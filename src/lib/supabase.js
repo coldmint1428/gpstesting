@@ -4,8 +4,9 @@
 // NEVER put the service-role key here.
 import { createClient } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Exported so the native tracker can upload to Supabase directly (useLocationTracker.js)
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // If .env is missing, export null so pages can still work without the database.
-export const supabase = url && anonKey ? createClient(url, anonKey) : null
+export const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null

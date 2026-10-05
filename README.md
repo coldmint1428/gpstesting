@@ -34,6 +34,21 @@ The app runs without `.env`; the GPS page then just shows "Database: Off".
   the laptop itself).
 - Check rows arriving in Supabase → Table Editor → `locations` (about one row every 5 s while sharing).
 
+## Phone app (background GPS)
+
+The same Vue app is wrapped as an Android/iOS app with [Capacitor](https://capacitorjs.com) and uses
+[Transistorsoft Background Geolocation](https://docs.transistorsoft.com/capacitor/) so tracking keeps
+working when the phone is locked. The browser version still works without it.
+All GPS logic is in `src/composables/useLocationTracker.js`.
+
+- **Android** (needs Android Studio): `npm run cap:android`, then press Run with your phone plugged in
+  (USB debugging on). Allow location "All the time".
+- **iOS** (needs a Mac + Xcode): `npm run cap:sync`, then `npx cap open ios`, choose your Apple ID team
+  under Signing & Capabilities, and run on your iPhone. Allow location "Always".
+- After changing Vue code, run `npm run cap:sync` again before rebuilding the app.
+- Transistorsoft is free in **debug** builds (what we use for testing and the demo); release builds
+  need a paid licence key.
+
 ## Deploying (Vercel)
 
 Import the repo in Vercel, framework preset **Vite**, and add the same `VITE_*` variables from `.env`
@@ -47,3 +62,5 @@ refreshing `/gps` works.
 - [Leaflet](https://leafletjs.com) (BSD-2-Clause)
 - [OneMap](https://www.onemap.gov.sg) basemap tiles © Singapore Land Authority
 - [supabase-js](https://github.com/supabase/supabase-js) (MIT)
+- [Capacitor](https://capacitorjs.com) (MIT)
+- [Transistorsoft Background Geolocation](https://docs.transistorsoft.com/capacitor/) (free for debug builds)

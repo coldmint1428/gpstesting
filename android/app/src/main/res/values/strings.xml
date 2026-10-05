@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Event Tracker</string>
+    <string name="title_activity_main">Event Tracker</string>
+    <string name="package_name">sg.edu.smu.is216.g11</string>
+    <string name="custom_url_scheme">sg.edu.smu.is216.g11</string>
+</resources>
