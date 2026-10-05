@@ -32,6 +32,7 @@ const lastSavedAt = ref(null)
 // ---------- Plain (non-reactive) variables ----------
 let watchId = null // id returned by watchPosition, needed to stop it
 let lastSentAt = 0 // time (ms) of the last insert, for throttling
+let signedIn = false // only try to save after a successful sign-in
 let nextId = 1 // unique key for each table row
 let map = null
 let marker = null
@@ -114,7 +115,7 @@ async function ensureSignedIn() {
 
 // Called on every GPS reading, but only inserts if 5 s have passed since the last insert
 async function saveReading(reading) {
-  if (!dbEnabled) return
+  if (!dbEnabled || !signedIn) return
 
   const now = Date.now()
   if (now - lastSentAt < SAVE_EVERY_MS) return
@@ -188,8 +189,8 @@ async function startSharing() {
 
   if (dbEnabled) {
     dbStatus.value = 'Signing in...'
-    const ok = await ensureSignedIn()
-    if (ok) dbStatus.value = 'Waiting for first reading'
+    signedIn = await ensureSignedIn()
+    if (signedIn) dbStatus.value = 'Waiting for first reading'
   }
 
   // The user may have pressed Stop while we were signing in
