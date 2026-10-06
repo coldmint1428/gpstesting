@@ -10,6 +10,10 @@
 // Views use this composable and never import the plugin directly, so the web build
 // keeps working and we can swap to another plugin later if licensing requires it.
 //
+// There is ONE tracker for the whole app (a singleton): sharing keeps running while the
+// user moves between pages, and every page sees the same state. It only stops when the
+// user presses Stop, logs out, or closes the app/tab.
+//
 // Libraries: @capacitor/core (MIT) - https://capacitorjs.com
 //            @transistorsoft/capacitor-background-geolocation - https://docs.transistorsoft.com/capacitor/
 //            (free in DEBUG builds; release builds need a paid licence key)
@@ -20,7 +24,56 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
 const MAX_READINGS = 20 // rows kept for the table
 const SAVE_EVERY_MS = 5000 // web only: at most one insert every 5 s
 
+// Load the Transistorsoft plugin only inside the app, so the web bundle never needs it
+async function loadBackgroundPlugin() {
+  const module = await import('@transistorsoft/capacitor-background-geolocation')
+  return module.default
+}
+
+// Used on logout: stop native tracking, delete locations still queued on the phone and
+// forget the login tokens - otherwise the phone keeps uploading as the previous user
+// (it even restarts on boot).
+export async function stopBackgroundTracking() {
+  if (!Capacitor.isNativePlatform()) return
+  await useLocationTracker().clearNative()
+}
+
+// Browser only: remember "I am sharing for event X" so sharing restarts by itself after a
+// page refresh / reopened tab. Only pressing Stop (or logging out) forgets it.
+// (The phone app doesn't need this: Transistorsoft keeps tracking natively.)
+const SHARING_KEY = 'gps-sharing'
+
+function rememberSharing(eventId, groupId) {
+  try {
+    localStorage.setItem(SHARING_KEY, JSON.stringify({ eventId, groupId }))
+  } catch {
+    // storage blocked (private mode): sharing still works until the page is refreshed
+  }
+}
+function forgetSharing() {
+  try {
+    localStorage.removeItem(SHARING_KEY)
+  } catch {
+    // ignore
+  }
+}
+function rememberedSharing() {
+  try {
+    return JSON.parse(localStorage.getItem(SHARING_KEY))
+  } catch {
+    return null
+  }
+}
+
+let tracker = null
+
+// Every page calls this and gets the same tracker
 export function useLocationTracker() {
+  if (!tracker) tracker = createTracker()
+  return tracker
+}
+
+function createTracker() {
   const isNative = Capacitor.isNativePlatform() // true inside the Android/iOS app
   const dbEnabled = supabase !== null
 
@@ -32,6 +85,7 @@ export function useLocationTracker() {
   const dbStatus = ref(dbEnabled ? 'Not started' : 'Off (no .env)')
   const savedCount = ref(0)
   const lastSavedAt = ref(null)
+  const sharingEventId = ref(null) // which event I'm sharing for (null = not sharing)
 
   // ---------- Plain variables ----------
   let nextId = 1 // unique key for each table row
@@ -50,24 +104,30 @@ export function useLocationTracker() {
     if (readings.value.length > MAX_READINGS) readings.value.pop()
   }
 
-  // Saving needs a signed-in user (RLS checks user_id = auth.uid()).
-  // Sandbox: anonymous sign-in. Returns the session, or null if it failed.
+  // Saving needs the logged-in user's session (RLS checks they are this group's IC).
+  // Returns the session, or null if nobody is logged in.
   async function ensureSignedIn() {
     const { data } = await supabase.auth.getSession()
-    if (data.session) return data.session
-
-    const { data: signInData, error } = await supabase.auth.signInAnonymously()
-    if (error) {
-      dbStatus.value = 'Sign-in failed: ' + error.message
-      return null
-    }
-    return signInData.session
+    if (!data.session) dbStatus.value = 'Not signed in'
+    return data.session
   }
 
   // ---------- Start / stop (what the page calls) ----------
   async function start(eventId, groupId) {
+    if (isTracking.value && ids.eventId === eventId && ids.groupId === groupId) return // already sharing here
+    if (isTracking.value) await stop() // sharing for another event/group: stop that first
+
     errorMsg.value = ''
+    if (ids.eventId !== eventId) {
+      // New event: start with an empty table
+      readings.value = []
+      current.value = null
+      savedCount.value = 0
+      lastSavedAt.value = null
+    }
     ids = { eventId, groupId }
+    sharingEventId.value = eventId
+    if (!isNative) rememberSharing(eventId, groupId)
     isTracking.value = true
 
     let session = null
@@ -84,36 +144,66 @@ export function useLocationTracker() {
     else startWeb(session)
   }
 
-  async function stop() {
+  // recordStop = false when the database already refused us (not IC any more)
+  async function stop(recordStop = true) {
+    const wasTracking = isTracking.value
     isTracking.value = false
+    sharingEventId.value = null
+    forgetSharing()
     if (isNative) {
-      if (bg) await bg.stop()
+      if (bg) {
+        await ensureReady()
+        await bg.stop()
+      }
     } else if (watchId !== null) {
       navigator.geolocation.clearWatch(watchId)
       watchId = null
     }
     if (dbEnabled && savedCount.value > 0) dbStatus.value = 'Stopped'
+    if (recordStop && wasTracking) await saveStopMarker()
   }
 
-  // Called when the page closes. On the web we stop GPS. In the app we only remove
-  // the listeners - native tracking keeps running in the background on purpose.
-  async function dispose() {
-    if (isNative) {
-      if (bg) await bg.removeListeners()
-      if (authSub) authSub.unsubscribe()
-      authSub = null
-    } else {
-      stop()
+  // Save one "stop" row at my last position, so viewers see "Stopped sharing"
+  // (on purpose) instead of a grey "lost contact" marker (phone died / no signal).
+  async function saveStopMarker() {
+    const last = current.value
+    if (!dbEnabled || !last || !ids.eventId || !ids.groupId) return
+
+    const { error } = await supabase.from('locations').insert({
+      event_id: ids.eventId,
+      group_id: ids.groupId,
+      lat: last.lat,
+      lng: last.lng,
+      accuracy: last.accuracy,
+      source: 'stop',
+      recorded_at: new Date().toISOString(),
+    })
+    if (!error) dbStatus.value = 'Stopped (others see "Stopped sharing")'
+  }
+
+  // Called once when the app opens (App.vue).
+  // Browser: restart sharing if it was on before a refresh (until the user presses Stop).
+  // Phone app: Transistorsoft requires ready() on EVERY launch, even when not tracking.
+  // If tracking is still running from before (app closed and reopened), show it again.
+  async function resume(isLoggedIn) {
+    if (!isNative) {
+      // Browser: restart sharing that was on before a refresh / reopened tab
+      const saved = rememberedSharing()
+      if (saved && isLoggedIn) start(saved.eventId, saved.groupId)
+      else forgetSharing()
+      return
     }
-  }
-
-  // App only: if tracking was left running (e.g. the app was reopened), show it again
-  async function resume() {
-    if (!isNative) return
-    await loadPlugin()
+    await ensureReady()
     const state = await bg.getState()
+    if (state.enabled && !isLoggedIn) {
+      await clearNative() // nobody is logged in: never keep uploading for an old login
+      return
+    }
     if (state.enabled) {
-      addListeners()
+      // Tracking was started earlier: get the event/group back from its upload settings
+      const params = state.http && state.http.params
+      if (params) ids = { eventId: params.event_id, groupId: params.group_id }
+      sharingEventId.value = ids.eventId
       isTracking.value = true
       dbStatus.value = 'Tracking in background'
     }
@@ -127,11 +217,15 @@ export function useLocationTracker() {
     if (!window.isSecureContext) {
       errorMsg.value = 'Location needs a secure (https) page. Open the https link instead.'
       isTracking.value = false
+      sharingEventId.value = null
+      forgetSharing()
       return
     }
     if (!('geolocation' in navigator)) {
       errorMsg.value = 'This browser does not support location.'
       isTracking.value = false
+      sharingEventId.value = null
+      forgetSharing()
       return
     }
 
@@ -180,8 +274,15 @@ export function useLocationTracker() {
       recorded_at: reading.time.toISOString(),
     })
 
-    if (error) dbStatus.value = 'Save failed: ' + error.message
-    else markSaved()
+    if (!error) {
+      markSaved()
+    } else if (error.code === '42501') {
+      // RLS said no: this user is not (or no longer) the group's IC
+      errorMsg.value = 'You are not allowed to share for this group any more (IC removed?). Sharing stopped.'
+      stop(false)
+    } else {
+      dbStatus.value = 'Save failed: ' + error.message
+    }
   }
 
   function markSaved() {
@@ -191,31 +292,42 @@ export function useLocationTracker() {
   }
 
   // ====================== NATIVE (Android / iOS app) ======================
-  // Load the plugin only inside the app, so the web bundle never needs it
-  async function loadPlugin() {
-    if (!bg) {
-      const module = await import('@transistorsoft/capacitor-background-geolocation')
-      bg = module.default
-    }
-  }
+  // ready() must run exactly ONCE per app launch (Transistorsoft rule). Listeners are added
+  // before it, because the plugin holds events from app start-up until ready() finishes.
+  // reset: false = keep the settings saved from last time (so tracking that was running
+  // keeps uploading); start() then applies our full settings with setConfig().
+  let readyPromise = null
+  async function ensureReady() {
+    if (!bg) bg = await loadBackgroundPlugin()
+    if (!readyPromise) {
+      addListeners()
+      readyPromise = bg.ready({ reset: false })
 
-  async function startNative(session) {
-    await loadPlugin()
-    addListeners()
-
-    // ready() applies our config; reset: true means "always use exactly this config"
-    await bg.ready(buildNativeConfig(session))
-    await bg.start()
-
-    // Keep the plugin's tokens in step when supabase-js refreshes them (app in foreground)
-    if (session && !authSub) {
+      // Keep the plugin's tokens in step when supabase-js refreshes them (app in foreground)
       const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
-        if (event === 'TOKEN_REFRESHED' && newSession && bg) {
+        if (event === 'TOKEN_REFRESHED' && newSession && isTracking.value) {
           bg.setConfig({ authorization: buildAuthConfig(newSession) })
         }
       })
       authSub = data.subscription
     }
+    return readyPromise
+  }
+
+  async function startNative(session) {
+    await ensureReady()
+    await bg.setConfig(buildNativeConfig(session)) // this event/group + fresh login tokens
+    await bg.start()
+  }
+
+  // Logout: stop, delete the queue, and remove the upload address + tokens
+  async function clearNative() {
+    await ensureReady()
+    await bg.stop()
+    await bg.destroyLocations()
+    await bg.setConfig({ http: { url: '', autoSync: false }, authorization: { strategy: 'jwt', accessToken: '' } })
+    isTracking.value = false
+    sharingEventId.value = null
   }
 
   function addListeners() {
@@ -236,8 +348,27 @@ export function useLocationTracker() {
 
     // Result of each native upload to Supabase (2xx = saved)
     bg.onHttp((response) => {
-      if (response.success) markSaved()
-      else dbStatus.value = 'Save failed: HTTP ' + response.status + ' (kept on phone, will retry)'
+      if (response.success) {
+        markSaved()
+      } else if (response.status === 403) {
+        // RLS said no (not IC any more). The plugin would retry this forever,
+        // so stop tracking and clear the queue.
+        errorMsg.value = 'You are not allowed to share for this group any more (IC removed?). Sharing stopped.'
+        isTracking.value = false
+        sharingEventId.value = null
+        bg.stop()
+        bg.destroyLocations()
+      } else if (response.status === 400) {
+        // Supabase could not read this record (bad data). The plugin only deletes a record
+        // after a 2xx reply and uploads in order, so ONE bad record would block every location
+        // behind it forever. Drop the queue so new locations can upload again.
+        console.error('[tracker] upload rejected (400):', response.responseText)
+        dbStatus.value = 'Upload rejected (400): ' + response.responseText
+        bg.destroyLocations()
+      } else {
+        console.error('[tracker] upload failed:', response.status, response.responseText)
+        dbStatus.value = 'Save failed: HTTP ' + response.status + ' (kept on phone, will retry)'
+      }
     })
 
     // Heartbeat: when the phone is standing still the plugin turns GPS off to save battery,
@@ -276,7 +407,6 @@ export function useLocationTracker() {
 
   function buildNativeConfig(session) {
     const config = {
-      reset: true,
       logger: {
         debug: true, // TESTING ONLY: plays sounds on each location so you can hear it in a pocket
         logLevel: bg.LogLevel.Verbose,
@@ -304,6 +434,9 @@ export function useLocationTracker() {
         locationTemplate:
           '{"lat":<%= latitude %>,"lng":<%= longitude %>,"accuracy":<%= accuracy %>,"recorded_at":"<%= timestamp %>"}',
         maxDaysToPersist: 3, // queued locations older than this are dropped
+        // Android records an extra "provider change" entry when location permission or GPS
+        // settings change; it doesn't fit our table's columns, so don't save/upload it.
+        disableProviderChangeRecord: true,
       },
     }
 
@@ -334,9 +467,10 @@ export function useLocationTracker() {
     dbStatus,
     savedCount,
     lastSavedAt,
+    sharingEventId,
     start,
     stop,
-    dispose,
     resume,
+    clearNative,
   }
 }

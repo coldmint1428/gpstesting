@@ -18,6 +18,8 @@
     "@transistorsoft/capacitor-background-geolocation": "^9.6.0",
     "bootstrap": "^5.3.8",
     "leaflet": "^1.9.4",
+    "pinia": "^4.0.3",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1"
   },

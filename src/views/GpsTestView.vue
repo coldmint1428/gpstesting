@@ -1,21 +1,24 @@
 <script setup>
-// GPS test page (Komin).
-// Shows this device's live position on a Leaflet map with OneMap tiles.
+// My GPS details for one event (Komin): my own position, accuracy, save status and
+// recent readings. Sharing itself is started from the event page ("Share my location")
+// or here; both use the same app-wide tracker, so it keeps running between pages.
+// Only the group's IC may share (the database rejects everyone else).
 // HOW we get GPS (browser vs Transistorsoft in the phone app) and how readings are
-// saved to Supabase lives in useLocationTracker.js - this page only displays it.
+// saved lives in useLocationTracker.js - this page shows my own position and status.
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles (c) Singapore Land Authority - https://www.onemap.gov.sg
 import { computed, watch, onMounted, onUnmounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useLocationTracker } from '../composables/useLocationTracker'
+import { useEventData } from '../composables/useEventData'
 
+const props = defineProps({ id: { type: String, required: true } }) // event id from the URL
 const MAX_READINGS = 20
 
-// Test IDs from .env until real events/groups exist
-const EVENT_ID = import.meta.env.VITE_TEST_EVENT_ID
-const GROUP_ID = import.meta.env.VITE_TEST_GROUP_ID
+const { event, loading, me, myGroup } = useEventData(props.id)
 
 const {
   isNative,
@@ -26,11 +29,13 @@ const {
   dbStatus,
   savedCount,
   lastSavedAt,
+  sharingEventId,
   start,
   stop,
-  dispose,
-  resume,
 } = useLocationTracker()
+
+const canShare = computed(() => !!(me.value && me.value.isIC && myGroup.value))
+const sharingHere = computed(() => isTracking.value && sharingEventId.value === props.id)
 
 // ---------- Map objects (plain variables, not reactive) ----------
 let map = null
@@ -57,8 +62,13 @@ function formatTime(date) {
 }
 
 function startSharing() {
-  start(EVENT_ID, GROUP_ID)
+  start(props.id, myGroup.value.id)
 }
+
+// If I stop being IC while sharing (someone changed my role), stop sharing
+watch(canShare, (allowed) => {
+  if (!allowed && sharingHere.value) stop(false)
+})
 
 // ---------- Map ----------
 onMounted(() => {
@@ -76,12 +86,12 @@ onMounted(() => {
       '<a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
   }).addTo(map)
 
-  // In the phone app, show tracking that is still running from before
-  resume()
+  // Already sharing (started on the event page)? Show where I am straight away
+  if (current.value) updateMap(current.value.lat, current.value.lng, current.value.accuracy)
 })
 
+// Leaving this page does NOT stop sharing - the tracker is shared by the whole app
 onUnmounted(() => {
-  dispose()
   if (map) map.remove()
 })
 
@@ -112,26 +122,41 @@ function updateMap(lat, lng, accuracy) {
 
 <template>
   <main class="container py-3">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-      <h1 class="h4 mb-0">
-        GPS test
-        <span class="badge text-bg-secondary fw-normal fs-6" data-testid="tracker-mode">
-          {{ isNative ? 'App (background GPS)' : 'Browser' }}
-        </span>
-      </h1>
+    <RouterLink :to="{ name: 'event', params: { id } }" class="small">&larr; Back to event</RouterLink>
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 my-2">
+      <div>
+        <h1 class="h4 mb-0">
+          My GPS details
+          <span class="badge text-bg-secondary fw-normal fs-6" data-testid="tracker-mode">
+            {{ isNative ? 'App (background GPS)' : 'Browser' }}
+          </span>
+        </h1>
+        <div v-if="event" class="small text-muted" data-testid="share-context">
+          {{ event.name }}<span v-if="myGroup"> · {{ myGroup.name }}</span>
+        </div>
+      </div>
       <button
-        v-if="!isTracking"
+        v-if="!sharingHere"
         class="btn btn-success"
+        :disabled="!canShare"
         data-testid="start-btn"
         @click="startSharing"
       >
         Start sharing
       </button>
-      <button v-else class="btn btn-danger" data-testid="stop-btn" @click="stop">
-        Stop sharing
-      </button>
+      <button v-else class="btn btn-danger" data-testid="stop-btn" @click="stop">Stop sharing</button>
     </div>
 
+    <div v-if="!loading && !canShare" class="alert alert-warning py-2" role="alert" data-testid="not-ic-msg">
+      Only your group's IC shares location. Ask the root, a planner or your group admin to make you IC.
+    </div>
+    <div v-if="isTracking && !sharingHere" class="alert alert-info py-2" role="status">
+      You are sharing for another event. Starting here will stop that one.
+    </div>
+    <div v-if="sharingHere" class="alert alert-success py-2" role="status" data-testid="sharing-banner">
+      You are sharing your live location with this event's planners and your group.
+    </div>
     <div v-if="errorMsg" class="alert alert-danger" role="alert" data-testid="error-msg">
       {{ errorMsg }}
     </div>
