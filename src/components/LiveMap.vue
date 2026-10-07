@@ -10,6 +10,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
+import { moveMarker } from '../utils/markerMotion'
 import { useLiveLocations } from '../composables/useLiveLocations'
 import { placeName } from '../composables/useReverseGeocode'
 import { weightedMidpoint } from '../utils/groupPosition'
@@ -31,6 +32,13 @@ const personMarkers = {} // userId -> Leaflet marker
 const groupMarkers = {} // groupId -> Leaflet marker
 const places = {} // userId -> place name text (filled when a tooltip opens)
 let fittedOnce = false
+
+// Follow mode: keep one person centred on the map while they move
+const followedId = ref(null) // userId being followed (null = not following)
+const followedName = computed(() => {
+  const p = people.value.find((x) => x.userId === followedId.value)
+  return p ? p.name : ''
+})
 
 function memberOf(userId) {
   return props.members.find((m) => m.id === userId) || null
@@ -117,10 +125,13 @@ function render() {
       marker.on('tooltipopen', () => lookUpPlace(person.userId))
       marker.on('click', () => marker.toggleTooltip()) // phones have no hover
       marker.iconKey = iconKey
+      marker.readingTime = person.time
       personMarkers[person.userId] = marker
     } else {
-      const moved = !marker.getLatLng().equals([person.lat, person.lng])
-      marker.setLatLng([person.lat, person.lng])
+      // Glide to the new reading, or ignore it if it is only GPS wobble (utils/markerMotion.js)
+      const gapMs = marker.readingTime ? person.time - marker.readingTime : 0
+      marker.readingTime = person.time
+      const moved = moveMarker(marker, L.latLng(person.lat, person.lng), { accuracy: person.accuracy, gapMs })
       if (marker.iconKey !== iconKey) {
         marker.setIcon(personIcon(person))
         marker.iconKey = iconKey
@@ -167,9 +178,16 @@ function render() {
       marker.bindTooltip(text, { direction: 'top' })
       groupMarkers[group.id] = marker
     } else {
-      marker.setLatLng([mid.lat, mid.lng])
+      moveMarker(marker, L.latLng(mid.lat, mid.lng)) // glide; tiny changes ignored (min 5 m)
       marker.setTooltipContent(text)
     }
+  }
+
+  // Follow mode: pan to where the followed marker is going (glides with it)
+  if (followedId.value) {
+    const marker = personMarkers[followedId.value]
+    if (marker) map.panTo(marker.shownLatLng || marker.getLatLng(), { animate: true, duration: 1 })
+    else stopFollowing() // they're no longer on the map
   }
 
   // Zoom to everyone the first time we have data
@@ -198,14 +216,23 @@ function statusText(p) {
   return timeAgo(p.time, now.value)
 }
 
+// Tap a person in the list: zoom to them and follow them as they move
 function focus(person) {
-  map.setView([person.lat, person.lng], 18)
-  personMarkers[person.userId].openTooltip()
+  followedId.value = person.userId
+  const marker = personMarkers[person.userId]
+  map.setView(marker ? marker.shownLatLng || marker.getLatLng() : [person.lat, person.lng], 18)
+  if (marker) marker.openTooltip()
+}
+
+function stopFollowing() {
+  followedId.value = null
 }
 
 onMounted(() => {
   // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
   map = createSingaporeMap(mapEl.value)
+  // Dragging the map yourself means "let me look around": stop following
+  map.on('dragstart', stopFollowing)
   render()
 })
 
@@ -217,7 +244,14 @@ onUnmounted(() => {
 <template>
   <div>
     <div v-if="errorMsg" class="alert alert-danger py-2" role="alert">{{ errorMsg }}</div>
-    <div ref="mapEl" class="live-map rounded border mb-3" data-testid="live-map"></div>
+    <div class="position-relative mb-3">
+      <div ref="mapEl" class="live-map rounded border" data-testid="live-map"></div>
+      <!-- Shown while following someone (on top of the map) -->
+      <div v-if="followedId" class="follow-bar shadow-sm" data-testid="follow-bar">
+        <span class="text-truncate">Following <strong>{{ followedName }}</strong></span>
+        <button class="btn btn-sm btn-outline-secondary py-0" data-testid="stop-follow-btn" @click="stopFollowing">Stop</button>
+      </div>
+    </div>
 
     <!-- What the marker styles mean -->
     <div class="d-flex flex-wrap gap-3 small text-muted mb-3" data-testid="map-legend">
@@ -227,7 +261,8 @@ onUnmounted(() => {
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
     </div>
 
-    <h2 class="h6">People on the map</h2>
+    <h2 class="h6 mb-0">People on the map</h2>
+    <p class="small text-muted mb-2">Tap a person to follow them on the map.</p>
     <p v-if="people.length === 0" class="text-muted small" data-testid="no-positions">
       No one is sharing yet. Only ICs share their location.
     </p>
@@ -236,6 +271,7 @@ onUnmounted(() => {
         v-for="p in people"
         :key="p.userId"
         class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+        :class="{ active: p.userId === followedId }"
         role="button"
         :data-testid="'person-' + p.username"
         @click="focus(p)"
@@ -254,6 +290,22 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.follow-bar {
+  /* Floats over the top of the map, above Leaflet's layers (z-index 400+) */
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: calc(100% - 100px); /* leave room for the zoom buttons on small screens */
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+  background: #fff;
+  border-radius: 999px;
+  font-size: 0.875rem;
+}
 .live-map {
   height: 60vh;
   min-height: 320px;

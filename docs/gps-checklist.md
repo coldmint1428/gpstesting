@@ -104,7 +104,7 @@ Tests passed on the phone:
 - [x] ⚠️ Same run (battery saver ON): readings every 30 s for the first ~40 min, then Android deep sleep (Doze) cut it to short bursts every ~20–36 min (152 readings instead of ~780). Battery 97% → 88% (≈1.4%/h, low because Doze kept GPS off most of the night). Next: repeat with battery saver OFF + battery "Unrestricted" to see what causes it and measure real full-rate battery use; then decide on a fix / IC instructions
 - [x] **3.6 h run with battery saver OFF** (07:53–11:32), app Unrestricted, swiped away, locked, unplugged, still: **434 readings, median gap 30 s, longest gap 53 s, no gap over 2 min**, battery 87% → 77% (**≈2.7% per hour** at full 30 s rate) → battery saver caused the overnight gaps; Doze alone does not
 - [ ] IC instructions: turn battery saver OFF while sharing (the app already warns); for phones that must keep it on, consider a stronger fix later
-- [ ] Walk test: readings follow you while moving, locked in pocket
+- [x] Real outing 7.7 h (16:57–00:38, ~49 km incl. transport), battery saver ON, app in background: **574 readings, median gap 31 s, 0 gaps over 10 min, longest 6 min, 0 upload errors**. Moving hours ≈ full rate (91–97/h); sitting still with battery saver → some 2–6 min gaps (marker fades, never "lost contact"). Battery 84% (18:05) → 47% (00:38) ≈5.6%/h incl. normal phone use, train and mobile data. MRT tunnels: 1.5–4.6 min gaps – no GPS underground and readings worse than 100 m are discarded (no delayed uploads, 0 out of order)
 - [ ] Airplane mode mid-walk → queued readings upload afterwards
 - [x] Log out in the app → "Stopped" row saved, location services OFF, tracking pass cancelled, no more rows
 - [ ] Other Android brands (ideally a Xiaomi or Oppo – most aggressive at killing background apps)
@@ -125,6 +125,10 @@ Tests passed on the phone:
 
 - [x] Fixed (code): map went blank at the last zoom step (`detectRetina` lowered the tile layer's max zoom) → shared `src/utils/onemap.js`, no detectRetina, `maxNativeZoom: 19` (zoom 20 enlarges zoom-19 tiles)
 - [ ] Check the zoom fix on the website (after push/deploy) and in the phone app (next install)
+- [x] Smooth live map (`src/utils/markerMotion.js`): markers **glide** (1 s) instead of jumping; big jumps (> 500 m or after > 90 s gap) still jump; **GPS wobble ignored** (moves smaller than the reading's accuracy, 5–25 m)
+- [x] Replayed the 7.7 h outing (574 readings): still → marker stays put 94% of the time (no twitching); walking → 63 glides; vehicle → 62 glides + 25 jumps; tunnel gaps → 18 jumps; marker never more than 22 m from the real reading
+- [x] Follow mode: tap a person in the list → map zooms in and keeps them centred as they move (pans with the glide); "Following X · Stop" bar on the map; dragging the map stops following
+- [ ] Check the smooth map + follow mode on the website (after push/deploy) and in the phone app (next install)
 
 ## 3. Playwright E2E tests (task 5 – 10% of grade)
 - [ ] Two-user test: user A (IC) shares faked GPS → user B sees A's marker (separate browser contexts)
@@ -164,6 +168,9 @@ To do:
 - [ ] Rebuild the app (`npm run cap:sync`) after every `.env` change – keys are baked in at build time
 - [ ] Optional: "phone setup check" screen that opens the maker's battery settings (`showPowerManager()`) for Xiaomi / Oppo / Huawei
 - [ ] Tidy-up: duplicate rows saved at the moment sharing starts
+- [ ] Underground / weak signal: keep coarse readings (accuracy limit 100 → ~500 m) with a "low accuracy" marker style; group midpoint still ignores > 100 m
+- [ ] Consider batch upload of queued readings (`batchSync` + bulk `report_location`) for crowd network congestion at NDP
+- [ ] Map: two people with the same initials ("TE" + "TE") look identical – show 3 letters or a number when initials clash
 - [ ] Install next app update (fixed in code, not yet on the phone): after Stop, a late queued reading got 403 and showed a wrong "IC removed?" message → Stop now uploads the queue first, clears it, then cancels the pass; late 403s are ignored
 
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
