@@ -9,6 +9,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { createSingaporeMap } from '../utils/onemap'
 import { useLiveLocations } from '../composables/useLiveLocations'
 import { placeName } from '../composables/useReverseGeocode'
 import { weightedMidpoint } from '../utils/groupPosition'
@@ -203,16 +204,8 @@ function focus(person) {
 }
 
 onMounted(() => {
-  map = L.map(mapEl.value, { minZoom: 11, maxZoom: 19 }).setView([1.3521, 103.8198], 12)
-  L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
-    detectRetina: true,
-    maxZoom: 19,
-    minZoom: 11,
-    attribution:
-      '<img src="https://www.onemap.gov.sg/web-assets/images/logo/om_logo.png" style="height:20px;width:20px;"/>&nbsp;' +
-      '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a>&nbsp;&copy;&nbsp;contributors&nbsp;&#124;&nbsp;' +
-      '<a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
-  }).addTo(map)
+  // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
+  map = createSingaporeMap(mapEl.value)
   render()
 })
 

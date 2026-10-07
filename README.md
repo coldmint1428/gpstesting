@@ -41,7 +41,8 @@ npm run dev            # http://localhost:5173
 2. Authentication → Sign In / Providers → Email: **turn off "Confirm email"** (Supabase's built-in
    email only reaches members of your Supabase organisation, so classmates would never get it).
    Turn **off** "Allow anonymous sign-ins" (no longer used).
-3. Authentication → URL Configuration: add `http://localhost:5173` (and the Vercel link later).
+3. (Only if you add password reset, email confirmation or social login) Authentication → URL Configuration:
+   set Site URL / Redirect URLs to the Vercel link, so email links don't point to localhost.
 4. Place names (OneMap reverse geocode): create a free account at
    <https://www.onemap.gov.sg/apidocs/register>, then Edge Functions → Secrets: add `ONEMAP_EMAIL` and
    `ONEMAP_PASSWORD`, and deploy `supabase/functions/reverse-geocode`

@@ -22,6 +22,7 @@ import { Capacitor } from '@capacitor/core'
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
 
 const MAX_READINGS = 20 // rows kept for the table
+const ANDROID_INTERVAL_MS = 30000 // Android app: record + upload a position every 30 s, even when standing still
 const SAVE_EVERY_MS = 5000 // web only: at most one insert every 5 s
 
 // Load the Transistorsoft plugin only inside the app, so the web bundle never needs it
@@ -86,6 +87,9 @@ function createTracker() {
   const savedCount = ref(0)
   const lastSavedAt = ref(null)
   const sharingEventId = ref(null) // which event I'm sharing for (null = not sharing)
+  // Phone app only: settings that can slow down or stop background tracking
+  const powerSaveOn = ref(false) // Android battery saver / iOS Low Power Mode is on
+  const batteryRestricted = ref(false) // Android: app is NOT set to "Unrestricted" battery use
 
   // ---------- Plain variables ----------
   let nextId = 1 // unique key for each table row
@@ -94,7 +98,6 @@ function createTracker() {
   let signedIn = false // web: only save after sign-in worked
   let ids = { eventId: null, groupId: null } // which event/group readings belong to
   let bg = null // native: the Transistorsoft plugin (loaded only inside the app)
-  let authSub = null // native: supabase auth listener (to share refreshed tokens)
 
   // Add a reading to current + the table (used by both web and native)
   function addReading(lat, lng, accuracy, time) {
@@ -127,7 +130,7 @@ function createTracker() {
     }
     ids = { eventId, groupId }
     sharingEventId.value = eventId
-    if (!isNative) rememberSharing(eventId, groupId)
+    rememberSharing(eventId, groupId) // browser: restart after refresh; app: know the event after reopening
     isTracking.value = true
 
     let session = null
@@ -154,6 +157,14 @@ function createTracker() {
       if (bg) {
         await ensureReady()
         await bg.stop()
+        // Upload readings still queued on the phone while the pass is valid, then clear the
+        // queue - otherwise they upload later with the cancelled pass and get rejected (403)
+        try {
+          await bg.sync()
+        } catch {
+          // offline: these last readings are dropped
+        }
+        await bg.destroyLocations()
       }
     } else if (watchId !== null) {
       navigator.geolocation.clearWatch(watchId)
@@ -161,6 +172,8 @@ function createTracker() {
     }
     if (dbEnabled && savedCount.value > 0) dbStatus.value = 'Stopped'
     if (recordStop && wasTracking) await saveStopMarker()
+    // Phone app: cancel the tracking pass so nothing more can be uploaded with it
+    if (isNative && dbEnabled) await supabase.rpc('revoke_my_tracking_passes')
   }
 
   // Save one "stop" row at my last position, so viewers see "Stopped sharing"
@@ -200,11 +213,32 @@ function createTracker() {
       return
     }
     if (state.enabled) {
-      // Tracking was started earlier: get the event/group back from its upload settings
-      const params = state.http && state.http.params
-      if (params) ids = { eventId: params.event_id, groupId: params.group_id }
+      // Tracking was started by an older app version (login-token uploads, no tracking pass):
+      // stop it cleanly so the screen and the tracker never disagree. The IC just taps Share again.
+      const url = (state.http && state.http.url) || ''
+      if (!url.includes('/rpc/report_location')) {
+        await clearNative()
+        return
+      }
+
+      // Which event/group? Use what we remembered at Share time, else ask the database
+      // which event our active tracking pass belongs to.
+      const saved = rememberedSharing()
+      if (saved) {
+        ids = { eventId: saved.eventId, groupId: saved.groupId }
+      } else {
+        const { data } = await supabase.rpc('my_active_tracking_pass')
+        if (!data || data.length === 0) {
+          await clearNative() // no valid pass (stopped/expired): nothing to resume
+          return
+        }
+        ids = { eventId: data[0].event_id, groupId: data[0].group_id }
+        rememberSharing(ids.eventId, ids.groupId)
+      }
       sharingEventId.value = ids.eventId
       isTracking.value = true
+      if (!state.isMoving) await bg.changePace(true) // keep the 30 s timer running (see startNative)
+      await checkPhoneSettings()
       dbStatus.value = 'Tracking in background'
     }
   }
@@ -295,29 +329,70 @@ function createTracker() {
   // ready() must run exactly ONCE per app launch (Transistorsoft rule). Listeners are added
   // before it, because the plugin holds events from app start-up until ready() finishes.
   // reset: false = keep the settings saved from last time (so tracking that was running
-  // keeps uploading); start() then applies our full settings with setConfig().
+  // keeps uploading); start() then applies our full settings with reset(config).
   let readyPromise = null
   async function ensureReady() {
     if (!bg) bg = await loadBackgroundPlugin()
     if (!readyPromise) {
       addListeners()
       readyPromise = bg.ready({ reset: false })
-
-      // Keep the plugin's tokens in step when supabase-js refreshes them (app in foreground)
-      const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
-        if (event === 'TOKEN_REFRESHED' && newSession && isTracking.value) {
-          bg.setConfig({ authorization: buildAuthConfig(newSession) })
-        }
-      })
-      authSub = data.subscription
     }
     return readyPromise
   }
 
   async function startNative(session) {
     await ensureReady()
-    await bg.setConfig(buildNativeConfig(session)) // this event/group + fresh login tokens
+
+    // Ask the database for a TRACKING PASS (needs the user's login, which we have now).
+    // The background tracker uploads with this pass instead of the login token, so uploads
+    // keep working for hours with the app closed (login tokens expire every hour).
+    let pass = null
+    if (session) {
+      const { data, error } = await supabase.rpc('start_tracking_pass', {
+        p_event_id: ids.eventId,
+        p_group_id: ids.groupId,
+      })
+      if (error) {
+        errorMsg.value = 'Could not start sharing: ' + error.message
+        isTracking.value = false
+        sharingEventId.value = null
+        forgetSharing()
+        return
+      }
+      pass = data
+    }
+
+    // reset() = drop every old setting (e.g. old login tokens) and use exactly this config
+    await bg.reset(buildNativeConfig(pass))
     await bg.start()
+    // start() begins in "stationary" mode (GPS mostly off) until the phone moves. Switch to
+    // "moving" right away so the 30 s timer runs even if the IC is standing still. Stop
+    // detection is disabled, so it then stays in moving mode until Stop is pressed.
+    await bg.changePace(true)
+    await checkPhoneSettings()
+  }
+
+  // Apps can't change these settings themselves - we can only detect them and warn the user
+  async function checkPhoneSettings() {
+    try {
+      powerSaveOn.value = await bg.isPowerSaveMode()
+      if (Capacitor.getPlatform() === 'android') {
+        batteryRestricted.value = !(await bg.deviceSettings.isIgnoringBatteryOptimizations())
+      }
+    } catch (err) {
+      console.error('[tracker] could not check phone settings:', err)
+    }
+  }
+
+  // Opens Android's battery settings for this app so the user can choose "Unrestricted"
+  async function openBatterySettings() {
+    try {
+      const request = await bg.deviceSettings.showIgnoreBatteryOptimizations()
+      await bg.deviceSettings.show(request)
+    } catch (err) {
+      console.error('[tracker] could not open battery settings:', err)
+    }
+    setTimeout(checkPhoneSettings, 3000) // re-check after the user comes back
   }
 
   // Logout: stop, delete the queue, and remove the upload address + tokens
@@ -325,13 +400,14 @@ function createTracker() {
     await ensureReady()
     await bg.stop()
     await bg.destroyLocations()
-    await bg.setConfig({ http: { url: '', autoSync: false }, authorization: { strategy: 'jwt', accessToken: '' } })
+    await bg.setConfig({ http: { url: '', autoSync: false, params: {} } })
     isTracking.value = false
     sharingEventId.value = null
   }
 
+  // Called exactly once per app launch (from ensureReady), so listeners are never doubled.
+  // (Don't call bg.removeListeners() here: it finishes later and would remove these new ones.)
   function addListeners() {
-    bg.removeListeners() // never attach the same listener twice
 
     // Every location the native tracker records (also shown on our page)
     bg.onLocation(
@@ -350,12 +426,16 @@ function createTracker() {
     bg.onHttp((response) => {
       if (response.success) {
         markSaved()
-      } else if (response.status === 403) {
-        // RLS said no (not IC any more). The plugin would retry this forever,
+      } else if (!isTracking.value) {
+        // Late upload after Stop (pass already cancelled): expected, ignore it
+      } else if (response.status === 403 || response.status === 401) {
+        // The database said no (pass stopped/expired or not IC any more). The plugin would retry this forever,
         // so stop tracking and clear the queue.
-        errorMsg.value = 'You are not allowed to share for this group any more (IC removed?). Sharing stopped.'
+        errorMsg.value =
+          'Sharing stopped: your tracking pass is no longer valid (stopped, expired after 24 h, or no longer the IC).'
         isTracking.value = false
         sharingEventId.value = null
+        forgetSharing()
         bg.stop()
         bg.destroyLocations()
       } else if (response.status === 400) {
@@ -375,52 +455,58 @@ function createTracker() {
     // so every 60 s we record one position anyway. This lets the dashboard tell
     // "standing still" apart from "phone died".
     bg.onHeartbeat(() => {
-      bg.getCurrentPosition({ samples: 1, persist: true }).catch(() => {})
+      // Android records every 30 s natively (see buildNativeConfig), so only iOS needs this
+      if (Capacitor.getPlatform() === 'android') return
+      console.log('[tracker] heartbeat: taking a position')
+      bg.getCurrentPosition({ samples: 1, persist: true, timeout: 30 })
+        .then((loc) => console.log('[tracker] heartbeat position saved, accuracy', loc.coords.accuracy))
+        .catch((err) => console.error('[tracker] heartbeat position failed:', JSON.stringify(err)))
     })
 
-    // When the plugin refreshes the Supabase token itself (e.g. while locked),
-    // give the new tokens to supabase-js too, so both keep using the same login session
-    bg.onAuthorization((event) => {
-      if (event.success && event.response && event.response.access_token) {
-        supabase.auth.setSession({
-          access_token: event.response.access_token,
-          refresh_token: event.response.refresh_token,
-        })
-      }
+    // Battery saver switched on/off while sharing: update the warning on the page
+    bg.onPowerSaveChange((enabled) => {
+      powerSaveOn.value = enabled
     })
   }
 
-  // Login token settings for native uploads.
-  // The plugin adds "Authorization: Bearer <accessToken>" to each upload. Supabase tokens
-  // expire after ~1 hour: when an upload gets 401, the plugin calls refreshUrl with the
-  // refresh token, saves the new tokens and retries.
-  function buildAuthConfig(session) {
-    return {
-      strategy: 'jwt',
-      accessToken: session.access_token,
-      refreshToken: session.refresh_token,
-      refreshUrl: supabaseUrl + '/auth/v1/token?grant_type=refresh_token',
-      refreshPayload: { refresh_token: '{refreshToken}' }, // plugin fills in {refreshToken}
-      refreshHeaders: { apikey: supabaseAnonKey },
-    }
-  }
-
-  function buildNativeConfig(session) {
+  // pass = tracking pass from start_tracking_pass() (null if not logged in: track without uploading)
+  function buildNativeConfig(pass) {
+    const isAndroid = Capacitor.getPlatform() === 'android'
     const config = {
       logger: {
-        debug: true, // TESTING ONLY: plays sounds on each location so you can hear it in a pocket
-        logLevel: bg.LogLevel.Verbose,
+        debug: false, // true = test sounds on every location (only for pocket testing)
+        // Info, not Verbose: Verbose prints the whole config incl. the login token into the phone log
+        logLevel: bg.LogLevel.Info,
       },
       geolocation: {
         desiredAccuracy: bg.DesiredAccuracy.High,
-        distanceFilter: 10, // record a new location every ~10 m of movement
         locationAuthorizationRequest: 'Always', // needed for tracking while locked
         pausesLocationUpdatesAutomatically: false, // iOS: don't let iOS pause updates by itself
+        // Standing still gives the same coordinates every time; keep them anyway,
+        // otherwise they are dropped as "identical" and no row is saved while standing.
+        allowIdenticalLocations: true,
+        ...(isAndroid
+          ? {
+              // ANDROID: record on a timer, not by distance: one position every 30 s, moving or
+              // not. All native (no app code needed), so it keeps working when locked or swiped away.
+              distanceFilter: 0,
+              locationUpdateInterval: ANDROID_INTERVAL_MS,
+              fastestLocationUpdateInterval: ANDROID_INTERVAL_MS,
+            }
+          : {
+              // iOS: record every ~10 m of movement; the 60 s heartbeat covers standing still
+              distanceFilter: 10,
+            }),
+      },
+      activity: {
+        // Never switch to "stationary" (GPS off) while sharing. Android: keeps the 30 s timer
+        // running. iOS: iOS only keeps a background app alive while it is using location.
+        disableStopDetection: true,
       },
       app: {
         stopOnTerminate: false, // keep tracking if the app is swiped away
         startOnBoot: true, // resume tracking after the phone restarts
-        heartbeatInterval: 60, // seconds (see onHeartbeat above)
+        heartbeatInterval: 60, // seconds - iOS only (see onHeartbeat above)
         preventSuspend: true, // iOS: needed for heartbeats while locked (uses more battery)
         notification: {
           // Android must show a notification while tracking in the background
@@ -429,10 +515,10 @@ function createTracker() {
         },
       },
       persistence: {
-        // Shape of each uploaded location = the columns of our "locations" table.
+        // Shape of each upload = the inputs of the report_location() database function.
         // Numbers have no quotes; the timestamp is text so it needs quotes.
         locationTemplate:
-          '{"lat":<%= latitude %>,"lng":<%= longitude %>,"accuracy":<%= accuracy %>,"recorded_at":"<%= timestamp %>"}',
+          '{"p_lat":<%= latitude %>,"p_lng":<%= longitude %>,"p_accuracy":<%= accuracy %>,"p_recorded_at":"<%= timestamp %>"}',
         maxDaysToPersist: 3, // queued locations older than this are dropped
         // Android records an extra "provider change" entry when location permission or GPS
         // settings change; it doesn't fit our table's columns, so don't save/upload it.
@@ -440,20 +526,17 @@ function createTracker() {
       },
     }
 
-    // Upload straight to Supabase (only if we have a login session)
-    if (session) {
+    // Upload straight to the report_location() database function with the tracking pass.
+    // No login token is sent, so nothing expires: the database checks the pass + IC role.
+    if (pass) {
       config.http = {
-        url: supabaseUrl + '/rest/v1/locations',
+        url: supabaseUrl + '/rest/v1/rpc/report_location',
         method: 'POST',
         autoSync: true, // upload each location as soon as it is recorded
-        rootProperty: '.', // put lat/lng/... at the top level of the JSON body
-        params: { event_id: ids.eventId, group_id: ids.groupId, source: 'gps' }, // added to every upload
-        headers: {
-          apikey: supabaseAnonKey, // public key; the user's token is added by "authorization"
-          Prefer: 'return=minimal', // Supabase: don't send the new row back
-        },
+        rootProperty: '.', // put p_lat/p_lng/... at the top level of the JSON body
+        params: { p_token: pass }, // added to every upload
+        headers: { apikey: supabaseAnonKey }, // public key only
       }
-      config.authorization = buildAuthConfig(session)
     }
     return config
   }
@@ -468,6 +551,9 @@ function createTracker() {
     savedCount,
     lastSavedAt,
     sharingEventId,
+    powerSaveOn,
+    batteryRestricted,
+    openBatterySettings,
     start,
     stop,
     resume,

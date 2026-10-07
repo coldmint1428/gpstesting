@@ -11,8 +11,8 @@ Owner: Komin · Pages: `/login`, `/events`, `/events/:id`, `/events/:id/share` (
 6. - [ ] Tell teammate: shared files changed (`App.vue`, `main.js`, `router/index.js`, `package.json` – added pinia, qrcode)
 7. - [ ] Run `npm install` after pulling (new packages), restart `npm run dev` (Vite only reads `.env` at start)
 8. - [ ] Commit + push (check `.env` is NOT in `git status`)
-9. - [ ] Laptop real-location test: normal window = `komin`, incognito = `komin2`; make one IC → Start sharing → allow location → other window's Live map shows the marker
-10. - [ ] Phone real-GPS test: install the Android app (section 4), sign in, Start sharing → marker moves on the laptop's Live map
+9. - [x] Laptop real-location test: normal window = `komin`, incognito = `komin2`; make one IC → Start sharing → allow location → other window's Live map shows the marker
+10. - [x] Phone real-GPS test: Android app installed, sharing as `testuser1` → marker on the laptop's Live map
 
 ## 0. Save readings to Supabase
 - [x] Scaffold Vue + Bootstrap + Leaflet/OneMap GPS page
@@ -61,7 +61,8 @@ Not yet tested:
 To do (test together, after your steps 1–3):
 - [ ] Record test account emails/passwords in the README "Test accounts" table (course requirement)
 - [ ] Optional: a 3rd account in a second group, to check groups can't see each other
-- [ ] Root creates event + 2 groups; others join by code, link and QR; add one by username
+- [x] Root creates event ("NDP rehearsal 1") + 2 groups; others join by code; members assigned to groups, ICs set (5 members)
+- [ ] Join by invite link and QR code; add someone by username
 - [x] IC shares from their real device (laptop) → root sees the initials marker
 - [x] Hover / tap marker: name, place name, coordinates, accuracy, last seen
 - [ ] Group member sees only own group; planner / root sees all groups
@@ -75,13 +76,38 @@ To do (test together, after your steps 1–3):
 - [x] Browser: sharing restarts by itself after a refresh / reopened tab (remembered until Stop or logout)
 - [x] Only **Stop sharing**, logout, leaving the event, or losing IC stops it
 - [x] Logic tested in the browser: same tracker on every page, survives navigation + refresh, Stop clears it
-- [ ] Test with your accounts: Share → go to Members / Events / Polygons → come back → still "Stop sharing"; press F5 → still sharing
+- [ ] Phone app: Share → go to other pages → come back → still "Stop sharing" + navbar badge (please confirm)
+- [ ] Browser: press F5 while sharing → still sharing
 
-## 1c. Transistorsoft check
-- [x] Fixed: `ready()` now runs once per app launch (plugin rule); Start uses `setConfig()`
-- [x] Android debug app builds with the plugin (`android/app/build/outputs/apk/debug/app-debug.apk`)
-- [x] Built app contains background location, foreground location service, motion detection, boot restart, notification permissions
-- [ ] Run on a real phone (or emulator) and confirm tracking + uploads while locked
+## 1c. Transistorsoft check (real phone: Galaxy S25 Ultra, Android 16)
+Fixes made during phone testing:
+- [x] `ready()` runs once per app launch (plugin rule); Start applies settings with `reset(config)`
+- [x] Android "provider change" record broke uploads (400 `provider` column) → `disableProviderChangeRecord: true`; a 400 now clears the stuck queue
+- [x] Listeners were wiped by an un-awaited `removeListeners()` → removed
+- [x] Tracking started in "stationary" mode (no readings while standing) → `changePace(true)` after start
+- [x] Login token expired after 1 h and the plugin's refresh can't talk to Supabase (form vs JSON) → **tracking pass** + `report_location()` (migration 004); no login token on the phone
+- [x] Reopened app showed "Share" while tracking ran → remembers the event, else asks `my_active_tracking_pass()`; old-style tracking is stopped cleanly
+- [x] Test sounds off (`debug: false`), log level Info (no token in the phone log)
+
+Tests passed on the phone:
+- [x] Android app builds, installs and runs; all permissions present (background location, foreground service, motion, boot, notifications)
+- [x] Uploads accepted (201/204) through `report_location` with the tracking pass
+- [x] App open: reading every ~30 s
+- [x] Home screen + locked: reading every ~30 s (one ~55 s gap only at the moment the app leaves the screen)
+- [x] Swiped away from Recents + locked: readings continue every ~30 s, no gaps (`stopOnTerminate: false`)
+- [x] Fake / cancelled pass → 403; non-IC can't get a pass (database test)
+- [x] Battery saver ON: warning shown in the app (detection works)
+- [x] Battery saver ON + locked: reading every ~31 s (same as normal)
+- [x] Battery saver ON + swiped away + locked: readings continue every ~31 s (two ~50–57 s gaps, still well inside the 2-min "Live" window)
+- [x] Reopen after swipe → event page shows **Stop sharing** (confirmed)
+- [x] Long run (6.5 h overnight, 01:13–07:43): swiped away, locked, unplugged, still, battery saver ON → **no upload errors** (tracking pass works for hours – the 1-hour token problem is gone)
+- [x] ⚠️ Same run (battery saver ON): readings every 30 s for the first ~40 min, then Android deep sleep (Doze) cut it to short bursts every ~20–36 min (152 readings instead of ~780). Battery 97% → 88% (≈1.4%/h, low because Doze kept GPS off most of the night). Next: repeat with battery saver OFF + battery "Unrestricted" to see what causes it and measure real full-rate battery use; then decide on a fix / IC instructions
+- [x] **3.6 h run with battery saver OFF** (07:53–11:32), app Unrestricted, swiped away, locked, unplugged, still: **434 readings, median gap 30 s, longest gap 53 s, no gap over 2 min**, battery 87% → 77% (**≈2.7% per hour** at full 30 s rate) → battery saver caused the overnight gaps; Doze alone does not
+- [ ] IC instructions: turn battery saver OFF while sharing (the app already warns); for phones that must keep it on, consider a stronger fix later
+- [ ] Walk test: readings follow you while moving, locked in pocket
+- [ ] Airplane mode mid-walk → queued readings upload afterwards
+- [x] Log out in the app → "Stopped" row saved, location services OFF, tracking pass cancelled, no more rows
+- [ ] Other Android brands (ideally a Xiaomi or Oppo – most aggressive at killing background apps)
 
 ## 2. Live map extras
 - [x] One marker per person with initials in group colour (you have a dark ring)
@@ -94,8 +120,11 @@ To do (test together, after your steps 1–3):
 - [x] Live updates via Supabase Realtime; reloads after reconnecting so nothing is missed
 - [x] "Stopped sharing" state: pressing Stop saves a `source = 'stop'` row → white dashed marker + "Stopped 3:05 pm"; grey now means "lost contact" (migration 003)
 - [x] Map legend: Live / no update 2–10 min / lost contact / stopped sharing
-- [ ] Test: IC presses Stop (or leaves the share page) → viewer sees dashed "Stopped"; closing the tab / phone dying → grey "Lost contact" after 10 min
+- [x] Test: IC presses Stop → viewer sees dashed "Stopped"; closing the tab / phone dying → grey "Lost contact" after 10 min (leaving a page no longer stops sharing – see 1b)
 - [ ] Agree final stale / offline thresholds with the team
+
+- [x] Fixed (code): map went blank at the last zoom step (`detectRetina` lowered the tile layer's max zoom) → shared `src/utils/onemap.js`, no detectRetina, `maxNativeZoom: 19` (zoom 20 enlarges zoom-19 tiles)
+- [ ] Check the zoom fix on the website (after push/deploy) and in the phone app (next install)
 
 ## 3. Playwright E2E tests (task 5 – 10% of grade)
 - [ ] Two-user test: user A (IC) shares faked GPS → user B sees A's marker (separate browser contexts)
@@ -111,42 +140,41 @@ To do (test together, after your steps 1–3):
 - [ ] README: how to run the tests
 
 ## 4. Background GPS on phones (Capacitor + Transistorsoft)
-Goal: Android + iOS keep tracking with the screen locked / phone asleep.
+Goal: Android + iOS keep tracking with the screen locked / phone asleep / app swiped away.
 
 Done:
 - [x] Install Capacitor 8 + `@transistorsoft/capacitor-background-geolocation` v9.6
 - [x] `capacitor.config.json` (app "Event Tracker", id `sg.edu.smu.is216.g11`) + `android/` and `ios/` projects
-- [x] Tracker wrapper `src/composables/useLocationTracker.js` – browser uses `watchPosition`, app uses Transistorsoft; page never imports the plugin
-- [x] Native upload straight to Supabase `locations` (works while JS is paused; queued offline)
-- [x] Token refresh via Supabase `/auth/v1/token?grant_type=refresh_token` on 401, synced with supabase-js
-- [x] Heartbeat every 60 s while stationary
+- [x] Tracker wrapper `src/composables/useLocationTracker.js` – browser uses `watchPosition`, app uses Transistorsoft; pages never import the plugin
+- [x] One app-wide tracker (singleton): sharing keeps running across pages
+- [x] Android: native reading + upload **every 30 s**, moving or standing (`distanceFilter: 0`, `locationUpdateInterval: 30000`, `disableStopDetection: true`)
+- [x] iOS (configured, not yet tested): every ~10 m when moving + 60 s heartbeat, never "stationary", `preventSuspend`
+- [x] Uploads use a **tracking pass** (`start_tracking_pass` / `report_location` / `revoke_my_tracking_passes`) – no expiring login token; pass cancelled on Stop / logout, expires after 24 h
+- [x] Queued offline, uploaded when the connection returns
+- [x] Battery saver / restricted battery warnings in the app (+ "Allow unrestricted" button)
 - [x] Android: plugin versions in `android/variables.gradle`, licence note in `AndroidManifest.xml`
 - [x] iOS: Background Modes (location, fetch, processing) + permission texts in `Info.plist`
-- [x] Browser mode re-tested (readings, 5 s save limit, Stop)
-- [x] Uses the logged-in user's real event + group (no more test IDs)
+- [x] Install Android Studio, run on phone (Galaxy S25 Ultra) – Android Studio updated for AGP 8.13
+- [x] Android: location "Allow all the time"; battery Unrestricted
+- [x] Test sounds off (`logger.debug: false`)
 
 To do:
 - [ ] Tell teammate: `package.json` changed, `android/` + `ios/` folders added
-- [ ] Install Android Studio, then `npm run cap:android` → Run on phone (USB debugging on)
-- [ ] Android: allow location **"Allow all the time"**; turn off battery optimisation for the app (Xiaomi/Oppo/Samsung)
-- [ ] iOS: needs a Mac + Xcode – open `ios/App`, set your Apple ID team, run on iPhone; allow location **"Always"**
+- [ ] iOS: needs a Mac + Xcode – open `ios/App`, set your Apple ID team, run on iPhone; allow location **"Always"**; repeat the 4-phase test
 - [ ] Rebuild the app (`npm run cap:sync`) after every `.env` change – keys are baked in at build time
-- [ ] Test: lock phone, walk 10+ min in pocket → rows keep arriving in Supabase (check `recorded_at` gaps)
-- [ ] Test: airplane mode mid-walk → queued rows sync afterwards
-- [ ] Test: run > 1 hour → no 401 errors (token refresh works)
-- [ ] Test: stand still 5 min → heartbeat rows about every 60 s
-- [ ] Test: log out in the app → tracking stops, no more rows
-- [ ] Before final demo: set `logger.debug: false` (turns off the test sounds)
+- [ ] Optional: "phone setup check" screen that opens the maker's battery settings (`showPowerManager()`) for Xiaomi / Oppo / Huawei
+- [ ] Tidy-up: duplicate rows saved at the moment sharing starts
+- [ ] Install next app update (fixed in code, not yet on the phone): after Stop, a late queued reading got 403 and showed a wrong "IC removed?" message → Stop now uploads the queue first, clears it, then cancels the pass; late 403s are ignored
 
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
-- [ ] One feature working end to end (login → join event → IC shares → others see it live)
+- [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)
 - [ ] Be ready to explain: roles + RLS, join codes, Realtime, weighted midpoint, 5 s save limit, background GPS
 
 ## 6. Moving to the teammate's new Supabase project
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Run every file in `supabase/migrations/` in order (001, 002, …)
-- [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off, URL Configuration (localhost + https links)
+- [ ] Run every file in `supabase/migrations/` in order (001 → 004)
+- [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app
 - [ ] Re-create test accounts, update README

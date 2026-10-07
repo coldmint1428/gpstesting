@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 import { useEventData } from '../composables/useEventData'
 import { useLocationTracker } from '../composables/useLocationTracker'
+import SharingWarnings from '../components/SharingWarnings.vue'
 import LiveMap from '../components/LiveMap.vue'
 import MembersPanel from '../components/MembersPanel.vue'
 import InvitePanel from '../components/InvitePanel.vue'
@@ -80,6 +81,7 @@ async function leaveEvent() {
       <div v-if="sharingHere" class="alert alert-success py-2" role="status" data-testid="sharing-banner">
         You are sharing your live location with this event's planners and your group.
       </div>
+      <SharingWarnings v-if="sharingHere" />
       <div v-if="shareError" class="alert alert-danger py-2" role="alert" data-testid="share-error">{{ shareError }}</div>
       <p class="small text-muted mb-3" data-testid="view-scope">{{ viewText }}</p>
 

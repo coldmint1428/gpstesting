@@ -12,7 +12,9 @@ import { computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { createSingaporeMap } from '../utils/onemap'
 import { useLocationTracker } from '../composables/useLocationTracker'
+import SharingWarnings from '../components/SharingWarnings.vue'
 import { useEventData } from '../composables/useEventData'
 
 const props = defineProps({ id: { type: String, required: true } }) // event id from the URL
@@ -72,19 +74,8 @@ watch(canShare, (allowed) => {
 
 // ---------- Map ----------
 onMounted(() => {
-  // Centre on Singapore; OneMap tiles only cover Singapore
-  map = L.map('gps-map', { minZoom: 11, maxZoom: 19 }).setView([1.3521, 103.8198], 12)
-
-  L.tileLayer('https://www.onemap.gov.sg/maps/tiles/Default/{z}/{x}/{y}.png', {
-    detectRetina: true,
-    maxZoom: 19,
-    minZoom: 11,
-    // OneMap requires this attribution
-    attribution:
-      '<img src="https://www.onemap.gov.sg/web-assets/images/logo/om_logo.png" style="height:20px;width:20px;"/>&nbsp;' +
-      '<a href="https://www.onemap.gov.sg/" target="_blank" rel="noopener noreferrer">OneMap</a>&nbsp;&copy;&nbsp;contributors&nbsp;&#124;&nbsp;' +
-      '<a href="https://www.sla.gov.sg/" target="_blank" rel="noopener noreferrer">Singapore Land Authority</a>',
-  }).addTo(map)
+  // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
+  map = createSingaporeMap('gps-map')
 
   // Already sharing (started on the event page)? Show where I am straight away
   if (current.value) updateMap(current.value.lat, current.value.lng, current.value.accuracy)
@@ -157,6 +148,7 @@ function updateMap(lat, lng, accuracy) {
     <div v-if="sharingHere" class="alert alert-success py-2" role="status" data-testid="sharing-banner">
       You are sharing your live location with this event's planners and your group.
     </div>
+    <SharingWarnings v-if="sharingHere" />
     <div v-if="errorMsg" class="alert alert-danger" role="alert" data-testid="error-msg">
       {{ errorMsg }}
     </div>
