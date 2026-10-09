@@ -8,9 +8,9 @@ Owner: Komin · Pages: `/login`, `/events`, `/events/:id`, `/events/:id/share` (
 3. - [x] Test accounts created: `komin` (Root) and `komin2` (Participant, Test group 1) in "NDP rehearsal 1"
 4. - [x] Register a free OneMap account: <https://www.onemap.gov.sg/apidocs/register>
 5. - [x] Supabase → Edge Functions → Secrets → add `ONEMAP_EMAIL` and `ONEMAP_PASSWORD` → tell Claude to test place names
-6. - [ ] Tell teammate: shared files changed (`App.vue`, `main.js`, `router/index.js`, `package.json` – added pinia, qrcode)
+6. - [ ] Tell teammate: shared files changed (`App.vue`, `main.js`, `router/index.js`, `package.json` – added pinia, qrcode, Capacitor, Transistorsoft) – point them to `docs/gps-tracking-spec.md`
 7. - [ ] Run `npm install` after pulling (new packages), restart `npm run dev` (Vite only reads `.env` at start)
-8. - [ ] Commit + push (check `.env` is NOT in `git status`)
+8. - [x] Commit + push (check `.env` is NOT in `git status`) – done regularly; `android/.idea/` now untracked + ignored
 9. - [x] Laptop real-location test: normal window = `komin`, incognito = `komin2`; make one IC → Start sharing → allow location → other window's Live map shows the marker
 10. - [x] Phone real-GPS test: Android app installed, sharing as `testuser1` → marker on the laptop's Live map
 
@@ -168,6 +168,7 @@ To do:
 - [ ] Rebuild the app (`npm run cap:sync`) after every `.env` change – keys are baked in at build time
 - [ ] Optional: "phone setup check" screen that opens the maker's battery settings (`showPowerManager()`) for Xiaomi / Oppo / Huawei
 - [ ] Tidy-up: duplicate rows saved at the moment sharing starts
+- [ ] Commit `docs/gps-tracking-spec.md` with the next push
 - [ ] Underground / weak signal: keep coarse readings (accuracy limit 100 → ~500 m) with a "low accuracy" marker style; group midpoint still ignores > 100 m
 - [ ] Consider batch upload of queued readings (`batchSync` + bulk `report_location`) for crowd network congestion at NDP
 - [ ] Map: two people with the same initials ("TE" + "TE") look identical – show 3 letters or a number when initials clash
@@ -179,8 +180,9 @@ To do:
 - [ ] Be ready to explain: roles + RLS, join codes, Realtime, weighted midpoint, 5 s save limit, background GPS
 
 ## 6. Moving to the teammate's new Supabase project
+- [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–004 reproduce it 1:1
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Run every file in `supabase/migrations/` in order (001 → 004)
+- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 004)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app
