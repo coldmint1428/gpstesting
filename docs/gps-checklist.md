@@ -173,6 +173,77 @@ To do:
 - [ ] Map: two people with the same initials ("TE" + "TE") look identical – show 3 letters or a number when initials clash
 - [ ] Install next app update (fixed in code, not yet on the phone): after Stop, a late queued reading got 403 and showed a wrong "IC removed?" message → Stop now uploads the queue first, clears it, then cancels the pass; late 403s are ignored
 
+## 4b. Polygon bench at `/polygon`
+A standalone drawing bench: lock a map, lay an optional floor plan over it, draw areas
+(Zone / No-Go / Obstacle / Stage / Entrance) on top. Not tied to an event.
+
+Built (Claude):
+- [x] `supabase/migrations/005_layouts.sql` – two tables (`layouts`, `layout_claims`), JSON
+      validators, RLS, and four commands: `open_bench`, `claim_bench`, `release_bench`, `save_bench`
+- [x] Exactly one bench, enforced by a unique index on a constant (it cannot grow a second row)
+- [x] One editor at a time: the claim hands out a **token**, every save must present it, and a
+      stale token is refused with `PT409` instead of overwriting someone's work
+- [x] 5-minute claim expiry, renewed by a heartbeat that only runs while the tab is visible
+- [x] `supabase/tests/layouts_rls.sql` – rolled-back checks for all of the above
+- [x] `/polygon` needs a login now (it was the only real page reachable signed out)
+- [x] One thing unlocked at a time: `null | 'map' | 'floorplan:<id>' | 'polygons' | 'area:<id>'`
+- [x] The map must be locked to edit a floor plan or draw (that rule is what keeps it simple)
+- [x] Floor plan: upload, shrink under 512 KB in the browser, **name it**, place, drag to
+      slide, resize from a corner and **rotate with a PowerPoint-style knob**, opacity
+      slider, hide, delete. One card per plan, each with its own show/hide switch; hiding the
+      one being edited puts it down first.
+- [x] Floor plan stored as centre + width + height + angle, so it follows the map forever
+- [x] The picture repaints from the new placement on every drag frame (it used to hold a
+      frozen copy of itself, so turning, resizing and fading only showed up after a reload)
+- [x] The picture also **eases through a zoom animation** with the tiles, instead of standing
+      still and jumping at the end. Leaflet only animates elements it built itself, so the
+      pictures are given the same left/top/width/height transition with Leaflet's own curve,
+      driven from `zoomanim` (`map.getZoom()` is already the new zoom while it runs)
+- [x] Corner handles and the rotate knob are pinned inside the map, so a plan that hangs off
+      the edge can still be grabbed
+- [x] Clicking a floor plan **or an area** on the map selects it, and its row in the list
+      highlights; clicking empty map, clicking away from the bench, or pressing Escape puts
+      it back down (which saves). Presses that land on a control — the opacity slider, a name
+      field — deliberately do not, so an edit is never cut short by reaching for its own UI.
+- [x] The cursor says what the press will do: a crosshair while drawing an area, `move` over
+      something that can be dragged, nothing clickable when the viewer cannot act
+- [x] An area's label travels with it. Leaflet works out a permanent tooltip's position once,
+      when it opens, and never again — so the name used to stay behind
+- [x] Press and drag moves an area as a whole; dragging a dot reshapes it **live**, instead of
+      the outline only catching up when the dot is dropped
+- [x] Areas: click to add a point, rubber-band line, **snap closed when the cursor comes
+      within 15 px of the first point** (the line turns green and the first dot turns into a
+      ring), or press Finish; name + type, vertex drag / click-to-remove to fix a shape
+- [x] The area list draws each area's **own outline** at 30 px, so a row is recognisable as
+      the polygon it belongs to instead of a symbol for its type (`src/utils/areaOutline.js`)
+- [x] Every lock saves – there is no Save button anywhere
+- [x] Claiming, saving and releasing go through **one queue**, in order. Firing two at once
+      was how a late release cancelled the claim that replaced it, so the page announced that
+      "somebody took the bench over" when the somebody was the planner themselves
+- [x] A save **never copies the server's answer back over the local canvas**. The reply
+      describes what was sent a moment ago; the planner may have carried on working since,
+      and overwriting them is what made a dragged area jump back to where it started
+- [x] No decorative copy: the explanatory paragraphs that were not telling the planner
+      anything were removed
+- [x] Type decides colour and icon, mirrored in `src/utils/areaKinds.js` and the SQL constraint
+- [x] Nothing new installed; no Storage bucket (the image lives in the row)
+
+Still to do:
+- [ ] `005_layouts.sql` is applied, but `public.floor_plan_ok()` has changed (floor plans can
+      now carry a `name`). Re-run just that one function: copy its `create function` block out
+      of `005_layouts.sql` and paste it back as `create or replace function`. Skipping this
+      makes **every save fail**, because the check constraint re-validates on each write
+- [ ] Re-run `supabase/tests/layouts_rls.sql` (checks 15 and 17 now cover the plan name, and
+      17c covers a plan saved before names existed)
+- [ ] Two-browser test: A starts editing, B sees "A is editing this bench" and cannot start;
+      A's save after B takes over must be refused, not applied
+- [ ] Check the whole page at 375px and 575px (the handles and the rotate knob on a phone)
+- [ ] Agree whether non-owners should be able to claim the bench at all (currently anyone can,
+      one at a time)
+- [ ] Decide if a forgotten tab's 5-minute hold needs a "take over" button
+- [ ] Drawn areas are not yet usable anywhere else — a no-go warning on the live map was
+      discussed and shelved
+
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)
@@ -180,7 +251,7 @@ To do:
 
 ## 6. Moving to the teammate's new Supabase project
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Run every file in `supabase/migrations/` in order (001 → 004)
+- [ ] Run every file in `supabase/migrations/` in order (001 → 005)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app
@@ -192,7 +263,7 @@ To do:
 - [ ] Delete old location rows after an event (privacy)
 
 ## Team decisions to confirm
-- [ ] Leaflet + OneMap vs Google Maps (polygon page must match)
+- [ ] Leaflet + OneMap vs Google Maps (polygon page must match) → **decided: Leaflet + OneMap**, the bench reuses `src/utils/onemap.js`
 - [ ] Update frequency (time and/or distance)
 - [ ] Full history vs latest position only
 - [ ] When tracking starts/stops during an event

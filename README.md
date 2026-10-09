@@ -11,7 +11,31 @@ Vue 3 + Vite + Bootstrap 5 + Leaflet (OneMap tiles) + Supabase.
 | Event: live map, members & groups, invite | `/events/:id` | Komin |
 | Share my location (ICs only) | `/events/:id/share` | Komin |
 | Invite link / QR target | `/join/:code` | Komin |
-| Polygon test | `/polygon` | teammate |
+| Polygon bench: draw areas over an optional floor plan | `/polygon` | shared |
+
+### The polygon bench (`/polygon`)
+
+A standalone drawing bench, deliberately **not** tied to an event: a planner locks a map,
+optionally lays a floor plan over it, and draws areas (Zone, No-Go, Obstacle, Stage,
+Entrance) on top. Every area's points are stored as lat/lng, so everything travels with
+the map.
+
+One thing is unlocked at a time (`null | 'map' | 'floorplan:<id>' | 'polygons' |
+'area:<id>'`), and locking is what saves — there is no Save button. A floor plan is named
+and edited like a PowerPoint picture: drag it to slide it, drag a corner to resize it, drag
+the knob above it to turn it. Recording an area is click-to-add-a-point, with the ring
+snapping shut when the cursor comes near the first point. Clicking a floor plan or an area
+on the map selects it and highlights its row; clicking empty map, or pressing Escape, puts
+it back down.
+
+There is exactly **one** bench, shared by every signed-in user, and **only one person may
+edit it at a time**. The database decides who: `claim_bench()` hands out a token, every
+save must present it, and a save with a stale token is refused rather than obeyed. The
+claim lapses after 5 minutes of silence (renewed by a heartbeat while the tab is visible).
+
+The whole canvas — the map view, the floor plans (placement **and** the image itself,
+base64) and the areas — lives in one row of `public.layouts`. Images are shrunk in the
+browser to under 512 KB first. See `supabase/migrations/005_layouts.sql`.
 
 ## Roles (per event, from the project spec)
 
