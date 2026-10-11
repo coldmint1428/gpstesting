@@ -58,7 +58,7 @@ Vite reads `.env` only at start/build → restart `npm run dev`, redeploy Vercel
 
 ## 4. Supabase project setup (order matters)
 
-1. **SQL** – run in order: `supabase/migrations/001_locations.sql` → `002_users_events_groups.sql` → `003_stop_sharing.sql` → `004_tracking_passes.sql`. (Verified: these 4 files reproduce the live gpstest schema exactly.)
+1. **SQL** – run in order: `supabase/migrations/001_locations.sql` → `002_users_events_groups.sql` → `003_stop_sharing.sql` → `004_tracking_passes.sql` → `005_layouts.sql` (teammate's polygon bench, on `main`) → `006_self_renewing_pass.sql`. **006 must run after 005**: 005 ends with a blanket `revoke execute on all functions ... from anon`, which blocks phone uploads (`report_location`) and the sign-up username check; 006 grants them back.
 2. **Auth → Sign In / Providers → Email:** Email provider **on**, **Confirm email OFF**, **Allow anonymous sign-ins OFF**.
 3. **Edge Function** `reverse-geocode` (file `supabase/functions/reverse-geocode/index.ts`), **verify JWT = on**:
    `npx supabase functions deploy reverse-geocode`
@@ -143,7 +143,7 @@ On a fresh project the FKs can be created normally (without `NOT VALID`).
 | event_id | uuid | no | – | FK → `events(id)` CASCADE |
 | group_id | uuid | no | – | FK → `groups(id)` CASCADE |
 | created_at | timestamptz | no | `now()` | |
-| expires_at | timestamptz | no | `now() + 24 h` | |
+| expires_at | timestamptz | no | `now() + 24 h` | self-renewing: every accepted upload sets it to `least(now() + 24 h, created_at + 7 days)` |
 | revoked_at | timestamptz | yes | – | set on Stop / logout / new pass |
 
 Index `(user_id)`. RLS on, **no policies** (only reachable through functions).
@@ -209,7 +209,8 @@ All `SECURITY DEFINER`, `SET search_path = ''`. `EXECUTE` revoked from `public`/
 | Function | Who | Returns | Behaviour |
 |---|---|---|---|
 | `start_tracking_pass(p_event_id uuid, p_group_id uuid)` | authenticated IC | uuid (pass) | error 42501 if not IC; revokes caller's older passes for the event; new pass valid 24 h |
-| `report_location(p_token uuid, p_lat double precision, p_lng double precision, p_accuracy real, p_recorded_at timestamptz)` | **anon**, authenticated | void → HTTP **204** | valid pass + still IC → inserts `locations` (user/event/group from the pass, `source='gps'`). Invalid/revoked/expired pass or no longer IC → `errcode 'PT403'` → **HTTP 403**. Bad coordinates → 22023 → 400 |
+| `report_location(p_token uuid, p_lat double precision, p_lng double precision, p_accuracy real, p_recorded_at timestamptz)` | **anon**, authenticated | void → HTTP **204** | valid pass + still IC → inserts `locations` (user/event/group from the pass, `source='gps'`). Invalid/revoked/expired pass or no longer IC → `errcode 'PT403'` → **HTTP 403**. Bad coordinates → 22023 → 400. Each accepted upload renews the pass (24 h after the last upload, max 7 days after Share) |
+| `stop_member_sharing(p_event_id uuid, p_user_id uuid)` | authenticated: self, root/planner, or admin of the member's group (else 42501) | boolean | revokes the member's active passes; adds a `source='stop'` row at their last position; `false` if they weren't sharing from the phone. Members tab "Stop sharing" button |
 | `revoke_my_tracking_passes()` | authenticated | void | cancels all caller's active passes |
 | `my_active_tracking_pass()` | authenticated | table(event_id, group_id) | newest active pass (app reopen) |
 
@@ -283,7 +284,13 @@ Applied with `bg.reset(config)` on every Start; `bg.ready({ reset: false })` onc
     stopOnTerminate: false, startOnBoot: true,
     heartbeatInterval: 60,                                     // iOS: onHeartbeat → getCurrentPosition({samples:1, persist:true, timeout:30}); ignored on Android
     preventSuspend: true,                                      // iOS
-    notification: { title: 'Event Tracker', text: 'Sharing your location with event planners' },
+    showsBackgroundLocationIndicator: true,                    // iOS blue pill
+    notification: {                                            // Android: always shown while sharing
+      title: 'Sharing your location', text: 'Event planners can see you. Tap to open.',
+      sticky: true, priority: bg.NotificationPriority.Default,
+      layout: 'notification_sharing',                          // android/app/src/main/res/layout/notification_sharing.xml
+      actions: ['notificationButtonStop'],                     // onNotificationAction → stop()
+    },
   },
   persistence: {
     locationTemplate: '{"p_lat":<%= latitude %>,"p_lng":<%= longitude %>,"p_accuracy":<%= accuracy %>,"p_recorded_at":"<%= timestamp %>"}',
@@ -353,7 +360,7 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/marke
 ## 14. Migration checklist (to the teammate's project / repo)
 
 1. Teammate adds you to their Supabase organisation.
-2. §4 steps 1–4: run migrations 001 → 004, auth settings, deploy the edge function, add OneMap secrets.
+2. §4 steps 1–4: run migrations 001 → 006 (006 after 005), auth settings, deploy the edge function, add OneMap secrets.
 3. Copy into the team repo: `src/` files listed in §12–13, `supabase/`, `capacitor.config.json`, `android/` + `ios/` (or regenerate with `npx cap add android|ios` and re-apply §11), package versions §2, scripts §2.
 4. `.env` with the new URL + public key; Vercel env vars (`VITE_*`, type Config); redeploy.
 5. `npm install` → `npm run cap:sync` → Android Studio ▶ Run; reinstall the phone app (keys are baked in at build).
