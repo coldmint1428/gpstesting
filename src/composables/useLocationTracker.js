@@ -362,6 +362,10 @@ function createTracker() {
       pass = data
     }
 
+    // Throw away readings still queued from an earlier share (they carry an old, maybe expired
+    // tracking pass). Otherwise they upload first, get 403 and stop this new share right away.
+    await bg.destroyLocations()
+
     // reset() = drop every old setting (e.g. old login tokens) and use exactly this config
     await bg.reset(buildNativeConfig(pass))
     await bg.start()
@@ -432,7 +436,7 @@ function createTracker() {
         // The database said no (pass stopped/expired or not IC any more). The plugin would retry this forever,
         // so stop tracking and clear the queue.
         errorMsg.value =
-          'Sharing stopped: your tracking pass is no longer valid (stopped, expired after 24 h, or no longer the IC).'
+          'Sharing stopped: stopped by a planner or from another device, no upload for 24 h, or you are no longer the IC.'
         isTracking.value = false
         sharingEventId.value = null
         forgetSharing()
@@ -463,6 +467,11 @@ function createTracker() {
         .catch((err) => console.error('[tracker] heartbeat position failed:', JSON.stringify(err)))
     })
 
+    // "Stop" button in the Android sharing notification = the same as pressing Stop sharing
+    bg.onNotificationAction((buttonId) => {
+      if (buttonId === 'notificationButtonStop' && isTracking.value) stop()
+    })
+
     // Battery saver switched on/off while sharing: update the warning on the page
     bg.onPowerSaveChange((enabled) => {
       powerSaveOn.value = enabled
@@ -485,6 +494,7 @@ function createTracker() {
         // Standing still gives the same coordinates every time; keep them anyway,
         // otherwise they are dropped as "identical" and no row is saved while standing.
         allowIdenticalLocations: true,
+        showsBackgroundLocationIndicator: true, // iOS: blue location pill while sharing (iOS has no sticky notifications)
         ...(isAndroid
           ? {
               // ANDROID: record on a timer, not by distance: one position every 30 s, moving or
@@ -509,9 +519,14 @@ function createTracker() {
         heartbeatInterval: 60, // seconds - iOS only (see onHeartbeat above)
         preventSuspend: true, // iOS: needed for heartbeats while locked (uses more battery)
         notification: {
-          // Android must show a notification while tracking in the background
-          title: 'Event Tracker',
-          text: 'Sharing your location with event planners',
+          // ANDROID: shown the WHOLE time sharing is on (sticky), with a Stop button.
+          // Layout file: android/app/src/main/res/layout/notification_sharing.xml
+          title: 'Sharing your location',
+          text: 'Event planners can see you. Tap to open.',
+          sticky: true,
+          layout: 'notification_sharing',
+          actions: ['notificationButtonStop'],
+          priority: bg.NotificationPriority.Default,
         },
       },
       persistence: {

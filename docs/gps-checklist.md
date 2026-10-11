@@ -153,7 +153,7 @@ Done:
 - [x] One app-wide tracker (singleton): sharing keeps running across pages
 - [x] Android: native reading + upload **every 30 s**, moving or standing (`distanceFilter: 0`, `locationUpdateInterval: 30000`, `disableStopDetection: true`)
 - [x] iOS (configured, not yet tested): every ~10 m when moving + 60 s heartbeat, never "stationary", `preventSuspend`
-- [x] Uploads use a **tracking pass** (`start_tracking_pass` / `report_location` / `revoke_my_tracking_passes`) – no expiring login token; pass cancelled on Stop / logout, expires after 24 h
+- [x] Uploads use a **tracking pass** (`start_tracking_pass` / `report_location` / `revoke_my_tracking_passes`) – no expiring login token; pass cancelled on Stop / logout; **self-renewing** (expires 24 h after the last upload, max 7 days) – migration 006
 - [x] Queued offline, uploaded when the connection returns
 - [x] Battery saver / restricted battery warnings in the app (+ "Allow unrestricted" button)
 - [x] Android: plugin versions in `android/variables.gradle`, licence note in `AndroidManifest.xml`
@@ -168,6 +168,13 @@ To do:
 - [ ] Rebuild the app (`npm run cap:sync`) after every `.env` change – keys are baked in at build time
 - [ ] Optional: "phone setup check" screen that opens the maker's battery settings (`showPowerManager()`) for Xiaomi / Oppo / Huawei
 - [ ] Tidy-up: duplicate rows saved at the moment sharing starts
+- [x] Fixed (code): sharing stopped right after Share – stale queued readings from an expired pass got 403 → queue now cleared before every new share
+- [x] Android sharing notification: always shown while sharing (`sticky`), custom layout `res/layout/notification_sharing.xml` with a **Stop** button (`onNotificationAction` → normal Stop); iOS shows the blue location indicator instead
+- [ ] Test on phone: notification stays the whole time; Stop button works with the app open, in background, and **swiped away** (if not, tapping the notification opens the app)
+- [x] Fixed (database): sharing auto-stopped right after Share – teammate's `005_layouts.sql` revoked `report_location` + `username_available` from anon → `006_self_renewing_pass.sql` grants them back
+- [x] Members tab: **Stop sharing** button for ICs (root / planner, or their group admin) → `stop_member_sharing`; map shows "Stopped sharing"
+- [ ] Test: planner stops an IC from the laptop → phone shows "Sharing stopped" on next upload (if the app was swiped away, the tracker only fully stops when the app is opened again)
+- [ ] Tell teammate: avoid blanket `grant/revoke ... on all functions` in migrations – grant per function
 - [ ] Commit `docs/gps-tracking-spec.md` with the next push
 - [ ] Underground / weak signal: keep coarse readings (accuracy limit 100 → ~500 m) with a "low accuracy" marker style; group midpoint still ignores > 100 m
 - [ ] Consider batch upload of queued readings (`batchSync` + bulk `report_location`) for crowd network congestion at NDP
@@ -180,9 +187,9 @@ To do:
 - [ ] Be ready to explain: roles + RLS, join codes, Realtime, weighted midpoint, 5 s save limit, background GPS
 
 ## 6. Moving to the teammate's new Supabase project
-- [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–004 reproduce it 1:1
+- [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–006 reproduce it 1:1
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 004)
+- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 006; 006 must come after 005)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app

@@ -20,6 +20,7 @@ const props = defineProps({
 const emit = defineEmits(['changed'])
 
 const errorMsg = ref('')
+const infoMsg = ref('') // e.g. "Stopped Komin's sharing"
 const busy = ref(false)
 
 const newGroupName = ref('')
@@ -91,6 +92,23 @@ function setEventRole(member, role, enabled) {
   return run('set_event_role', { p_event_id: props.eventId, p_user_id: member.id, p_role: role, p_enabled: enabled })
 }
 
+// Stop an IC's phone sharing remotely (e.g. they forgot after a rehearsal).
+// Cancels their tracking pass: the phone's next upload is refused and the map shows "Stopped sharing".
+async function stopSharing(member) {
+  if (!confirm('Stop ' + member.display_name + "'s location sharing?")) return
+  errorMsg.value = ''
+  infoMsg.value = ''
+  busy.value = true
+  const { data: wasSharing, error } = await supabase.rpc('stop_member_sharing', {
+    p_event_id: props.eventId,
+    p_user_id: member.id,
+  })
+  busy.value = false
+  if (error) errorMsg.value = error.message
+  else if (wasSharing) infoMsg.value = 'Stopped ' + member.display_name + "'s location sharing."
+  else infoMsg.value = member.display_name + ' was not sharing from the phone app.'
+}
+
 function removeMember(member) {
   if (!confirm('Remove ' + member.display_name + ' from this event?')) return
   return run('remove_member', { p_event_id: props.eventId, p_user_id: member.id })
@@ -98,6 +116,8 @@ function removeMember(member) {
 
 // ---------- Per-member permission checks (decide which controls to show) ----------
 const canSetIC = (m) => m.groupId && (props.canManage || m.groupId === myAdminGroupId.value)
+// Same people who may change IC may stop an IC's sharing (not yourself: use your own Stop button)
+const canStopSharing = (m) => m.isIC && canSetIC(m) && (!props.me || m.id !== props.me.id)
 const adminCanAdd = (m) => !props.canManage && myAdminGroupId.value && !m.groupId
 const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.groupId === myAdminGroupId.value
 const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props.me || m.id !== props.me.id)
@@ -106,6 +126,7 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
 <template>
   <div>
     <div v-if="errorMsg" class="alert alert-danger py-2" role="alert" data-testid="members-error">{{ errorMsg }}</div>
+    <div v-if="infoMsg" class="alert alert-success py-2" role="status" data-testid="members-info">{{ infoMsg }}</div>
 
     <!-- Create group (root / planner) -->
     <form v-if="canManage" class="card mb-3" @submit.prevent="createGroup">
@@ -252,6 +273,15 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
               </template>
             </div>
 
+            <button
+              v-if="canStopSharing(m)"
+              class="btn btn-sm btn-outline-danger mt-2 me-2"
+              :disabled="busy"
+              :data-testid="'stop-sharing-' + m.username"
+              @click="stopSharing(m)"
+            >
+              Stop sharing
+            </button>
             <button v-if="canRemove(m)" class="btn btn-sm btn-link text-danger px-0 mt-1" :disabled="busy" @click="removeMember(m)">
               Remove from event
             </button>
