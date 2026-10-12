@@ -6,3 +6,6 @@ dist
 *.log
 .DS_Store
 .claude/
+# Firebase app config (download from the Firebase console, see docs/gps-checklist.md)
+android/app/google-services.json
+GoogleService-Info.plist

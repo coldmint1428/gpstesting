@@ -34,6 +34,14 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
+        <!-- Push reminders (Firebase): status-bar icon + channel used when the app is closed -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_location" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="event-start" />
+
         <!-- Transistorsoft licence: NOT needed for DEBUG builds. Release builds need a key here:
         <meta-data
             android:name="com.transistorsoft.locationmanager.license"
