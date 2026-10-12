@@ -6,6 +6,7 @@
 import { ref, computed } from 'vue'
 import { formatTime, formatDayTime, toDateTimeLocal } from '../utils/time'
 import { remindIcsNow } from '../composables/usePushNotifications'
+import { askConfirm, toast } from '../composables/useNotify'
 
 const props = defineProps({
   sessions: { type: Object, required: true }, // from useEventSessions
@@ -19,33 +20,40 @@ const live = computed(() => props.sessions.liveSession.value)
 const scheduled = computed(() => props.sessions.scheduledStart.value)
 
 const busy = ref(false)
-const errorMsg = ref('')
-const infoMsg = ref('')
 const picking = ref(false) // start-time picker open
 const pickedTime = ref('')
 
+// Runs an action; the result appears as a toast (green = done, red = error)
 async function run(action, successText) {
-  errorMsg.value = ''
-  infoMsg.value = ''
   busy.value = true
   try {
     const result = await action()
-    infoMsg.value = typeof successText === 'function' ? successText(result) : successText
+    const text = typeof successText === 'function' ? successText(result) : successText
+    toast(text.text || text, text.type || 'success')
     picking.value = false
   } catch (err) {
-    errorMsg.value = err.message
+    toast(err.message, 'danger', 8000)
   }
   busy.value = false
 }
 
-function startNow() {
-  if (!confirm('Start the event now? ICs will be able to share their location.')) return
-  run(props.sessions.startEvent, 'Event started. ICs can share now.')
+async function startNow() {
+  const ok = await askConfirm({
+    title: 'Start the event now?',
+    message: 'ICs will be able to share their location, and ICs who are not sharing get a reminder on their phone.',
+    confirmText: 'Start event',
+  })
+  if (ok) run(props.sessions.startEvent, 'Event started. ICs can share now.')
 }
 
-function endNow() {
-  if (!confirm("End the event? Everyone's location sharing stops.")) return
-  run(props.sessions.endEvent, (stopped) =>
+async function endNow() {
+  const ok = await askConfirm({
+    title: 'End the event?',
+    message: "Everyone's location sharing stops. The recording stays in Playback for 7 days.",
+    confirmText: 'End event',
+    danger: true,
+  })
+  if (ok) run(props.sessions.endEvent, (stopped) =>
     'Event ended.' + (stopped ? ' Stopped sharing for ' + stopped + (stopped === 1 ? ' person.' : ' people.') : ''),
   )
 }
@@ -70,13 +78,16 @@ function remind() {
     (result) =>
       result && result.sent
         ? 'Reminder sent to ' + result.sent + (result.sent === 1 ? ' phone.' : ' phones.')
-        : 'No phone to remind: those ICs have no app with notifications on, or were reminded in the last minute.',
+        : {
+            text: 'No phone to remind: the ICs not sharing have no app with notifications on, or were reminded in the last minute.',
+            type: 'warning',
+          },
   )
 }
 
-function cancelSchedule() {
-  if (!confirm('Cancel the scheduled start?')) return
-  run(props.sessions.cancelSchedule, 'Scheduled start cancelled.')
+async function cancelSchedule() {
+  const ok = await askConfirm({ title: 'Cancel the scheduled start?', confirmText: 'Cancel schedule', danger: true })
+  if (ok) run(props.sessions.cancelSchedule, 'Scheduled start cancelled.')
 }
 </script>
 
@@ -141,8 +152,6 @@ function cancelSchedule() {
         <button class="btn btn-sm btn-link" type="button" @click="picking = false">Cancel</button>
       </form>
 
-      <div v-if="errorMsg" class="alert alert-danger py-1 px-2 small mt-2 mb-0" role="alert">{{ errorMsg }}</div>
-      <div v-if="infoMsg" class="alert alert-success py-1 px-2 small mt-2 mb-0" role="status">{{ infoMsg }}</div>
 
       <div v-if="$slots.sharing" class="border-top mt-2 pt-2">
         <slot name="sharing" />

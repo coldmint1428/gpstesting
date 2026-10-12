@@ -16,6 +16,7 @@ import {
   allowExactReminders,
 } from '../composables/useStartReminders'
 import { clearPushReminders } from '../composables/usePushNotifications'
+import { askConfirm } from '../composables/useNotify'
 import { formatDayTime } from '../utils/time'
 import SharingWarnings from '../components/SharingWarnings.vue'
 import EventStatus from '../components/EventStatus.vue'
@@ -120,7 +121,7 @@ function goLive() {
 }
 
 async function leaveEvent() {
-  if (!confirm('Leave this event?')) return
+  if (!(await askConfirm({ title: 'Leave this event?', confirmText: 'Leave', danger: true }))) return
   if (sharingHere.value) await tracker.stop() // stop sharing before leaving
   const { error } = await supabase.rpc('remove_member', { p_event_id: props.id, p_user_id: auth.user.id })
   if (error) errorMsg.value = error.message

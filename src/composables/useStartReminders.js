@@ -18,10 +18,12 @@ import { pushReady } from './usePushNotifications'
 const isNative = Capacitor.isNativePlatform()
 const KIND = 'event-start'
 
-let plugin = null
-async function notifications() {
-  if (!plugin) plugin = (await import('@capacitor/local-notifications')).LocalNotifications
-  return plugin
+// Returns the MODULE, not the plugin: a Capacitor plugin can't be returned from an async
+// function (await checks it for .then(), which Capacitor answers with "not implemented")
+let pluginModule = null
+async function loadNotifications() {
+  if (!pluginModule) pluginModule = await import('@capacitor/local-notifications')
+  return pluginModule
 }
 
 // Same notification id for the same event every time (32-bit number from the event id)
@@ -47,7 +49,7 @@ export async function syncStartReminders(userId, sharingEventId = null) {
   // drop the phone alarms instead of showing two reminders
   if (pushReady.value) return clearAllStartReminders()
   try {
-    const LN = await notifications()
+    const LN = (await loadNotifications()).LocalNotifications
 
     const { data: myGroups, error: e1 } = await supabase
       .from('group_members')
@@ -132,7 +134,7 @@ async function canBeExact(LN) {
 // For a button: opens Android's "Alarms & reminders" setting for this app
 export async function allowExactReminders() {
   if (!isNative) return
-  const LN = await notifications()
+  const LN = (await loadNotifications()).LocalNotifications
   const result = await LN.changeExactNotificationSetting()
   exactAllowed = result.exact_alarm === 'granted'
   return exactAllowed
@@ -140,14 +142,14 @@ export async function allowExactReminders() {
 
 export async function exactRemindersAllowed() {
   if (!isNative || Capacitor.getPlatform() !== 'android') return true
-  return canBeExact(await notifications())
+  return canBeExact((await loadNotifications()).LocalNotifications)
 }
 
 // Started sharing (or event over): this event's reminder can go
 export async function clearStartReminder(eventId) {
   if (!isNative) return
   try {
-    await remove(await notifications(), [idFor(eventId)])
+    await remove((await loadNotifications()).LocalNotifications, [idFor(eventId)])
   } catch (err) {
     console.error('[reminders] could not clear reminder:', err)
   }
@@ -157,7 +159,7 @@ export async function clearStartReminder(eventId) {
 export async function clearAllStartReminders() {
   if (!isNative) return
   try {
-    const LN = await notifications()
+    const LN = (await loadNotifications()).LocalNotifications
     const pending = (await LN.getPending()).notifications.filter((n) => n.extra && n.extra.kind === KIND)
     const delivered = (await LN.getDeliveredNotifications()).notifications.filter((n) => n.extra && n.extra.kind === KIND)
     await remove(LN, [...pending, ...delivered].map((n) => n.id))
@@ -171,7 +173,7 @@ let listening = false
 export async function listenForReminderTaps(router) {
   if (!isNative || listening) return
   listening = true
-  const LN = await notifications()
+  const LN = (await loadNotifications()).LocalNotifications
   LN.addListener('localNotificationActionPerformed', (action) => {
     const extra = action.notification.extra
     if (extra && extra.kind === KIND && extra.eventId) {

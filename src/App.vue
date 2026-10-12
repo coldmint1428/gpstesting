@@ -5,6 +5,7 @@ import { useAuthStore } from './stores/auth'
 import { useLocationTracker } from './composables/useLocationTracker'
 import { syncStartReminders, listenForReminderTaps } from './composables/useStartReminders'
 import { enablePush } from './composables/usePushNotifications'
+import NotifyHost from './components/NotifyHost.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -77,4 +78,5 @@ async function logout() {
   </nav>
 
   <RouterView />
+  <NotifyHost />
 </template>

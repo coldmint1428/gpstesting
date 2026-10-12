@@ -17,13 +17,15 @@ import { supabase } from '../lib/supabase'
 const isNative = Capacitor.isNativePlatform()
 export const pushReady = ref(false) // this phone has a push token saved for the logged-in user
 
-let plugin = null
+let pluginModule = null
 let currentToken = null
 let listenersAdded = false
 
-async function push() {
-  if (!plugin) plugin = (await import('@capacitor/push-notifications')).PushNotifications
-  return plugin
+// Returns the MODULE, not the plugin: a Capacitor plugin can't be returned from an async
+// function (await checks it for .then(), which Capacitor answers with "not implemented")
+async function loadPush() {
+  if (!pluginModule) pluginModule = await import('@capacitor/push-notifications')
+  return pluginModule
 }
 
 async function saveToken(token) {
@@ -38,7 +40,7 @@ async function saveToken(token) {
 export async function enablePush(router) {
   if (!isNative) return
   try {
-    const PN = await push()
+    const PN = (await loadPush()).PushNotifications
     if (!listenersAdded) {
       listenersAdded = true
       await PN.addListener('registration', (t) => saveToken(t.value))
@@ -88,7 +90,7 @@ export async function disablePush() {
 export async function clearPushReminders() {
   if (!isNative) return
   try {
-    const PN = await push()
+    const PN = (await loadPush()).PushNotifications
     await PN.removeAllDeliveredNotifications()
   } catch {
     // nothing shown
