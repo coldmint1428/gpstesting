@@ -58,7 +58,7 @@ Vite reads `.env` only at start/build → restart `npm run dev`, redeploy Vercel
 
 ## 4. Supabase project setup (order matters)
 
-1. **SQL** – run in order: `supabase/migrations/001_locations.sql` → `002_users_events_groups.sql` → `003_stop_sharing.sql` → `004_tracking_passes.sql` → `005_layouts.sql` (teammate's polygon bench, on `main`) → `006_self_renewing_pass.sql` → `007_event_sessions.sql` → `008_playback.sql` → `009_push_reminders.sql`. 007 switches on **pg_cron**, 009 **pg_net** (scheduled jobs, see §5.11). After 009, once per project: `select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');` **006 must run after 005**: 005 ends with a blanket `revoke execute on all functions ... from anon`, which blocks phone uploads (`report_location`) and the sign-up username check; 006 grants them back.
+1. **SQL** – run in order: `supabase/migrations/001_locations.sql` → `002_users_events_groups.sql` → `003_stop_sharing.sql` → `004_tracking_passes.sql` → `005_layouts.sql` (teammate's polygon bench, on `main`) → `006_self_renewing_pass.sql` → `007_event_sessions.sql` → `008_playback.sql` → `009_push_reminders.sql` → `010_stop_with_pass.sql`. 007 switches on **pg_cron**, 009 **pg_net** (scheduled jobs, see §5.11). After 009, once per project: `select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');` **006 must run after 005**: 005 ends with a blanket `revoke execute on all functions ... from anon`, which blocks phone uploads (`report_location`) and the sign-up username check; 006 grants them back.
 2. **Auth → Sign In / Providers → Email:** Email provider **on**, **Confirm email OFF**, **Allow anonymous sign-ins OFF**.
 3. **Edge Function** `reverse-geocode` (file `supabase/functions/reverse-geocode/index.ts`), **verify JWT = on**:
    `npx supabase functions deploy reverse-geocode`
@@ -246,6 +246,7 @@ All `SECURITY DEFINER`, `SET search_path = ''`. `EXECUTE` revoked from `public`/
 | `stop_member_sharing(p_event_id uuid, p_user_id uuid)` | authenticated: self, root/planner, or admin of the member's group (else 42501) | boolean | revokes the member's active passes; adds a `source='stop'` row at their last position; `false` if they weren't sharing from the phone. Members tab "Stop sharing" button |
 | `revoke_my_tracking_passes()` | authenticated | void | cancels all caller's active passes |
 | `my_active_tracking_pass()` | authenticated | table(event_id, group_id) | newest active pass (app reopen) |
+| `stop_sharing_with_pass(p_token uuid)` (010) | **anon**, authenticated | void | revokes that pass + `source='stop'` row at the last position; called by `BackgroundGeolocationHeadlessTask.java` when "Stop sharing" is pressed in the notification with the app closed |
 
 Since 007, `start_tracking_pass` also refuses when the event isn't live, and `report_location` answers PT403 (HTTP 403) once it isn't. Website inserts: policy **"ICs insert own group locations while live"** = `user_id = auth.uid() and is_ic_of(event_id, group_id) and event_is_live(event_id)`.
 

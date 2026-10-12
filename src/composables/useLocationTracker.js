@@ -467,7 +467,8 @@ function createTracker() {
         .catch((err) => console.error('[tracker] heartbeat position failed:', JSON.stringify(err)))
     })
 
-    // "Stop" button in the Android sharing notification = the same as pressing Stop sharing
+    // "Stop sharing" button in the Android sharing notification = the same as pressing Stop sharing
+    // (app open; when the app is closed, BackgroundGeolocationHeadlessTask.java does it)
     bg.onNotificationAction((buttonId) => {
       if (buttonId === 'notificationButtonStop' && isTracking.value) stop()
     })
@@ -515,6 +516,9 @@ function createTracker() {
       },
       app: {
         stopOnTerminate: false, // keep tracking if the app is swiped away
+        // App swiped away: BackgroundGeolocationHeadlessTask.java handles the notification's
+        // Stop sharing button and refused uploads (403), since this JavaScript isn't running then
+        enableHeadless: true,
         startOnBoot: true, // resume tracking after the phone restarts
         heartbeatInterval: 60, // seconds - iOS only (see onHeartbeat above)
         preventSuspend: true, // iOS: needed for heartbeats while locked (uses more battery)

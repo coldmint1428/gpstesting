@@ -276,12 +276,19 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 - [x] Edge Function `send-reminders` deployed (FCM HTTP v1); only pg_cron (secret) or a root / planner may call it
 - [x] App: registers the phone after login, "Event start reminders" channel, tap = open event + start sharing; logout removes the phone; phone alarms (above) only when push isn't set up
 - [x] "Remind ICs" button on the status card while live and someone isn't sharing
-- [ ] Firebase console → **Add project** (Analytics off) → **Add app → Android**, package name `sg.edu.smu.is216.g11` → download **google-services.json** → put it in `android/app/` (git-ignored; skip the SDK steps)
-- [ ] Firebase → Project settings → **Service accounts** → **Generate new private key** → keep the JSON file private (not in the repo, not in chat)
-- [ ] Supabase → Edge Functions → **Secrets** → add `FCM_SERVICE_ACCOUNT` = the whole contents of that JSON file
-- [ ] Android Studio → Sync → Run; allow notifications when asked
+- [x] Firebase console → **Add project** (Analytics off) → **Add app → Android**, package name `sg.edu.smu.is216.g11` → download **google-services.json** → put it in `android/app/` (git-ignored; skip the SDK steps)
+- [x] Firebase → Project settings → **Service accounts** → **Generate new private key** → keep the JSON file private (not in the repo, not in chat)
+- [x] Supabase → Edge Functions → **Secrets** → add `FCM_SERVICE_ACCOUNT` = the whole contents of that JSON file
+- [x] Android Studio → Sync → Run; allow notifications when asked
 - [ ] Test: log in as an IC on the phone, close the app; laptop: Start event → push within ~1 min; tap → sharing starts; "Remind ICs" → push again
 - [ ] iPhone push later: needs a paid Apple Developer account + APNs key uploaded to Firebase
+- [x] Fixed: phone never registered – plugins were returned from async functions ("…then() is not implemented"); now the module is returned
+- [x] Reminder drawn by the app itself (`android/.../ReminderMessagingService.java`, data push from `send-reminders`) with a **Start sharing** button – works with the app closed or open (+ in-app toast); scheduled reminders have the same button
+- [x] Tested on phone (13 Oct): push arrives, **Start sharing** opens the event and starts sharing
+- [x] Sharing notification button renamed "Stop sharing" (stays the whole time sharing is on)
+- [x] Fixed (code): "Stop sharing" in the notification did nothing with the app swiped away (JavaScript not running) → `BackgroundGeolocationHeadlessTask.java` stops the tracker + `010_stop_with_pass.sql` (`stop_sharing_with_pass`) shows "Stopped sharing"; it also stops the tracker when uploads are refused (event ended / planner stopped) while the app is closed
+- [ ] Test: share, swipe the app away, press Stop sharing in the notification → notification goes, laptop map shows "Stopped sharing"; again with End event from the laptop → phone stops within ~30 s
+- [x] Website: in-app confirm dialogs + toast messages instead of browser pop-ups; Share / My GPS details moved into the status card
 
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
@@ -291,7 +298,7 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 ## 6. Moving to the teammate's new Supabase project
 - [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–009 reproduce it 1:1
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 009; 005 = teammate's polygon bench `layouts`; 006 must come after 005; after 009 add the Vault secret `project_url`)
+- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 010; 005 = teammate's polygon bench `layouts`; 006 must come after 005; after 009 add the Vault secret `project_url`)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app
