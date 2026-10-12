@@ -13,6 +13,7 @@
 import { ref } from 'vue'
 import { Capacitor } from '@capacitor/core'
 import { supabase } from '../lib/supabase'
+import { toast } from './useNotify'
 
 const isNative = Capacitor.isNativePlatform()
 export const pushReady = ref(false) // this phone has a push token saved for the logged-in user
@@ -52,6 +53,9 @@ export async function enablePush(router) {
           router.push({ name: 'event', params: { id: data.eventId }, query: { share: '1' } })
         }
       })
+      // Arrived while the app is OPEN: Android doesn't show push messages for the app on screen,
+      // so show it ourselves - as a phone notification (same tap action) and an in-app toast
+      await PN.addListener('pushNotificationReceived', (notification) => showWhileOpen(notification, router))
       // Android: reminders use their own channel so they can make a sound and pop up
       if (Capacitor.getPlatform() === 'android') {
         await PN.createChannel({
@@ -72,6 +76,32 @@ export async function enablePush(router) {
     await PN.register() // answers through the 'registration' listener above
   } catch (err) {
     console.error('[push] could not enable push reminders:', err)
+  }
+}
+
+async function showWhileOpen(notification, router) {
+  const data = notification.data || {}
+  if (data.kind !== 'event-start') return
+  const title = notification.title || 'Event started'
+  const body = notification.body || 'Tap to share your location.'
+  toast(title + '. ' + body, 'warning', 8000)
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications')
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: Math.floor(Math.random() * 1000000000) + 1,
+          title,
+          body,
+          channelId: 'event-start',
+          smallIcon: 'ic_stat_location',
+          isExactNotification: false, // shown now: never ask for the "Alarms & reminders" permission
+          extra: { kind: 'event-start', eventId: data.eventId }, // tap = same as a push (useStartReminders.js)
+        },
+      ],
+    })
+  } catch (err) {
+    console.error('[push] could not show the reminder:', err)
   }
 }
 
