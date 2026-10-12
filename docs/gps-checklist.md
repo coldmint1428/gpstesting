@@ -181,15 +181,46 @@ To do:
 - [ ] Map: two people with the same initials ("TE" + "TE") look identical – show 3 letters or a number when initials clash
 - [ ] Install next app update (fixed in code, not yet on the phone): after Stop, a late queued reading got 403 and showed a wrong "IC removed?" message → Stop now uploads the queue first, clears it, then cancels the pass; late 403s are ignored
 
+## 4c. Start/End event, playback, start reminders (built 12 Oct)
+Built (Claude) – database on gpstest, website + app code:
+- [x] `007_event_sessions.sql`: sessions (Start → End, many per event, scheduled start), ICs can only share while **live** (tracking pass, phone uploads → 403, website inserts → RLS); End event stops everyone + "Stopped sharing" markers; session with no uploads for 24 h closes itself (pg_cron every 15 min)
+- [x] `008_playback.sql`: `playback_list`, `location_history` (root / planners only), cleanup at 00:05 SGT deletes a session 7 days after the day it ended (until 23:59), days without a session the same way
+- [x] Event status card: Not live / Scheduled / ● Live, Start now, Schedule start (date + time picker), Change / Cancel, End event, "x of y ICs sharing"
+- [x] Share button locked until live ("Sharing opens at …") and unlocks by itself at the scheduled time; ICs get "Not sharing yet" / "● Sharing" badges (Members tab)
+- [x] Playback tab (root / planners): session list with "available until", amber "Download to keep" in the last 2 days, Rewind for the live session (+ ● Live button)
+- [x] Player: timeline (drag) with start/stop marks, Play/Pause, 1× 2× 5× 10× 30× 60×, ±1 / ±10 min, replay length, gaps = "no update" / "lost contact", Stopped markers, tap a person = info card + place name + Follow + their whole trail (dashed over gaps, others fade), "Show trails" switch (last 10 min), group filter
+- [x] CSV download per session (`Event_2026-08-09_1700-2130.csv`, times as text `+08:00`) and **Replay from CSV** (read in the browser, never uploaded; accepts Excel re-saved dates; skips broken rows)
+- [x] Phone app: "Event started – tap to share" reminder at the scheduled start (`@capacitor/local-notifications`), stays until sharing starts, tap = opens the event and starts sharing; "Allow alarms" button for on-time reminders
+- [x] Tested on localhost (test account `claude_test`, event "Playback test (Claude)"): schedule → live by itself, badges, End event, playback states, CSV round trip, file replay, live Rewind
+
+To test (you):
+- [ ] Laptop: Start / Schedule / End on "NDP rehearsal 1"; Share locked before start; badges
+- [ ] Laptop: Playback → ▶ Play (does the marker move?), speeds, skip buttons, tap person (trail + card), Show trails, Download CSV, Replay from CSV
+- [ ] Phone: Share locked before start; after End the phone stops by itself (≤ 30 s)
+- [ ] Phone: schedule a start 3 min ahead, open the app once, close it → reminder appears at the time; tap it → sharing starts; reminder disappears
+- [ ] 14 Oct 00:05: the cleanup job deletes the oldest test readings (6 Oct) – expected, their 7 days ended (download a CSV first if you want them)
+
+Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
+- [x] `009_push_reminders.sql`: `push_tokens`, `push_reminders`, `claim_push_reminders` (ICs who haven't shared in the live session: at the start, then every 10 min, max 6), pg_cron job every minute while live → Edge Function (secret in Vault)
+- [x] Edge Function `send-reminders` deployed (FCM HTTP v1); only pg_cron (secret) or a root / planner may call it
+- [x] App: registers the phone after login, "Event start reminders" channel, tap = open event + start sharing; logout removes the phone; phone alarms (above) only when push isn't set up
+- [x] "Remind ICs" button on the status card while live and someone isn't sharing
+- [ ] Firebase console → **Add project** (Analytics off) → **Add app → Android**, package name `sg.edu.smu.is216.g11` → download **google-services.json** → put it in `android/app/` (git-ignored; skip the SDK steps)
+- [ ] Firebase → Project settings → **Service accounts** → **Generate new private key** → keep the JSON file private (not in the repo, not in chat)
+- [ ] Supabase → Edge Functions → **Secrets** → add `FCM_SERVICE_ACCOUNT` = the whole contents of that JSON file
+- [ ] Android Studio → Sync → Run; allow notifications when asked
+- [ ] Test: log in as an IC on the phone, close the app; laptop: Start event → push within ~1 min; tap → sharing starts; "Remind ICs" → push again
+- [ ] iPhone push later: needs a paid Apple Developer account + APNs key uploaded to Firebase
+
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)
 - [ ] Be ready to explain: roles + RLS, join codes, Realtime, weighted midpoint, 5 s save limit, background GPS
 
 ## 6. Moving to the teammate's new Supabase project
-- [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–006 reproduce it 1:1
+- [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–009 reproduce it 1:1
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 006; 006 must come after 005)
+- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 009; 006 must come after 005; after 009 add the Vault secret `project_url`)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app

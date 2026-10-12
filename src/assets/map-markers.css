@@ -1,0 +1,43 @@
+/* Map markers (live map + playback). Global because Leaflet creates the marker HTML outside Vue. */
+.pm {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font: 600 12px/30px system-ui, sans-serif;
+  text-align: center;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+}
+.pm-me {
+  border-color: #212529;
+}
+.pm-stale {
+  opacity: 0.55;
+}
+.pm-offline {
+  background: #adb5bd !important;
+  opacity: 0.8;
+}
+.pm-stopped {
+  /* Pressed Stop: white with a dashed outline (different from grey "lost contact") */
+  background: #fff !important;
+  color: #495057;
+  text-shadow: none;
+  border: 2px dashed #6c757d;
+}
+.gm {
+  width: 18px;
+  height: 18px;
+  transform: rotate(45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.pm-faded {
+  /* Playback: someone else is selected */
+  opacity: 0.35;
+}
+.pm-selected {
+  box-shadow: 0 0 0 3px #212529, 0 1px 6px rgba(0, 0, 0, 0.5);
+}

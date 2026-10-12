@@ -11,20 +11,23 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
 import { moveMarker } from '../utils/markerMotion'
-import { useLiveLocations } from '../composables/useLiveLocations'
 import { placeName } from '../composables/useReverseGeocode'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 
 const props = defineProps({
-  eventId: { type: String, required: true },
+  positions: { type: Object, required: true }, // from useLiveLocations (EventView)
+  now: { type: Number, required: true }, // ticking clock from useLiveLocations
+  liveError: { type: String, default: '' },
   members: { type: Array, required: true }, // from useEventData
   groups: { type: Array, required: true },
   myUserId: { type: String, default: null },
   active: { type: Boolean, default: true }, // false while another tab is shown
 })
 
-const { positions, errorMsg, now } = useLiveLocations(props.eventId)
+const positions = computed(() => props.positions)
+const now = computed(() => props.now)
+const errorMsg = computed(() => props.liveError)
 
 const mapEl = ref(null) // the <div> Leaflet draws into
 let map = null
@@ -327,40 +330,4 @@ onUnmounted(() => {
   border: 2px dashed #6c757d;
 }
 
-/* Marker styles are global because Leaflet creates the marker HTML outside Vue */
-:global(.pm) {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  color: #fff;
-  font: 600 12px/30px system-ui, sans-serif;
-  text-align: center;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
-}
-:global(.pm-me) {
-  border-color: #212529;
-}
-:global(.pm-stale) {
-  opacity: 0.55;
-}
-:global(.pm-offline) {
-  background: #adb5bd !important;
-  opacity: 0.8;
-}
-:global(.pm-stopped) {
-  /* Pressed Stop: white with a dashed outline (different from grey "lost contact") */
-  background: #fff !important;
-  color: #495057;
-  text-shadow: none;
-  border: 2px dashed #6c757d;
-}
-:global(.gm) {
-  width: 18px;
-  height: 18px;
-  transform: rotate(45deg);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-}
 </style>

@@ -311,8 +311,8 @@ function createTracker() {
     if (!error) {
       markSaved()
     } else if (error.code === '42501') {
-      // RLS said no: this user is not (or no longer) the group's IC
-      errorMsg.value = 'You are not allowed to share for this group any more (IC removed?). Sharing stopped.'
+      // RLS said no: the event isn't live, or this user is not (or no longer) the group's IC
+      errorMsg.value = 'Sharing stopped: the event is not live (ended or not started), or you are no longer this group\'s IC.'
       stop(false)
     } else {
       dbStatus.value = 'Save failed: ' + error.message
@@ -436,7 +436,7 @@ function createTracker() {
         // The database said no (pass stopped/expired or not IC any more). The plugin would retry this forever,
         // so stop tracking and clear the queue.
         errorMsg.value =
-          'Sharing stopped: stopped by a planner or from another device, no upload for 24 h, or you are no longer the IC.'
+          'Sharing stopped: the event ended, a planner stopped your sharing, there was no upload for 24 h, or you are no longer the IC.'
         isTracking.value = false
         sharingEventId.value = null
         forgetSharing()

@@ -58,11 +58,11 @@ Vite reads `.env` only at start/build → restart `npm run dev`, redeploy Vercel
 
 ## 4. Supabase project setup (order matters)
 
-1. **SQL** – run in order: `supabase/migrations/001_locations.sql` → `002_users_events_groups.sql` → `003_stop_sharing.sql` → `004_tracking_passes.sql` → `005_layouts.sql` (teammate's polygon bench, on `main`) → `006_self_renewing_pass.sql`. **006 must run after 005**: 005 ends with a blanket `revoke execute on all functions ... from anon`, which blocks phone uploads (`report_location`) and the sign-up username check; 006 grants them back.
+1. **SQL** – run in order: `supabase/migrations/001_locations.sql` → `002_users_events_groups.sql` → `003_stop_sharing.sql` → `004_tracking_passes.sql` → `005_layouts.sql` (teammate's polygon bench, on `main`) → `006_self_renewing_pass.sql` → `007_event_sessions.sql` → `008_playback.sql` → `009_push_reminders.sql`. 007 switches on **pg_cron**, 009 **pg_net** (scheduled jobs, see §5.11). After 009, once per project: `select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');` **006 must run after 005**: 005 ends with a blanket `revoke execute on all functions ... from anon`, which blocks phone uploads (`report_location`) and the sign-up username check; 006 grants them back.
 2. **Auth → Sign In / Providers → Email:** Email provider **on**, **Confirm email OFF**, **Allow anonymous sign-ins OFF**.
 3. **Edge Function** `reverse-geocode` (file `supabase/functions/reverse-geocode/index.ts`), **verify JWT = on**:
    `npx supabase functions deploy reverse-geocode`
-4. **Edge Function secrets:** `ONEMAP_EMAIL`, `ONEMAP_PASSWORD` (free OneMap account).
+4. **Edge Function secrets:** `ONEMAP_EMAIL`, `ONEMAP_PASSWORD` (free OneMap account); `FCM_SERVICE_ACCOUNT` (Firebase service-account JSON, for push reminders). Deploy `send-reminders` with **verify JWT = off** (it checks callers itself).
 5. **Auth → URL Configuration:** only needed if adding password reset / email confirmation / social login.
 
 ---
@@ -148,11 +148,44 @@ On a fresh project the FKs can be created normally (without `NOT VALID`).
 
 Index `(user_id)`. RLS on, **no policies** (only reachable through functions).
 
+### 5.10 `event_sessions` – Start event → End event (007)
+| Column | Type | Null | Default | Rules |
+|---|---|---|---|---|
+| id | uuid | no | `gen_random_uuid()` | PK |
+| event_id | uuid | no | – | FK → `events(id)` CASCADE |
+| starts_at | timestamptz | no | – | future = scheduled start; ≤ now() = started |
+| ended_at | timestamptz | yes | – | null = scheduled or live; check `ended_at >= starts_at` |
+| started_by / ended_by | uuid | yes | – | FK → `profiles(id)` SET NULL |
+| end_reason | text | yes | – | `'ended'` (End button) \| `'auto'` (24 h without uploads) |
+| created_at | timestamptz | no | `now()` | |
+
+Unique index `(event_id) where ended_at is null` = at most one scheduled-or-live session per event. Index `(event_id, starts_at desc)`. RLS: members `select`; writes only through functions. **Live** = `ended_at is null and starts_at <= now()`.
+
+### 5.11 Scheduled jobs (pg_cron)
+| Job | Schedule (UTC) | Runs |
+|---|---|---|
+| `gps-auto-close-sessions` | `*/15 * * * *` | `auto_close_idle_sessions()` – live sessions with no upload for 24 h end at their last upload |
+| `gps-cleanup-expired-locations` | `5 16 * * *` (00:05 SGT) | `cleanup_expired_locations()` – deletes readings past "available until" + passes older than 8 days |
+| `gps-push-reminders` | `* * * * *` | only while a session is live: `net.http_post` to Edge Function `send-reminders` with header `x-cron-secret` (Vault `push_cron_secret`, URL from Vault `project_url`) |
+
+**Retention rule:** `playback_available_until(end) = midnight SGT at the start of (end's SGT date + 8 days)` – shown as "until 23:59, 7 days after the day it ended". Readings inside a session use the session's end; readings outside any session use their own day.
+
+### 5.12 Push reminders (009)
+`push_tokens(token text PK, user_id uuid FK profiles CASCADE, platform text 'android'|'ios', updated_at timestamptz)` and `push_reminders(session_id uuid FK event_sessions CASCADE, user_id uuid FK profiles CASCADE, sent_count int, last_sent_at timestamptz, PK (session_id, user_id))`. RLS on, no policies (functions only).
+
+| Function | Who | Behaviour |
+|---|---|---|
+| `register_push_token(p_token, p_platform)` / `unregister_push_token(p_token)` | authenticated | save / remove this phone for the caller (a phone belongs to whoever logged in last) |
+| `claim_push_reminders(p_event_id default null, p_force default false)` | service_role | ICs in a live session with no reading and no new pass since the start; first reminder at once, then every 10 min, max 6; forced (planner button) at most once a minute; records each reminder; returns their tokens |
+| `delete_push_token(p_token)`, `check_push_cron_secret(p_secret)` | service_role | invalid tokens / caller check |
+
+Edge Function `supabase/functions/send-reminders/index.ts`: caller = pg_cron (`x-cron-secret`) or a root/planner (login token + `{ eventId }`); signs a Google JWT with the service account → FCM HTTP v1 `messages:send`; Android channel `event-start`, tag `event-start-<eventId>` (newer reminder replaces older), data `{ kind: 'event-start', eventId }`; deletes tokens FCM reports as UNREGISTERED. App side: `composables/usePushNotifications.js` (`@capacitor/push-notifications` 8.1.2); `android/app/google-services.json` from Firebase (git-ignored); manifest meta-data `default_notification_icon` = `ic_stat_location`, `default_notification_channel_id` = `event-start`.
+
 ### 5.8 Trigger
 `on_auth_user_created` AFTER INSERT ON `auth.users` → `handle_new_user()`: inserts `profiles(id, lower(username), display_name)` from sign-up metadata (`raw_user_meta_data.username`, `.display_name`); skips users without a username.
 
 ### 5.9 Realtime publication `supabase_realtime`
-`locations`, `group_members`, `event_roles`.
+`locations`, `group_members`, `event_roles`, `event_sessions`.
 
 ---
 
@@ -213,6 +246,26 @@ All `SECURITY DEFINER`, `SET search_path = ''`. `EXECUTE` revoked from `public`/
 | `stop_member_sharing(p_event_id uuid, p_user_id uuid)` | authenticated: self, root/planner, or admin of the member's group (else 42501) | boolean | revokes the member's active passes; adds a `source='stop'` row at their last position; `false` if they weren't sharing from the phone. Members tab "Stop sharing" button |
 | `revoke_my_tracking_passes()` | authenticated | void | cancels all caller's active passes |
 | `my_active_tracking_pass()` | authenticated | table(event_id, group_id) | newest active pass (app reopen) |
+
+Since 007, `start_tracking_pass` also refuses when the event isn't live, and `report_location` answers PT403 (HTTP 403) once it isn't. Website inserts: policy **"ICs insert own group locations while live"** = `user_id = auth.uid() and is_ic_of(event_id, group_id) and event_is_live(event_id)`.
+
+### 7.4 Event sessions (007)
+| Function | Who | Returns | Behaviour |
+|---|---|---|---|
+| `live_session_id(p_event_id)` / `event_is_live(p_event_id)` | authenticated (helpers) | uuid / boolean | the live session, if any |
+| `start_event(p_event_id)` | root/planner (else 42501) | uuid | starts now; a scheduled start is moved to now; error if already live |
+| `schedule_event_start(p_event_id, p_starts_at timestamptz)` | root/planner | uuid | future time (≤ 1 year); moves an existing scheduled start; error if live |
+| `cancel_scheduled_start(p_event_id)` | root/planner | void | deletes the not-yet-started session |
+| `end_event(p_event_id)` | root/planner | integer | ends the live session, revokes every pass of the event, adds `source='stop'` rows for people whose newest reading in the session is GPS; returns how many |
+| `close_session_sharing(p_session_id, p_end)` / `auto_close_idle_sessions()` | internal / pg_cron | integer | – |
+
+### 7.5 Playback (008) – root / planners only (else 42501)
+| Function | Returns | Behaviour |
+|---|---|---|
+| `playback_list(p_event_id)` | table(kind 'session'\|'day', session_id, starts_at, ended_at, end_reason, available_until, readings, people) | started sessions + days with readings outside any session, newest first |
+| `location_history(p_event_id, p_from, p_to, p_after_id bigint default 0)` | jsonb `{rows: [[id, user_id, group_id, lat, lng, accuracy, source, epoch_ms]], next_after_id, people, groups}` | pages of 10 000 by id; `people` / `groups` on the first page only (names of people who left still work) |
+| `playback_available_until(timestamptz)` | timestamptz | retention rule (§5.11) |
+| `cleanup_expired_locations()` | integer | pg_cron only |
 
 ---
 
@@ -348,19 +401,34 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/marke
 |---|---|---|
 | `/login` | LoginView | sign in / create account |
 | `/events` | EventsView | my events, create, join with code |
-| `/events/:id` | EventView | tabs Live map · Members · Invite; one-tap Share/Stop |
+| `/events/:id` | EventView | status card (Start / Schedule / End), tabs Live map · Members · Invite · Playback (root/planner); one-tap Share/Stop (locked until live) |
 | `/events/:id/share` | GpsTestView | "My GPS details" (raw readings, save status) |
 | `/join/:code` | JoinView | invite link / QR target |
 | `/gps` | redirect → `/events` | |
 
-`meta.requiresAuth` routes → login guard (Pinia `stores/auth.js`; sign-out stops sharing first). Other files: `components/MembersPanel.vue`, `InvitePanel.vue` (code, link, QR, WhatsApp `https://wa.me/?text=`, Telegram `https://t.me/share/url?url=&text=`), `SharingWarnings.vue`, `composables/useEventData.js`, `lib/supabase.js` (exports `supabase`, `supabaseUrl`, `supabaseAnonKey`; `null` client if `.env` missing).
+`meta.requiresAuth` routes → login guard (Pinia `stores/auth.js`; sign-out stops sharing first). Other files: `components/MembersPanel.vue`, `InvitePanel.vue` (code, link, QR, WhatsApp `https://wa.me/?text=`, Telegram `https://t.me/share/url?url=&text=`), `SharingWarnings.vue`, `EventStatus.vue`, `PlaybackPanel.vue`, `PlaybackPlayer.vue`, `composables/useEventData.js`, `useEventSessions.js`, `usePlaybackHistory.js`, `useStartReminders.js` (phone reminders, `@capacitor/local-notifications` 8.3.0, icon `res/drawable/ic_stat_location.xml`), `utils/playback.js` (tracks, position at time t, trails, CSV), `utils/time.js` (SGT formatting), `assets/map-markers.css`, `lib/supabase.js` (exports `supabase`, `supabaseUrl`, `supabaseAnonKey`; `null` client if `.env` missing).
+
+### 13.1 Playback CSV format (v1)
+Line 1: `# Event Tracker playback,v1,<event name>,<from>,<to>` · line 2 = header · then one row per reading, oldest first. UTF-8 with BOM, CRLF.
+
+| Column | Example | Notes |
+|---|---|---|
+| time_sgt | `2026-08-09T17:00:05+08:00` | text, so Excel doesn't round it; the reader also accepts `9/8/2026 17:00` and `2026-08-09 17:00:05` (= SGT) |
+| name, username | `Komin Chow`, `komin` | |
+| group, group_colour | `Contingent A`, `#0d6efd` | |
+| lat, lng | `1.293000`, `103.852000` | 6 decimals |
+| accuracy_m | `8` | |
+| source | `gps` \| `stop` | |
+| user_id, group_id | uuid | identify people/groups; name is the fallback |
+
+Required to replay: `time_sgt`, `name`, `lat`, `lng`. Rows that can't be read are skipped and counted.
 
 ---
 
 ## 14. Migration checklist (to the teammate's project / repo)
 
 1. Teammate adds you to their Supabase organisation.
-2. §4 steps 1–4: run migrations 001 → 006 (006 after 005), auth settings, deploy the edge function, add OneMap secrets.
+2. §4 steps 1–4: run migrations 001 → 009 (006 after 005; 007 enables pg_cron; after 009 add the Vault `project_url`), Firebase project + `google-services.json` + `FCM_SERVICE_ACCOUNT` secret, deploy `send-reminders`, auth settings, deploy the edge function, add OneMap secrets.
 3. Copy into the team repo: `src/` files listed in §12–13, `supabase/`, `capacitor.config.json`, `android/` + `ios/` (or regenerate with `npx cap add android|ios` and re-apply §11), package versions §2, scripts §2.
 4. `.env` with the new URL + public key; Vercel env vars (`VITE_*`, type Config); redeploy.
 5. `npm install` → `npm run cap:sync` → Android Studio ▶ Run; reinstall the phone app (keys are baked in at build).

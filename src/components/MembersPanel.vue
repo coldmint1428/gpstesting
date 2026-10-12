@@ -16,6 +16,7 @@ const props = defineProps({
   me: { type: Object, default: null },
   isRoot: { type: Boolean, default: false },
   canManage: { type: Boolean, default: false },
+  sharingStatus: { type: Object, default: () => ({}) }, // live only: { userId: true (sharing) | false }
 })
 const emit = defineEmits(['changed'])
 
@@ -211,6 +212,12 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
               <span v-for="r in m.roles" :key="r" class="badge text-bg-secondary me-1 text-capitalize">{{ r }}</span>
               <span v-if="m.isAdmin" class="badge text-bg-info me-1">Group admin</span>
               <span v-if="m.isIC" class="badge text-bg-success me-1">IC</span>
+              <span v-if="sharingStatus[m.id] === true" class="badge text-bg-light border border-success text-success me-1" data-testid="badge-sharing">
+                ● Sharing
+              </span>
+              <span v-else-if="sharingStatus[m.id] === false" class="badge text-bg-warning me-1" :data-testid="'badge-not-sharing-' + m.username">
+                Not sharing yet
+              </span>
             </div>
 
             <!-- Group (root / planner) -->

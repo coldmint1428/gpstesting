@@ -4,6 +4,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useLocationTracker, stopBackgroundTracking } from '../composables/useLocationTracker'
+import { clearAllStartReminders } from '../composables/useStartReminders'
+import { disablePush } from '../composables/usePushNotifications'
 
 export const useAuthStore = defineStore('auth', () => {
   const session = ref(null)
@@ -97,6 +99,8 @@ export const useAuthStore = defineStore('auth', () => {
     const tracker = useLocationTracker()
     if (tracker.isTracking.value) await tracker.stop()
     await stopBackgroundTracking()
+    await clearAllStartReminders()
+    await disablePush()
     await supabase.auth.signOut()
     session.value = null
     profile.value = null
