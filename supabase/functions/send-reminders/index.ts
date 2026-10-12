@@ -80,25 +80,19 @@ function messageFor(r: Reminder) {
       ? 'Event started: ' + r.event_name
       : 'Reminder: ' + r.event_name + ' is live'
   const body = r.forced
-    ? r.event_name + ' is live. Tap to share your location.'
+    ? r.event_name + ' is live. Tap Start sharing to share your location.'
     : r.reminder_no === 1
-      ? 'Tap to share your location with the planners.'
-      : "You're not sharing your location yet. Tap to share."
+      ? 'Tap Start sharing to share your location with the planners.'
+      : "You're not sharing your location yet. Tap Start sharing."
   return {
     message: {
       token: r.token,
-      notification: { title, body },
-      data: { kind: 'event-start', eventId: r.event_id },
-      android: {
-        priority: 'HIGH',
-        notification: {
-          channel_id: 'event-start', // created by the app (usePushNotifications.js)
-          tag: 'event-start-' + r.event_id, // a new reminder replaces the old one instead of piling up
-          notification_priority: 'PRIORITY_HIGH',
-          default_sound: true,
-        },
-      },
-      apns: { payload: { aps: { sound: 'default' } } },
+      // Android: a DATA message, drawn by the app itself (ReminderMessagingService.java) so it can
+      // have a "Start sharing" button - works when the app is closed. HIGH = delivered right away.
+      data: { kind: 'event-start', eventId: r.event_id, title, body },
+      android: { priority: 'HIGH', ttl: '900s' }, // drop it if the phone is offline for 15+ min
+      // iPhone: a normal alert (needs APNs set up in Firebase)
+      apns: { payload: { aps: { alert: { title, body }, sound: 'default' } } },
     },
   }
 }

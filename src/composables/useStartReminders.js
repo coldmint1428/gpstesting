@@ -80,11 +80,12 @@ export async function syncStartReminders(userId, sharingEventId = null) {
         wanted.set(id, {
           id,
           title: 'Event started: ' + (s.events ? s.events.name : 'your event'),
-          body: 'Tap to share your location with the planners.',
+          body: 'Tap Start sharing to share your location with the planners.',
           schedule: { at: new Date(at), allowWhileIdle: true },
           ongoing: true, // Android: can't be swiped away (until Android 14)
           autoCancel: false, // stays after tapping, until sharing really starts
           smallIcon: 'ic_stat_location',
+          actionTypeId: KIND,
           isExactNotification: await canBeExact(LN),
           extra: { kind: KIND, eventId: s.event_id },
         })
@@ -110,6 +111,10 @@ export async function syncStartReminders(userId, sharingEventId = null) {
         const asked = await LN.requestPermissions()
         if (asked.display !== 'granted') return
       }
+      // "Start sharing" button on the reminder (tapping it = same as tapping the reminder)
+      await LN.registerActionTypes({
+        types: [{ id: KIND, actions: [{ id: 'start-sharing', title: 'Start sharing', foreground: true }] }],
+      })
       await LN.schedule({ notifications: [...wanted.values()] }) // same id = replaces the old alarm
     }
   } catch (err) {
