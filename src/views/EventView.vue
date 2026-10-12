@@ -137,44 +137,47 @@ async function leaveEvent() {
     </div>
 
     <template v-else>
-      <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
-        <div>
-          <h1 class="h4 mb-1" data-testid="event-name">{{ event.name }}</h1>
-          <div>
-            <span v-for="r in myRoles" :key="r" class="badge text-bg-secondary me-1 text-capitalize">{{ r }}</span>
-            <span v-if="me && me.isAdmin" class="badge text-bg-info me-1">Group admin</span>
-            <span v-if="me && me.isIC" class="badge text-bg-success me-1">IC</span>
-          </div>
-        </div>
-        <!-- Only the group's IC shares, and only while the event is live. One tap starts sharing. -->
-        <div v-if="isIC" class="d-flex flex-wrap gap-2 align-items-center">
-          <button v-if="sharingHere" class="btn btn-danger" data-testid="stop-share-btn" @click="tracker.stop()">
-            Stop sharing
-          </button>
-          <button v-else-if="isLive" class="btn btn-success" data-testid="share-btn" @click="startSharing">
-            Share my location
-          </button>
-          <button v-else class="btn btn-success" disabled data-testid="share-btn-locked">Share my location</button>
-          <RouterLink :to="{ name: 'share', params: { id } }" class="btn btn-outline-secondary" data-testid="share-details-link">
-            My GPS details
-          </RouterLink>
-          <div v-if="!isLive && !sharingHere" class="small text-muted w-100 text-sm-end" data-testid="share-locked-text">
-            <template v-if="scheduledStart">Sharing opens at {{ formatDayTime(scheduledStart) }}.</template>
-            <template v-else>Sharing opens when a planner starts the event.</template>
-          </div>
-        </div>
+      <div class="mb-3">
+        <h1 class="h4 mb-1" data-testid="event-name">{{ event.name }}</h1>
+        <span v-for="r in myRoles" :key="r" class="badge text-bg-secondary me-1 text-capitalize">{{ r }}</span>
+        <span v-if="me && me.isAdmin" class="badge text-bg-info me-1">Group admin</span>
+        <span v-if="me && me.isIC" class="badge text-bg-success me-1">IC</span>
       </div>
 
-      <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount" />
+      <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount">
+        <!-- Only the group's IC shares, and only while the event is live. One tap starts sharing. -->
+        <template v-if="isIC" #sharing>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="small flex-grow-1">
+              <strong>Your location:</strong>
+              <span v-if="sharingHere" class="text-success" data-testid="sharing-banner">
+                ● Sharing with this event's planners and your group.
+              </span>
+              <span v-else-if="isLive" class="text-muted"> not shared yet.</span>
+              <span v-else class="text-muted" data-testid="share-locked-text">
+                <template v-if="scheduledStart"> sharing opens at {{ formatDayTime(scheduledStart) }}.</template>
+                <template v-else> sharing opens when a planner starts the event.</template>
+              </span>
+            </span>
+            <button v-if="sharingHere" class="btn btn-sm btn-danger" data-testid="stop-share-btn" @click="tracker.stop()">
+              Stop sharing
+            </button>
+            <button v-else-if="isLive" class="btn btn-sm btn-success" data-testid="share-btn" @click="startSharing">
+              Share my location
+            </button>
+            <button v-else class="btn btn-sm btn-success" disabled data-testid="share-btn-locked">Share my location</button>
+            <RouterLink :to="{ name: 'share', params: { id } }" class="btn btn-sm btn-outline-secondary" data-testid="share-details-link">
+              My GPS details
+            </RouterLink>
+          </div>
+        </template>
+      </EventStatus>
 
       <div v-if="isIC && scheduledStart && tracker.isNative && !exactAllowed" class="alert alert-light border py-2 small">
         We'll remind you to share at the start time. For an on-time reminder, allow alarms for this app.
         <button class="btn btn-sm btn-outline-primary ms-1" @click="allowExact">Allow alarms</button>
       </div>
 
-      <div v-if="sharingHere" class="alert alert-success py-2" role="status" data-testid="sharing-banner">
-        You are sharing your live location with this event's planners and your group.
-      </div>
       <SharingWarnings v-if="sharingHere" />
       <div v-if="shareError" class="alert alert-danger py-2" role="alert" data-testid="share-error">{{ shareError }}</div>
       <p class="small text-muted mb-3" data-testid="view-scope">{{ viewText }}</p>

@@ -1,6 +1,7 @@
 <script setup>
 // Event status: Not started / Starts at ... / Live, with Start, End and a start-time picker
 // for root and planners. Everyone else only sees the status.
+// Slot "sharing": a second row for the IC's own Share / My GPS details buttons.
 // ICs can only share while the event is live (checked by the database too).
 import { ref, computed } from 'vue'
 import { formatTime, formatDayTime, toDateTimeLocal } from '../utils/time'
@@ -142,6 +143,10 @@ function cancelSchedule() {
 
       <div v-if="errorMsg" class="alert alert-danger py-1 px-2 small mt-2 mb-0" role="alert">{{ errorMsg }}</div>
       <div v-if="infoMsg" class="alert alert-success py-1 px-2 small mt-2 mb-0" role="status">{{ infoMsg }}</div>
+
+      <div v-if="$slots.sharing" class="border-top mt-2 pt-2">
+        <slot name="sharing" />
+      </div>
     </div>
   </div>
 </template>
