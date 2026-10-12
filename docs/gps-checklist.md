@@ -287,7 +287,8 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 - [x] Tested on phone (13 Oct): push arrives, **Start sharing** opens the event and starts sharing
 - [x] Sharing notification button renamed "Stop sharing" (stays the whole time sharing is on)
 - [x] Fixed (code): "Stop sharing" in the notification did nothing with the app swiped away (JavaScript not running) → `BackgroundGeolocationHeadlessTask.java` stops the tracker + `010_stop_with_pass.sql` (`stop_sharing_with_pass`) shows "Stopped sharing"; it also stops the tracker when uploads are refused (event ended / planner stopped) while the app is closed
-- [ ] Test: share, swipe the app away, press Stop sharing in the notification → notification goes, laptop map shows "Stopped sharing"; again with End event from the laptop → phone stops within ~30 s
+- [x] Tested on phone (13 Oct): share, swipe the app away, Stop sharing in the notification → sharing stops
+- [ ] Test: share, swipe the app away, End event on the laptop → phone notification goes within ~30 s
 - [x] Website: in-app confirm dialogs + toast messages instead of browser pop-ups; Share / My GPS details moved into the status card
 
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
