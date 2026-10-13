@@ -3,6 +3,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import BenchAlert from '../components/BenchAlert.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -102,7 +103,7 @@ async function submit() {
                 </div>
               </template>
 
-              <div v-if="errorMsg" class="alert alert-danger py-2" role="alert" data-testid="auth-error">{{ errorMsg }}</div>
+              <BenchAlert v-if="errorMsg" data-testid="auth-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
               <button type="submit" class="btn btn-primary w-100" :disabled="busy" data-testid="auth-submit">
                 {{ busy ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Create account' }}

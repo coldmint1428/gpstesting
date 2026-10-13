@@ -23,6 +23,7 @@
 //    older snapshot is what made a dragged area jump back to where it started.
 import { ref, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
+import { LAYOUT_TOO_LARGE_MESSAGE, layoutBytes, MAX_LAYOUT_BYTES } from '../utils/layoutLimits'
 
 const RENEW_MS = 60 * 1000
 
@@ -46,11 +47,36 @@ function isLostClaim(error) {
   return error.code === 'PT409' || /claim expired/i.test(error.message || '')
 }
 
+// A save is refused with 54000 (program_limit_exceeded) when the canvas is over 4 MB.
+function isTooLarge(error) {
+  if (!error) return false
+  return error.code === '54000' || /too large/i.test(error.message || '')
+}
+
+// A save is refused with 22023 (invalid_parameter_value) when the canvas breaks one of the
+// rules in area_ok()/floor_plan_ok(), and save_bench() raises that with one sentence for
+// every rule: "The layout data is not valid". That tells the planner nothing.
+function isInvalidData(error) {
+  if (!error) return false
+  return error.code === '22023' || /layout data is not valid/i.test(error.message || '')
+}
+
+// The canvas is one JSON document and the image lives inside it, so "how big is it" is
+// measured on the text that is about to be sent -- the same string save() hands to
+// supabase-js, serialised once. `undefined` means the caller built the payload itself and
+// this has to do the serialising.
+function measure(nextData, jsonText) {
+  return jsonText === undefined ? layoutBytes(JSON.stringify(nextData)) : layoutBytes(jsonText)
+}
+
 export function useBenchClaim() {
   const data = ref(normalise(null)) // the saved canvas
   const updatedAt = ref(null)
   const loading = ref(true)
   const errorMsg = ref('')
+  // Size of the canvas as it stands, in the same bytes save_bench() counts, so the page can
+  // tell the planner how close to the 4 MB cap they are before they find out the hard way.
+  const bytes = ref(0)
 
   const editing = ref(false) // do I hold a live claim?
   const claiming = ref(false)
@@ -116,6 +142,7 @@ export function useBenchClaim() {
 
     data.value = normalise(row.data)
     updatedAt.value = row.updated_at ? new Date(row.updated_at) : null
+    bytes.value = layoutBytes(JSON.stringify(data.value))
     heldBy.value = row.held_by || ''
     claimExpiresAt.value = row.claim_expires_at ? new Date(row.claim_expires_at) : null
     return data.value
@@ -186,9 +213,29 @@ export function useBenchClaim() {
   }
 
   // ---------- Save ----------
-  async function doSave(nextData) {
+  // `opts.jsonText` is optional: pass it when the caller already serialised the payload, so
+  // the document is not turned into a string twice on every lock.
+  //
+  // `opts.diagnose(nextData)` is optional too: it returns a sentence when the CLIENT can
+  // already see why the canvas would be refused, or null when it cannot. It is only asked
+  // after the database has refused, and only so the planner gets a reason instead of
+  // "The layout data is not valid". It is a backstop, not a guard -- anything routinely
+  // reachable should be refused at the point the planner tries to do it.
+  async function doSave(nextData, opts) {
     const mine = token
     if (!editing.value || !mine || !supabase) return false
+
+    const size = measure(nextData, opts && opts.jsonText)
+
+    // Refuse an over-large canvas BEFORE the round trip. The database would give the same
+    // answer, only later and less usefully: by then the planner has already locked the thing
+    // they were working on. Refusing here keeps their work on screen and says what to do.
+    // Deleting a floor plan always shrinks the document, so the way out of this state is
+    // itself a save -- there is no dead end.
+    if (size > MAX_LAYOUT_BYTES) {
+      errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
+      return false
+    }
 
     saving.value = true
     const { error } = await supabase.rpc('save_bench', { p_token: mine, p_data: nextData })
@@ -202,6 +249,8 @@ export function useBenchClaim() {
     if (!error) {
       // Deliberately NOT `data.value = nextData` -- see rule 2 at the top of the file.
       updatedAt.value = new Date()
+      bytes.value = size
+      errorMsg.value = '' // a failed save left its reason here; it no longer applies
       return true
     }
 
@@ -213,13 +262,51 @@ export function useBenchClaim() {
       return false
     }
 
-    errorMsg.value = error.message
+    // Over the cap even though we measured first: the row is bigger than this browser thinks
+    // it is, most likely because an older client wrote it.
+    if (isTooLarge(error)) {
+      errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
+      return false
+    }
+
+    errorMsg.value =
+      (isInvalidData(error) ? await explain(nextData, opts) : '') ||
+      error.message ||
+      'The bench could not be saved.'
     return false
   }
 
+  // The database said no; find out what it objected to. Three answers, best first:
+  //
+  //   1. the client's own diagnosis, which NAMES the thing to fix (see opts.diagnose);
+  //   2. layout_problem(), which asks the database the same question -- it knows about floor
+  //      plans, and it is the only side that can see the row as it is actually stored;
+  //   3. nothing. A generic sentence is still better than silence.
+  async function explain(nextData, opts) {
+    if (opts && typeof opts.diagnose === 'function') {
+      try {
+        const mine = opts.diagnose(nextData)
+        if (mine) return mine
+      } catch {
+        // A broken diagnosis must not replace the failure it was meant to describe.
+      }
+    }
+
+    try {
+      const { data, error } = await supabase.rpc('layout_problem', { p_data: nextData })
+      if (error) return ''
+      // A scalar function arrives as the value itself; be forgiving about an array wrapper.
+      const reason = Array.isArray(data) ? data[0] : data
+      return typeof reason === 'string' ? reason : ''
+    } catch {
+      return ''
+    }
+  }
+
   // Save the whole canvas. The token travels with it.
-  function save(nextData) {
-    return enqueue(() => doSave(nextData))
+  function save(nextData, jsonText) {
+    const opts = typeof jsonText === 'string' ? { jsonText } : jsonText || {}
+    return enqueue(() => doSave(nextData, opts))
   }
 
   // ---------- Heartbeat ----------
@@ -288,6 +375,7 @@ export function useBenchClaim() {
     errorMsg,
     save,
     saving,
+    bytes,
     // claim
     open,
     startEditing,

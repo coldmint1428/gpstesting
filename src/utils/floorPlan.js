@@ -128,10 +128,17 @@ export function clampSize(metres) {
   return Math.min(MAX_SIZE_M, Math.max(MIN_SIZE_M, metres))
 }
 
+// A new plan is placed at about a quarter of the screen width, which at a zoomed-out view
+// can be many kilometres. MAX_SIZE_M is the resize ceiling, not a sensible starting point,
+// so the first size is capped well below it: a venue plan that starts larger than the venue
+// is one the planner has to fix before they can use it.
+export const MAX_DEFAULT_SIZE_M = 2000
+
 // A brand-new plan, centred on the current view: roughly a quarter of the screen wide,
 // with the height taken from the image's own aspect ratio.
 export function defaultPlan({ centre, zoom, image, imageAspect, id, name }) {
-  const metresAcross = Math.max(5, 0.25 * 1000 * metresPerPixel(latOf(centre), zoom))
+  const acrossTheScreen = Math.max(5, 0.25 * 1000 * metresPerPixel(latOf(centre), zoom))
+  const metresAcross = Math.min(acrossTheScreen, MAX_DEFAULT_SIZE_M)
   const aspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : 1
   return {
     id,

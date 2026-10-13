@@ -59,3 +59,51 @@ export function isValidAreaName(name) {
   const trimmed = String(name == null ? '' : name).trim()
   return trimmed.length >= 1 && trimmed.length <= AREA_NAME_MAX
 }
+
+// Why would public.area_ok() refuse this area? Returns a sentence naming the area, or null
+// when this build can see nothing wrong with it.
+//
+// area_ok() answers true or false, and save_bench() turns a false into one sentence for
+// every rule it has: "The layout data is not valid". That is unactionable when the real
+// problem is one area with 500 points, so the client -- which can see the whole list and
+// knows each area's name -- says which one and what about it.
+//
+// This mirrors area_ok(), it does not replace it: the function in the database is still the
+// authority, and a rule added there without a line here only costs a worse error message,
+// never an accepted bad save.
+export function areaPointProblem(area, index) {
+  const name = String((area && area.name) || '').trim()
+  const label = name ? '"' + (name.length > 30 ? name.slice(0, 30) + '...' : name) + '"' : 'Area ' + (index + 1)
+
+  const points = area && area.points
+  if (!Array.isArray(points)) {
+    return label + ' has no shape. Delete it and draw it again.'
+  }
+  if (points.length > AREA_MAX_POINTS) {
+    return (
+      label + ' has ' + points.length + ' points. An area can have at most ' +
+      AREA_MAX_POINTS + '. Click its dots to remove the extra ones.'
+    )
+  }
+  if (points.length < AREA_MIN_POINTS) {
+    return (
+      label + ' has only ' + points.length + ' point' + (points.length === 1 ? '' : 's') +
+      '. An area needs at least ' + AREA_MIN_POINTS + '.'
+    )
+  }
+  if (!AREA_KINDS.some((kind) => kind.value === area.kind)) {
+    return label + ' has a type this version does not know ("' + String(area.kind) + '").'
+  }
+  return null
+}
+
+// The first problem in a list of areas, or null. Used as the bench's own diagnosis when a
+// save is refused, so the planner is told which area to fix instead of which SQL rule fired.
+export function firstAreaProblem(areas) {
+  if (!Array.isArray(areas)) return null
+  for (let index = 0; index < areas.length; index += 1) {
+    const problem = areaPointProblem(areas[index], index)
+    if (problem) return problem
+  }
+  return null
+}

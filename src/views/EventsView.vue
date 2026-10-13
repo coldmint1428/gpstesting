@@ -4,6 +4,7 @@ import { ref, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
+import BenchAlert from '../components/BenchAlert.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -64,7 +65,7 @@ onMounted(loadEvents)
   <main class="container py-3">
     <h1 class="h4 mb-3">My events</h1>
 
-    <div v-if="errorMsg" class="alert alert-danger py-2" role="alert" data-testid="events-error">{{ errorMsg }}</div>
+    <BenchAlert v-if="errorMsg" data-testid="events-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
     <div class="row g-3 mb-4">
       <div class="col-12 col-md-6">

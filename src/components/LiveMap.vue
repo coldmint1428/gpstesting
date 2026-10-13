@@ -15,6 +15,7 @@ import { useLiveLocations } from '../composables/useLiveLocations'
 import { placeName } from '../composables/useReverseGeocode'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
+import BenchAlert from './BenchAlert.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -243,7 +244,7 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <div v-if="errorMsg" class="alert alert-danger py-2" role="alert">{{ errorMsg }}</div>
+    <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
     <div class="position-relative mb-3">
       <div ref="mapEl" class="live-map rounded border" data-testid="live-map"></div>
       <!-- Shown while following someone (on top of the map) -->

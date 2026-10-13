@@ -324,9 +324,11 @@ declare
   v_case  text;
 begin
   -- A reusable "expect a rejection" pattern.
+  --
+  -- Every case here fails area_ok() / floor_plan_ok() on a field they actually check. A
+  -- floor plan's NAME is deliberately not one of them -- see check 17g, and the note on 17c.
   foreach v_case in array array[
-    'kind', 'two_points', 'outside_sg', 'bad_opacity', 'not_a_data_url', 'no_name',
-    'empty_plan_name'
+    'kind', 'two_points', 'outside_sg', 'bad_opacity', 'not_a_data_url', 'no_name'
   ] loop
     v_json := case v_case
       when 'kind' then
@@ -339,9 +341,7 @@ begin
         '{"floorPlans":[{"centre":[1.35,103.82],"widthM":10,"heightM":10,"angleDeg":0,"opacity":4,"visible":true,"image":"data:image/png;base64,AA"}]}'
       when 'not_a_data_url' then
         '{"floorPlans":[{"centre":[1.35,103.82],"widthM":10,"heightM":10,"angleDeg":0,"opacity":0.5,"visible":true,"image":"https://example.test/x.png"}]}'
-      when 'empty_plan_name' then
-        '{"floorPlans":[{"name":"","centre":[1.35,103.82],"widthM":10,"heightM":10,"angleDeg":0,"opacity":0.5,"visible":true,"image":"data:image/png;base64,AA"}]}'
-      else -- 'no_name'
+      else -- 'no_name': an AREA must have a name (area_ok checks it; a floor plan's is optional)
         '{"polygons":[{"name":"","kind":"zone","points":[[1.35,103.82],[1.36,103.83],[1.35,103.83]]}]}'
     end;
     v_bad := v_json::jsonb;
@@ -436,6 +436,82 @@ begin
   perform public.save_bench(
     current_setting('bench.token_a')::uuid,
     '{"floorPlans":[{"centre":[1.3521,103.8198],"widthM":120,"heightM":80,"angleDeg":0,"opacity":0.4,"visible":true,"image":"data:image/png;base64,iVBORw0KGgo="}]}'::jsonb
+  );
+end $$;
+
+-- ============================================================
+-- 17d. A floor plan whose CENTRE is inside Singapore but whose CORNERS are not is refused.
+--      This is what 006_floor_plan_bounds.sql added: before it, only the centre was checked,
+--      so a picture could hang kilometres off the edge of the basemap. The centre here is
+--      ~1.5 km east of the 103.5 boundary while half the 4 km width is 2 km, so the west
+--      corners fall outside.
+-- ============================================================
+do $$
+begin
+  begin
+    perform public.save_bench(
+      current_setting('bench.token_a')::uuid,
+      '{"floorPlans":[{"id":"p_out","name":"Level 9","centre":[1.3521,103.5143],"widthM":4000,"heightM":3000,"angleDeg":0,"opacity":0.5,"visible":true,"image":"data:image/png;base64,iVBORw0KGgo="}]}'::jsonb
+    );
+    raise exception 'FAIL 17d: a floor plan hanging outside Singapore was accepted';
+  exception
+    when sqlstate '22023' then null; -- expected: invalid data
+  end;
+end $$;
+
+-- ============================================================
+-- 17e. A large plan that DOES fit is still accepted, and it is accepted while ROTATED --
+--      the corner maths has to rotate the offsets, not just add half the width.
+-- ============================================================
+do $$
+begin
+  perform public.save_bench(
+    current_setting('bench.token_a')::uuid,
+    '{"floorPlans":[{"id":"p_ok","name":"Level 1","centre":[1.3521,103.8198],"widthM":2000,"heightM":1500,"angleDeg":45,"opacity":0.5,"visible":true,"image":"data:image/png;base64,iVBORw0KGgo="}]}'::jsonb
+  );
+end $$;
+
+-- ============================================================
+-- 17f. layout_problem() explains the refusal, naming the plan, so the page can tell the
+--      planner which floor plan to fix rather than "the layout data is not valid".
+-- ============================================================
+do $$
+declare
+  v_reason text;
+begin
+  v_reason := public.layout_problem(
+    '{"floorPlans":[{"id":"p_out","name":"Level 9","centre":[1.3521,103.5143],"widthM":4000,"heightM":3000,"angleDeg":0,"opacity":0.5,"visible":true,"image":"data:image/png;base64,iVBORw0KGgo="}]}'::jsonb
+  );
+
+  if v_reason is null then
+    raise exception 'FAIL 17f: layout_problem() found no problem with an out-of-bounds plan';
+  end if;
+  if v_reason not like 'Level 9:%' then
+    raise exception 'FAIL 17f: the reason did not name the plan (%)', v_reason;
+  end if;
+
+  -- A good layout has no problem to report.
+  if public.layout_problem('{"polygons":[{"id":"a1","name":"Trees","kind":"zone","points":[[1.3521,103.8198],[1.3524,103.8201],[1.3521,103.8204]]}]}'::jsonb) is not null then
+    raise exception 'FAIL 17f: layout_problem() reported a problem with a valid layout';
+  end if;
+end $$;
+
+-- ============================================================
+-- 17g. A floor plan with an EMPTY name is accepted, deliberately.
+--
+--      This is the closest call in the file and it is worth spelling out. A validator
+--      naturally wants to require a non-empty name, and an earlier version of check 15
+--      asserted exactly that for floor plans. It is wrong, for the same reason 17c gives:
+--      the constraint re-validates the WHOLE document on every write, so the moment a name
+--      is required, ONE plan without one makes the bench impossible to save ever again.
+--      An AREA still needs a name (area_ok checks it, and check 15's 'no_name' case proves
+--      it); a floor plan does not. The list falls back to "Floor plan 2" via planLabel().
+-- ============================================================
+do $$
+begin
+  perform public.save_bench(
+    current_setting('bench.token_a')::uuid,
+    '{"floorPlans":[{"id":"p_noname","name":"","centre":[1.3521,103.8198],"widthM":100,"heightM":80,"angleDeg":0,"opacity":0.5,"visible":true,"image":"data:image/png;base64,iVBORw0KGgo="}]}'::jsonb
   );
 end $$;
 

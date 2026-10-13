@@ -15,18 +15,43 @@ Vue 3 + Vite + Bootstrap 5 + Leaflet (OneMap tiles) + Supabase.
 
 ### The polygon bench (`/polygon`)
 
-A standalone drawing bench, deliberately **not** tied to an event: a planner locks a map,
-optionally lays a floor plan over it, and draws areas (Zone, No-Go, Obstacle, Stage,
-Entrance) on top. Every area's points are stored as lat/lng, so everything travels with
-the map.
+A standalone drawing bench, deliberately **not** tied to an event: a planner clicks a floor
+plan or an area to work on it, optionally lays a floor plan over the map, and draws areas
+(Zone, No-Go, Obstacle, Stage, Entrance) on top. Every area's points are stored as lat/lng,
+so everything travels with the map.
 
-One thing is unlocked at a time (`null | 'map' | 'floorplan:<id>' | 'polygons' |
-'area:<id>'`), and locking is what saves — there is no Save button. A floor plan is named
-and edited like a PowerPoint picture: drag it to slide it, drag a corner to resize it, drag
-the knob above it to turn it. Recording an area is click-to-add-a-point, with the ring
-snapping shut when the cursor comes near the first point. Clicking a floor plan or an area
-on the map selects it and highlights its row; clicking empty map, or pressing Escape, puts
-it back down.
+One thing is worked on at a time (`null | 'floorplan:<id>' | 'polygons' | 'area:<id>'`), and
+putting it down is what saves — there is no Save button. **The map is never locked**: it pans
+and zooms whenever you ask, and a shape is grabbed by its own parts (an outline by its body, a
+picture by the picture), which is what keeps a drag of one from moving the view. A **middle
+drag pans** whatever is underneath — on a shape, on a handle, and while an area is being drawn —
+which is the way to hold the map when a picture covers the screen. The left button moves the view
+wherever there is nothing else for it to mean, and the only thing that narrows that is drawing an
+area, where every left click has to be a point. A floor plan is named and edited like a PowerPoint
+picture: drag it to slide it, drag a corner to resize it, drag the knob above it to turn it.
+Recording an area is click-to-add-a-point, with the ring snapping shut when the cursor comes near
+the first point. Clicking a floor plan or an area on the map selects it and highlights its row.
+**Dragging a shape past the edge of the map carries the map with it**, so something can be moved
+somewhere that is not on screen yet without letting go first.
+
+The rules the bench enforces while you work, all of them in the browser so the answer arrives
+before the action rather than at the next save:
+
+- **An outline may never cross itself.** A click that would draw a crossing line is refused
+  and the rubber band turns red as the cursor approaches; a dragged dot turns the outline red
+  while it would cross and is put back if it is dropped there. The answer is given while the
+  dot is still moving, in red rather than in words.
+- **"Add point" always finds a legal place for the new dot** (`src/utils/areaGrow.js`), by
+  splitting the longest edge if the end of the ring will not do.
+- **One message, one place**: a refusal is a single red sentence along the top of the map,
+  whether you are drawing or adjusting.
+- **Undo and redo cover the whole canvas**, as arrow buttons next to Start / Stop editing (and
+  Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y). Client-side only. Copy and paste a floor plan or an area
+  with Ctrl+C / Ctrl+V.
+- **A floor plan must fit inside Singapore**, not merely start there — see
+  `supabase/migrations/006_floor_plan_bounds.sql`.
+- **How full the canvas is** is drawn as a ring on the Floor plans card, and an upload that
+  would push the canvas over 4 MB is refused before it is added.
 
 There is exactly **one** bench, shared by every signed-in user, and **only one person may
 edit it at a time**. The database decides who: `claim_bench()` hands out a token, every
@@ -34,8 +59,10 @@ save must present it, and a save with a stale token is refused rather than obeye
 claim lapses after 5 minutes of silence (renewed by a heartbeat while the tab is visible).
 
 The whole canvas — the map view, the floor plans (placement **and** the image itself,
-base64) and the areas — lives in one row of `public.layouts`. Images are shrunk in the
-browser to under 512 KB first. See `supabase/migrations/005_layouts.sql`.
+base64) and the areas — lives in one row of `public.layouts`, capped at **4 MB** by
+`save_bench()`. Every floor plan image is shrunk in the browser to under 512 KB before it goes
+near the database, and a floor plan that would not fit inside Singapore is refused. See
+`supabase/migrations/005_layouts.sql` and `006_floor_plan_bounds.sql`.
 
 ## Roles (per event, from the project spec)
 

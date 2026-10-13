@@ -10,6 +10,7 @@ import SharingWarnings from '../components/SharingWarnings.vue'
 import LiveMap from '../components/LiveMap.vue'
 import MembersPanel from '../components/MembersPanel.vue'
 import InvitePanel from '../components/InvitePanel.vue'
+import BenchAlert from '../components/BenchAlert.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -82,10 +83,10 @@ async function leaveEvent() {
         You are sharing your live location with this event's planners and your group.
       </div>
       <SharingWarnings v-if="sharingHere" />
-      <div v-if="shareError" class="alert alert-danger py-2" role="alert" data-testid="share-error">{{ shareError }}</div>
+      <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
       <p class="small text-muted mb-3" data-testid="view-scope">{{ viewText }}</p>
 
-      <div v-if="errorMsg" class="alert alert-danger py-2" role="alert">{{ errorMsg }}</div>
+      <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
       <ul class="nav nav-tabs mb-3">
         <li class="nav-item">

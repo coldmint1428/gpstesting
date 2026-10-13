@@ -15,6 +15,7 @@ import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
 import { useLocationTracker } from '../composables/useLocationTracker'
 import SharingWarnings from '../components/SharingWarnings.vue'
+import BenchAlert from '../components/BenchAlert.vue'
 import { useEventData } from '../composables/useEventData'
 
 const props = defineProps({ id: { type: String, required: true } }) // event id from the URL
@@ -149,9 +150,7 @@ function updateMap(lat, lng, accuracy) {
       You are sharing your live location with this event's planners and your group.
     </div>
     <SharingWarnings v-if="sharingHere" />
-    <div v-if="errorMsg" class="alert alert-danger" role="alert" data-testid="error-msg">
-      {{ errorMsg }}
-    </div>
+    <BenchAlert v-if="errorMsg" data-testid="error-msg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
     <div class="row g-3">
       <!-- Map: full width on phones, 2/3 on large screens -->

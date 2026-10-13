@@ -2,19 +2,39 @@
 // AreaBench - the drawing bench itself: the map, the floor plans on it, the areas drawn on
 // top, and the controls that operate them.
 //
-// Three things are deliberate and worth knowing before changing anything:
+// Six things are deliberate and worth knowing before changing anything:
 //
-// 1. ONE THING IS UNLOCKED AT A TIME. `mode` is null | 'map' | 'floorplan:<id>' |
-//    'polygons' | 'area:<id>'. Picking one locks the others, because two unlocked things
-//    is not a state the value can express. Locking the map means disabling every Leaflet
-//    handler.
+// 1. ONE THING IS UNLOCKED AT A TIME. `mode` is null | 'floorplan:<id>' | 'polygons' |
+//    'area:<id>'. Picking one locks the others, because two unlocked things is not a state the
+//    value can express.
 //
-// 2. BECAUSE THE MAP IS LOCKED WHILE A FLOOR PLAN IS EDITED, the corner handles and the
-//    rotate knob are positioned once, from the frozen view, and never have to chase
-//    anything. That is the whole reason this stays simple.
+// 2. THE MAP ALWAYS PANS AND ALWAYS ZOOMS, and this component moves it -- Leaflet's own drag is
+//    switched off (see startPan). The middle button pans EVERYWHERE: on the map, on a picture, on
+//    an outline, on a handle, and while an area is being drawn. The left button pans wherever there
+//    is nothing else for it to mean; a shape is picked up by its OWN parts -- an outline by its
+//    body, a picture by the picture -- and those stop the press from reaching the map, so grabbing
+//    one moves that shape and never the view.
 //
-// 3. THE PAGE OWNS THE DATA. This component only draws it and reports what the planner
-//    did (emit), so there is exactly one place that saves.
+// 3. LOCKED IS GONE, BUT `mode` STILL DECIDES WHAT IS CLICKABLE. Nothing on the map takes a click
+//    while an area is being drawn, because every click there is a point. The middle button is the
+//    exception to the exception: it moves the view there too.
+//
+// 4. A SHAPE AND THE VIEW NEVER MOVE TOGETHER. While a shape is dragged the view is still, and
+//    when the drag reaches the edge of the map the view follows it -- so something can be put
+//    somewhere that is not on screen yet without letting go. In the other direction, panning while
+//    a shape is held moves the view alone: the shape keeps its geography and stays where it is on
+//    screen, and the frame loop is stopped so it does not jump when the drag resumes.
+//
+// 5. THE PAGE OWNS THE DATA. This component only draws it and reports what the planner
+//    did (emit), so there is exactly one place that saves. Undo is the page's too: the stack
+//    is one timeline of the whole document (composables/useDocHistory.js), and the buttons for
+//    it are on the page next to the other document-wide controls. All the bench does with the
+//    stack is close a run of changes when a drag ends -- a dragged dot is one step, not sixty.
+//
+// 6. AN OUTLINE MAY NEVER CROSS ITSELF, and the answer to "would it?" is given while the
+//    planner is still moving rather than when they let go: the outline turns red under a dot
+//    that would cross, the way the loose end of the rubber band does while a ring is being
+//    drawn. Nothing is committed until the drop, so the red is a look, not a state.
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles (c) Singapore Land Authority - https://www.onemap.gov.sg
@@ -25,6 +45,7 @@ import { createSingaporeMap } from '../utils/onemap'
 import { escapeHtml } from '../utils/people'
 import {
   AREA_KINDS,
+  AREA_MAX_POINTS,
   AREA_MIN_POINTS,
   areaStyle,
   areaTooltipHtml,
@@ -43,15 +64,32 @@ import {
   planLabel,
   sizeFromCorner,
 } from '../utils/floorPlan'
+import { closingCrosses, pathCrossing, ringCrossing } from '../utils/areaShape'
+import { growRing } from '../utils/areaGrow.js'
 import { shrinkToUnder } from '../utils/imageShrink'
+import { LAYOUT_TOO_LARGE_MESSAGE, MAX_LAYOUT_BYTES, layoutBytes } from '../utils/layoutLimits'
+import { useHistory } from '../composables/useHistory'
 
 const props = defineProps({
   plans: { type: Array, default: () => [] },
   areas: { type: Array, default: () => [] },
   view: { type: Object, default: null }, // where the map was left
+  // How close the canvas is to the 4 MB cap save_bench() enforces, and the same thing as a
+  // fraction for the ring that shows it. Handed in rather than measured here because the PAGE
+  // owns the document -- see views/PolygonTestView.vue.
+  sizeText: { type: String, default: '' },
+  sizeRatio: { type: Number, default: 0 },
   // False while the planner is only looking. Looking allows panning and zooming; editing
   // is what starts locked, so the very first choice is what to work on.
   canEdit: { type: Boolean, default: false },
+  // The undo stack of the whole document (see composables/useDocHistory.js). Handed in rather
+  // than owned here, because a step is a change to the PAGE's document, not to one panel -- and
+  // because a history that reset when the planner clicked away was the bug. All the bench does
+  // with it is close a run of changes when a drag ends; the buttons live on the page.
+  history: { type: Object, default: null },
+  // What has been copied, so the paste buttons can say whether they have anything to paste.
+  // The clipboard itself lives on the page (composables/useBenchClipboard.js).
+  clipboard: { type: Object, default: null },
 })
 
 const emit = defineEmits([
@@ -61,14 +99,30 @@ const emit = defineEmits([
   'area-added',
   'area-updated',
   'view-changed',
+  // A copy is just news -- the page keeps the clipboard. A paste is a request for a new thing,
+  // built by the page because the page owns the document.
+  'area-copied',
+  'area-pasted',
+  'plan-copied',
+  'plan-pasted',
 ])
 
-// null | 'map' | 'floorplan:<id>' | 'polygons' | 'area:<id>'
+// null | 'floorplan:<id>' | 'polygons' | 'area:<id>'
 const mode = defineModel('mode', { default: null })
 
 const mapEl = ref(null)
 const fileInput = ref(null)
 const nameInput = ref(null)
+// Anything the PLANNER has to read before they can put a dot down, or while they are dragging
+// one: a refused point, an outline that would cross itself, the name a shape still needs. Every
+// one of these is one sentence, they replace each other, and they are all about the map -- which
+// is why they are one variable.
+//
+// They used to arrive in two places: the drawing hint along the top of the map while a ring was
+// being drawn, and a Bootstrap alert in the controls column while an existing shape was being
+// edited. The same sentence about the same outline coming out of two different places, at two
+// different ends of the page, is what made the bench feel like two tools. There is one place now:
+// the strip along the top of the map, red, for both.
 const errorMsg = ref('')
 const busy = ref(false)
 
@@ -85,22 +139,120 @@ const draftKind = ref('zone')
 // True while the cursor is close enough to the first point that clicking would close the
 // ring. Drives both the rubber band and the look of the first dot.
 const snapActive = ref(false)
+// True while a click where the cursor is would make the outline cross a line already drawn.
+// That click is refused, so the rubber band turns red before it is made rather than after.
+const crossWarn = ref(false)
 let cursorLatLng = null
 let draftVertexMarkers = []
 let draftLine = null
 let draftFill = null
+
+// Undo belongs to the PAGE: one timeline of the whole document (see
+// composables/useDocHistory.js), handed in as `history` so the buttons can sit over the map
+// instead of inside each panel. The one thing that is still local is the ring being DRAWN: it
+// is not part of the document until Save, so `draftSteps` is its own small stack, and it is
+// thrown away whenever the drawing session ends.
+const HISTORY_LIMIT = 50
+const draftSteps = useHistory(HISTORY_LIMIT)
+// Above this line the history is a PROP, and all the bench does with it is close a run of changes
+// when a drag ends (endDrag / endAreaDrag -> endHistoryRun). The Undo and Redo buttons are on the
+// page, next to the document-wide controls, because a step is not a property of the map -- see
+// views/PolygonTestView.vue.
 
 // Handle positions, in pixels inside the map container
 const handlePoints = ref([])
 const knobPoint = ref(null)
 let dragState = null
 let areaDrag = null
+// A dot's own drag, latched the same way and for the same reason: `point` is the dot as it was when
+// the pointer's offset was last taken and `from` is where the pointer was then. One measurement, so
+// reanchor has to move the two together -- see there.
+let vertexDrag = null
+// Whether the press on a dot has travelled far enough to be a drag rather than a click. It decides
+// both what the drop does and whether the click that ends the gesture means "remove this point".
+let vertexMoved = false
+// How far a press on a dot may wobble and still count as a click on it rather than a drag of it.
+// Leaflet's own drag used 3 px as its click tolerance, and clicking a dot to remove it has to stay
+// exactly as easy to do as it was.
+const VERTEX_SLOP_PX = 3
 
 // Vertices of the area whose shape is being adjusted
 let areaVertexMarkers = []
 let zoomAnimating = false
 
-const MAP_HANDLERS = ['dragging', 'scrollWheelZoom', 'touchZoom', 'boxZoom', 'doubleClickZoom', 'keyboard']
+// The middle button, wherever it is pressed, and whatever happens to be under it.
+//
+// A shape is grabbed with the LEFT button, because that is what a press on a shape means. The
+// middle button means the same thing everywhere on the map -- move the view -- which is the way out
+// when the thing being dragged covers most of what can be seen: a picture is often the size of the
+// screen, and left-dragging it moves the picture rather than the view.
+//
+// It used to be handed to Leaflet's own drag handler, which does accept the middle button, by
+// declining the press and letting it through. That is NOT enough any more: Leaflet binds its drag
+// to the map container and unbinds it while an area is drawn, so the very mode that most needs to
+// be pannable had no handler to receive the press. The view is now moved here instead, by
+// startPan -- see "The view is moved here" below.
+function wantsMapPan(event) {
+  return event.button === 1
+}
+
+// How near the edge of the map a drag has to come before the view starts following it, how fast it
+// follows once the pointer reaches the map's own edge, how much faster each further pixel of
+// overshoot makes it, and the speed the climb stops at. See beginAutoPan and panSpeed.
+const EDGE_PX = 40
+const AUTO_PAN_EDGE_PX = 8
+const AUTO_PAN_GAIN = 0.1
+const AUTO_PAN_MAX_PX = 32
+
+// The view follows a shape that is dragged past the edge of the map. Without it, moving something
+// somewhere that is not on screen is two gestures -- drop it, pan, pick it up again -- and the
+// second one lands it somewhere other than where the planner was pointing.
+let autoPanFrame = null
+let autoPanPointer = null
+let autoPanMove = null
+// Whether the follow in flight is a HOVER's rather than a drag's. The two differ in one way that
+// matters to the frame loop: a drag is held, so the loop keeps asking even when there is nothing to
+// do; a hover is not, so an idle frame ends it and the next move re-arms it. See autoPanStep.
+let autoPanHover = false
+// Whether the drawing hover's listener is installed. It comes and goes with the mode.
+let hoverFollowOn = false
+
+// The view moves whenever the planner asks it to, and what "asks" means is: the middle button
+// anywhere, or the left button anywhere there is nothing else for it to mean. Drawing an area is
+// the one place the LEFT button does not move the view, because a click there IS a point.
+//
+// Zooming never needs any of this. The wheel zooms AROUND THE CURSOR, so the place under the cursor
+// stays under the cursor; the corner handles and the knob are re-placed on zoomend, and the draft
+// ring is geographic, so it lands exactly right too.
+//
+// A wheel over the map must never scroll the page and never zoom the browser -- see onMapWheel,
+// which is what actually guarantees that.
+const ZOOM_HANDLERS = ['scrollWheelZoom', 'touchZoom']
+
+// ---------- The view is moved here ----------
+// Leaflet's own drag is switched OFF, and the view is moved by the code below instead. The reason
+// is that a shape drag and a map drag cannot both be live: Leaflet binds its drag to the map
+// container and starts it from the same press a shape takes, so dragging a shape moved the view as
+// well. That is not a detail -- it is what made a picture look as though it slid out from under
+// the cursor, and an outline look as though it stayed still while the map ran away underneath it.
+//
+// Owning it also buys the one thing Leaflet cannot be asked for: panning by the middle button in
+// EVERY mode. Leaflet's drag handler is enabled or disabled as a whole, and drawing an area needs
+// it off, so a middle press while drawing had no handler left to receive it.
+//
+// `panFrom` is the geography under the pointer at the moment of the press. Every move asks where
+// that same place is now and puts it back under the pointer. Working in geography rather than in
+// pixels means the pan stays correct across a zoom, with nothing to keep in step by hand.
+let panFrom = null
+let panPoint = null
+let panPointerId = null
+// How far the pointer has travelled in total, and whether that was far enough to call the press a
+// pan. Both are about the click that arrives at the END of a press: the browser fires one whether
+// or not the view moved, and while drawing a click is a point -- so a drag of the map must not
+// leave a dot behind it. Half a pixel of jitter is not a drag.
+const PAN_SLOP_PX = 2
+let panTravel = 0
+let panMoved = false
 
 // Leaflet animates a zoom by transforming each `.leaflet-zoom-animated` element and letting
 // CSS carry it across in 250 ms. A hand-built <img> gets none of that: it used to sit still
@@ -114,10 +266,37 @@ const ZOOM_TRANSITION = ['left', 'top', 'width', 'height']
   .map((prop) => prop + ' ' + ZOOM_MS + 'ms ' + ZOOM_EASE)
   .join(', ')
 
+// Where a floor plan sits among its siblings inside Leaflet's overlay pane. The vector renderer for
+// the area outlines is at z-index 200 in that same pane, so these two numbers are what decide
+// whether a plan can be pressed where an outline overlaps it. See place().
+const PLAN_ON_TOP_Z = '300' // the one being worked on: above the outlines, below the marker pane
+const PLAN_UNDER_Z = '-1' // every other plan: behind the outlines, as a background should be
+
 // How near the cursor has to come to the first point before the ring snaps shut, in screen
 // pixels. Generous on purpose: closing a shape should not be a test of aim, and a fingertip
 // covers far more than a mouse pointer does.
 const SNAP_PX = 15
+
+// How near a click has to land to the previous point to not be a point at all. A double-click
+// fires two clicks in the same place, and two points in the same place would be a zero-length
+// edge -- which the crossing check would then read as a shape touching itself, and the planner
+// would be told their next click crosses a line when all they did was double-click.
+const DUPLICATE_PX = 2
+
+// The red shared by every "this is the thing that will not be allowed to exist": the loose end of
+// the rubber band while it would cross a line already drawn, and an existing outline while a dot
+// is being dragged somewhere it would cross itself. One colour for one idea.
+const CROSS_COLOUR = '#dc3545'
+
+// The few things worth a sentence, and no more than a sentence each. The red on the outline says
+// "not there" while the planner is still moving, so a message that only repeats it is noise: there
+// is deliberately no "the outline would cross itself" while a dot is being dragged, and no "a new
+// point would cross this outline" when Add point cannot find a place -- in both cases the shape
+// visibly does not change, which is the answer. What is left is what the planner cannot see.
+const CROSS_DRAW_MESSAGE = 'That line would cross one you have already drawn.'
+const CROSS_CLOSE_MESSAGE = 'The closing line would cross the shape. Add another point.'
+const CROSS_VERTEX_MESSAGE = 'That would cross the outline, so the dot went back.'
+const CROSS_REMOVE_MESSAGE = 'Removing that point would cross the outline.'
 
 const editingPlan = computed(() => {
   if (typeof mode.value !== 'string' || !mode.value.startsWith('floorplan:')) return null
@@ -131,17 +310,101 @@ const editingArea = computed(() => {
   return props.areas.find((a) => a.id === id) || null
 })
 
-// Floor plans and drawn areas may be clicked on the map only when the map's own pointer is
-// not wanted: in the locked state (to pick something) and while that kind of thing is
-// already being worked on. In map and drawing modes every click belongs to the map, so the
-// pictures and the polygons step out of the way.
-const plansClickable = computed(
-  () => props.canEdit && (mode.value === null || String(mode.value).startsWith('floorplan:')),
+// What on the map takes a click. Nothing does while an area is being DRAWN -- every click there is
+// a point, and a picture or an outline that took one would swallow it. Otherwise a floor plan and
+// an outline can both be picked up, and each of them stops the press from also reaching the map, so
+// grabbing one never pans.
+const shapesClickable = computed(() => props.canEdit && mode.value !== 'polygons')
+
+// What the strip along the top of the map says while a shape is open. One line, about the one
+// thing the planner cannot guess -- what a dot does. A floor plan says nothing: its handles and its
+// knob are already the only things on it that can be pressed.
+const editHint = computed(() =>
+  editingArea.value ? 'Drag a dot to move it, click a dot to remove it.' : '',
 )
 
-const areasClickable = computed(
-  () => props.canEdit && (mode.value === null || String(mode.value).startsWith('area:')),
+// Is anything at all wanted along the top of the map? While drawing, yes -- there is always
+// something to say, and a refusal is inside that same chain of messages.
+const showHint = computed(() => mode.value === 'polygons' || Boolean(editHint.value))
+
+// How full the size ring is, and what colour it is. The ring is drawn with `pathLength="100"`, so
+// the numbers are percentages and there is no circumference to keep in step with the radius.
+// Green well clear of the cap, amber when the next picture is worth thinking about twice, red when
+// a save is about to be refused -- the same three colours a progress bar uses.
+const ringPercent = computed(() => Math.round(Math.min(Math.max(props.sizeRatio, 0), 1) * 100))
+
+const ringVariant = computed(() => {
+  if (props.sizeRatio >= 0.9) return 'danger'
+  if (props.sizeRatio >= 0.75) return 'warning'
+  return 'success'
+})
+
+
+// The ring has all the points it is allowed. The map stops taking clicks at this point, so
+// the hint has to say so -- otherwise the crosshair simply stops responding and it looks
+// like the map has broken.
+const reachedPointCap = computed(() => draftPoints.value.length >= AREA_MAX_POINTS)
+
+// Would closing the ring now make the last line cross the shape? A shape can be perfectly
+// legal as far as the drawn path goes and still be impossible to close -- an inward spiral is
+// the plain example -- so this is a different question from the one asked of each point, and
+// it is what the Finish button and the hint report.
+const closeBlocked = computed(
+  () => draftPoints.value.length >= AREA_MIN_POINTS && closingCrosses(draftPoints.value),
 )
+
+// Would a click here make the outline cross a line already drawn? Asked on every mouse move so
+// the answer is on screen before the click rather than after it, and again when the click
+// arrives. A path of fewer than three points cannot cross anything: it has at most two edges,
+// and two edges that meet only at the end they share are not a crossing.
+function wouldCrossNext(latlng) {
+  if (draftPoints.value.length < 3) return false
+  return Boolean(pathCrossing([...draftPoints.value, [latlng.lat, latlng.lng]]))
+}
+
+// Does the shape being adjusted already cross itself? An older build could leave one behind, and
+// every edit to it is refused until it is put right -- which is correct, but looks exactly like
+// a broken page unless it is said out loud. The repair is one drag that lands on a legal shape,
+// or Delete and draw it again.
+const editingAreaCrosses = computed(() => {
+  const area = editingArea.value
+  return Boolean(area && Array.isArray(area.points) && ringCrossing(area.points))
+})
+
+// Does the bench have an area or a floor plan on its clipboard? Asked so the Paste buttons can
+// say whether they have anything to paste, and what.
+const canPasteArea = computed(() => Boolean(props.clipboard && props.clipboard.area.value))
+const canPastePlan = computed(() => Boolean(props.clipboard && props.clipboard.plan.value))
+const clipboardAreaName = computed(() =>
+  props.clipboard && props.clipboard.area.value ? props.clipboard.area.value.name : '',
+)
+const clipboardPlanName = computed(() =>
+  props.clipboard && props.clipboard.plan.value ? props.clipboard.plan.value.name : '',
+)
+
+// Copying and pasting. The copy is reported because the PAGE holds the clipboard; the paste is
+// reported because the PAGE holds the document. Both go through the page so there is one place
+// that decides what a duplicate is -- a new id, a name that is not already taken, and a place to
+// put it.
+function copyArea(area) {
+  if (!area) return
+  emit('area-copied', area)
+}
+
+function pasteArea() {
+  if (!props.clipboard || !props.clipboard.area.value) return
+  emit('area-pasted')
+}
+
+function copyPlan(plan) {
+  if (!plan) return
+  emit('plan-copied', plan)
+}
+
+function pastePlan() {
+  if (!props.clipboard || !props.clipboard.plan.value) return
+  emit('plan-pasted')
+}
 
 function newId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
@@ -188,15 +451,23 @@ function makePlanLayer(plan) {
       img.style.opacity = String(p.opacity)
       img.style.display = p.visible === false ? 'none' : ''
 
-      // A picture that accepts pointer events swallows the map's own drags and taps, so it
-      // only does so when the map is not the thing being used.
-      const grabbable = plansClickable.value
+      // A picture that accepts pointer events swallows the map's own drags and taps -- which is
+      // exactly what is wanted: a drag that starts on the picture moves the picture, and a drag
+      // that starts anywhere else moves the view. So it takes them whenever a click on it means
+      // something, and never while an area is being drawn.
+      const grabbable = shapesClickable.value
       img.style.pointerEvents = grabbable ? 'auto' : 'none'
       img.style.touchAction = grabbable ? 'none' : ''
       img.style.cursor = grabbable ? (mine ? 'move' : 'pointer') : ''
-      // The one being worked on sits above its neighbours. The overlay pane is its own
-      // stacking context, so these numbers can never lift a plan over the map's controls.
-      img.style.zIndex = mine ? '0' : '-1'
+      // The one being worked on sits above its neighbours, and above the area outlines.
+      //
+      // That second part is not decoration. Leaflet's SVG renderer sits at z-index 200 inside this
+      // same pane, so a plan left at 0 or -1 is BELOW every area outline -- and an outline takes the
+      // press, so a floor plan could not be grabbed at all wherever an area overlapped it. Measured,
+      // not guessed: with the plan selected the browser still reported a `<path>` under the cursor.
+      // 300 puts the selected plan over the vector layer and still under the marker and tooltip
+      // panes (600 and 650), so it can never cover the map's own controls.
+      img.style.zIndex = mine ? PLAN_ON_TOP_Z : PLAN_UNDER_Z
     },
 
     add() {
@@ -219,12 +490,30 @@ function makePlanLayer(plan) {
 }
 
 // Picking a floor plan up off the map. The same gesture also selects it, so a plan can be
-// chosen and then moved without letting go in between.
+// chosen and then moved without letting go in between. The press never reaches the map, so it does
+// not pan as well.
 function onPlanPointerDown(layer, event) {
-  if (!plansClickable.value) return
-  const myMode = 'floorplan:' + layer.plan.id
-  if (mode.value !== myMode) mode.value = myMode
-  startDrag('move', event)
+  // The middle button is for moving the view, never for picking a picture up. Leaflet's own
+  // draggables already ignore it; this one has to be told.
+  // A press with anything but the left button belongs to the map. See wantsMapPan.
+  if (wantsMapPan(event)) {
+    if (event.preventDefault) event.preventDefault() // no middle-click autoscroll cursor
+    return
+  }
+  if (!shapesClickable.value) return
+  const plan = layer.plan
+  const myMode = 'floorplan:' + plan.id
+
+  // A press on a picture is a fresh start: whatever was refused about something else goes away.
+  errorMsg.value = ''
+
+  // Picking the picture up leaves the view alone: it is under the cursor, and a fit to it would move
+  // the ground under the drag that is about to begin -- see viewAlreadyRight.
+  if (mode.value !== myMode) {
+    viewAlreadyRight = true
+    mode.value = myMode
+  }
+  startDrag('move', plan, event)
 }
 
 function areaKey(area) {
@@ -233,12 +522,28 @@ function areaKey(area) {
 
 // Move an area's outline, and its label with it.
 //
+// `crossing` is the one thing about an outline that is not in the area's kind: the shape the
+// planner is dragging right now, which would cross itself if they let go. It is drawn in the same
+// red as the refused line while a ring is being drawn, so the answer to "may I drop it here?"
+// arrives while the dot is moving rather than on release -- and it is only ever a LOOK, never a
+// second source of truth: the area's own points are not touched until the drop.
+//
 // A permanent Leaflet tooltip works out its own position ONCE, when it opens, and never
 // looks again -- so moving the polygon leaves the name behind. Setting the label's latlng to
 // the polygon's new centre is what puts it back on top of the shape.
-function applyAreaPoints(layer, points) {
+function applyAreaPoints(layer, points, crossing = false) {
   if (!layer) return
   layer.setLatLngs(points)
+
+  if (layer.benchCrossing !== crossing) {
+    layer.benchCrossing = crossing
+    const style = areaStyle(layer.benchKind)
+    layer.setStyle(
+      crossing
+        ? { ...style, color: CROSS_COLOUR, weight: 3, opacity: 1, fillOpacity: 0.32 }
+        : style,
+    )
+  }
 
   const tip = layer.getTooltip()
   if (!tip) return
@@ -290,9 +595,11 @@ function render() {
     }
   }
 
-  // Areas. They only take pointer events when clicking one is meant to select it; an
-  // interactive polygon otherwise swallows the drags and taps meant for the map underneath.
-  const clickable = areasClickable.value
+  // Areas. An interactive polygon swallows the drags and taps underneath it, which is what makes a
+  // drag that starts on the outline move the outline rather than the view -- so it is interactive
+  // whenever a click on it means something, and never while an area is being drawn, where every
+  // click on the map is a point.
+  const clickable = shapesClickable.value
   const seenAreas = new Set()
   for (const area of props.areas) {
     seenAreas.add(area.id)
@@ -312,18 +619,23 @@ function render() {
       })
       layer.benchKey = key
       layer.benchStyleKey = area.kind + '\u0000' + area.name
+      layer.benchKind = area.kind
+      // Whatever this layer was reddened for mid-drag, it is drawn fresh here, and the area's own
+      // points are by definition not crossing.
+      layer.benchCrossing = false
       layer.benchClickable = clickable
       areaLayers[area.id] = layer
       if (clickable) {
         // A native pointer event, not Leaflet's `mousedown`: pointer events cover mouse,
         // finger and stylus with one path, and Leaflet's own touch events would never reach
-        // this handler. The map is locked in every mode where this is attached, so the
-        // polygon taking the press costs the map nothing.
+        // this handler. The handler stops the press reaching the map, which is what keeps a drag
+        // of the outline from panning the view as well.
         const el = layer.getElement()
         if (el) {
           el.style.cursor = 'move'
           el.addEventListener('pointerdown', (event) => onAreaPointerDown(area.id, event))
-        }      }
+        }
+      }
     } else {
       // Shape and look are compared separately: dragging an area rewrites its points many
       // times a second, and there is no reason to rewrite the colour and the label too.
@@ -333,6 +645,8 @@ function render() {
         layer.benchKey = key
       }
       if (layer.benchStyleKey !== styleKey) {
+        layer.benchKind = area.kind
+        layer.benchCrossing = false // re-styled from the area, which is not crossing
         layer.setStyle(areaStyle(area.kind))
         layer.setTooltipContent(areaTooltipHtml(area.kind, escapeHtml(area.name)))
         layer.benchStyleKey = styleKey
@@ -347,22 +661,58 @@ function render() {
   }
 }
 
-// ---------- Map lock ----------
-// Looking is free -- anybody may pan around. Working is not: once a planner holds the
-// claim, everything starts locked and they unlock one thing at a time.
-function applyMapLock() {
+// ---------- What the map's own pointer does ----------
+// Nothing here is a lock. `mode` decides what the LEFT button means and what takes a click; the
+// view is moved by the middle button in every mode, and by the left button wherever there is
+// nothing else for it to mean. See wantsPan.
+function applyMapHandlers() {
   if (!map) return
-  const unlocked = !props.canEdit || mode.value === 'map'
-  for (const name of MAP_HANDLERS) {
+  const set = (name, on) => {
     const handler = map[name]
-    if (!handler) continue
-    if (unlocked) handler.enable()
+    if (!handler) return
+    if (on) handler.enable()
     else handler.disable()
   }
+  const drawing = mode.value === 'polygons'
+  // The view is moved by this component now, never by Leaflet -- see startPan. Leaflet's drag has
+  // to be off in EVERY mode, not only while drawing: left on, it would take the same press a shape
+  // takes and drag the view at the same time as the shape.
+  set('dragging', false)
+  // Box zoom is a left-drag on the map that draws a rectangle. That is the same gesture as moving
+  // the view, so the two cannot both be bound; the view is the one the planner expects, and the
+  // wheel already zooms.
+  set('boxZoom', false)
+  set('keyboard', !drawing)
+  for (const name of ZOOM_HANDLERS) set(name, true)
+  // Drawing an area is a run of quick clicks on the map, so a double-click there is two points
+  // in one spot rather than a zoom. Everywhere else it is an ordinary way to zoom in.
+  set('doubleClickZoom', !drawing)
+  // The view follows the pointer while a ring is being drawn -- see onHoverMove. Its listener comes
+  // and goes with the mode for the same reason the handlers above do.
+  setHoverFollow(drawing && props.canEdit)
 }
 
+// The page must never scroll or zoom because of a wheel over the map. Leaflet's own wheel
+// handler already does this while it is enabled -- it calls preventDefault and stopPropagation
+// on every wheel event it sees -- but a handler that is disabled lets the event through, and
+// that is how reaching for the map scrolled the page. This listener is attached ONCE and never
+// toggled, so the map is a wall against page scrolling whatever state it is in. It deliberately
+// does not stop propagation of its own: Leaflet still sees the event and zooms.
+function onMapWheel(event) {
+  if (event.cancelable) event.preventDefault()
+}
+
+// A wheel event is only cancelable if the browser is told not to treat the listener as passive,
+// which is the third argument of addEventListener -- hence the explicit option rather than the
+// default.
+const WHEEL_OPTIONS = { passive: false }
+
+// The view is remembered whenever the map settles, not only while a shape is open: looking around
+// works in every mode, and coming back to the bench at the view you left it at is the whole point of
+// remembering it. Only the final resting view is reported -- moveend and zoomend are the settling
+// events, so a drag of the view does not send a request per frame.
 function emitView() {
-  if (!map || mode.value !== 'map') return
+  if (!map) return
   const centre = map.getCenter()
   emit('view-changed', { lat: centre.lat, lng: centre.lng, zoom: map.getZoom() })
 }
@@ -396,28 +746,85 @@ function renderHandles() {
   knobPoint.value = clamp(kp)
 }
 
-function startDrag(kind, event, index) {
+// `plan` is passed in rather than read from `editingPlan`, because the plan being dragged is the
+// one this press belongs to -- the mode may not have caught up yet.
+function startDrag(kind, plan, event, index) {
   if (!props.canEdit) return
-  const plan = editingPlan.value
+  // A press with anything but the left button belongs to the map. See wantsMapPan.
+  if (wantsMapPan(event)) {
+    if (event.preventDefault) event.preventDefault() // no middle-click autoscroll cursor
+    return
+  }
   if (!plan || !map) return
   event.preventDefault()
   event.stopPropagation()
-  dragState = { kind, index }
+  dragState = { kind, plan, index }
   if (kind === 'move') {
     // Recorded once, in geography: every move is then measured from here, so the picture
     // follows the pointer exactly instead of accumulating rounding at every step.
     dragState.from = map.containerPointToLatLng(map.mouseEventToContainerPoint(event))
     dragState.centre = [plan.centre[0], plan.centre[1]]
+    beginAutoPan(event)
   }
   window.addEventListener('pointermove', onDragMove)
   window.addEventListener('pointerup', endDrag)
   window.addEventListener('pointercancel', endDrag)
 }
 
-function onDragMove(event) {
-  const plan = editingPlan.value
-  if (!dragState || !plan || !map) return
+// Put a drag that is still in progress back in step with the view, AFTER the view has moved.
+//
+// A shape drag is measured as "where the shape was when the offset was last taken, plus how far
+// the pointer has come since": `from` is the geography the pointer was over then, and `points` /
+// `centre` is the shape as it was then. The two are one measurement, so they have to move together.
+// A dragged dot is the same thing with one coordinate instead of a ring: `from` is still the
+// pointer, `point` is the dot.
+//
+// This used to move `from` on its own, and that silently threw away every metre the shape had
+// already travelled -- the drag restarted from where it began. Measured on the real page, with the
+// map 550 px wide: a floor plan dragged out through the right-hand edge followed the cursor for
+// 195 px, and the moment the auto-pan started it jumped back to where it had been picked up and
+// then travelled with the map instead of with the cursor. An outline did the same, and worse: the
+// anchor it was writing there was a lat/lng where a pixel point belonged (see onAreaDragMove), so
+// the next move measured from NaN and the shape was gone.
+//
+// Re-basing first and re-anchoring second is what makes it a no-op on screen: the shape is moved
+// on by exactly what the view moved under it, so it is left where the cursor is. The move handler
+// is then run with the pointer where it already is, which draws the shape from the new anchor and
+// reports it -- so the page's copy of the document never lags the drag, not even while the pointer
+// is held still against the edge and no move events are arriving at all.
+function reanchor() {
+  // A corner or the rotation knob has no anchor and no base -- both are measured from the CURSOR on
+  // every move (see renderHandles), so there is nothing here to put back in step.
+  const moving = dragState && dragState.from ? dragState : null
+  const latch = moving || areaDrag || vertexDrag
+  if (!latch || !map || !autoPanPointer) return
+  const here = map.containerPointToLatLng(map.mouseEventToContainerPoint(autoPanPointer))
+  const moved = latLngToMetres(latch.from, here)
+  // Nothing has changed under the pointer, so there is nothing to put right.
+  if (!moved.x && !moved.y) return
 
+  if (moving) {
+    moving.centre = metresToLatLng(moving.centre, moved.x, moved.y)
+    moving.from = here
+    onDragMove(autoPanPointer)
+    return
+  }
+  if (areaDrag) {
+    areaDrag.points = areaDrag.points.map((p) => metresToLatLng(p, moved.x, moved.y))
+    areaDrag.from = here
+    onAreaDragMove(autoPanPointer)
+    return
+  }
+  // A dot: the dot IS the whole of what is held, so it is the base as well as the thing that moves.
+  vertexDrag.point = metresToLatLng(vertexDrag.point, moved.x, moved.y)
+  vertexDrag.from = here
+  onVertexMove(autoPanPointer)
+}
+
+function onDragMove(event) {
+  if (!dragState || !dragState.plan || !map) return
+  trackPointer(event)
+  const plan = dragState.plan
   const latlng = map.containerPointToLatLng(map.mouseEventToContainerPoint(event))
 
   if (dragState.kind === 'move') {
@@ -436,6 +843,326 @@ function endDrag() {
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', endDrag)
   window.removeEventListener('pointercancel', endDrag)
+  stopAutoPan()
+  endHistoryRun()
+}
+
+// ---------- The view follows a drag ----------
+// A shape dragged towards the edge of the map takes the map with it, so something can be moved
+// somewhere that is not on screen yet without letting go first. Letting go and panning would be
+// two gestures, and the second one lands the thing somewhere other than where the planner was
+// pointing.
+//
+// It runs on the animation frame rather than on the pointer's move events, which is what makes it
+// keep going while the pointer is held still against the edge -- the case it exists for. The band it
+// works from is measured from the map's own edge, so everything outside the map is past it; how far
+// past it is allowed to matter differs between a drag and the drawing hover, and the hover says why.
+//
+// `move` is what the follow does once the view has moved: `reanchor` for anything being dragged --
+// see there -- and `followCursor` for the hover that follows the pointer while a ring is being
+// drawn. Either way the order matters: the pan changes the geography under the pointer, and a
+// follow that worked from the geography of BEFORE the pan would be one frame behind for ever, so
+// the shape would sit a pan's width away from the cursor and follow it at a remove.
+function beginAutoPan(event, move = reanchor, hover = false) {
+  autoPanMove = move
+  autoPanHover = hover
+  trackPointer(event)
+  // A frame is only ever outstanding through the gesture that asked for it. The check is here rather
+  // than implied by the callers so that a drag which does not want the view to follow (a corner, a
+  // rotation knob) can arm nothing at all by not calling this.
+  if (autoPanFrame === null) autoPanFrame = requestAnimationFrame(autoPanStep)
+}
+
+// Where the pointer is, in the browser's coordinates. Kept up to date from every move AND from the
+// press that started the drag, so a shape can be dragged straight into the edge without a move
+// event in between. The numbers are copied out of the event rather than the event itself being
+// kept: a listener of the same kind that runs later is handed the SAME object, so holding one is
+// holding a value that quietly changes under it.
+function trackPointer(event) {
+  autoPanPointer = { clientX: event.clientX, clientY: event.clientY }
+}
+
+function stopAutoPan() {
+  if (autoPanFrame !== null) cancelAnimationFrame(autoPanFrame)
+  autoPanFrame = null
+  autoPanMove = null
+  autoPanHover = false
+  autoPanPointer = null
+}
+
+function autoPanStep() {
+  autoPanFrame = null
+  if (!autoPanMove || !map) return
+
+  const size = map.getSize()
+  let x = 0
+  let y = 0
+  if (autoPanPointer) {
+    const point = map.mouseEventToContainerPoint(autoPanPointer)
+    if (point.x < EDGE_PX) x = -panSpeed(EDGE_PX - point.x)
+    else if (point.x > size.x - EDGE_PX) x = panSpeed(point.x - (size.x - EDGE_PX))
+    if (point.y < EDGE_PX) y = -panSpeed(EDGE_PX - point.y)
+    else if (point.y > size.y - EDGE_PX) y = panSpeed(point.y - (size.y - EDGE_PX))
+  }
+
+  if (x || y) {
+    // The view moves first, and the shape is put back in step with it second, so that the shape
+    // ends the frame exactly where the cursor is rather than one frame's worth of pan away.
+    map.panBy([x, y], { animate: false })
+    autoPanMove()
+    autoPanFrame = requestAnimationFrame(autoPanStep)
+    return
+  }
+  // Nothing to do this frame. A DRAG keeps asking anyway: it is held, so the pointer can reach the
+  // edge without a move event, and the next frame has to notice -- the loop ends when the drag does,
+  // in stopAutoPan. A HOVER is not held: its pointer position only ever changes with a move event,
+  // and every one of those re-arms this -- so an idle hover frame ends the loop rather than spinning
+  // one for as long as a ring is being drawn.
+  if (!autoPanHover) autoPanFrame = requestAnimationFrame(autoPanStep)
+}
+
+// How fast the view follows, in pixels per frame, for a pointer `distance` px past the inner line
+// where the following starts. Nothing at the line, AUTO_PAN_EDGE_PX by the time the pointer has
+// reached the map's own edge, and from there AUTO_PAN_GAIN faster for every further pixel out -- so
+// pushing the pointer further out of the map pans proportionally faster, which is what makes a long
+// distance one gesture instead of a drag followed by a pan. The climb stops at AUTO_PAN_MAX_PX, so a
+// pointer parked off the far side of the window cannot throw the view across Singapore in one frame;
+// it reaches that 240 px outside the map, which the window has room for in every direction.
+//
+// The two segments are written out rather than folded into one expression: past the edge the first
+// segment keeps growing too, and the sum of the two slopes reached the cap in 80 px -- too short to
+// aim with, since every distance beyond it would pan at the same speed.
+//
+// The climb used to stop AT the edge: the formula measured the distance past the inner line and
+// capped the result at the edge speed, so the whole world outside the map -- which is all the same
+// distance as far as that was concerned -- moved at one fixed 8 px a frame however far out it went.
+function panSpeed(distance) {
+  const speed = distance <= EDGE_PX
+    ? (distance / EDGE_PX) * AUTO_PAN_EDGE_PX
+    : AUTO_PAN_EDGE_PX + (distance - EDGE_PX) * AUTO_PAN_GAIN
+  return Math.max(1, Math.round(Math.min(AUTO_PAN_MAX_PX, speed)))
+}
+
+// ---------- The view follows the pointer while a ring is being drawn ----------
+// Drawing is the one mode where the left button cannot move the view, because there a click IS a
+// point -- so without this the only way to reach ground that is off screen is the middle button, with
+// the hand that is busy placing points. The view follows the pointer instead, so the ground under the
+// pointer keeps being refreshed and the next click can land on somewhere that was off screen a moment
+// ago.
+//
+// It follows with the SAME law a dragged dot follows: the same EDGE_PX band, the same panSpeed, and
+// the same reach -- everything outside the map, however far out, at a speed that climbs with the
+// distance. A ring drawn around a venue grows in one direction for several screens, and the whole
+// point of the follow is that growing costs one gesture rather than "place a point, pan, place the
+// next point".
+//
+// It used to stop EDGE_PX outside the map, on the argument that nothing is held, so a pointer parked
+// over the controls column means "I am reaching for Undo" at least as often as it means "keep going".
+// That got the answer wrong where it counts. The map is ONE COLUMN of the page: the controls are
+// directly beside its right-hand edge, so a pointer pushed past that edge -- the direction a ring
+// most often needs to grow -- is over them immediately, and the follow died exactly where it was
+// wanted. The button a drag has to say "still travelling" is not replaced by anything, so the band
+// does the whole job: see autoPanStep, where a pointer that is inside the map and away from its edges
+// still ends the follow on the first frame with nothing to do.
+function setHoverFollow(on) {
+  if (on === hoverFollowOn) return
+  hoverFollowOn = on
+  if (on) {
+    window.addEventListener('pointermove', onHoverMove)
+    return
+  }
+  window.removeEventListener('pointermove', onHoverMove)
+  // Leaving the mode ends the follow that mode asked for -- but only if it is the hover's own: a
+  // drag's follow is ended by the drag, and nothing here may cut one of those short.
+  if (autoPanHover) stopAutoPan()
+}
+
+// A pointer with a button down is a different gesture, and every one of those has a follow of its own:
+// a dot being dragged, a picture being dragged, the middle-button pan. This one is only ever the
+// pointer by itself.
+//
+// A ring has to be under way for it to run at all: at least one point placed, so the next click is
+// the next point. Watch mode alone is not enough to know that travel is wanted -- entering drawing
+// puts the pointer ON the controls, and the pointer's first move is from there to the map, across a
+// column at the far end of the ramp. That is a view that runs away before a single point is placed.
+function onHoverMove(event) {
+  if (
+    event.buttons ||
+    !map ||
+    !props.canEdit ||
+    mode.value !== 'polygons' ||
+    draftClosed.value ||
+    draftPoints.value.length === 0
+  ) {
+    if (autoPanHover) stopAutoPan()
+    return
+  }
+  // The bench's own controls sit OVER the map rather than beside it, and moving the view because the
+  // pointer crossed the hint along the top would make reading it impossible. Same rule, and the same
+  // elements, as the two clicks on the map.
+  const target = event.target
+  if (target && target.closest && target.closest('.bench-hint, .bench-draft')) {
+    if (autoPanHover) stopAutoPan()
+    return
+  }
+  beginAutoPan(event, followCursor, true)
+}
+
+// What the hover's follow does once the view has moved: ask where the pointer is NOW, and let the
+// drawing code put the loose end of the rubber band there. Nothing is latched and nothing is held, so
+// that is the whole of it -- onMapMove is the same thing a move inside the map does, and running it
+// here is what keeps the loose end, the snap and the crossing warning right while the view slides
+// underneath a pointer that is not itself moving at all.
+function followCursor() {
+  if (!map || !autoPanPointer) return
+  onMapMove({ latlng: map.containerPointToLatLng(map.mouseEventToContainerPoint(autoPanPointer)) })
+}
+
+// ---------- Moving the view ----------
+// A press moves the view when it is the middle button, wherever it lands -- the map, a picture, an
+// outline, a corner handle, the middle of drawing an area -- and that is the only press that
+// always does. The LEFT button moves the view only where there is nothing else for it to mean,
+// which is what keeps a drag that starts on a shape moving that shape.
+//
+// The shape test reads the event's TARGET, not `dragState`: a press on a shape has already been
+// taken by that shape's own handler by the time this runs, and the only question left is whether
+// the press was for the map or for the shape.
+function wantsPan(event) {
+  if (wantsMapPan(event)) return true
+  if (event.button !== 0) return false
+  // While an area is being drawn every click is a point, so the LEFT button belongs to the ring.
+  // The middle button is above this line and still pans.
+  if (mode.value === 'polygons') return false
+  const target = event.target
+  if (!target || !target.closest) return true
+  // Everything the bench puts on the map under its own name, plus Leaflet's own interactive
+  // layers: each of those has a press of its own to handle.
+  return !target.closest('.bench-plan, .bench-handle, .bench-knob, .leaflet-interactive')
+}
+
+// Every press on the map passes through here, whatever it turns out to be for. The one thing that
+// has to happen for ALL of them is forgetting whether the LAST press was a pan: a left click a
+// moment after a middle pan is an ordinary click, and leaving the answer from the previous press
+// standing would throw its point away.
+function onMapPointerDown(event) {
+  panMoved = false
+  startPan(event)
+}
+
+// Put a shape drag that is in progress back in step with the view, without moving the shape on
+// screen. Called at the START of a pan, because the shape's anchor is geography: once the view
+// moves, that geography is somewhere else on screen, and a drag that resumed with the old anchor
+// would jump by the whole width of the pan to catch up.
+//
+// One helper rather than a branch at the call site: both drags re-anchor identically, and the only
+// thing that differs is which of them is running.
+function followShape(event) {
+  if (!areaDrag && !dragState && !vertexDrag) return
+  if (event) trackPointer(event)
+  reanchor()
+}
+
+function startPan(event) {
+  if (!map || panFrom) return
+  if (!wantsPan(event)) return
+
+  // Middle-click on a desktop browser otherwise starts its autoscroll cursor, which scrolls the
+  // page at the same time as the pan.
+  if (event.preventDefault) event.preventDefault()
+
+  // The press belongs to the view now, so a shape drag in progress must stop following the
+  // pointer: if it carried on, the shape would jump by the whole width of the pan on the next
+  // move. It keeps its geography and the view moves under it, which is the only thing "pan while
+  // holding something" can mean.
+  stopAutoPan()
+  // The shape's anchor is left on the geography it had at the press, which is now somewhere else on
+  // screen -- so when the pan ends and the drag resumes, the first move would measure from there and
+  // the shape would jump. Re-anchoring onto the pointer's new geography at the same screen point
+  // puts that right, and is a no-op on screen: same place under the cursor, new coordinates for it.
+  followShape(event)
+
+  panFrom = map.containerPointToLatLng(map.mouseEventToContainerPoint(event))
+  panPoint = { clientX: event.clientX, clientY: event.clientY }
+  panPointerId = event.pointerId
+  panTravel = 0
+  setPanning(true)
+  // CAPTURE, so the view keeps following a pointer that has left the map -- over another card, or
+  // off the window entirely. Without it the moves stop at the edge and the pan dies with them.
+  // A capture also fails on its own if the pointer is gone by the time it is asked for, and there
+  // is nothing to recover from in that case: the pan simply follows the events it does get.
+  if (panPointerId !== undefined && map.getContainer().setPointerCapture) {
+    try { map.getContainer().setPointerCapture(panPointerId) } catch { /* pointer already gone */ }
+  }
+
+  window.addEventListener('pointermove', onPanMove)
+  window.addEventListener('pointerup', endPan)
+  window.addEventListener('pointercancel', endPan)
+  window.addEventListener('blur', endPan)
+}
+
+function onPanMove(event) {
+  if (!panFrom || !map) return
+  if (panPointerId !== null && event.pointerId !== panPointerId) return
+
+  // Where the place the press grabbed sits now, and where it sat then. Both are in the map's own
+  // pixels, so a zoom in between is already accounted for and nothing has to be scaled by hand.
+  const way = map.mouseEventToContainerPoint(event)
+  const at = map.mouseEventToContainerPoint(panPoint)
+  const dx = way.x - at.x
+  const dy = way.y - at.y
+  panPoint = { clientX: event.clientX, clientY: event.clientY }
+  // Kept up to date here as well, so that a shape drag resumed after this pan starts from where the
+  // cursor actually is rather than from wherever it was when the pan began.
+  trackPointer(event)
+
+  panTravel += Math.abs(dx) + Math.abs(dy)
+  // Below the slop the press is not a drag yet, and nothing is moved: a click that wobbles by a
+  // pixel must still be a click, and still place its point.
+  if (!panMoved && panTravel < PAN_SLOP_PX) return
+  panMoved = true
+
+  // The numbers handed to `panBy` are the pointer's movement, NEGATED. Leaflet's `panBy(offset)`
+  // moves the CENTRE of the view by `offset`, so a positive x means "show more of the east", which
+  // is a LARGER world x. Dragging the pointer to the right has to show more of the WEST -- the map
+  // follows the hand -- so a positive `dx` needs a NEGATIVE offset. Getting this the wrong way round
+  // makes the map run away from the cursor at twice the speed, which is the exact bug this code was
+  // rewritten to fix. The sign is not taken on trust: the harness tries all four combinations and
+  // requires exactly one of them to keep the geography under the cursor at the press still under it.
+  map.panBy([-dx, -dy], { animate: false })
+}
+
+function endPan(event) {
+  if (!panFrom) return
+  // One pointer, one pan. A second finger arriving must not end the first one's pan.
+  if (event && panPointerId !== null && event.pointerId !== undefined && event.pointerId !== panPointerId) return
+  const id = panPointerId
+  panFrom = null
+  panPoint = null
+  panPointerId = null
+  setPanning(false)
+  if (map && id !== null && map.getContainer().releasePointerCapture) {
+    // A capture that is already gone throws rather than failing quietly, and there would be nothing
+    // to do about it either way: the pan is over.
+    try { map.getContainer().releasePointerCapture(id) } catch { /* already released */ }
+  }
+  window.removeEventListener('pointermove', onPanMove)
+  window.removeEventListener('pointerup', endPan)
+  window.removeEventListener('pointercancel', endPan)
+  window.removeEventListener('blur', endPan)
+}
+
+// The grabbing hand, while the view is being moved by a press rather than by the wheel. Leaflet's
+// own `.leaflet-grab` class no longer means anything -- its drag is off -- so this is the cursor
+// state now.
+function setPanning(on) {
+  if (map) map.getContainer().classList.toggle('bench-panning', Boolean(on))
+}
+
+// A gesture that reported many changes is over, so the one step it earned is closed now rather
+// than when the changes happen to stop coming. Called from every pointerup path, which is the
+// one moment that is reliably the end of a drag.
+function endHistoryRun() {
+  if (props.history) props.history.endRun()
 }
 
 // ---------- Drawing ----------
@@ -472,8 +1199,17 @@ function drawDraftVertices() {
 // Closing the ring must not depend on pixel-perfect aim. Once there are enough points to
 // make an area, coming near the FIRST one makes the loose end of the rubber band snap onto
 // it and turns the line green: what is on screen is what will be created.
+//
+// Not offered when the ring cannot be closed at all: a green line that promises a shape the
+// bench then refuses would be a lie.
 function updateSnap() {
-  if (draftClosed.value || draftPoints.value.length < AREA_MIN_POINTS || !cursorLatLng || !map) {
+  if (
+    draftClosed.value ||
+    draftPoints.value.length < AREA_MIN_POINTS ||
+    !cursorLatLng ||
+    !map ||
+    closeBlocked.value
+  ) {
     snapActive.value = false
     return
   }
@@ -507,7 +1243,9 @@ function drawDraftLine() {
   if (path.length < 2) return
 
   draftLine = L.polyline(path, {
-    color: snapActive.value ? '#198754' : '#0d6efd',
+    // Red is the line that will not be allowed to exist: it would cross one already drawn,
+    // and the click that would end it here is refused.
+    color: crossWarn.value ? '#dc3545' : snapActive.value ? '#198754' : '#0d6efd',
     weight: snapActive.value ? 3 : 2,
     dashArray: draftClosed.value ? null : '6 6',
     interactive: false,
@@ -566,7 +1304,13 @@ function drawAreaVertices() {
 
   points.forEach((point, index) => {
     const marker = L.marker(point, {
-      draggable: true,
+      // NOT Leaflet's own drag, and this is the one place the component cannot use it. It moves the
+      // icon by the pointer's travel in PIXELS and reads the geography back out of where that put it
+      // (`_newPos = _startPos + offset`, then `layerPointToLatLng(getPosition(icon))`), so it has no
+      // idea the view moved: a pan underneath would leave the dot slipping behind the cursor with its
+      // coordinates frozen where the pan started. It also cannot arm the auto-pan at all, because
+      // that only happens for a press this component handles. See onVertexPointerDown.
+      draggable: false,
       keyboard: false,
       icon: L.divIcon({
         className: '',
@@ -576,33 +1320,36 @@ function drawAreaVertices() {
       }),
     }).addTo(map)
 
-    marker.on('drag', () => {
-      const at = marker.getLatLng()
-      const next = currentAreaPoints()
-      next[index] = [at.lat, at.lng]
-      // Move the outline with the dot as it goes. Waiting for the drop meant the shape
-      // only caught up once the planner let go, which made placing a point a guessing game.
-      applyAreaPoints(areaLayers[area.id], next)
-    })
-
-    marker.on('dragend', () => {
-      const at = marker.getLatLng()
-      const next = currentAreaPoints()
-      next[index] = [at.lat, at.lng]
-      emit('area-updated', { id: area.id, patch: { points: next } })
-    })
+    // The press is taken on the dot's own element, so it is handled exactly like a press on a picture
+    // or on an outline rather than like a Leaflet drag.
+    const element = marker.getElement()
+    if (element) {
+      element.addEventListener('pointerdown', (event) => onVertexPointerDown(area.id, index, event))
+    }
 
     marker.on('click', (event) => {
       L.DomEvent.stopPropagation(event)
-      const next = currentAreaPoints()
-      if (next.length <= AREA_MIN_POINTS) {
-        errorMsg.value = 'An area needs at least ' + AREA_MIN_POINTS + ' points.'
+      // The click the browser fires as the press ends is not always a click ON the dot: at the end of
+      // a drag it is only how the gesture finished, and acting on it would delete the very point the
+      // planner has just placed. Leaflet suppressed that click for its own drags (see
+      // Map._draggableMoved); owning the drag means owning that too. `vertexMoved` is cleared by the
+      // next press on a dot, so the only click it can swallow is the one at the end of a drag.
+      if (vertexMoved) return
+      const before = currentAreaPoints()
+      if (before.length <= AREA_MIN_POINTS) {
+        errorMsg.value = 'That is the ' + AREA_MIN_POINTS + '-point minimum.'
         return
       }
-      emit('area-updated', {
-        id: area.id,
-        patch: { points: next.filter((_, i) => i !== index) },
-      })
+      const next = before.filter((_, i) => i !== index)
+      // Taking a point out can leave a ring that crosses itself just as surely as moving one
+      // can, so it is checked the same way -- and with no exception for a shape that already
+      // crosses, because that exception was the bypass.
+      if (ringCrossing(next)) {
+        errorMsg.value = CROSS_REMOVE_MESSAGE
+        return
+      }
+      errorMsg.value = ''
+      emit('area-updated', { id: area.id, patch: { points: next } })
     })
 
     areaVertexMarkers.push(marker)
@@ -611,14 +1358,157 @@ function drawAreaVertices() {
   areaVertexMarkers.benchArea = area.id
 }
 
-// A new point has to go somewhere: park it a short step east of the last one, then the
-// planner drags it into place.
+// ---------- Moving one point of an area ----------
+// The dot follows the pointer the way a picture does -- measured from where the pointer was at the
+// press and never accumulated -- and the outline is redrawn from the ring that gives, so the planner
+// watches the lines move and go red over somewhere the ring cannot go.
+//
+// Owned here rather than by Leaflet's marker drag, for the reason written at the marker: nothing but
+// this can take the view along, and a dot that cannot leave the map can only ever be placed on
+// ground that is already on screen. Making the press look like a picture's is also what lets
+// `reanchor` keep the dot in step with a pan, which is what makes the two work together.
+//
+// Nothing is reported to the page until the drop: the props still hold the ring as it was, the dot
+// and the outline are drawn from the ring as it is being dragged, and the one thing a drop can do
+// that a move cannot is refuse.
+function onVertexPointerDown(id, index, event) {
+  // A press with anything but the left button belongs to the map -- see wantsMapPan.
+  if (wantsMapPan(event)) {
+    if (event.preventDefault) event.preventDefault() // no middle-click autoscroll cursor
+    return
+  }
+  if (!props.canEdit || !map) return
+  const area = props.areas.find((a) => a.id === id)
+  if (!area || !area.points[index]) return
+
+  // The browser must not start a text selection instead of a drag.
+  if (event.preventDefault) event.preventDefault()
+
+  // The message from the last thing that was refused goes away as soon as a new drag begins. Without
+  // this the refusal would sit there while the planner was busy fixing the shape, saying something
+  // that is no longer true.
+  errorMsg.value = ''
+
+  vertexMoved = false
+  vertexDrag = {
+    id,
+    index,
+    // The dot itself, held for the whole gesture: the array it came from is rebuilt whenever the
+    // shape gains or loses a point, and a drag that outlived that would be moving a marker that is
+    // no longer on the map.
+    marker: areaVertexMarkers[index],
+    // Geography, like every other drag, and the dot's own place at the press: the two halves of the
+    // measurement reanchor has to move together.
+    from: map.containerPointToLatLng(map.mouseEventToContainerPoint(event)),
+    point: [area.points[index][0], area.points[index][1]],
+    press: map.mouseEventToContainerPoint(event),
+    dot: null,
+  }
+  window.addEventListener('pointermove', onVertexMove)
+  window.addEventListener('pointerup', endVertexDrag)
+  window.addEventListener('pointercancel', endVertexDrag)
+}
+
+function onVertexMove(event) {
+  if (!vertexDrag || !map) return
+  trackPointer(event)
+  const here = map.mouseEventToContainerPoint(event)
+
+  // Below the tolerance the press is still a click on the dot rather than a drag of it, so the dot
+  // has not moved and the drop has nothing to report.
+  if (!vertexMoved) {
+    if (here.distanceTo(vertexDrag.press) < VERTEX_SLOP_PX) return
+    vertexMoved = true
+    // The view starts following once the press has become a drag OF the dot, not at the press itself
+    // -- which is where a picture arms it, a picture having no click of its own. A dot does: a click
+    // on one takes the point out, and a click that removed a point AND scrolled the map underneath
+    // would be two answers to one gesture.
+    beginAutoPan(event)
+  }
+
+  const moved = latLngToMetres(vertexDrag.from, map.containerPointToLatLng(here))
+  const dot = metresToLatLng(vertexDrag.point, moved.x, moved.y)
+  vertexDrag.dot = dot
+
+  const next = currentAreaPoints()
+  next[vertexDrag.index] = dot
+  // The dot is moved here rather than by Leaflet: nothing has been reported to the page yet, so the
+  // props still hold the ring as it was and nothing else would move it off its old spot.
+  if (vertexDrag.marker) vertexDrag.marker.setLatLng(dot)
+
+  // The answer to "would this cross?" is worked out on every frame, not on release, which is too late
+  // to be any use: the outline turns red while the dot is somewhere it would cross itself, and turns
+  // back the moment it is inside again, so the planner is told where the line is instead of being
+  // snapped away from it. This is feedback only, and the red IS the message: the planner can see the
+  // line that overlaps, and a paragraph repeating it would be noise in the corner of the thing they
+  // are looking at. The one thing said out loud is the refusal they cannot see, on the drop.
+  applyAreaPoints(areaLayers[vertexDrag.id], next, Boolean(ringCrossing(next)))
+}
+
+// The drop, judged on where the dot LANDS and never on the path it took to get there. One drag that
+// ends on a legal shape repairs a broken outline, and the outline follows the dot the whole way, so
+// the planner watches the lines come apart before letting go.
+function endVertexDrag() {
+  const drag = vertexDrag
+  stopVertexDrag()
+  if (!drag || !vertexMoved || !drag.dot) return
+
+  const before = currentAreaPoints()
+  const next = currentAreaPoints()
+  next[drag.index] = drag.dot
+
+  // NO CROSSING LINES, with no way round it. An earlier version let a shape that already crossed
+  // itself off the hook -- "it is broken, so anything goes" -- and that WAS the way round: any drag
+  // on a broken outline was accepted, crossings and all.
+  if (ringCrossing(next)) {
+    errorMsg.value = CROSS_VERTEX_MESSAGE
+    if (drag.marker) drag.marker.setLatLng(before[drag.index])
+    applyAreaPoints(areaLayers[drag.id], before)
+    return
+  }
+
+  errorMsg.value = ''
+  emit('area-updated', { id: drag.id, patch: { points: next } })
+}
+
+// The gesture is over, whatever became of it -- including a cancelled press, which must not leave the
+// latch or the frame loop behind. This is also what the unmount runs, so a drag in flight can never
+// outlive the map it was moving.
+function stopVertexDrag() {
+  vertexDrag = null
+  window.removeEventListener('pointermove', onVertexMove)
+  window.removeEventListener('pointerup', endVertexDrag)
+  window.removeEventListener('pointercancel', endVertexDrag)
+  stopAutoPan()
+  endHistoryRun()
+}
+
+// A new point has to go somewhere legal, and then the planner drags it into place.
+//
+// Where "somewhere legal" is turns out to be the whole difficulty, which is why the search lives
+// in utils/areaGrow.js with its own tests. Appending a point at the end of the ring -- one short
+// step east of the last dot, which is what this used to do -- is joined to TWO neighbours, because
+// the ring closes: the dot that was last, and the dot that was first. For a three-point ring that
+// often leaves no legal spot at all, and the planner was simply told their point would cross
+// something no matter where they asked for it. growRing tries the end of the ring first, next to
+// the dot they were last looking at, and splits an edge if that is refused.
+//
+// AREA_MAX_POINTS is the same ceiling public.area_ok() enforces. Refusing the point here
+// rather than letting the save discover it is the difference between an action that cannot
+// be taken and a completed edit that is silently thrown away.
 function addAreaPoint() {
   const area = editingArea.value
   if (!area) return
-  const last = area.points[area.points.length - 1]
-  const next = [last[0], last[1] + 0.00012] // ~13 m at this latitude
-  emit('area-updated', { id: area.id, patch: { points: [...area.points, next] } })
+  if (area.points.length >= AREA_MAX_POINTS) {
+    errorMsg.value = 'An area can have at most ' + AREA_MAX_POINTS + ' points.'
+    return
+  }
+
+  const { points, insertedAt } = growRing(currentAreaPoints())
+  if (insertedAt === null) return // nowhere legal to put it: the shape is left exactly as it is
+
+  errorMsg.value = ''
+  emit('area-updated', { id: area.id, patch: { points } })
 }
 
 // ---------- Selecting and moving areas ----------
@@ -626,28 +1516,59 @@ function addAreaPoint() {
 // carries the whole shape along, exactly the way a floor plan moves. A plain press with no
 // movement is therefore just a selection.
 function onAreaPointerDown(id, event) {
-  if (!areasClickable.value || !map) return
+  // A press with anything but the left button belongs to the map -- including one that lands on a
+  // dot, which is the whole point: the map may be covered in shapes, and there is nowhere else left
+  // to grab it. See wantsMapPan.
+  if (wantsMapPan(event)) {
+    if (event.preventDefault) event.preventDefault() // no middle-click autoscroll cursor
+    return
+  }
+
+  if (!shapesClickable.value || !map) return
   const area = props.areas.find((a) => a.id === id)
   if (!area) return
+
+  // A dot's own press is not the outline's. The map has to stay pannable now, so the check that a
+  // press meant the outline rather than the map is this one -- and it has to happen on POINTERDOWN,
+  // not on click: the vertex stops its own click from propagating, which means the browser fires no
+  // click at all, and a press that reaches the map would also put the shape down on the way.
+  const pressed = event.target && event.target.getAttribute && event.target.getAttribute('class')
+  if (pressed && pressed.indexOf('bench-vertex') >= 0) return
 
   // The browser must not start a text selection or a page scroll instead of a drag.
   if (event.preventDefault) event.preventDefault()
 
-  if (mode.value !== 'area:' + id) mode.value = 'area:' + id
+  // Picking a shape up is a fresh start, so whatever was last refused about a different one goes
+  // away -- the same reason every other action clears it where the action begins.
+  errorMsg.value = ''
+
+  // The press is stopped from reaching the map, so this drag moves the outline and nothing else. The
+  // view stays where it is: this shape is under the cursor, and a fit to it would move the ground
+  // under the drag that is about to begin -- see viewAlreadyRight.
+  if (mode.value !== 'area:' + id) {
+    viewAlreadyRight = true
+    mode.value = 'area:' + id
+  }
 
   areaDrag = {
     id,
-    from: map.mouseEventToContainerPoint(event),
+    // Geography, not a pixel point -- the same thing a picture's drag is measured from, and for the
+    // same reason: a pan changes where a pixel is, and a re-anchor has to be able to move this.
+    from: map.containerPointToLatLng(map.mouseEventToContainerPoint(event)),
     points: area.points.map((p) => [p[0], p[1]]),
   }
   window.addEventListener('pointermove', onAreaDragMove)
   window.addEventListener('pointerup', endAreaDrag)
   window.addEventListener('pointercancel', endAreaDrag)
+  beginAutoPan(event)
 }
 
+// The outline is drawn from `areaDrag.from`, which is geography for the same reason a picture's
+// anchor is: see reanchor, which moves it while the view moves under the drag.
 function onAreaDragMove(event) {
   if (!areaDrag || !map) return
-  const from = map.containerPointToLatLng(areaDrag.from)
+  trackPointer(event)
+  const from = areaDrag.from
   const here = map.containerPointToLatLng(map.mouseEventToContainerPoint(event))
   const moved = latLngToMetres(from, here)
   const points = areaDrag.points.map((p) => metresToLatLng(p, moved.x, moved.y))
@@ -660,43 +1581,107 @@ function endAreaDrag() {
   window.removeEventListener('pointermove', onAreaDragMove)
   window.removeEventListener('pointerup', endAreaDrag)
   window.removeEventListener('pointercancel', endAreaDrag)
+  stopAutoPan()
+  endHistoryRun()
 }
 
-// ---------- Drawing ----------
+// ---------- Drawing, and the map's two clicks ----------
+// The map has exactly two clicks.
+//
+//   - drawing: the click adds a point, or closes the ring. Nothing else on the map takes a click
+//     while a ring is open, so this is every click there is.
+//   - otherwise: the click puts down whatever was being worked on. Nothing open means nothing to
+//     put down, so it does nothing at all -- which is the common case, because the view can be
+//     dragged whenever the planner likes.
 function onMapClick(event) {
   const native = event.originalEvent
+  // The click the browser fires at the end of a press is a click on the map only if the press was
+  // one. A press that moved the view was the middle button, or a drag, and neither places a point.
+  if (!native || native.button !== 0 || panMoved) return
   const target = native && native.target
   // A click that landed on a floor plan picture or on a drawn area already belongs to that
   // thing, so it is not a click on the map.
   if (target && target.closest && target.closest('.leaflet-overlay-pane')) return
+  // Neither is a click on the bench's own controls, which sit over the map rather than beside
+  // it: the strip along the top, and the name-and-type form in the corner while a ring is
+  // being closed.
+  if (target && target.closest && target.closest('.bench-hint, .bench-draft')) return
   if (!props.canEdit) return
+
+  // A press on the map is the planner moving on from whatever was last refused, so the refusal
+  // goes away. Every other route back to a clean message -- drawing a point, starting a drag,
+  // pressing a button -- clears it where that action begins.
+  errorMsg.value = ''
 
   if (mode.value === 'polygons') {
     addDraftPoint(event)
     return
   }
 
-  // Clicking away from whatever is being worked on puts it down. Putting it down is a lock,
-  // and a lock is the save -- so this keeps what was done, it does not throw it away.
-  if (mode.value !== null && mode.value !== 'map') mode.value = null
+  // Putting it down is the save -- so this keeps what was done, it does not throw it away. The
+  // view is not affected either way: the map is always free to pan.
+  if (mode.value !== null) mode.value = null
 }
 
 function addDraftPoint(event) {
   if (draftClosed.value) return
 
   const points = draftPoints.value
+  const here = map.latLngToContainerPoint(event.latlng)
+
   if (points.length >= AREA_MIN_POINTS) {
     // Same tolerance as the snap, so "it looked closed" and "it closed" are the same thing.
     // The panel's Finish button closes it too, for anyone who would rather not aim at all.
     const first = map.latLngToContainerPoint(L.latLng(points[0][0], points[0][1]))
-    const here = map.latLngToContainerPoint(event.latlng)
     if (here.distanceTo(first) <= SNAP_PX) {
       closeDraft()
       return
     }
+  } else if (points.length === AREA_MIN_POINTS - 1) {
+    // Two points down and a click back on the first one: the planner is trying to close a ring
+    // that is not a shape yet. Saying so beats adding a second point on top of the first, which
+    // would leave a three-point ring with no area in it at all.
+    const first = map.latLngToContainerPoint(L.latLng(points[0][0], points[0][1]))
+    if (here.distanceTo(first) <= SNAP_PX) {
+      errorMsg.value = 'That is the ' + AREA_MIN_POINTS + '-point minimum.'
+      return
+    }
   }
 
+  // A double-click fires two clicks in the same place. The first is a point and the second is
+  // that same point again, which would leave a zero-length edge behind -- and the crossing
+  // check below would then read it as a shape touching itself. Dropping it is also what the
+  // planner means: two clicks in one spot is one point.
+  if (points.length > 0) {
+    const last = points[points.length - 1]
+    const previous = map.latLngToContainerPoint(L.latLng(last[0], last[1]))
+    if (here.distanceTo(previous) <= DUPLICATE_PX) return
+  }
+
+  // NO CROSSING LINES. A ring that crosses itself is not a shape, so the point that would
+  // cross one is refused -- before it is drawn, not at the next save.
+  //
+  // This asks about the edge the click would ADD and nothing else, which is what makes it safe
+  // to be strict: the edges of a legal ring never cross each other, so neither does any part
+  // of drawing one, and this can never refuse a point of a shape that is legal when it closes.
+  if (wouldCrossNext(event.latlng)) {
+    errorMsg.value = CROSS_DRAW_MESSAGE
+    return
+  }
+
+  // The ceiling is checked BEFORE the point joins the ring, so a ring that cannot be saved is
+  // never drawn. Without this a long enough outline is accepted here, drawn in full, and then
+  // thrown away by the database at the next lock -- with one generic sentence to explain it.
+  // 200 is the same limit public.area_ok() enforces.
+  if (points.length >= AREA_MAX_POINTS) {
+    errorMsg.value = 'That is the ' + AREA_MAX_POINTS + '-point limit.'
+    return
+  }
+
+  recordDraft()
+  errorMsg.value = ''
   points.push([event.latlng.lat, event.latlng.lng])
+  crossWarn.value = false
   cursorLatLng = event.latlng
   updateSnap()
   redrawDraft()
@@ -707,13 +1692,30 @@ function onMapMove(event) {
   cursorLatLng = event.latlng
   updateSnap()
   applySnapLook()
+  crossWarn.value = wouldCrossNext(event.latlng)
   drawDraftLine()
 }
 
 function closeDraft() {
   if (draftPoints.value.length < AREA_MIN_POINTS) return
+
+  // Backstop. With every point checked as it is added, the closing line can only cross after
+  // an undo, because taking a point out of a legal ring can leave one that closes across
+  // itself. Refusing here is what keeps "it closed" and "it is a shape" the same thing.
+  if (closingCrosses(draftPoints.value)) {
+    errorMsg.value = CROSS_CLOSE_MESSAGE
+    return
+  }
+
+  recordDraft()
+  errorMsg.value = ''
   draftClosed.value = true
+  // A closed ring is no longer being drawn, so the view stops following the pointer: the click that
+  // closed it may well have been made inside the edge band, and the loop must not outlive the gesture
+  // that asked for it.
+  if (autoPanHover) stopAutoPan()
   snapActive.value = false
+  crossWarn.value = false
   redrawDraft()
   nextTick(() => {
     if (nameInput.value) nameInput.value.focus()
@@ -723,7 +1725,7 @@ function closeDraft() {
 function finishDraft() {
   errorMsg.value = ''
   if (!isValidAreaName(draftName.value)) {
-    errorMsg.value = 'Give the area a name (1 to 50 characters).'
+    errorMsg.value = 'Give the area a name.'
     return
   }
   emit('area-added', {
@@ -733,7 +1735,7 @@ function finishDraft() {
     points: draftPoints.value.map((p) => [p[0], p[1]]),
   })
   resetDraft()
-  mode.value = null // locking is the save
+  mode.value = null // putting it down is the save
 }
 
 function resetDraft() {
@@ -743,15 +1745,85 @@ function resetDraft() {
   draftName.value = ''
   draftKind.value = 'zone'
   snapActive.value = false
+  crossWarn.value = false
   cursorLatLng = null
 }
 
-function undoPoint() {
-  if (draftClosed.value) {
-    draftClosed.value = false
+// Escape and the Clear button both empty the ring. Clearing is recorded like any other change,
+// so Undo brings the whole ring back -- which is what makes Escape safe to press at all.
+function clearDraft() {
+  if (draftPoints.value.length === 0 && !draftClosed.value) return
+  recordDraft()
+  resetDraft()
+}
+
+// ---------- Undo / redo ----------
+// Two stacks (see composables/useHistory.js): the ring being drawn, and the shape of the area
+// whose dots are being dragged. Whichever is open is the one Ctrl+Z reaches -- only one can be
+// open at a time -- and the buttons in each panel offer the same thing for anyone who would
+// rather not use a keyboard.
+//
+// Snapshots are copied on the way in and on the way out, so a state that has been stepped back
+// to can never be altered by the editing that follows it.
+function draftSnapshot() {
+  return {
+    points: draftPoints.value.map((p) => [p[0], p[1]]),
+    closed: draftClosed.value,
+    name: draftName.value,
+    kind: draftKind.value,
   }
-  draftPoints.value.pop()
+}
+
+function applyDraftSnapshot(snapshot) {
+  draftPoints.value = snapshot.points.map((p) => [p[0], p[1]])
+  draftClosed.value = snapshot.closed
+  draftName.value = snapshot.name
+  draftKind.value = snapshot.kind
+  snapActive.value = false
+  crossWarn.value = false
+  cursorLatLng = null
+  errorMsg.value = ''
   redrawDraft()
+}
+
+function recordDraft() {
+  draftSteps.record(draftSnapshot())
+}
+
+// Both of these report whether anything happened, which is how the keyboard handler knows
+// whether the press was the bench's to consume or the browser's to keep.
+function undoDraft() {
+  const snapshot = draftSteps.undo(draftSnapshot())
+  if (!snapshot) return false
+  applyDraftSnapshot(snapshot)
+  return true
+}
+
+function redoDraft() {
+  const snapshot = draftSteps.redo(draftSnapshot())
+  if (!snapshot) return false
+  applyDraftSnapshot(snapshot)
+  return true
+}
+
+// An existing area's shape has no stack of its own any more: a dragged dot, a removed point and
+// an added one are all changes to the PAGE's document, so they are all steps on the one global
+// timeline. That is the whole point -- the stack used to reset the moment the planner clicked
+// away from the shape, so Ctrl+Z stopped working exactly when they came back to it.
+
+// Would adding a floor plan push the canvas over the 4 MB that save_bench() accepts?
+//
+// Because EVERY lock saves the whole document, an addition that breaks the cap is refused by
+// the database at the next save -- and the planner would have no way of knowing which of
+// their edits did it. Catching it here means the file is never added, so the canvas stays
+// saveable. The document is rebuilt the way the page builds it (view + floorPlans + polygons)
+// so the byte count matches what would actually be stored.
+function canvasWouldOverflow(addedPlan) {
+  const document = { view: props.view, floorPlans: [...props.plans, addedPlan], polygons: props.areas }
+  const size = layoutBytes(JSON.stringify(document))
+  if (size <= MAX_LAYOUT_BYTES) return false
+  errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
+  return true
 }
 
 // ---------- Floor plan upload ----------
@@ -778,7 +1850,13 @@ async function onFileChosen(event) {
       image: shrunk.dataUrl,
       imageAspect: shrunk.width / shrunk.height,
     })
+    // Measured before the plan joins the canvas: a plan that cannot be saved is not added.
+    if (canvasWouldOverflow(plan)) return
     emit('plan-added', plan)
+    // Selected, so its corners and its rotate knob are there to work with -- but the view is left
+    // where it is: the picture was just placed at a quarter of THIS screen (see defaultPlan), so
+    // fitting it would zoom in on a placement the planner never saw at the size it was made for.
+    viewAlreadyRight = true
     mode.value = 'floorplan:' + plan.id
     nextTick(renderHandles)
   } catch (err) {
@@ -817,6 +1895,24 @@ function deletePlan(plan) {
   emit('plan-deleted', plan.id)
 }
 
+// A row in the list of floor plans is a way of choosing one, exactly as a row in the list of areas
+// is: choosing one is what puts its corners and its rotate knob on the map. What must NOT choose is
+// anything ON the row that does something of its own -- the name field, the show/hide switch, Edit,
+// Copy, Delete, the opacity slider -- so a click that lands on one of those is left to it.
+//
+// Choosing the plan already being worked on changes nothing. A row in the areas list toggles,
+// because that row is the only handle an area has; a plan has an Edit button that says what pressing
+// it again will do, and a card that put the plan down when the planner clicked its empty half would
+// be the same button with no label on it.
+const PLAN_ROW_CONTROLS = 'input, button, select, textarea, a, label'
+
+function pickPlanCard(plan, event) {
+  const target = event.target
+  if (target && target.closest && target.closest(PLAN_ROW_CONTROLS)) return
+  if (mode.value === 'floorplan:' + plan.id) return
+  mode.value = 'floorplan:' + plan.id
+}
+
 // ---------- Map events ----------
 function onMapMoved() {
   zoomAnimating = false
@@ -837,41 +1933,95 @@ function onZoomAnim() {
   for (const id of Object.keys(planLayers)) planLayers[id].place(animate)
 }
 
-// Escape backs out of whatever is going on: first a half-drawn ring, then the mode. Both
-// steps land on a lock, so both save.
+// Keyboard: Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y) for undo and redo, Escape to back out.
+//
+// The DOCUMENT stack is the page's, and so is the listener that drives it (registered after this
+// one, so a press reaches here first). What this handler owns is the ring being DRAWN, which the
+// document knows nothing about. While a ring is being drawn every press belongs to the ring --
+// including the presses that find nothing left to take back -- because the alternative is the
+// page stepping the whole document back and dropping the half-drawn ring on the floor. The event
+// is stopped so exactly one step is taken per press.
 function onKeyDown(event) {
-  if (event.key !== 'Escape') return
-
-  // A field comes first: leaving it commits what was typed, and a second Escape then backs
-  // out. Otherwise pressing Escape mid-rename would quietly drop the new name.
   const el = event.target
   const tag = el && el.tagName
-  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+  // A field comes first. Inside one, Ctrl+Z belongs to the browser's own text undo -- the
+  // planner who mistypes an area name must get that back, not the last point they drew -- and
+  // Escape commits what was typed, so a second Escape then backs out. Without this, pressing
+  // Escape mid-rename would quietly drop the new name.
+  const inField = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA'
+
+  if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+    const key = String(event.key || '').toLowerCase()
+    const undo = key === 'z' && !event.shiftKey
+    const redo = (key === 'z' && event.shiftKey) || key === 'y'
+    if ((undo || redo) && !inField && mode.value === 'polygons') {
+      if (undo) undoDraft()
+      else redoDraft()
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    return
+  }
+
+  if (event.key !== 'Escape') return
+  if (inField) {
     if (el.blur) el.blur()
     return
   }
 
+  // Clearing is recorded, so this is safe to press: Undo brings the ring straight back.
   if (draftPoints.value.length > 0) {
-    resetDraft()
+    clearDraft()
     return
   }
   if (mode.value !== null) mode.value = null
 }
 
-// Clicking anywhere that is not part of the bench puts down whatever is being worked on:
-// the page background, the header, the navbar, or the empty space of a card.
+// There is no longer a question of WHICH Undo: the document has one timeline, and it is the
+// page's (see composables/useDocHistory.js), so a press reaches the last change whatever it was.
+// Clicking away from a shape and back does not touch it.
 //
-// Things that OPERATE the bench are exempt, because reaching for one must not end the edit
-// you are in the middle of -- the opacity slider would vanish under your finger, and a
-// rename would be cut short. The map is exempt because it handles its own clicks and has to
-// be able to ADD a point while drawing.
-const KEEPS_EDITING = '.bench-wrap, .area-row, input, select, textarea, button, a, label'
+// The one thing that is not on that timeline is the ring being DRAWN, because it is not part of
+// the document until Save -- and that is what this component's own key handler takes first (see
+// onKeyDown). Anything it does not take is left for the page's listener, which is registered
+// after this component's, so this one has already run by the time the page sees the press.
+
+// A press on the page, outside the bench, puts down whatever is being worked on. Everything a
+// planner reaches for while working is exempt: the bench itself (the map handles its own clicks,
+// and while drawing it has to be able to ADD a point), a row in the list of areas, and any control
+// -- so reaching for the opacity slider or a name field never ends the edit they belong to.
+const KEEPS_EDITING = '.bench-wrap, .plan-row, .area-row, input, select, textarea, button, a, label'
+
+// A scrollbar grab is not a click on the page, and it must not be read as one.
+//
+// Both lists scroll now, and reaching for a scrollbar while drawing would otherwise count as
+// clicking away -- which ends the drawing session and throws away a half-drawn ring, because
+// the planner wanted to see the bottom of a list. The browser reports a scrollbar press as
+// landing on the scroll CONTAINER itself, never on anything inside it, so this matches the
+// container and nothing else: the cards and rows keep their ordinary behaviour.
+const SCROLL_AREAS = ['plan-scroll', 'area-scroll']
+
+function isScrollbarGrab(target) {
+  if (!target || !target.classList) return false
+  return SCROLL_AREAS.some((name) => target.classList.contains(name))
+}
 
 function onDocumentPointerDown(event) {
-  if (!props.canEdit || mode.value === null) return
+  if (!props.canEdit) return
+  // A middle press asks for the view, never for a shape or a page -- so it is not "clicking away",
+  // and it must not put down what is being worked on. Ending a resize because the planner reached
+  // for the map to see the far edge of it would be its own small betrayal.
+  if (wantsMapPan(event)) return
+  if (mode.value === null) return
   const target = event.target
   if (!target || !target.closest) return
+  // Things that OPERATE the bench are exempt, because reaching for one must not end the edit you
+  // are in the middle of -- the opacity slider would vanish under your finger, and a rename would
+  // be cut short. The map is exempt too: it handles its own clicks, and it has to be able to ADD a
+  // point while drawing.
+  if (isScrollbarGrab(target)) return
   if (target.closest(KEEPS_EDITING)) return
+  // A press anywhere else on the page puts down whatever is being worked on, which saves it.
   mode.value = null
 }
 
@@ -885,6 +2035,12 @@ onMounted(() => {
   map = createSingaporeMap(mapEl.value)
   if (props.view) map.setView([props.view.lat, props.view.lng], props.view.zoom)
 
+  // The map is a wall against page scrolling: see onMapWheel.
+  map.getContainer().addEventListener('wheel', onMapWheel, WHEEL_OPTIONS)
+  // On the container rather than on the map, because Leaflet drops every press that has already
+  // been stopped -- and a press on a shape has been. A pan has to be able to start there.
+  map.getContainer().addEventListener('pointerdown', onMapPointerDown)
+
   map.on('click', onMapClick)
   map.on('mousemove', onMapMove)
   map.on('zoom zoomend viewreset moveend', onMapMoved)
@@ -892,20 +2048,34 @@ onMounted(() => {
   map.on('zoomstart', onZoomStart)
   map.on('zoomanim', onZoomAnim)
 
-  applyMapLock()
+  applyMapHandlers()
   render()
   renderHandles()
   window.addEventListener('resize', onWindowResize)
-  window.addEventListener('keydown', onKeyDown)
+  // CAPTURE, deliberately. The page listens for the same keys on `window` too (it drives the
+  // document's undo stack), and the two are not ordered by anything either of them controls --
+  // whichever registered first would win. Capturing puts this one first whatever the order is,
+  // so the ring being drawn always gets the press before the document does. `stopImmediate-
+  // Propagation` in the handler is then enough to keep the page out of it.
+  window.addEventListener('keydown', onKeyDown, true)
   document.addEventListener('pointerdown', onDocumentPointerDown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', onWindowResize)
-  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keydown', onKeyDown, true)
   document.removeEventListener('pointerdown', onDocumentPointerDown)
+  if (map) {
+    map.getContainer().removeEventListener('wheel', onMapWheel, WHEEL_OPTIONS)
+    map.getContainer().removeEventListener('pointerdown', onMapPointerDown)
+  }
+  // All of these stop the auto-pan as well, so the frame loop can never outlive the map it pans.
   endDrag()
   endAreaDrag()
+  stopVertexDrag()
+  setHoverFollow(false)
+  stopAutoPan()
+  endPan()
   clearDraftLayers()
   clearAreaVertices()
   if (map) {
@@ -914,14 +2084,74 @@ onUnmounted(() => {
   }
 })
 
-// Redraw what the props now say. Leaving a floor-plan edit, or finishing a polygon, locks
-// the map again -- which is also the page's cue to save.
-watch(mode, (value) => {
-  applyMapLock()
-  if (value !== 'polygons') resetDraft()
-  render()
+// ---------- Picking a shape brings it into view ----------
+// A shape picked from a list can be anywhere. It can be off the side of the screen, and it can be
+// drawn at a zoom where a room is a few pixels across -- so the panel changes to the shape and the
+// map carries on showing somewhere else, and the planner is left reaching for the zoom control to
+// find the thing they just asked for. Choosing a shape is choosing to work on it, and the first
+// thing that needs is for it to be on screen.
+//
+// The room left around it is not decoration. An area's dots sit ON its outline and a floor plan's
+// corner handles and rotate knob stick OUT beyond the picture, so a shape framed edge to edge would
+// have the very handles it was picked for off the screen.
+const FRAME_PADDING_PX = 56
+
+// A pick made ON the map is a pick too -- it is how a shape is grabbed -- but it is also the
+// beginning of a drag, and moving the view out from under a drag would pull the shape away from the
+// cursor holding it. The bench's own gestures say so by raising this before they set the mode;
+// everything else that sets the mode is somebody choosing a shape they are not pointing at, from a
+// list, a paste, or the buttons beside it.
+let viewAlreadyRight = false
+
+// Where the picked shape is, or null when it is not there at all -- a list row whose area was
+// deleted in another tab. A plan is framed on its four corners rather than on its width and height,
+// so a turned picture is framed by what is actually on screen.
+function frameBounds(value) {
+  if (value.startsWith('floorplan:')) {
+    const plan = props.plans.find((p) => p.id === value.slice('floorplan:'.length))
+    if (!plan || !Array.isArray(plan.centre)) return null
+    return L.latLngBounds(cornersOf(plan).map(([lat, lng]) => L.latLng(lat, lng)))
+  }
+  const area = props.areas.find((a) => a.id === value.slice('area:'.length))
+  if (!area || !Array.isArray(area.points) || area.points.length === 0) return null
+  return L.latLngBounds(area.points.map(([lat, lng]) => L.latLng(lat, lng)))
+}
+
+function framePick(value) {
+  if (!map || typeof value !== 'string') return
+  if (!value.startsWith('area:') && !value.startsWith('floorplan:')) return
+  const bounds = frameBounds(value)
+  if (!bounds || !bounds.isValid()) return
+  // No animation: the shape is what was asked for, so the answer arrives with the click rather than
+  // a moment later. Leaflet clamps the zoom to the map's own limits, which is the closest a very
+  // large or very small shape can be shown.
+  map.fitBounds(bounds, { padding: [FRAME_PADDING_PX, FRAME_PADDING_PX], animate: false })
+}
+
+// Redraw what the props now say. The one mode that changes what the map's own pointer does is
+// drawing, so that is the one the handlers are re-applied for; putting a shape down is the page's
+// cue to save. The repaint itself is not here: `render` watches shapesClickable, which is exactly
+// "may a picture or an outline be clicked", and entering or leaving drawing is the only thing that
+// changes it.
+watch(mode, (value, oldValue) => {
+  const pickedOnMap = viewAlreadyRight
+  viewAlreadyRight = false
+  if (value === 'polygons' || oldValue === 'polygons') applyMapHandlers()
+  if (value !== 'polygons') {
+    // A drawing session that is over has nothing left to undo: the areas it produced belong to
+    // the page now, and the next session starts clean.
+    resetDraft()
+    draftSteps.reset()
+  }
   renderHandles()
+  // Taking hold of a plan changes where it sits in the layer order (see place), so the pictures have
+  // to be laid out again -- otherwise the plan that was just picked up stays under the area
+  // outlines until something else happens to move it, and cannot be dragged where they overlap it.
+  if (value !== null && value !== 'polygons') render()
   drawAreaVertices()
+  // Last, so the shape is drawn before the view moves to it: `fitBounds` reports the new centre
+  // through moveend and zoomend (see emitView), and that report is the view the page keeps.
+  if (!pickedOnMap) framePick(value)
 })
 
 watch(() => props.plans, () => {
@@ -931,18 +2161,40 @@ watch(() => props.plans, () => {
 
 watch(() => props.areas, render, { deep: true })
 
-// Whether a floor plan or an area accepts a click is decided by the mode, and that is baked
-// into the Leaflet layers when they are built -- so it needs its own repaint.
-watch(plansClickable, render)
-watch(areasClickable, render)
+// What on the map takes a click changes with the mode, and that is baked into the Leaflet layers
+// when they are built -- so it needs its own repaint.
+watch(shapesClickable, render)
 
 watch(editingPlan, renderHandles)
 
-// Gaining or losing the claim changes whether the map may move at all -- and whether the
-// floor plans may be picked up, which is a style on the pictures rather than a Leaflet
-// handler, so it needs a repaint too.
+// The shape being adjusted is identified by its ID and never by the object. The page replaces
+// the area object on every change (see PolygonTestView.updateArea), so comparing objects would
+// look like a different area on every dragged dot -- and would throw the history away exactly
+// when the planner reached for it.
+const editingAreaId = computed(() => (editingArea.value ? editingArea.value.id : ''))
+
+watch(editingAreaId, () => {
+  // The red on a dragged outline belongs to the drag, and the drag is over: whatever the layer was
+  // last told, the area's own points are what it should be drawing now. `dragend` normally does
+  // this, but a drag that is cut short -- a lost pointer capture, an interrupted touch -- must not
+  // leave a shape looking like it is still being refused. The shape being edited is skipped,
+  // because a drag may be in progress right now and its red is the live answer.
+  for (const id of Object.keys(areaLayers)) {
+    if (id === editingAreaId.value) continue
+    const layer = areaLayers[id]
+    if (!layer.benchCrossing) continue
+    const area = props.areas.find((a) => a.id === id)
+    if (!area) continue
+    applyAreaPoints(layer, area.points)
+  }
+  renderHandles()
+})
+
+// Gaining or losing the claim changes whether the pictures and the outlines may be picked up,
+// which is a style on the layers rather than a Leaflet handler -- so it needs a repaint. The view
+// moves either way: looking around is not editing.
 watch(() => props.canEdit, () => {
-  applyMapLock()
+  applyMapHandlers()
   render()
 })
 
@@ -955,15 +2207,22 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 <template>
   <div class="row g-3">
     <!-- ============ The map ============ -->
-    <div class="col-12 col-lg-8">
+    <div class="col-12 col-lg-6">
       <div
         class="bench-wrap position-relative"
         :class="{ 'bench-drawing': mode === 'polygons' }"
       >
         <div ref="mapEl" class="bench-map rounded border" data-testid="bench-map"></div>
 
-        <!-- Floor-plan handles. They only exist while the map is locked, so they never
-             have to be re-anchored: they are placed once, from a frozen view. -->
+        <!-- Undo and redo are NOT here. They act on the whole document, not on the map, so they
+             live on the page next to the other document-wide controls -- see
+             views/PolygonTestView.vue. Over the map they covered the corner of the very thing
+             they changed. -->
+
+        <!-- Floor-plan handles. They are placed in map pixels, so they are re-placed on every
+             `zoom`, `zoomend`, `viewreset` and `moveend` (see onMapMoved) -- a pan or a zoom moves
+             the ground under them. A drag of a handle measures itself from the CURSOR and not from
+             the handle, so a handle pulled in from the edge of the map still resizes correctly. -->
         <template v-if="editingPlan">
           <div
             v-for="(point, index) in handlePoints"
@@ -971,7 +2230,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
             class="bench-handle"
             :style="{ left: point.x + 'px', top: point.y + 'px' }"
             :data-testid="'corner-' + index"
-            @pointerdown="startDrag('corner', $event, index)"
+            @pointerdown="startDrag('corner', editingPlan, $event, index)"
           ></div>
           <div
             v-if="knobPoint"
@@ -979,20 +2238,40 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
             :style="{ left: knobPoint.x + 'px', top: knobPoint.y + 'px' }"
             data-testid="rotate-knob"
             title="Drag to turn the floor plan"
-            @pointerdown="startDrag('knob', $event)"
+            @pointerdown="startDrag('knob', editingPlan, $event)"
           >
             <span class="bench-knob-dot"></span>
           </div>
         </template>
 
-        <!-- Drawing hint -->
-        <div v-if="mode === 'polygons'" class="bench-hint shadow-sm" data-testid="draft-hint">
-          <template v-if="draftClosed">Ring closed. Name it, then save.</template>
-          <template v-else-if="draftPoints.length === 0">Click the map to add the first point.</template>
-          <template v-else-if="draftPoints.length < 3">
-            Click to add point ({{ draftPoints.length }} of 3 minimum).
+        <!-- The one strip along the top of the map, and the only place a sentence is ever put on
+             screen -- while a ring is being drawn and while a shape is being adjusted alike. The
+             refusal wins over everything: it is red, and it is the same red as the line or the
+             outline it is about. -->
+
+        <!-- While a dot is being dragged the outline itself is the message: it is red exactly
+             where it would cross. Nothing is written for that, and nothing is written when "Add
+             point" finds nowhere legal to put the dot -- the shape plainly did not change. -->
+        <div
+          v-if="showHint"
+          class="bench-hint shadow-sm"
+          :class="{ 'bench-hint-bad': Boolean(errorMsg) }"
+          data-testid="bench-hint"
+        >
+          <span v-if="errorMsg" data-testid="bench-error">{{ errorMsg }}</span>
+
+          <template v-else-if="mode === 'polygons'">
+            <span data-testid="draft-hint">
+              <template v-if="draftClosed">Name it, then save.</template>
+              <template v-else-if="crossWarn">That point would cross a line already drawn.</template>
+              <template v-else-if="closeBlocked">The closing line would cross the shape.</template>
+              <template v-else-if="reachedPointCap">That is the {{ AREA_MAX_POINTS }}-point limit.</template>
+              <template v-else-if="draftPoints.length < 3">Click to add a point.</template>
+              <template v-else>Click the first dot to close the shape.</template>
+            </span>
           </template>
-          <template v-else>Click to add a point, or click the first dot to close the shape.</template>
+
+          <span v-else data-testid="edit-hint">{{ editHint }}</span>
         </div>
 
         <!-- The ring is closed: ask for a name and a type -->
@@ -1018,7 +2297,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
             <button class="btn btn-sm btn-success flex-grow-1" data-testid="area-save" @click="finishDraft">
               Save area
             </button>
-            <button class="btn btn-sm btn-outline-secondary" data-testid="area-cancel" @click="resetDraft">
+            <button class="btn btn-sm btn-outline-secondary" data-testid="area-cancel" @click="clearDraft">
               Cancel
             </button>
           </div>
@@ -1027,220 +2306,310 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
     </div>
 
     <!-- ============ Controls ============ -->
-    <div class="col-12 col-lg-4">
-      <div v-if="errorMsg" class="alert alert-danger py-2" role="alert" data-testid="bench-error">
-        {{ errorMsg }}
-      </div>
-
-      <!-- Looking, not editing: the map moves, nothing else does. -->
-      <div v-if="!canEdit" class="card">
-        <div class="card-body">
-          <h2 class="h6 card-title">Looking, not editing</h2>
-          <p class="small text-muted mb-0">
-            Press <strong>Start editing</strong> to change anything.
-          </p>
+    <div class="col-12 col-lg-6">
+      <!-- The controls take the right half of a large screen, split in two: the areas being
+           drawn, and the pictures they are drawn over. Below lg the split collapses and
+           everything stacks in this order. -->
+      <div class="row g-3">
+        <!-- Looking, not editing: the map moves, nothing else does. -->
+        <div v-if="!canEdit" class="col-12">
+          <div class="card">
+            <div class="card-body">
+              <h2 class="h6 card-title">Looking, not editing</h2>
+              <p class="small text-muted mb-0">
+                Press <strong>Start editing</strong> to change anything.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <template v-else>
-      <!-- Map -->
-      <div class="card mb-3">
-        <div class="card-body">
-          <h2 class="h6 card-title">Map</h2>
-          <button
-            v-if="mode === 'map'"
-            class="btn btn-primary w-100"
-            data-testid="lock-map"
-            @click="mode = null"
-          >
-            Lock the map
-          </button>
-          <button
-            v-else
-            class="btn btn-outline-primary w-100"
-            :disabled="mode === 'polygons' && draftPoints.length > 0"
-            data-testid="unlock-map"
-            @click="mode = 'map'"
-          >
-            Unlock the map
-          </button>
+        <!-- There is no Map card any more. Lock and Unlock were its two buttons, and there is
+             nothing left for them to do: the map is never held still for the view's sake, and the
+             only thing that narrows what a press means is `mode`, which the shapes and the map's
+             own clicks set by themselves. What is left of the idea is said where it is needed --
+             along the top of the map, while a shape is open, which is the only time it is true. -->
+
+        <!-- The areas come first: drawing them is what the bench is for, and the list of them
+             is what the planner keeps coming back to. -->
+        <div class="col-12" :class="{ 'col-lg-6': canEdit }">
+          <!-- Drawing -->
+          <div v-if="canEdit" class="card mb-3">
+            <div class="card-body">
+              <h2 class="h6 card-title">Areas</h2>
+
+              <template v-if="mode === 'polygons'">
+                <div class="d-flex flex-wrap gap-2">
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    :disabled="draftPoints.length < 3 || draftClosed || closeBlocked"
+                    :title="closeBlocked ? 'This shape would close across itself' : ''"
+                    data-testid="area-finish"
+                    @click="closeDraft"
+                  >
+                    Finish
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-danger"
+                    :disabled="draftPoints.length === 0"
+                    data-testid="area-clear"
+                    @click="clearDraft"
+                  >
+                    Clear
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary" data-testid="area-done" @click="mode = null">
+                    Done
+                  </button>
+                </div>
+              </template>
+
+              <template v-else-if="editingArea">
+                <!-- The instruction is on the map, over the shape it is about. Saying it again here
+                     would be the same sentence twice on one screen, which is what the old bench
+                     did. An outline left crossing by an older build refuses every edit until it is
+                     put right: that is correct but looks like a broken page, so it is the one
+                     thing that does get said here, with the way out. -->
+                <p v-if="editingAreaCrosses" class="small text-danger mb-2" data-testid="area-crosses">
+                  This outline crosses itself. Drag a dot until the lines no longer cross.
+                </p>
+                <div class="d-flex flex-wrap gap-2">
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    :disabled="editingArea.points.length >= AREA_MAX_POINTS"
+                    :title="editingArea.points.length >= AREA_MAX_POINTS ? 'An area can have at most ' + AREA_MAX_POINTS + ' points' : ''"
+                    data-testid="area-add-point"
+                    @click="addAreaPoint"
+                  >
+                    Add point
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    title="Copy this area, then paste it to draw the same shape again"
+                    data-testid="area-copy"
+                    @click="copyArea(editingArea)"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    class="btn btn-sm btn-outline-secondary"
+                    data-testid="area-shape-done"
+                    @click="mode = null"
+                  >
+                    Done
+                  </button>
+                </div>
+              </template>
+
+              <div v-else class="d-flex flex-wrap gap-2">
+                <button
+                  class="btn btn-success flex-grow-1"
+                  data-testid="draw-areas"
+                  @click="mode = 'polygons'"
+                >
+                  Draw areas
+                </button>
+                <!-- Paste makes a SECOND area out of the last one copied, offset so it does not
+                     hide underneath it. It is offered here rather than on the list because an
+                     area is what is being made, and this is where areas are made. -->
+                <button
+                  class="btn btn-outline-secondary"
+                  :disabled="!canPasteArea"
+                  :title="canPasteArea ? 'Paste a copy of ' + clipboardAreaName : 'Copy an area first'"
+                  data-testid="area-paste"
+                  @click="pasteArea"
+                >
+                  Paste
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- The page drops the list of areas in here, so it lines up with the controls. -->
+          <slot />
         </div>
-      </div>
 
-      <!-- Floor plans. One card each, because each one has its own name, its own show/hide
-           and its own placement. -->
-      <div class="card mb-3">
-        <div class="card-body">
-          <h2 class="h6 card-title">Floor plans</h2>
-
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/*"
-            class="d-none"
-            data-testid="floorplan-file"
-            @change="onFileChosen"
-          />
-          <button
-            class="btn btn-outline-secondary w-100 mb-3"
-            :disabled="busy || mode === 'map'"
-            data-testid="add-floorplan"
-            @click="fileInput.click()"
-          >
-            {{ busy ? 'Shrinking...' : 'Add a floor plan' }}
-          </button>
-
-          <p v-if="plans.length === 0" class="small text-muted mb-0" data-testid="no-plans">
-            No floor plans yet.
-          </p>
-          <div v-else data-testid="plan-list">
-            <div
-              v-for="(plan, index) in plans"
-              :key="plan.id"
-              class="card mb-2"
-              :class="{ 'border-primary': mode === 'floorplan:' + plan.id }"
-              :data-testid="'plan-' + index"
-            >
-              <div class="card-body p-2">
-                <div class="d-flex align-items-center gap-2">
-                  <!-- The name is what the planner calls this level, and what identifies the
-                       picture on the map. -->
-                  <input
-                    v-if="canEdit"
-                    class="form-control form-control-sm"
-                    :value="planLabel(plan, index)"
-                    :maxlength="PLAN_NAME_MAX"
-                    :aria-label="'Name of ' + planLabel(plan, index)"
-                    :data-testid="'plan-name-' + index"
-                    @change="renamePlan(plan, index, $event)"
-                  />
-                  <div v-else class="text-truncate">{{ planLabel(plan, index) }}</div>
-
-                  <div class="form-check form-switch mb-0" :title="'Show or hide this floor plan'">
-                    <input
-                      class="form-check-input"
-                      type="checkbox"
-                      role="switch"
-                      :checked="plan.visible !== false"
-                      :aria-label="'Show ' + planLabel(plan, index)"
-                      :data-testid="'plan-visible-' + index"
-                      @change="togglePlanVisible(plan)"
+        <!-- Floor plans. One card each, because each one has its own name, its own show/hide
+             and its own placement. -->
+        <div v-if="canEdit" class="col-12 col-lg-6">
+          <div class="card">
+            <div class="card-body">
+              <!-- How close the canvas is to the 4 MB cap save_bench() enforces, as a ring. This is
+                   the one number in the bench that the planner cannot see any other way, and the
+                   pictures BELOW are what make it big -- so it belongs on this heading, next to
+                   the thing that spends it, rather than off in the page header where it used to
+                   sit with no clue about what it was counting. -->
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                <h2 class="h6 card-title mb-0">Floor plans</h2>
+                <div
+                  class="d-flex align-items-center gap-2"
+                  data-testid="canvas-size"
+                  :title="
+                    'The whole canvas is ' + sizeText + '. Floor plan images live inside it, so ' +
+                    'they are what makes it big.'
+                  "
+                >
+                  <span class="small text-muted text-nowrap">{{ sizeText }}</span>
+                  <svg
+                    class="bench-ring"
+                    :class="'text-' + ringVariant"
+                    width="34"
+                    height="34"
+                    viewBox="0 0 34 34"
+                    role="img"
+                    :aria-label="'Canvas size: ' + sizeText"
+                  >
+                    <!-- The full circle behind, then the part used, drawn as a dash of the
+                         circumference. `pathLength="100"` lets the numbers be percentages rather
+                         than a length in pixels. Rotated a quarter turn so the ring starts at the
+                         top and fills clockwise, the way a gauge is read. -->
+                    <circle
+                      cx="17"
+                      cy="17"
+                      r="14"
+                      pathLength="100"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="4"
+                      opacity="0.18"
                     />
+                    <circle
+                      cx="17"
+                      cy="17"
+                      r="14"
+                      pathLength="100"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="4"
+                      stroke-linecap="round"
+                      :stroke-dasharray="ringPercent + ' 100'"
+                      transform="rotate(-90 17 17)"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              <input
+                ref="fileInput"
+                type="file"
+                accept="image/*"
+                class="d-none"
+                data-testid="floorplan-file"
+                @change="onFileChosen"
+              />
+              <button
+                class="btn btn-outline-secondary w-100 mb-2"
+                :disabled="busy"
+                data-testid="add-floorplan"
+                @click="fileInput.click()"
+              >
+                {{ busy ? 'Shrinking...' : 'Add a floor plan' }}
+              </button>
+
+              <!-- Paste makes a COPY of the last floor plan copied: the same picture and size,
+                   a name of its own, and a position a short step from the original so the two
+                   are not stacked exactly on top of each other. -->
+              <button
+                class="btn btn-outline-secondary w-100 mb-3"
+                :disabled="!canPastePlan"
+                :title="canPastePlan ? 'Paste a copy of ' + clipboardPlanName : 'Copy a floor plan first'"
+                data-testid="paste-floorplan"
+                @click="pastePlan"
+              >
+                Paste a floor plan
+              </button>
+
+              <p v-if="plans.length === 0" class="small text-muted mb-0" data-testid="no-plans">
+                No floor plans yet.
+              </p>
+              <div v-else class="plan-scroll" data-testid="plan-list">
+                <div
+                  v-for="(plan, index) in plans"
+                  :key="plan.id"
+                  class="card mb-2 plan-row"
+                  :class="{ 'border-primary': mode === 'floorplan:' + plan.id }"
+                  :data-testid="'plan-' + index"
+                  @click="pickPlanCard(plan, $event)"
+                >
+                  <div class="card-body p-2">
+                    <div class="d-flex align-items-center gap-2">
+                      <!-- The name is what the planner calls this level, and what identifies the
+                           picture on the map. -->
+                      <input
+                        v-if="canEdit"
+                        class="form-control form-control-sm"
+                        :value="planLabel(plan, index)"
+                        :maxlength="PLAN_NAME_MAX"
+                        :aria-label="'Name of ' + planLabel(plan, index)"
+                        :data-testid="'plan-name-' + index"
+                        @change="renamePlan(plan, index, $event)"
+                      />
+                      <div v-else class="text-truncate">{{ planLabel(plan, index) }}</div>
+
+                      <div class="form-check form-switch mb-0" :title="'Show or hide this floor plan'">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          :checked="plan.visible !== false"
+                          :aria-label="'Show ' + planLabel(plan, index)"
+                          :data-testid="'plan-visible-' + index"
+                          @change="togglePlanVisible(plan)"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 mt-2">
+                      <!-- Edit / Done deliberately does NOT toggle anything about the map: Done puts
+                           the picture down, and putting it down is the save. The view was never held
+                           still for this, so there is nothing to hand back -- but a press on the
+                           picture belongs to the picture, and Done is how it stops belonging. -->
+                      <button
+                        class="btn btn-sm"
+                        :class="mode === 'floorplan:' + plan.id ? 'btn-primary' : 'btn-outline-primary'"
+                        :data-testid="'plan-edit-' + index"
+                        @click="mode = mode === 'floorplan:' + plan.id ? null : 'floorplan:' + plan.id"
+                      >
+                        {{ mode === 'floorplan:' + plan.id ? 'Done' : 'Edit' }}
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-secondary"
+                        title="Copy this floor plan, then paste it to place the same picture again"
+                        :data-testid="'plan-copy-' + index"
+                        @click="copyPlan(plan)"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        class="btn btn-sm btn-link text-danger ms-auto px-0"
+                        :data-testid="'plan-delete-' + index"
+                        @click="deletePlan(plan)"
+                      >
+                        Delete
+                      </button>
+                    </div>
+
+                    <div v-if="mode === 'floorplan:' + plan.id" class="mt-2">
+                      <label class="form-label small mb-1" :for="'opacity-' + plan.id">
+                        Opacity {{ Math.round((plan.opacity || 0) * 100) }}%
+                      </label>
+                      <input
+                        :id="'opacity-' + plan.id"
+                        class="form-range"
+                        type="range"
+                        min="0.05"
+                        max="1"
+                        step="0.05"
+                        :value="plan.opacity"
+                        :data-testid="'plan-opacity-' + index"
+                        @input="setOpacity(plan, $event.target.value)"
+                      />
+                    </div>
                   </div>
-                </div>
-
-                <div class="d-flex align-items-center gap-2 mt-2">
-                  <button
-                    class="btn btn-sm"
-                    :class="mode === 'floorplan:' + plan.id ? 'btn-primary' : 'btn-outline-primary'"
-                    :data-testid="'plan-edit-' + index"
-                    @click="mode = mode === 'floorplan:' + plan.id ? null : 'floorplan:' + plan.id"
-                  >
-                    {{ mode === 'floorplan:' + plan.id ? 'Done' : 'Edit' }}
-                  </button>
-                  <button
-                    class="btn btn-sm btn-link text-danger ms-auto px-0"
-                    :data-testid="'plan-delete-' + index"
-                    @click="deletePlan(plan)"
-                  >
-                    Delete
-                  </button>
-                </div>
-
-                <div v-if="mode === 'floorplan:' + plan.id" class="mt-2">
-                  <label class="form-label small mb-1" :for="'opacity-' + plan.id">
-                    Opacity {{ Math.round((plan.opacity || 0) * 100) }}%
-                  </label>
-                  <input
-                    :id="'opacity-' + plan.id"
-                    class="form-range"
-                    type="range"
-                    min="0.05"
-                    max="1"
-                    step="0.05"
-                    :value="plan.opacity"
-                    :data-testid="'plan-opacity-' + index"
-                    @input="setOpacity(plan, $event.target.value)"
-                  />
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- Drawing -->
-      <div class="card">
-        <div class="card-body">
-          <h2 class="h6 card-title">Areas</h2>
-
-          <template v-if="mode === 'polygons'">
-            <div class="d-flex flex-wrap gap-2">
-              <button
-                class="btn btn-sm btn-outline-secondary"
-                :disabled="draftPoints.length === 0"
-                data-testid="area-undo"
-                @click="undoPoint"
-              >
-                Undo point
-              </button>
-              <button
-                class="btn btn-sm btn-outline-secondary"
-                :disabled="draftPoints.length < 3 || draftClosed"
-                data-testid="area-finish"
-                @click="closeDraft"
-              >
-                Finish
-              </button>
-              <button
-                class="btn btn-sm btn-outline-danger"
-                :disabled="draftPoints.length === 0"
-                data-testid="area-clear"
-                @click="resetDraft"
-              >
-                Clear
-              </button>
-              <button class="btn btn-sm btn-outline-secondary" data-testid="area-done" @click="mode = null">
-                Done
-              </button>
-            </div>
-          </template>
-
-          <template v-else-if="editingArea">
-            <p class="small mb-2">Drag a dot to move it, click a dot to remove it.</p>
-            <div class="d-flex flex-wrap gap-2">
-              <button
-                class="btn btn-sm btn-outline-secondary"
-                data-testid="area-add-point"
-                @click="addAreaPoint"
-              >
-                Add point
-              </button>
-              <button
-                class="btn btn-sm btn-outline-secondary"
-                data-testid="area-shape-done"
-                @click="mode = null"
-              >
-                Done
-              </button>
-            </div>
-          </template>
-
-          <button
-            v-else
-            class="btn btn-success w-100"
-            :disabled="mode === 'map'"
-            data-testid="draw-areas"
-            @click="mode = 'polygons'"
-          >
-            Draw areas
-          </button>
-        </div>
-      </div>
-      </template>
-
-      <!-- The page drops the list of areas in here, so it lines up with the controls. -->
-      <slot />
     </div>
   </div>
 </template>
@@ -1251,14 +2620,52 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   min-height: 360px;
 }
 
+/* The list of floor plans, capped. A bench with a dozen plans used to grow this column until
+   the drawing card and the list of areas were pushed off the bottom of the screen, and the
+   controls the planner was reaching for moved every time a plan was added. Now the list
+   scrolls inside its card instead: about three plan cards are visible at a time, and the rest
+   are a wheel-turn away.
+   The same cap is on the list of areas, in AreaList.vue -- the two lists sit in the same
+   column and should run out at the same height. */
+.plan-scroll {
+  max-height: 20rem;
+  overflow-y: auto;
+  /* Room for the scrollbar, so it does not sit on top of the cards' borders. */
+  padding-right: 0.25rem;
+  /* Scrolling to the end of the list must not carry on into the page behind it. */
+  overscroll-behavior: contain;
+}
+
 /* While an area is being drawn the pointer becomes a crosshair -- the same signal every
    drawing tool gives -- on the map AND on everything Leaflet puts inside it, because those
    set a cursor of their own. This class goes on the wrapper, NOT on the map element: Vue
-   rewrites `class` wholesale, which would wipe the `leaflet-*` classes Leaflet needs. */
+   rewrites `class` wholesale, which would wipe the `leaflet-*` classes Leaflet needs.
+   Leaflet's own drag is off, so `.leaflet-grab` is not asked about: the class is not on the
+   map any more. */
 .bench-drawing .bench-map,
-.bench-drawing .bench-map .leaflet-grab,
 .bench-drawing .bench-map .leaflet-interactive {
   cursor: crosshair;
+}
+
+/* Moving the view. The middle button pans in every mode, drawing included, so this has to be able
+   to win over the crosshair above -- hence the class going on the map container itself, which
+   makes the selector one part longer than `.bench-drawing .bench-map`, and hence the `!important`
+   for the interactive layers, whose own `cursor: move`/`pointer` is set inline by the bench. */
+.bench-map.bench-panning,
+.bench-map.bench-panning .leaflet-interactive,
+.bench-map.bench-panning .leaflet-interactive * {
+  cursor: grabbing !important;
+}
+
+/* Adding points is a run of quick clicks, and a quick second click reads as a double-click --
+   which starts a text selection. On the map there is no text worth selecting, but there is
+   plenty to highlight: the attribution and the zoom buttons turned blue in the middle of
+   drawing, and the drag then carried that highlight around. Nothing inside the map is
+   selectable, so the highlight never starts. The hint and the name form sit in the same
+   wrapper and are left alone -- the planner does need to select the name they typed. */
+.bench-map,
+.bench-map * {
+  user-select: none;
 }
 
 /* The floor plan itself. Positioned from a geographic centre, so Leaflet's overlay pane
@@ -1320,20 +2727,47 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   cursor: move;
 }
 
+/* How full the canvas is, and how full it is allowed to get. `currentColor` means the SVG picks up
+   the Bootstrap text colour on the same element, so the three states are three class names and no
+   colour is written twice. */
+.bench-ring {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+}
+
+/* The strip along the top of the map -- the ONE place a refusal is said, while drawing and while
+   adjusting alike. The name-and-type form takes the bottom-right while a ring is being closed. */
 .bench-hint {
   position: absolute;
   top: 10px;
   left: 50%;
+  /* Anchored at its TOP edge, not its middle. A message that wraps to two lines must grow down
+     into the map, where it covers nothing that matters, rather than half off the top of it. */
   transform: translateX(-50%);
   z-index: 1000;
   padding: 0.25rem 0.75rem;
   background: #fff;
-  border-radius: 999px;
+  border-radius: 0.5rem;
   font-size: 0.875rem;
-  max-width: calc(100% - 100px);
-  white-space: nowrap;
+  /* Wider than a status message needs: a refusal is a whole sentence, and cutting one in half
+     with an ellipsis is how the planner ends up not knowing what to fix. Everything past two
+     lines is elided rather than growing the strip down the map. */
+  max-width: min(90%, 30rem);
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Somebody is being told no. The same red as the line or the outline the sentence is about, so the
+   words and the thing they describe are obviously one thing. */
+.bench-hint-bad {
+  color: #b02a37;
+  border: 1px solid #dc3545;
+  background: #fdf2f3;
 }
 
 .bench-draft {

@@ -8,6 +8,7 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { initials } from '../utils/people'
+import BenchAlert from './BenchAlert.vue'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -105,7 +106,7 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
 
 <template>
   <div>
-    <div v-if="errorMsg" class="alert alert-danger py-2" role="alert" data-testid="members-error">{{ errorMsg }}</div>
+    <BenchAlert v-if="errorMsg" data-testid="members-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
     <!-- Create group (root / planner) -->
     <form v-if="canManage" class="card mb-3" @submit.prevent="createGroup">
