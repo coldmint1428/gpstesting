@@ -79,9 +79,14 @@ const props = defineProps({
   // owns the document -- see views/PolygonTestView.vue.
   sizeText: { type: String, default: '' },
   sizeRatio: { type: Number, default: 0 },
-  // False while the planner is only looking. Looking allows panning and zooming; editing
-  // is what starts locked, so the very first choice is what to work on.
-  canEdit: { type: Boolean, default: false },
+  // May this planner work on the bench at all? TRUE for everybody now: there is no claim to hold
+  // and no Start editing to press, and who may change a particular SHAPE is settled one object at a
+  // time by `locks` below (see 008_object_locks.sql). Looking and working are the same state.
+  canEdit: { type: Boolean, default: true },
+  // The per-object locks (composables/useBenchLocks.js). Handed in like the history and the
+  // clipboard, because it is the page's session. Read here for two things: the sentence in the
+  // strip, and refusing a press on a shape somebody else is holding before it moves at all.
+  locks: { type: Object, default: null },
   // The undo stack of the whole document (see composables/useDocHistory.js). Handed in rather
   // than owned here, because a step is a change to the PAGE's document, not to one panel -- and
   // because a history that reset when the planner clicked away was the bug. All the bench does
@@ -335,7 +340,42 @@ const editHint = computed(() =>
 
 // Is anything at all wanted along the top of the map? While drawing, yes -- there is always
 // something to say, and a refusal is inside that same chain of messages.
-const showHint = computed(() => mode.value === 'polygons' || Boolean(editHint.value))
+// Who else has this shape, if anyone. Read from PRESENCE -- the hint streamed by
+// useBenchPresence -- so that a press is refused instantly, without a round trip. A planner who
+// really is holding it still has the last word, from the database, in the page's write handlers;
+// nothing this display says ever decides anything.
+function blockedBy(objectId) {
+  if (!objectId) return null
+  const watchers = props.presence ? props.presence.byObject.value[objectId] : null
+  const holding = watchers ? watchers.find((who) => who.active) : null
+  if (holding) return holding
+
+  const refused = props.locks ? props.locks.refused.value : null
+  return refused && refused.objectId === objectId ? refused : null
+}
+
+// The sentence the strip says when a change was refused because somebody else is on that shape --
+// or because it is this planner's own other window. One place says no, and this is it.
+const lockNotice = computed(() => {
+  const refused = props.locks ? props.locks.refused.value : null
+  if (!refused) return ''
+  if (refused.error) return refused.error
+  if (refused.mine) return 'You are editing this in another window.'
+  return (refused.name || 'Somebody else') + ' is editing this.'
+})
+
+const showHint = computed(
+  () => mode.value === 'polygons' || Boolean(editHint.value) || Boolean(lockNotice.value),
+)
+
+// A refusal has to be SEEN to have happened. A drag draws the shape under the pointer as it goes
+// (see onAreaDragMove), so a change the page then refuses would leave the outline displaced until
+// something else happened to repaint it. Redrawing from the document puts it back where it really
+// is, at the moment the refusal lands.
+watch(
+  () => (props.locks ? props.locks.refused.value : null),
+  () => render(),
+)
 
 // How full the size ring is, and what colour it is. The ring is drawn with `pathLength="100"`, so
 // the numbers are percentages and there is no circumference to keep in step with the radius.
@@ -1485,7 +1525,7 @@ function onVertexPointerDown(id, index, event) {
     if (event.preventDefault) event.preventDefault() // no middle-click autoscroll cursor
     return
   }
-  if (!props.canEdit || !map) return
+  if (!props.canEdit || !map || blockedBy(id)) return
   const area = props.areas.find((a) => a.id === id)
   if (!area || !area.points[index]) return
 
@@ -1607,6 +1647,9 @@ function stopVertexDrag() {
 function addAreaPoint() {
   const area = editingArea.value
   if (!area) return
+  // Adding a point changes the area like any other change, so it is refused the same way -- and
+  // saying so here is better than a dot that appears and then cannot be saved.
+  if (blockedBy(area.id)) return
   if (area.points.length >= AREA_MAX_POINTS) {
     errorMsg.value = 'An area can have at most ' + AREA_MAX_POINTS + ' points.'
     return
@@ -1632,7 +1675,7 @@ function onAreaPointerDown(id, event) {
     return
   }
 
-  if (!shapesClickable.value || !map) return
+  if (!shapesClickable.value || !map || blockedBy(id)) return
   const area = props.areas.find((a) => a.id === id)
   if (!area) return
 
@@ -2374,6 +2417,9 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
           data-testid="bench-hint"
         >
           <span v-if="errorMsg" data-testid="bench-error">{{ errorMsg }}</span>
+
+          <!-- Somebody else is on this shape: the one sentence that explains why nothing moved. -->
+          <span v-else-if="lockNotice" data-testid="lock-notice">{{ lockNotice }}</span>
 
           <template v-else-if="mode === 'polygons'">
             <span data-testid="draft-hint">

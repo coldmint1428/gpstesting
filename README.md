@@ -53,18 +53,31 @@ before the action rather than at the next save:
 - **How full the canvas is** is drawn as a ring on the Floor plans card, and an upload that
   would push the canvas over 4 MB is refused before it is added.
 
-There is exactly **one** bench, shared by every signed-in user, and **only one person may
-edit it at a time**. The database decides who: `claim_bench()` hands out a token, every
-save must present it, and a save with a stale token is refused rather than obeyed. The
-claim lapses after 5 minutes of silence (renewed by a heartbeat while the tab is visible).
+There is exactly **one** bench, shared by every signed-in user, and everybody may work on it at
+once. Exclusion happens **one shape at a time**: a planner takes a lock on the area or floor plan
+they are changing, the database decides who has it, and a change to a shape somebody else holds is
+refused rather than obeyed. A lock is held by a *session* — one per browser tab — so two tabs of
+the same account are two planners here, which was the bug this replaced: the old one-claim-for-the-
+whole-bench model handed a second browser of the same login the *same* token, and both could save.
 
-**Planners can see each other while that is true.** Each open page keeps a row in
+Nothing has to be pressed to start working: the lock is taken by the first change to a shape and
+let go when it is put down, when the tab is hidden, or after 45 seconds of quiet. A planner who is
+refused is told who has it and why nothing moved.
+
+The save itself **merges**. `save_bench()` walks the document object by object: what the planner
+holds a lock on is taken from them, everything else keeps the stored version and is named in the
+reply (so the page re-reads and says what happened), and an object missing from their copy is only
+treated as deleted if they hold its lock. A page with a stale copy of somebody else's work can
+therefore neither overwrite it nor delete it — with or without a lock, and whether or not the other
+planner has already finished. See `supabase/migrations/008_object_locks.sql`.
+
+**Planners can see each other while all of that is going on.** Each open page keeps a row in
 `public.layout_presence` — one row per tab, refreshed every 10 seconds and streamed over Realtime
 — so the bench shows who else is here, and puts a planner's name on the shape they have open, in
 their own colour, both on the map and in the list of areas. A second tab or a second browser of
 the *same* account is listed as its own planner, labelled as another window, because that is the
 case that used to be invisible. None of it is trusted: presence is a hint for the display, and
-what a planner may actually change is still decided by the database. The map view is now each
+what a planner may actually change is decided by the locks and by the merge. The map view is each
 planner's **own** (`public.layout_views`), so panning no longer carries anybody else's map along
 with it — the copy inside the canvas is only the fallback for a planner who has never panned. See
 `supabase/migrations/007_presence_and_views.sql`.

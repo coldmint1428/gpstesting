@@ -1,31 +1,28 @@
-// useBenchClaim - the "receipt" for the polygon bench.
+// useBenchClaim - the bench's document, and where this planner left the map.
 //
-// There is ONE bench and only one person may edit it at a time. The database decides who:
-// claim_bench() returns a TOKEN, every save must present it, and a save with a stale token
-// is refused rather than obeyed. So nobody has to trust anyone's browser.
+// THE NAME IS A LEFTOVER: there is no claim any more. 008 replaced one-claim-for-the-whole-bench
+// with a lock per object, which lives in composables/useBenchLocks.js. What is left here is the
+// document itself -- reading it, saving it, and remembering this planner's camera.
 //
-// The claim lapses after 5 minutes of silence. This composable keeps it alive with a
-// heartbeat -- but only while the tab is VISIBLE, so a forgotten background tab releases
-// the bench instead of holding it hostage. On the way back in it re-claims, which either
-// renews the claim or reports that somebody else has it now.
+// There is ONE bench, holding the whole canvas as a single JSON document. Saving it is a MERGE
+// decided by the database (see save_bench in 008): an object this planner holds a lock on is taken
+// from them, everything else keeps the stored version, and the ids of the objects where the STORED
+// version won come back in the reply. So a save can succeed and still not have written everything
+// it was sent -- which is why save() resolves to that list rather than to a plain "done".
 //
 // TWO RULES HOLD THIS TOGETHER, and both were learned the hard way:
 //
-// 1. ONE REQUEST AT A TIME. Claiming, saving and releasing all go through a single queue,
-//    in the order they were asked for. Firing two at once is exactly how a late release
-//    cancels the claim that replaced it (so the next save is refused and the page announces
-//    that "somebody took the bench over" -- when it was you), and how two saves can land
-//    out of order so the older one wins.
+// 1. ONE REQUEST AT A TIME. Opening and saving go through a single queue, in the order they were
+//    asked for. Two saves in flight at once can land out of order, and then the older one wins.
 //
-// 2. THE BROWSER IS THE TRUTH WHILE YOU ARE WORKING. A save never copies the server's
-//    version back over the local one. The reply describes what was sent a moment ago, and
-//    the planner has probably kept working since; overwriting their newer edits with that
-//    older snapshot is what made a dragged area jump back to where it started.
+// 2. THE BROWSER IS THE TRUTH WHILE YOU ARE WORKING. A save never copies the server's version back
+//    over the local one. The reply describes what was sent a moment ago, and the planner has
+//    probably kept working since; overwriting their newer edits with that older snapshot is what
+//    made a dragged area jump back to where it started. When the server reports that it overruled
+//    something, the PAGE decides what to do about it -- see mergeFromServer in PolygonTestView.
 import { ref, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { LAYOUT_TOO_LARGE_MESSAGE, layoutBytes, MAX_LAYOUT_BYTES } from '../utils/layoutLimits'
-
-const RENEW_MS = 60 * 1000
 
 // Where I left the map is a convenience, not a save: coalesce the reports a single pan produces
 // into one write, and let the last one win.
@@ -43,12 +40,6 @@ function normalise(raw) {
 
 function firstRow(data) {
   return Array.isArray(data) ? data[0] : data
-}
-
-// A save is refused with PT409 (HTTP 409) when the token is no longer good.
-function isLostClaim(error) {
-  if (!error) return false
-  return error.code === 'PT409' || /claim expired/i.test(error.message || '')
 }
 
 // A save is refused with 54000 (program_limit_exceeded) when the canvas is over 4 MB.
@@ -82,21 +73,14 @@ export function useBenchClaim() {
   // tell the planner how close to the 4 MB cap they are before they find out the hard way.
   const bytes = ref(0)
 
-  const editing = ref(false) // do I hold a live claim?
-  const claiming = ref(false)
   const saving = ref(false)
-  const lostClaim = ref(false) // I was editing and the claim was taken from me
-  const heldBy = ref('') // display name of whoever else is editing
-  const claimExpiresAt = ref(null)
 
   // The bench's id, and where THIS planner left the map. Both are per-session server state the
   // page needs: the id is what presence is filed under (see useBenchPresence.js), and the view is
-  // now a planner's own rather than a field of the shared canvas (see 007_presence_and_views.sql).
+  // a planner's own rather than a field of the shared canvas (see 007_presence_and_views.sql).
   const layoutId = ref('')
   const myView = ref(null)
 
-  let token = null
-  let renewTimer = null
   let viewTimer = null // pending write of where I left the map (see saveView)
   let pendingView = null
 
@@ -111,27 +95,11 @@ export function useBenchClaim() {
     return next
   }
 
-  function stopRenewing() {
-    if (renewTimer) {
-      clearInterval(renewTimer)
-      renewTimer = null
-    }
-  }
-
-  function applyRefusal(row) {
-    token = null
-    editing.value = false
-    heldBy.value = (row && row.held_by) || ''
-    claimExpiresAt.value = row && row.expires_at ? new Date(row.expires_at) : null
-    stopRenewing()
-  }
-
   // ---------- Open ----------
   // Load (or create) the bench and find out who is editing it.
   async function doOpen() {
     loading.value = true
     errorMsg.value = ''
-    lostClaim.value = false
 
     if (!supabase) {
       loading.value = false
@@ -158,8 +126,6 @@ export function useBenchClaim() {
     bytes.value = layoutBytes(JSON.stringify(data.value))
     layoutId.value = row.id || ''
     myView.value = await loadMyView()
-    heldBy.value = row.held_by || ''
-    claimExpiresAt.value = row.claim_expires_at ? new Date(row.claim_expires_at) : null
     // LAST, and not a moment earlier. The page draws the map as soon as `loading` is false, and the
     // map takes the view it is given at that instant and never looks again -- so reading my own
     // view above is what makes the bench open where I left it rather than at the home view.
@@ -169,6 +135,22 @@ export function useBenchClaim() {
 
   function open() {
     return enqueue(doOpen)
+  }
+
+  // Read the bench as it is NOW, without touching the local document. The page needs this when the
+  // server overrules part of a save: it has to take the bench's version of what it was not entitled
+  // to say while keeping its own version of what it holds, and only the page knows which is which
+  // (see mergeById in PolygonTestView).
+  async function doReload() {
+    if (!supabase) return null
+    const { data: rows, error } = await supabase.rpc('open_bench')
+    if (error) return null
+    const row = firstRow(rows)
+    return row ? normalise(row.data) : null
+  }
+
+  function reload() {
+    return enqueue(doReload)
   }
 
   // ---------- Where I left the map ----------
@@ -219,128 +201,65 @@ export function useBenchClaim() {
     myView.value = next
   }
 
-  // ---------- Claim ----------
-  // Ask to edit. Returns true if the bench is mine now.
-  async function doClaim() {
-    // Already mine. Asking again would be harmless, but a second answer arriving out of
-    // order is not, so don't ask.
-    if (editing.value && token) return true
-
-    if (!supabase) {
-      errorMsg.value = 'Supabase is not set up, so the bench cannot be edited.'
-      return false
-    }
-
-    claiming.value = true
-    errorMsg.value = ''
-    const { data: rows, error } = await supabase.rpc('claim_bench')
-    claiming.value = false
-
-    if (error) {
-      errorMsg.value = error.message
-      return false
-    }
-
-    const row = firstRow(rows)
-    if (!row || !row.granted) {
-      applyRefusal(row)
-      return false
-    }
-
-    token = row.token
-    editing.value = true
-    lostClaim.value = false
-    heldBy.value = ''
-    claimExpiresAt.value = row.expires_at ? new Date(row.expires_at) : null
-    startRenewing()
-    return true
-  }
-
-  function startEditing() {
-    return enqueue(doClaim)
-  }
-
-  // ---------- Release ----------
-  // Let go deliberately, so the next person does not have to wait out the 5 minutes. The
-  // state is only dropped HERE, in the queue, so a save that was asked for first still has
-  // a claim to present.
-  async function doRelease() {
-    stopRenewing()
-    const mine = token
-    token = null
-    editing.value = false
-    heldBy.value = ''
-    claimExpiresAt.value = null
-
-    if (mine && supabase) await supabase.rpc('release_bench', { p_token: mine })
-  }
-
-  function stopEditing() {
-    return enqueue(doRelease)
-  }
-
   // ---------- Save ----------
   // `opts.jsonText` is optional: pass it when the caller already serialised the payload, so
-  // the document is not turned into a string twice on every lock.
+  // the document is not turned into a string twice on every save.
+  //
+  // `opts.session` is the tab's lock session (see useBenchLocks). It is not optional: without it
+  // the database refuses the save outright, because a page that holds nothing has nothing it is
+  // entitled to write.
   //
   // `opts.diagnose(nextData)` is optional too: it returns a sentence when the CLIENT can
   // already see why the canvas would be refused, or null when it cannot. It is only asked
   // after the database has refused, and only so the planner gets a reason instead of
   // "The layout data is not valid". It is a backstop, not a guard -- anything routinely
   // reachable should be refused at the point the planner tries to do it.
+  //
+  // Resolves to the list of object ids the server OVERRULED -- where the stored version won over
+  // the one sent -- or null when the save did not happen at all. An empty list is the ordinary
+  // case: everything sent was mine to say.
   async function doSave(nextData, opts) {
-    const mine = token
-    if (!editing.value || !mine || !supabase) return false
+    if (!opts || !opts.session || !supabase) return null
 
     const size = measure(nextData, opts && opts.jsonText)
 
     // Refuse an over-large canvas BEFORE the round trip. The database would give the same
-    // answer, only later and less usefully: by then the planner has already locked the thing
-    // they were working on. Refusing here keeps their work on screen and says what to do.
+    // answer, only later and less usefully: by then the planner has already done the work.
     // Deleting a floor plan always shrinks the document, so the way out of this state is
     // itself a save -- there is no dead end.
     if (size > MAX_LAYOUT_BYTES) {
       errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
-      return false
+      return null
     }
 
     saving.value = true
-    const { error } = await supabase.rpc('save_bench', { p_token: mine, p_data: nextData })
+    const { data, error } = await supabase.rpc('save_bench', {
+      p_data: nextData,
+      p_session: opts.session,
+    })
     saving.value = false
 
-    // We let go, or claimed again, while that was in flight. The answer is about a claim we
-    // no longer hold, so it says nothing about the bench -- in particular it must not be
-    // read as "somebody took it over".
-    if (mine !== token) return false
+    if (error) {
+      // Over the cap even though we measured first: the row is bigger than this browser thinks it
+      // is, most likely because another planner has added something since this page loaded.
+      if (isTooLarge(error)) {
+        errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
+        return null
+      }
 
-    if (!error) {
-      // Deliberately NOT `data.value = nextData` -- see rule 2 at the top of the file.
-      updatedAt.value = new Date()
-      bytes.value = size
-      errorMsg.value = '' // a failed save left its reason here; it no longer applies
-      return true
+      errorMsg.value =
+        (isInvalidData(error) ? await explain(nextData, opts) : '') ||
+        error.message ||
+        'The bench could not be saved.'
+      return null
     }
 
-    if (isLostClaim(error)) {
-      // Somebody else really did take the bench while we were quiet. Go read-only and say
-      // so rather than silently dropping the planner's work.
-      applyRefusal({ held_by: heldBy.value })
-      lostClaim.value = true
-      return false
-    }
-
-    // Over the cap even though we measured first: the row is bigger than this browser thinks
-    // it is, most likely because an older client wrote it.
-    if (isTooLarge(error)) {
-      errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
-      return false
-    }
-
-    errorMsg.value =
-      (isInvalidData(error) ? await explain(nextData, opts) : '') ||
-      error.message ||
-      'The bench could not be saved.'
-    return false
+    // Deliberately NOT `data.value = nextData` -- see rule 2 at the top of the file. What the
+    // server actually stored is the page's business, and the overruled list is how it finds out.
+    updatedAt.value = new Date()
+    bytes.value = size
+    errorMsg.value = '' // a failed save left its reason here; it no longer applies
+    return Array.isArray(data) ? data : []
   }
 
   // The database said no; find out what it objected to. Three answers, best first:
@@ -376,66 +295,14 @@ export function useBenchClaim() {
     return enqueue(() => doSave(nextData, opts))
   }
 
-  // ---------- Heartbeat ----------
-  async function doRenew() {
-    const mine = token
-    if (!editing.value || !mine || !supabase) return
-
-    const { data: rows, error } = await supabase.rpc('claim_bench')
-    if (error) return // a blip: the claim is still ours until it actually expires
-    if (!editing.value || token !== mine) return // stopped or re-claimed meanwhile
-
-    const row = firstRow(rows)
-    if (!row) return
-
-    if (!row.granted) {
-      applyRefusal(row)
-      lostClaim.value = true
-      return
-    }
-
-    token = row.token
-    claimExpiresAt.value = row.expires_at ? new Date(row.expires_at) : null
-  }
-
-  function renew() {
-    return enqueue(doRenew)
-  }
-
-  function startRenewing() {
-    stopRenewing()
-    renewTimer = setInterval(() => {
-      // A hidden tab is not editing, so it earns no renewal: walking away for five
-      // minutes hands the bench to whoever wants it next.
-      if (document.visibilityState === 'visible') renew()
-    }, RENEW_MS)
-  }
-
-  function onVisibilityChange() {
-    // Back in view: re-claim straight away, so being away never leaves a stale token.
-    if (document.visibilityState === 'visible' && editing.value) renew()
-  }
-
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', onVisibilityChange)
-  }
-
   onUnmounted(() => {
-    stopRenewing()
     // A pan that has not been written yet is still worth writing: leaving the page is exactly the
     // moment "where I was looking" should be remembered, so the debounce is flushed rather than
     // dropped.
+    //
+    // There is nothing else to let go of here. The claim is gone (008), and the locks this page
+    // holds are released by useBenchLocks, which owns them.
     flushView()
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-
-    // Best-effort release, queued behind whatever is still in flight. beforeunload is
-    // deliberately NOT used: it is unreliable, and the 5-minute expiry is the backstop.
-    const mine = token
-    token = null
-    editing.value = false
-    if (mine && supabase) enqueue(() => supabase.rpc('release_bench', { p_token: mine }))
   })
 
   return {
@@ -447,16 +314,9 @@ export function useBenchClaim() {
     save,
     saving,
     bytes,
-    // claim
     open,
-    startEditing,
-    stopEditing,
-    editing,
-    claiming,
-    lostClaim,
-    heldBy,
-    claimExpiresAt,
-    // Per-session state that is not the claim: the bench's id, and my own camera.
+    reload,
+    // Per-session state that is not the document: the bench's id, and my own camera.
     layoutId,
     myView,
     saveView,

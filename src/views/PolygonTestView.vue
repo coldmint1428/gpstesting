@@ -29,14 +29,8 @@ const {
   save,
   saving,
   open,
-  startEditing,
-  stopEditing,
-  editing,
-  claiming,
-  lostClaim,
-  heldBy,
-  claimExpiresAt,
-  // Per-session state that is not the claim: the bench's id, and where this planner left the map.
+  reload,
+  // Per-session state that is not the document: the bench's id, and where this planner left the map.
   layoutId,
   myView,
   saveView,
@@ -72,6 +66,12 @@ const clipboard = useBenchClipboard()
 // socket and one heartbeat per open page -- not one per component.
 const presence = useBenchPresence()
 
+// Who may change which shape, decided one object at a time (see composables/useBenchLocks.js).
+// Handed down for the same reason as the clipboard and the history, and for one more: every write
+// on this page asks it for the object first, so a change to something another planner is holding
+// never happens at all.
+const locks = useBenchLocks()
+
 // A ref inside a plain object is not unwrapped in a template (see the note on canUndo above), so
 // what the header draws is a real computed rather than presence.others.
 const hereNow = computed(() => presence.others.value)
@@ -88,19 +88,6 @@ const startView = computed(() => myView.value || layout.value.view)
 // joining waits for it instead of guessing.
 watch(layoutId, (id) => {
   if (id) presence.join(id)
-})
-
-function formatClock(date) {
-  if (!date) return ''
-  return new Date(date).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' })
-}
-
-const heldByText = computed(() => {
-  if (!heldBy.value) return ''
-  const until = formatClock(claimExpiresAt.value)
-  return until
-    ? heldBy.value + ' is editing this bench (until ' + until + ')'
-    : heldBy.value + ' is editing this bench'
 })
 
 // Build the canvas as JSON text, which is what save_bench() counts the bytes of. The
@@ -121,7 +108,28 @@ function diagnose(payload) {
 
 async function saveNow() {
   const text = canvasText.value
-  await save(JSON.parse(text), { jsonText: text, diagnose })
+  const overruled = await save(JSON.parse(text), {
+    jsonText: text,
+    diagnose,
+    session: locks.session.value,
+  })
+
+  // The server kept its own version of something this save carried -- an object somebody else was
+  // holding, or one this page's copy was simply behind on. Everything it did not take has to come
+  // back, and the merge decides what that means: what I hold stays on screen, because the planner
+  // may have moved it on since the save left, and everything else is taken from the bench as it
+  // now stands.
+  if (overruled && overruled.length) await resync()
+}
+
+async function resync() {
+  const server = await reload()
+  if (!server) return
+  layout.value = {
+    view: layout.value.view,
+    floorPlans: mergeById(server.floorPlans, layout.value.floorPlans),
+    polygons: mergeById(server.polygons, layout.value.polygons),
+  }
 }
 
 // How close the canvas is to the 4 MB cap save_bench() enforces. The planner cannot see a
@@ -137,9 +145,28 @@ const bytes = computed(() => layoutBytes(canvasText.value))
 const sizeText = computed(() => formatBytes(bytes.value) + ' of ' + formatBytes(MAX_LAYOUT_BYTES))
 const sizeRatio = computed(() => bytes.value / MAX_LAYOUT_BYTES)
 
-// The one and only save trigger: leaving an editing mode.
+// The one and only save trigger, and the one and only place a shape is let go of -- which is why
+// they are the same watcher. Letting go has to happen AFTER the save and not beside it: an unlock
+// that overtook its own save would leave that save holding no lock at all, and the database would
+// (quite correctly) refuse every object in it, throwing the planner's work away.
+//
+// Leaving a shape for another one needs no save and nothing in flight, so it lets go at once.
 watch(mode, async (value, oldValue) => {
-  if (oldValue !== null && value === null) await saveNow()
+  const was = objectIdOf(oldValue)
+
+  if (value === null) {
+    if (oldValue !== null) await saveNow()
+    if (was) {
+      locks.end(was)
+      presence.setHolding('')
+    }
+    return
+  }
+
+  if (was && was !== objectIdOf(value)) {
+    locks.end(was)
+    presence.setHolding('')
+  }
 })
 
 // What I have open, reported to everyone else. This is how my name gets onto a shape on another
@@ -155,19 +182,9 @@ function objectIdOf(value) {
   return cut === -1 ? '' : value.slice(cut + 1)
 }
 
-// If the claim goes away (taken over, or released), nothing may stay unlocked -- and the
-// history goes with it: a stack carried over from a previous session would let a planner undo
-// past the moment they took the bench, or past somebody else's saved version. A session starts
-// clean, from whatever was loaded at that moment.
-watch(
-  editing,
-  (isEditing, wasEditing) => {
-    if (!isEditing) mode.value = null
-    if (isEditing && !wasEditing) history.reset()
-    if (!isEditing) history.reset()
-  },
-  { immediate: true },
-)
+// There is no editing session to start or stop any more, and nothing resets the history: everyone
+// works on the bench whenever they like, one object at a time. The stack belongs to this page, and
+// mergeById is what keeps Ctrl+Z from reaching into anybody else's work.
 
 // A pointer coming up anywhere is reliably the end of a drag, and the end of a drag is when a
 // run of changes becomes the one step it earned -- see endGesture and the listeners at the
@@ -178,7 +195,6 @@ watch(
 // the press here for everything except the ring being drawn, which is not part of the document
 // yet.
 function onKeyDown(event) {
-  if (!editing.value) return
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return
   const el = event.target
   const tag = el && el.tagName
@@ -263,32 +279,53 @@ function pasteSelection() {
 // state it captures is the one before the change -- which is exactly what Undo has to put back.
 // Doing it here, at the one place that writes, is what makes the stack cover everything: a
 // dropped dot, a new area, a deleted floor plan and a renamed area are all just writes.
-function addPlan(plan) {
+//
+// AND EVERY WRITE ASKS FOR THE OBJECT'S LOCK FIRST. This is the one place a change to the canvas
+// begins, and the database will not store a change to an object nobody holds (see save_bench in
+// 008_object_locks.sql) -- so the refusal is taken here, before the change happens at all: the
+// shape never moves, no step is recorded, and useBenchLocks has already put the reason on screen.
+async function mayWrite(id) {
+  if (!id) return true
+  const granted = await locks.ensure(id)
+  // Tell the others what I am holding. A page carries one active object in its presence row, so
+  // this is the most recent one rather than the whole set -- a hint for their screens, while the
+  // database holds every lock and is what actually refuses them.
+  if (granted) presence.setHolding(id)
+  return granted
+}
+
+async function addPlan(plan) {
+  if (!(await mayWrite(plan.id))) return
   history.record()
   layout.value.floorPlans = [...layout.value.floorPlans, plan]
 }
 
-function updatePlan({ id, patch }) {
+async function updatePlan({ id, patch }) {
+  if (!(await mayWrite(id))) return
   history.record()
   layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? { ...p, ...patch } : p))
 }
 
-function deletePlan(id) {
+async function deletePlan(id) {
+  if (!(await mayWrite(id))) return
   history.record()
   layout.value.floorPlans = layout.value.floorPlans.filter((p) => p.id !== id)
 }
 
-function addArea(area) {
+async function addArea(area) {
+  if (!(await mayWrite(area.id))) return
   history.record()
   layout.value.polygons = [...layout.value.polygons, area]
 }
 
-function updateArea({ id, patch }) {
+async function updateArea({ id, patch }) {
+  if (!(await mayWrite(id))) return
   history.record()
   layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? { ...a, ...patch } : a))
 }
 
-function deleteArea(id) {
+async function deleteArea(id) {
+  if (!(await mayWrite(id))) return
   history.record()
   layout.value.polygons = layout.value.polygons.filter((a) => a.id !== id)
 }
@@ -312,6 +349,29 @@ function endGesture() {
 // A restore is NOT a reset: the states ahead of the one being put back have to stay reachable,
 // or redo would clear itself the moment undo ran. `settle` tells the stack what is on screen
 // now; only starting or ending a session resets it.
+// Objects I hold the lock on come from `preferred` (a snapshot, or the bench as the server has it);
+// everything else stays exactly as it is, because it is not mine to say. This is the SAME rule the
+// database applies to a save (see save_bench in 008_object_locks.sql), and it is what stops Ctrl+Z
+// from undoing somebody else's work -- with ONE stack for the whole canvas, putting a snapshot back
+// wholesale would do exactly that.
+function mergeById(preferred, current) {
+  const out = []
+  const seen = new Set()
+
+  for (const item of preferred) {
+    const here = current.find((c) => c.id === item.id)
+    out.push(!here || locks.holds(item.id) ? item : here)
+    seen.add(item.id)
+  }
+
+  // Anything the other side has never heard of is not mine to remove either: another planner may
+  // have made it since.
+  for (const item of current) {
+    if (!seen.has(item.id)) out.push(item)
+  }
+  return out
+}
+
 function restore(snapshot) {
   if (!snapshot) return
   // Put down whatever is being worked on first. Restoring can remove the very area being
@@ -320,9 +380,11 @@ function restore(snapshot) {
   // null also avoids a pointless save of the pre-restore state.
   if (mode.value !== null) mode.value = null
   layout.value = {
-    view: snapshot.view,
-    floorPlans: snapshot.floorPlans,
-    polygons: snapshot.polygons,
+    // The view is not the document's any more, so Undo leaves the camera where the planner has it
+    // (see setView below).
+    view: layout.value.view,
+    floorPlans: mergeById(snapshot.floorPlans, layout.value.floorPlans),
+    polygons: mergeById(snapshot.polygons, layout.value.polygons),
   }
   history.settle(snapshot)
 }
@@ -418,23 +480,9 @@ function selectArea(id) {
   mode.value = mode.value === 'area:' + id ? null : 'area:' + id
 }
 
-// ---------- Claiming ----------
-async function beginEditing() {
-  // Already asking, or already mine: pressing again must not start a second claim.
-  if (claiming.value || editing.value) return
-  const granted = await startEditing()
-  if (granted) mode.value = null // editing starts with the map locked
-}
-
-async function endEditing() {
-  mode.value = null // putting it down is the save, and the watcher above does it
-  await nextTick() // ...on the next tick, so wait for it to be queued
-  // Releasing is queued behind that save, so the save still has a claim to present.
-  await stopEditing()
-}
-
 onMounted(() => {
   open()
+  locks.start()
   window.addEventListener('keydown', onKeyDown)
   // A gesture ends when the pointer comes up, wherever it is: that is when a run of changes
   // becomes the one step it earned, rather than waiting for the quiet timer.
@@ -483,12 +531,7 @@ onUnmounted(() => {
              Arrows rather than the words: at this size the words are the wider half of the
              control and the meaning is in the direction. Both carry a title and an aria-label, so
              the word is still there for anyone who needs it, and Ctrl+Z / Ctrl+Shift+Z work too. -->
-        <div
-          v-if="editing"
-          class="btn-group btn-group-sm"
-          role="group"
-          aria-label="Undo and redo the whole bench"
-        >
+        <div class="btn-group btn-group-sm" role="group" aria-label="Undo and redo the whole bench">
           <button
             type="button"
             class="btn btn-outline-secondary"
@@ -522,7 +565,6 @@ onUnmounted(() => {
         <!-- How far back the stack goes. A browser-side stack is invisible, and "nothing to undo"
              is otherwise indistinguishable from "Undo is broken". -->
         <span
-          v-if="editing"
           class="badge text-bg-light"
           data-testid="history-steps"
           :title="'Changes that can be undone, one step per thing you did'"
@@ -531,35 +573,7 @@ onUnmounted(() => {
         </span>
 
         <span v-if="saving" class="badge text-bg-light" data-testid="saving-badge">Saving...</span>
-
-        <button
-          v-if="editing"
-          class="btn btn-outline-danger"
-          :disabled="saving"
-          data-testid="stop-editing"
-          @click="endEditing"
-        >
-          Stop editing
-        </button>
-        <button
-          v-else
-          class="btn btn-success"
-          :disabled="claiming || saving || !!heldBy || loading"
-          data-testid="start-editing"
-          @click="beginEditing"
-        >
-          {{ claiming ? 'Asking...' : 'Start editing' }}
-        </button>
       </div>
-    </div>
-
-    <div v-if="!editing && heldBy" class="alert alert-warning py-2" role="status" data-testid="held-by">
-      {{ heldByText }}. You can look around, but not change anything.
-    </div>
-
-    <div v-if="lostClaim" class="alert alert-danger py-2" role="alert" data-testid="lost-claim">
-      <strong>Your editing claim expired.</strong> Someone else took the bench over, so your last
-      changes were not saved. Reload the page to see their version.
     </div>
 
     <BenchAlert v-if="errorMsg" data-testid="page-error" @dismiss="errorMsg = ''">
@@ -574,7 +588,7 @@ onUnmounted(() => {
       :plans="plans"
       :areas="areas"
       :view="startView"
-      :can-edit="editing"
+      :locks="locks"
       :history="history"
       :clipboard="clipboard"
       :presence="presence"
@@ -593,7 +607,8 @@ onUnmounted(() => {
     >
       <AreaList
         :areas="areas"
-        :editable="editing"
+        :editable="true"
+        :locks="locks"
         :selected="selectedAreaId"
         :clipboard="clipboard"
         :presence="presence"

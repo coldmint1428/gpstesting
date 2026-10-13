@@ -35,6 +35,7 @@
 import { computed, onUnmounted, ref } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
+import { uuid4 } from '../utils/uuid'
 
 const BEAT_MS = 10 * 1000 // how often this tab says it is still here
 const STALE_MS = 45 * 1000 // behind the freshest row on the bench: gone
@@ -51,25 +52,21 @@ export function plannerColour(userId) {
   return COLOURS[hash % COLOURS.length]
 }
 
-// The same fallback AreaBench uses for a new shape's id: crypto.randomUUID is missing over plain
-// http, which is how this app is served on a phone on the same network.
-function mint() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
-  return 'x' + Math.random().toString(36).slice(2) + Date.now().toString(36)
-}
-
+// The tag has to be a real uuid: layout_presence.presence_id is a uuid column. It is an identifier
+// and never a secret, but it still has to be the right SHAPE, which is what utils/uuid.js is for --
+// crypto.randomUUID() alone would leave every plain-http origin unable to announce itself at all.
 function tabTag(userId) {
   const key = 'bench.presence.' + userId
   try {
     const saved = sessionStorage.getItem(key)
     if (saved) return saved
-    const tag = mint()
+    const tag = uuid4()
     sessionStorage.setItem(key, tag)
     return tag
   } catch {
     // Storage can be blocked (private mode). A fresh tag per page load is still correct -- it
     // just means this tab leaves a ghost behind when it closes, which the sweep clears.
-    return mint()
+    return uuid4()
   }
 }
 

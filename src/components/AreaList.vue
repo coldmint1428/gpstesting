@@ -49,6 +49,14 @@ function watchersFor(areaId) {
   return watchers.value[areaId] || []
 }
 
+// Somebody else is WORKING on this area -- not merely looking at it -- so its row cannot be
+// changed, and the name of whoever has it is already shown on the row. The database would refuse
+// the change anyway (see 008_object_locks.sql); refusing it here means the planner never types
+// something that cannot be saved.
+function blocked(areaId) {
+  return watchersFor(areaId).find((who) => who.active) || null
+}
+
 // A bar down the left of a row that somebody else has open, in their colour. The list is the one
 // place a planner can see the whole bench at once, so "which of these is somebody on" belongs
 // here as an edge rather than only as a badge inside the row.
@@ -213,6 +221,7 @@ function paste() {
                   v-if="editable"
                   class="form-control form-control-sm flex-grow-1 area-name-input"
                   :value="row.area.name"
+                  :disabled="Boolean(blocked(row.area.id))"
                   :maxlength="AREA_NAME_MAX"
                   :aria-label="'Name of ' + row.area.name"
                   :data-testid="'area-name-' + row.area.name"
@@ -225,6 +234,7 @@ function paste() {
                   v-if="editable"
                   class="form-select form-select-sm area-kind-select"
                   :value="row.area.kind"
+                  :disabled="Boolean(blocked(row.area.id))"
                   :aria-label="'Type of ' + row.area.name"
                   :data-testid="'area-kind-select-' + row.area.name"
                   @click.stop
@@ -249,6 +259,7 @@ function paste() {
                 <button
                   v-if="editable"
                   class="btn btn-sm btn-link text-danger px-1"
+                  :disabled="Boolean(blocked(row.area.id))"
                   :aria-label="'Delete ' + row.area.name"
                   :data-testid="'area-delete-' + row.area.name"
                   @click.stop="remove(row.area)"
