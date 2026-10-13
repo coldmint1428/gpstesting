@@ -10,7 +10,8 @@ import { ref, computed, watch, markRaw, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { loadRecording, loadNewRows } from '../composables/usePlaybackHistory'
 import { addRows, recordingToCsv, csvToRecording, csvFileName, downloadText } from '../utils/playback'
-import { formatTime, formatDay, formatDayTime } from '../utils/time'
+import { formatTime, formatDay, formatDayTime, sgtParts } from '../utils/time'
+import { askConfirm, toast } from '../composables/useNotify'
 import PlaybackPlayer from './PlaybackPlayer.vue'
 
 const props = defineProps({
@@ -102,6 +103,30 @@ async function play(item) {
   infoMsg.value = ''
   player.value = { recording, version: 0, title: item.title, live: item.live, fileName: '', item }
   if (item.live) startLiveRefresh()
+}
+
+// Delete a finished recording for everyone (root / planners; the database checks it)
+async function remove(item) {
+  const what = item.readings ? item.readings.toLocaleString() + (item.readings === 1 ? ' reading' : ' readings') : 'This empty recording'
+  const ok = await askConfirm({
+    title: 'Delete this recording?',
+    message:
+      item.title + '. ' + what + (item.readings ? ' will be deleted for everyone.' : ' will be removed.') +
+      " This can't be undone." + (item.readings ? ' Download a CSV first if you want to keep it.' : ''),
+    confirmText: 'Delete recording',
+    danger: true,
+  })
+  if (!ok) return
+  busyKey.value = item.key
+  const { data, error } = await supabase.rpc('delete_recording', {
+    p_event_id: props.eventId,
+    p_session_id: item.kind === 'session' ? item.key : null,
+    p_day: item.kind === 'day' ? sgtParts(item.startsAt).date : null,
+  })
+  busyKey.value = null
+  if (error) return toast(error.message, 'danger', 8000)
+  toast('Recording deleted' + (data ? ' (' + data.toLocaleString() + (data === 1 ? ' reading).' : ' readings).') : '.'))
+  loadList()
 }
 
 async function download(item) {
@@ -251,6 +276,16 @@ onUnmounted(() => clearInterval(liveTimer))
                 Download CSV
               </button>
             </template>
+            <button
+              v-if="!item.live"
+              class="btn btn-sm btn-outline-danger"
+              :disabled="busyKey !== null"
+              title="Delete this recording"
+              data-testid="delete-recording-btn"
+              @click="remove(item)"
+            >
+              Delete
+            </button>
           </div>
         </li>
       </ul>

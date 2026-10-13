@@ -291,6 +291,8 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 - [ ] Test: share, swipe the app away, End event on the laptop → phone notification goes within ~30 s
 - [x] **Schedule end** (`011_scheduled_end.sql`): end time on a scheduled or live event ("ends at …" in the status card, Change / Cancel end); at that time the event stops being live at once and a job (every minute) closes it like End event
 - [x] Status card flow: Not live → **Start event now** / **Schedule…** (start + optional end in one form, +30 min / +1 h / +2 h / +3 h); Scheduled → **Start now** / **Edit schedule** / **Cancel schedule**; Live → **Remind ICs** / **Set·Change end time** / **Remove end time** / **End event now**, with "ends 9:00 pm (in 2 h 58 min)" or "no end time"; tested on localhost (13 Oct)
+- [x] Playback **Delete** button (`013_delete_recording.sql`, root / planners): deletes a finished recording's readings + session for everyone (a live event can't be deleted; confirm dialog suggests downloading the CSV first)
+- [ ] Test: delete an empty recording, then one with readings → it disappears from the list and toast shows how many readings
 - [x] `012_close_expired_first.sql`: Start / Schedule / Change end / End first close an event whose end time has passed (no "already live" or reviving an ended event in the minute before the job runs)
 - [ ] Test: start the event, set the end 2–3 min ahead, share from the phone → at the end time sharing stops by itself and the card shows Not live
 - [x] Website: in-app confirm dialogs + toast messages instead of browser pop-ups; Share / My GPS details moved into the status card
@@ -303,7 +305,7 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 ## 6. Moving to the teammate's new Supabase project
 - [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–009 reproduce it 1:1
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 012; 005 = teammate's polygon bench `layouts`; 006 must come after 005; after 009 add the Vault secret `project_url`)
+- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 013; 005 = teammate's polygon bench `layouts`; 006 must come after 005; after 009 add the Vault secret `project_url`)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app

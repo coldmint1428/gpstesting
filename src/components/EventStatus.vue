@@ -61,45 +61,97 @@ async function run(action, successText) {
 
 // ---------- Form: 'schedule' (start + optional end, before the start) or 'end' (while live) ----------
 const form = ref('')
-const startValue = ref('')
-const endValue = ref('')
+const startDate = ref('') // "2026-10-13"
+const startTime = ref('') // "15:00"
+const endDate = ref('')
+const endTime = ref('')
+const endMode = ref('none') // '30' | '60' | '120' | '180' (minutes) | 'custom' | 'none'
 const formError = ref('')
 
-const PRESETS = [
-  { label: '+30 min', ms: 30 * 60000 },
-  { label: '+1 h', ms: 3600000 },
-  { label: '+2 h', ms: 2 * 3600000 },
-  { label: '+3 h', ms: 3 * 3600000 },
+const DURATIONS = [
+  { mode: '30', label: '30 min' },
+  { mode: '60', label: '1 h' },
+  { mode: '120', label: '2 h' },
+  { mode: '180', label: '3 h' },
 ]
+
+const pad = (n) => String(n).padStart(2, '0')
+const dateOf = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+const timeOf = (d) => pad(d.getHours()) + ':' + pad(d.getMinutes())
+const combine = (date, time) => (date && time ? new Date(date + 'T' + time) : null)
+
+const formStart = computed(() =>
+  form.value === 'schedule' ? combine(startDate.value, startTime.value) : live.value ? live.value.startsAt : null,
+)
+// Durations count from the start (scheduling) or from now (live)
+const durationBase = computed(() => (form.value === 'schedule' ? formStart.value : new Date(now.value)))
+const formEnd = computed(() => {
+  if (endMode.value === 'none') return null
+  if (endMode.value === 'custom') return combine(endDate.value, endTime.value)
+  return durationBase.value ? new Date(durationBase.value.getTime() + Number(endMode.value) * 60000) : null
+})
+
+// "Live Tue 13 Oct, 3:00 pm → 5:00 pm · 2 h"
+const summary = computed(() => {
+  const start = formStart.value
+  const end = formEnd.value
+  if (form.value === 'end') {
+    if (!end) return ''
+    const ms = end.getTime() - Date.now()
+    return 'Sharing stops at ' + endText(end, new Date()) + (ms > 0 ? ' (in ' + formatDuration(ms) + ')' : '')
+  }
+  if (!start) return ''
+  if (!end) return 'Live from ' + formatDayTime(start) + ' until someone ends it'
+  return 'Live ' + formatDayTime(start) + ' → ' + endText(end, start) + (end > start ? ' · ' + formatDuration(end - start) : '')
+})
+
+function setEndMode(mode) {
+  endMode.value = mode
+  if (mode === 'custom' && !endDate.value) {
+    // Start the custom fields from what was shown (or 2 h after the start / now)
+    const base = formEnd.value || new Date((durationBase.value || new Date()).getTime() + 2 * 3600000)
+    endDate.value = dateOf(base)
+    endTime.value = timeOf(base)
+  }
+}
+
+// Which chip matches an existing end time
+function modeFor(end, base) {
+  if (!end) return 'none'
+  const minutes = Math.round((end.getTime() - base.getTime()) / 60000)
+  return DURATIONS.some((d) => Number(d.mode) === minutes) ? String(minutes) : 'custom'
+}
 
 function openSchedule() {
   const nextHour = new Date()
   nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0)
-  startValue.value = toDateTimeLocal(scheduledStart.value || nextHour)
-  endValue.value = scheduledEnd.value ? toDateTimeLocal(scheduledEnd.value) : ''
+  const start = scheduledStart.value || nextHour
+  startDate.value = dateOf(start)
+  startTime.value = timeOf(start)
+  endDate.value = scheduledEnd.value ? dateOf(scheduledEnd.value) : ''
+  endTime.value = scheduledEnd.value ? timeOf(scheduledEnd.value) : ''
+  endMode.value = modeFor(scheduledEnd.value, start)
   formError.value = ''
   form.value = 'schedule'
 }
 
 function openEnd() {
-  endValue.value = toDateTimeLocal(scheduledEnd.value || new Date(Date.now() + 2 * 3600000))
+  const end = scheduledEnd.value
+  endDate.value = end ? dateOf(end) : ''
+  endTime.value = end ? timeOf(end) : ''
+  endMode.value = end ? 'custom' : '60'
   formError.value = ''
   form.value = 'end'
 }
 
-// Presets count from the start (scheduling) or from now (live)
-function preset(ms) {
-  const base = form.value === 'schedule' && startValue.value ? new Date(startValue.value).getTime() : Date.now()
-  endValue.value = toDateTimeLocal(new Date(base + ms))
-}
-
 async function saveForm() {
   formError.value = ''
-  const start = form.value === 'schedule' ? new Date(startValue.value) : live.value ? live.value.startsAt : null
-  const end = endValue.value ? new Date(endValue.value) : null
+  const start = formStart.value
+  const end = formEnd.value
 
   if (form.value === 'schedule' && !(start > new Date())) return (formError.value = 'Pick a start time in the future.')
-  if (form.value === 'end' && !end) return (formError.value = 'Pick an end time.')
+  if (form.value === 'end' && !end) return (formError.value = 'Pick when the event should end.')
+  if (endMode.value === 'custom' && !end) return (formError.value = 'Pick an end date and time.')
   if (end && end <= new Date()) return (formError.value = 'Pick an end time in the future.')
   if (end && start && end <= start) return (formError.value = 'The end time must be after the start time.')
 
@@ -230,32 +282,86 @@ function remind() {
         </template>
       </div>
 
-      <!-- Schedule (start + optional end) / end-time form -->
-      <form v-if="form" class="border rounded p-2 mt-2" data-testid="time-form" @submit.prevent="saveForm">
-        <div class="row g-2 align-items-end">
-          <div v-if="form === 'schedule'" class="col-12 col-sm-auto">
-            <label class="form-label small mb-1" for="start-time">Start</label>
-            <input id="start-time" v-model="startValue" type="datetime-local" class="form-control form-control-sm" required data-testid="start-time-input" />
+      <!-- Schedule (start + optional end) / end-time panel -->
+      <form v-if="form" class="time-panel mt-2" data-testid="time-form" @submit.prevent="saveForm">
+        <div class="d-flex align-items-start justify-content-between mb-2">
+          <div>
+            <h3 class="h6 mb-0">{{ form === 'schedule' ? (scheduledStart ? 'Edit the schedule' : 'Schedule the event') : 'When should the event end?' }}</h3>
+            <p class="small text-muted mb-0">
+              {{
+                form === 'schedule'
+                  ? 'The event goes live by itself at the start and ends by itself at the end.'
+                  : "At the end time everyone's sharing stops by itself."
+              }}
+            </p>
           </div>
-          <div class="col-12 col-sm-auto">
-            <label class="form-label small mb-1" for="end-time">
-              End <span v-if="form === 'schedule'" class="text-muted">(optional)</span>
-            </label>
-            <input id="end-time" v-model="endValue" type="datetime-local" class="form-control form-control-sm" data-testid="end-time-input" />
+          <button type="button" class="btn-close" aria-label="Close" @click="form = ''"></button>
+        </div>
+
+        <div class="row g-2">
+          <!-- Start -->
+          <div v-if="form === 'schedule'" class="col-12 col-md-5">
+            <div class="time-card h-100">
+              <div class="time-label"><span class="dot dot-start"></span>Start</div>
+              <div class="d-flex gap-2">
+                <input v-model="startDate" type="date" class="form-control date-input" aria-label="Start date" required data-testid="start-date-input" />
+                <input v-model="startTime" type="time" class="form-control time-input" aria-label="Start time" required data-testid="start-time-input" />
+              </div>
+              <div class="small text-muted mt-1">{{ formStart ? formatDayTime(formStart) : '' }}</div>
+            </div>
           </div>
-          <div class="col-12 col-sm-auto d-flex flex-wrap gap-1">
-            <button v-for="p in PRESETS" :key="p.label" type="button" class="btn btn-sm btn-light border" @click="preset(p.ms)">{{ p.label }}</button>
-            <button v-if="form === 'schedule' && endValue" type="button" class="btn btn-sm btn-link" @click="endValue = ''">No end time</button>
+
+          <!-- End -->
+          <div class="col-12" :class="{ 'col-md-7': form === 'schedule' }">
+            <div class="time-card h-100">
+              <div class="time-label">
+                <span class="dot dot-end"></span>{{ form === 'schedule' ? 'End' : 'End in' }}
+                <span v-if="form === 'schedule'" class="text-muted fw-normal">· optional</span>
+              </div>
+              <div class="d-flex flex-wrap gap-1" role="group" aria-label="Event length">
+                <button
+                  v-for="d in DURATIONS"
+                  :key="d.mode"
+                  type="button"
+                  class="chip"
+                  :class="{ active: endMode === d.mode }"
+                  :data-testid="'duration-' + d.mode"
+                  @click="setEndMode(d.mode)"
+                >
+                  {{ form === 'end' ? '+' : '' }}{{ d.label }}
+                </button>
+                <button type="button" class="chip" :class="{ active: endMode === 'custom' }" data-testid="duration-custom" @click="setEndMode('custom')">
+                  Pick a time
+                </button>
+                <button
+                  v-if="form === 'schedule'"
+                  type="button"
+                  class="chip"
+                  :class="{ active: endMode === 'none' }"
+                  data-testid="duration-none"
+                  @click="setEndMode('none')"
+                >
+                  No end
+                </button>
+              </div>
+              <div v-if="endMode === 'custom'" class="d-flex gap-2 mt-2">
+                <input v-model="endDate" type="date" class="form-control date-input" aria-label="End date" data-testid="end-date-input" />
+                <input v-model="endTime" type="time" class="form-control time-input" aria-label="End time" data-testid="end-time-input" />
+              </div>
+            </div>
           </div>
         </div>
-        <div class="small text-muted mt-1">
-          <template v-if="form === 'end'">Quick buttons count from now.</template>
-          <template v-else>Quick buttons count from the start. Without an end time, the event stays live until someone ends it.</template>
-        </div>
-        <div v-if="formError" class="small text-danger mt-1" role="alert">{{ formError }}</div>
-        <div class="d-flex gap-2 mt-2">
-          <button class="btn btn-sm btn-primary" type="submit" :disabled="busy" data-testid="save-schedule-btn">Save</button>
+
+        <!-- Summary + save -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+          <div class="summary flex-grow-1" data-testid="time-summary">
+            <span v-if="formError" class="text-danger" role="alert">{{ formError }}</span>
+            <template v-else>{{ summary }}</template>
+          </div>
           <button class="btn btn-sm btn-outline-secondary" type="button" @click="form = ''">Cancel</button>
+          <button class="btn btn-sm btn-primary px-3" type="submit" :disabled="busy" data-testid="save-schedule-btn">
+            {{ form === 'schedule' ? 'Save schedule' : 'Save end time' }}
+          </button>
         </div>
       </form>
 
@@ -265,3 +371,72 @@ function remind() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.time-panel {
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.75rem;
+  padding: 0.85rem;
+}
+.time-card {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.7rem;
+}
+.time-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+/* Date + time side by side; both may shrink on a phone */
+.date-input {
+  flex: 1 1 9rem;
+  min-width: 0;
+  max-width: 11.5rem;
+}
+.time-input {
+  flex: 0 1 8.5rem;
+  min-width: 0;
+}
+.dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: 0.05rem;
+}
+.dot-start {
+  background: var(--bs-success);
+}
+.dot-end {
+  background: var(--bs-danger);
+}
+/* Duration chips: pill buttons, the chosen one filled */
+.chip {
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.chip:hover {
+  border-color: var(--bs-primary);
+  color: var(--bs-primary);
+}
+.chip.active {
+  background: var(--bs-primary);
+  border-color: var(--bs-primary);
+  color: #fff;
+}
+.summary {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+</style>
