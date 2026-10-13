@@ -1,7 +1,7 @@
 // useEventSessions - an event's sessions (Start event -> End event) and whether it is LIVE now.
 // ICs can only share while live; the database checks this too (007_event_sessions.sql).
 //   open session  = scheduled or live (not ended); at most one per event
-//   live          = open session whose start time has passed
+//   live          = open session whose start time has passed and scheduled end (if any) hasn't
 // A scheduled start turns live by itself: a timer reloads at that moment, so the
 // Share button unlocks without anyone refreshing the page.
 import { ref, computed, onUnmounted } from 'vue'
@@ -16,7 +16,7 @@ export function useEventSessions(eventId) {
   async function load() {
     const { data, error } = await supabase
       .from('event_sessions')
-      .select('id, starts_at, ended_at, end_reason')
+      .select('id, starts_at, ended_at, end_reason, scheduled_end')
       .eq('event_id', eventId)
       .order('starts_at', { ascending: false })
     if (error) {
@@ -30,29 +30,36 @@ export function useEventSessions(eventId) {
       startsAt: new Date(s.starts_at),
       endedAt: s.ended_at ? new Date(s.ended_at) : null,
       endReason: s.end_reason,
+      scheduledEnd: s.scheduled_end ? new Date(s.scheduled_end) : null,
     }))
     loaded.value = true
     timeStartTimer()
   }
 
   const openSession = computed(() => sessions.value.find((s) => !s.endedAt) || null)
-  const liveSession = computed(() =>
-    openSession.value && openSession.value.startsAt.getTime() <= now.value ? openSession.value : null,
-  )
+  const liveSession = computed(() => {
+    const s = openSession.value
+    if (!s || s.startsAt.getTime() > now.value) return null
+    if (s.scheduledEnd && s.scheduledEnd.getTime() <= now.value) return null // its end time has passed
+    return s
+  })
   const isLive = computed(() => liveSession.value !== null)
   const scheduledStart = computed(() =>
     openSession.value && openSession.value.startsAt.getTime() > now.value ? openSession.value.startsAt : null,
   )
+  const scheduledEnd = computed(() => (openSession.value ? openSession.value.scheduledEnd : null))
 
-  // Reload exactly when a scheduled start is reached (also catches a start that was
+  // Reload exactly when a scheduled start or end is reached (also catches a start that was
   // cancelled meanwhile: Realtime doesn't tell other viewers about deleted rows)
   let startTimer = null
   function timeStartTimer() {
     clearTimeout(startTimer)
     const s = openSession.value
     if (!s) return
-    const wait = s.startsAt.getTime() - Date.now()
-    if (wait > 0) startTimer = setTimeout(load, Math.min(wait + 500, 2147483647)) // setTimeout max ~24 days
+    const next = [s.startsAt, s.scheduledEnd]
+      .filter((d) => d && d.getTime() > Date.now())
+      .map((d) => d.getTime() - Date.now())
+    if (next.length) startTimer = setTimeout(load, Math.min(Math.min(...next) + 500, 2147483647)) // setTimeout max ~24 days
   }
 
   // ---------- Actions (root / planner; the database checks the role) ----------
@@ -66,6 +73,8 @@ export function useEventSessions(eventId) {
   const scheduleStart = (date) => call('schedule_event_start', { p_starts_at: new Date(date).toISOString() })
   const cancelSchedule = () => call('cancel_scheduled_start')
   const endEvent = () => call('end_event') // returns how many people were stopped
+  const scheduleEnd = (date) => call('schedule_event_end', { p_ends_at: new Date(date).toISOString() })
+  const cancelScheduledEnd = () => call('cancel_scheduled_end')
 
   // ---------- Live updates ----------
   let reloadTimer = null
@@ -101,10 +110,13 @@ export function useEventSessions(eventId) {
     liveSession,
     isLive,
     scheduledStart,
+    scheduledEnd,
     load,
     startEvent,
     scheduleStart,
     cancelSchedule,
     endEvent,
+    scheduleEnd,
+    cancelScheduledEnd,
   }
 }
