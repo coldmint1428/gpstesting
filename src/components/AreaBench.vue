@@ -348,14 +348,34 @@ const editHint = computed(() =>
 // useBenchPresence -- so that a press is refused instantly, without a round trip. A planner who
 // really is holding it still has the last word, from the database, in the page's write handlers;
 // nothing this display says ever decides anything.
-function blockedBy(objectId) {
+function holderOf(objectId) {
   if (!objectId) return null
   const watchers = props.presence ? props.presence.byObject.value[objectId] : null
-  const holding = watchers ? watchers.find((who) => who.active) : null
+  return watchers ? watchers.find((who) => who.active) || null : null
+}
+
+// Is this shape blocked for me -- by the hint above, or by a refusal the database has already given
+// this page? One predicate, and every press asks it.
+function blockedBy(objectId) {
+  if (!objectId) return null
+  const holding = holderOf(objectId)
   if (holding) return holding
 
   const refused = props.locks ? props.locks.refused.value : null
   return refused && refused.objectId === objectId ? refused : null
+}
+
+// A press on a shape somebody else is holding: refused, AND SAID. The sentence goes through the same
+// refusal the database's own refusals use (see useBenchLocks.refuseHere), so the strip has one source
+// for it and one timer behind it -- and a planner who presses a locked shape is told who has it,
+// instead of watching nothing happen. Presence is only a hint, so this is a courtesy: the shape does
+// not move either way, and what would refuse a change is the lock. Returns whatever blocked the
+// press, or null when nothing did.
+function refusePress(objectId) {
+  const holding = holderOf(objectId)
+  if (!holding) return blockedBy(objectId)
+  if (props.locks) props.locks.refuseHere(objectId, holding.label, holding.mine)
+  return holding
 }
 
 // The sentence the strip says when a change was refused because somebody else is on that shape --
@@ -921,6 +941,10 @@ function startDrag(kind, plan, event, index) {
     return
   }
   if (!plan || !map) return
+  // A floor plan is an object like any other, so picking one up is refused exactly as an outline is
+  // (see refusePress). This was missing: a picture somebody else was holding could be dragged out
+  // from under them on this screen and only snapped back when the save came back refused.
+  if (refusePress(plan.id)) return
   event.preventDefault()
   event.stopPropagation()
   dragState = { kind, plan, index }
@@ -1549,7 +1573,7 @@ function onVertexPointerDown(id, index, event) {
     if (event.preventDefault) event.preventDefault() // no middle-click autoscroll cursor
     return
   }
-  if (!props.canEdit || !map || blockedBy(id)) return
+  if (!props.canEdit || !map || refusePress(id)) return
   const area = props.areas.find((a) => a.id === id)
   if (!area || !area.points[index]) return
 
@@ -1707,7 +1731,7 @@ function addAreaPoint() {
   if (!area) return
   // Adding a point changes the area like any other change, so it is refused the same way -- and
   // saying so here is better than a dot that appears and then cannot be saved.
-  if (blockedBy(area.id)) return
+  if (refusePress(area.id)) return
   if (area.points.length >= AREA_MAX_POINTS) {
     errorMsg.value = 'An area can have at most ' + AREA_MAX_POINTS + ' points.'
     return
@@ -1733,7 +1757,7 @@ function onAreaPointerDown(id, event) {
     return
   }
 
-  if (!shapesClickable.value || !map || blockedBy(id)) return
+  if (!shapesClickable.value || !map || refusePress(id)) return
   const area = props.areas.find((a) => a.id === id)
   if (!area) return
 

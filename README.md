@@ -126,6 +126,33 @@ cp .env.example .env   # then fill in your Supabase URL + public key
 npm run dev            # http://localhost:5173
 ```
 
+### Checking the bench with two browsers (`tools/bench_harness.mjs`)
+
+`npm run build` cannot tell you whether two planners get on: it passed while `/polygon` threw on
+load (a missing import is a legal reference to a global), and every rule that matters here is decided
+by two sessions, a lock answered while a finger is down, or a frame from somebody else's browser. So
+the bench has a harness that drives the real page in two real browsers — the same account in two
+profiles, which is the case all of this started from — and reports what happened:
+
+```bash
+# two headless Firefox instances, each with its own profile and its own debug port
+firefox --headless -no-remote -profile %TEMP%\bench-harness\ff1 --remote-debugging-port 9222 about:blank
+firefox --headless -no-remote -profile %TEMP%\bench-harness\ff2 --remote-debugging-port 9223 about:blank
+npm run dev
+BENCH_EMAIL=... BENCH_PASSWORD=... node tools/bench_harness.mjs http://localhost:5174
+```
+
+The account comes from the environment, with no default: this file is in the repository, and a test
+account's password in a repository is a password in a repository.
+
+It makes its own area, drags it, watches it arrive on the other screen, presses it from the losing
+side, deletes it and checks the bench was left as it found it. `tools/probe.mjs` asks one question of
+a page that is already open (`node tools/probe.mjs 9222 @question.js`), which is how most of the
+above was diagnosed. Nothing here runs in CI: it needs the browsers, a dev server and a login.
+
+Note: one save of a canvas this size takes **tens of seconds** (measured: 22 s at 3.7 MB of the 4 MB
+cap), so the harness waits accordingly — and so should anybody testing by hand.
+
 ### Supabase (one-time, for a new project)
 
 1. SQL Editor → run every file in `supabase/migrations/` **in order** (001, 002, ...).

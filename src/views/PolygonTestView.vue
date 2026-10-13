@@ -123,6 +123,15 @@ function diagnose(payload) {
 }
 
 async function saveNow() {
+  // A write that is still waiting for its lock has not touched the document yet, and this save is
+  // about to read it. Letting the save go first is how a shape the planner had just drawn was left
+  // out of the canvas that was stored -- see `writing` below.
+  await settled()
+
+  // The moment this save's payload is taken. Only changes older than this are committed by it, so
+  // only those may have their lock let go of afterwards (see `end` in useBenchLocks): anything the
+  // planner touches while this is in flight is newer, stays locked, and is saved by the next one.
+  const since = Date.now()
   const text = canvasText.value
   const overruled = await save(JSON.parse(text), {
     jsonText: text,
@@ -130,17 +139,36 @@ async function saveNow() {
     session: locks.session.value,
   })
 
-  // The server kept its own version of something this save carried -- an object somebody else was
+  // A save that happened at all -- even one that was partly overruled -- has committed everything
+  // this page changed before `since`, which is what makes those locks safe to let go of.
+  if (overruled) locks.saved(since)
+
+  // The server kept its own version of something this save carried: an object somebody else was
   // holding, or one this page's copy was simply behind on. Everything it did not take has to come
   // back, and the merge decides what that means: what I hold stays on screen, because the planner
   // may have moved it on since the save left, and everything else is taken from the bench as it
   // now stands.
-  if (overruled && overruled.length) await resync()
+  //
+  // UNLESS THE DOCUMENT HAS MOVED ON. A save is twenty seconds on a bench this size, and the planner
+  // works through all of them; read back now and the reply describes a state that is no longer on
+  // screen. That is not a small thing: the merge keeps anything the bench has and this page does not,
+  // which is right for a shape another planner just made and WRONG for one this planner just deleted
+  // -- it came back on screen, deleted and undead at the same time (measured; tools/bench_harness.mjs
+  // has the sequence). So a reply is only merged when nothing has been written since the payload was
+  // taken. What was overruled is not lost: the next save carries the newer document and finds out
+  // about it there.
+  if (overruled && overruled.length && !changedSince(since)) await resync(since)
 }
 
-async function resync() {
+async function resync(since) {
   const server = await reload()
   if (!server) return
+  // Checked AGAIN after the read, and this is the check that matters: reading the bench means
+  // downloading the whole canvas (3.7 MB here), so seconds pass, and the planner can have deleted a
+  // shape in the middle of it. The bench AS READ still has that shape, this page no longer does, and
+  // mergeById keeps what the bench has and this page only does not -- so the shape comes back on
+  // screen: deleted and undead at once. Measured, twice, before this line existed.
+  if (changedSince(since)) return
   layout.value = {
     view: layout.value.view,
     floorPlans: mergeById(server.floorPlans, layout.value.floorPlans),
@@ -174,6 +202,11 @@ const sizeRatio = computed(() => bytes.value / MAX_LAYOUT_BYTES)
 // (quite correctly) refuse every object in it, throwing the planner's work away.
 //
 // Leaving a shape for another one needs no save and nothing in flight, so it lets go at once.
+// Leaving a shape for another one. Clicking straight from one area to the next is the ordinary way to
+// work, and it does something the planner cannot see: it lets go of the first shape. A lock may only
+// be let go of once the change it protects has been saved (see `end` in useBenchLocks) -- so if that
+// shape has unsaved work, it is committed here, before the lock goes. Clicking between shapes without
+// editing anything costs nothing: there is nothing to save.
 watch(mode, async (value, oldValue) => {
   const was = objectIdOf(oldValue)
 
@@ -187,6 +220,7 @@ watch(mode, async (value, oldValue) => {
   }
 
   if (was && was !== objectIdOf(value)) {
+    if (locks.unsaved(was)) await saveNow()
     locks.end(was)
     presence.setHolding('')
   }
@@ -363,47 +397,106 @@ async function streamArea({ id, patch }) {
   frames.send('area', id, patch)
 }
 
+// ---------- Writes that are still on their way in ----------
+// EVERY WRITE WAITS FOR A LOCK, and a lock is a round trip, so a write can still be on its way in
+// when the planner does the next thing. That is fine everywhere except in the one sequence that is
+// the most ordinary thing anybody does here: draw a shape and name it. finishDraft() hands the new
+// area to addArea() -- which now asks the database for that area's lock first -- and sets `mode` to
+// null in the SAME tick, and `mode` going to null is the save. So the save ran while addArea was
+// still waiting, and it wrote the canvas without the shape it had just been handed.
+//
+// It was not theoretical. tools/bench_harness.mjs drew an area, waited for the save, reloaded the
+// bench in a second browser, and the area was not there: drawn, on screen, saved, gone. (The save
+// itself took 22 seconds, because this bench is 3.7 MB of a 4 MB cap, which only made the window
+// wider.)
+//
+// So the page keeps its own writes in a list, and a save waits for them all. Nothing in flight is
+// the ordinary case and costs one loop check.
+let inFlight = []
+// When the document was last written to. A save remembers the moment it took its payload, so it can
+// tell whether the reply it gets back is still about the document on screen -- see saveNow.
+let lastWriteAt = 0
+
+function changedSince(stamp) {
+  return lastWriteAt > (Number(stamp) || 0)
+}
+
+function writing(work) {
+  const flight = work()
+  inFlight.push(flight)
+  const done = () => {
+    inFlight = inFlight.filter((other) => other !== flight)
+    lastWriteAt = Date.now()
+  }
+  flight.then(done, done)
+  return flight
+}
+
+async function settled() {
+  while (inFlight.length) await Promise.allSettled(inFlight.slice())
+}
+
 async function addPlan(plan) {
-  if (!(await mayWrite(plan.id))) return
-  history.record()
-  layout.value.floorPlans = [...layout.value.floorPlans, plan]
+  return writing(async () => {
+    if (!(await mayWrite(plan.id))) return
+    history.record()
+    layout.value.floorPlans = [...layout.value.floorPlans, plan]
+  })
 }
 
 async function updatePlan({ id, patch }) {
-  if (!(await mayWrite(id))) return
-  history.record()
-  layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? { ...p, ...patch } : p))
-  // And tell the others, so a picture being moved or turned travels across their screens instead of
-  // teleporting when it is put down. Whatever the drag reports -- a centre, an angle, a size, a
-  // rename -- is exactly what a frame may carry (see utils/benchFrame.js).
-  frames.send('plan', id, patch)
+  return writing(async () => {
+    if (!(await mayWrite(id))) return
+    history.record()
+    layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? { ...p, ...patch } : p))
+    // And tell the others, so a picture being moved or turned travels across their screens instead of
+    // teleporting when it is put down. Whatever the drag reports -- a centre, an angle, a size, a
+    // rename -- is exactly what a frame may carry (see utils/benchFrame.js).
+    frames.send('plan', id, patch)
+  })
 }
 
 async function deletePlan(id) {
-  if (!(await mayWrite(id))) return
-  history.record()
-  layout.value.floorPlans = layout.value.floorPlans.filter((p) => p.id !== id)
+  return writing(async () => {
+    if (!(await mayWrite(id))) return
+    history.record()
+    layout.value.floorPlans = layout.value.floorPlans.filter((p) => p.id !== id)
+    // Deleting the picture that is open puts it down at once. See deleteArea.
+    if (mode.value === 'floorplan:' + id) mode.value = null
+  })
 }
 
 async function addArea(area) {
-  if (!(await mayWrite(area.id))) return
-  history.record()
-  layout.value.polygons = [...layout.value.polygons, area]
+  return writing(async () => {
+    if (!(await mayWrite(area.id))) return
+    history.record()
+    layout.value.polygons = [...layout.value.polygons, area]
+  })
 }
 
 async function updateArea({ id, patch }) {
-  if (!(await mayWrite(id))) return
-  history.record()
-  layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? { ...a, ...patch } : a))
-  // And tell the others. An outline dragged across the map reports on every move, so this is what
-  // the other planners watch it with: twenty frames a second, and one save when it is put down.
-  frames.send('area', id, patch)
+  return writing(async () => {
+    if (!(await mayWrite(id))) return
+    history.record()
+    layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? { ...a, ...patch } : a))
+    // And tell the others. An outline dragged across the map reports on every move, so this is what
+    // the other planners watch it with: twenty frames a second, and one save when it is put down.
+    frames.send('area', id, patch)
+  })
 }
 
 async function deleteArea(id) {
-  if (!(await mayWrite(id))) return
-  history.record()
-  layout.value.polygons = layout.value.polygons.filter((a) => a.id !== id)
+  return writing(async () => {
+    if (!(await mayWrite(id))) return
+    history.record()
+    layout.value.polygons = layout.value.polygons.filter((a) => a.id !== id)
+    // Deleting the shape that is open puts it down at once. `mode` would otherwise point at a shape
+    // that no longer exists -- and `mode` going to null is the ONLY save trigger on this page, so the
+    // deletion would sit in the browser until the planner happened to click somewhere else. The
+    // watcher runs after this function returns, and the save it starts waits for this write (see
+    // settled), so what goes to the database is the canvas with the shape already gone.
+    if (mode.value === 'area:' + id) mode.value = null
+  })
 }
 
 // The view is NOT a step, and it is not the document's business either. Panning and zooming report

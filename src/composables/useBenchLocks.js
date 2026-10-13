@@ -65,6 +65,11 @@ export function useBenchLocks() {
 
   let pending = {} // object id -> the acquisition already in flight
   let touched = {} // object id -> when I last CHANGED it
+  // Everything changed up to this moment has been saved. A lock is not let go of while its change is
+  // NEWER than this, because the save that carries that change is the thing the lock is for: release
+  // it early and the database keeps its own version of the shape instead, which is the planner's work
+  // thrown away with no error anywhere. Measured, not imagined -- see tools/bench_harness.mjs.
+  let savedAt = 0
   let timer = null
   let refusalTimer = null
 
@@ -72,6 +77,20 @@ export function useBenchLocks() {
 
   function holds(objectId) {
     return Boolean(objectId && session.value && held.value[objectId])
+  }
+
+  // Has this object been changed since the last save that landed? An object nobody has touched is
+  // clean, so a lock taken and never used can always be let go of at once.
+  function unsaved(objectId) {
+    return Boolean(objectId) && (touched[objectId] || 0) > savedAt
+  }
+
+  // A save landed, and its payload was taken at `since`. Everything changed before that moment is
+  // committed -- and everything changed after it (while the save was in flight, which on a bench this
+  // size is twenty seconds of opportunity) is not, and keeps its lock.
+  function saved(since) {
+    const stamp = Number(since) || 0
+    if (stamp > savedAt) savedAt = stamp
   }
 
   function remember(objectId) {
@@ -95,6 +114,16 @@ export function useBenchLocks() {
     }
     if (refusalTimer) clearTimeout(refusalTimer)
     refusalTimer = setTimeout(() => (refused.value = null), REFUSAL_MS)
+  }
+
+  // A refusal the page can ALREADY see, without asking anybody: presence says this shape is held, and
+  // by whom. It goes through the same `refused` a refusal from the database does -- so the sentence
+  // in the bench's strip has one source and one timer -- and it decides nothing at all: the shape
+  // does not move either way, and only the lock can actually refuse a change. Without this, a press
+  // on a shape somebody else is holding was refused in silence: the planner saw nothing happen and
+  // was told nothing, which is indistinguishable from a broken page.
+  function refuseHere(objectId, name, mine) {
+    refuse(objectId, { held_by: name, mine_elsewhere: mine, idle_seconds: 0 })
   }
 
   // ---------- Taking one ----------
@@ -148,19 +177,41 @@ export function useBenchLocks() {
 
   // ---------- Letting go ----------
   // Called when a planner puts a shape down, and when a drag or an edit is over for good.
+  //
+  // THE CHANGE GOES FIRST, THE LOCK AFTER. A lock whose object has been changed and not yet saved is
+  // KEPT -- this page forgets about it locally (so it stops being renewed and expires on its own) but
+  // does not tell the database to drop it, because the save that is still coming needs it. That one
+  // line is the difference between an edit being stored and an edit being silently overruled: the
+  // merge in save_bench() takes an object from this page only while this page holds its lock, and it
+  // cannot tell "I have not saved that yet" from "I have stopped caring about that".
   function end(objectId) {
     if (!objectId) return
     const mine = holds(objectId)
+    const keep = mine && unsaved(objectId)
     forget(objectId)
-    if (mine && supabase) supabase.rpc('unlock_object', { p_object: objectId, p_session: session.value })
+    if (mine && !keep && supabase) {
+      supabase.rpc('unlock_object', { p_object: objectId, p_session: session.value })
+    }
   }
 
-  function releaseAll() {
-    const had = Object.keys(held.value).length > 0
+  // Everything at once: the tab is being hidden or is going away. `force` is for the second case --
+  // a page that is unloading cannot save anything any more, so holding a lock only delays whoever
+  // comes next until it expires.
+  function releaseAll(force = false) {
+    const ids = Object.keys(held.value)
+    const clean = ids.filter((id) => force || !unsaved(id))
     held.value = {}
     touched = {}
-    if (had && supabase && session.value) {
+
+    if (!ids.length || !supabase || !session.value) return
+
+    // One round trip for the ordinary case; per object only when something unsaved has to be kept.
+    if (clean.length === ids.length) {
       supabase.rpc('release_my_locks', { p_session: session.value })
+      return
+    }
+    for (const id of clean) {
+      supabase.rpc('unlock_object', { p_object: id, p_session: session.value })
     }
   }
 
@@ -171,6 +222,14 @@ export function useBenchLocks() {
 
     const now = Date.now()
     for (const objectId of Object.keys(held.value)) {
+      // Quiet means the planner has stopped working on it -- unless the work is not SAVED yet. Then
+      // the lock is what protects it, and letting go now would hand the shape to somebody else and
+      // throw this planner's change away the next time they save. A lock like that keeps being
+      // renewed; what releases it is a save (see `saved`), the tab going away, or a takeover.
+      if (unsaved(objectId)) {
+        if (held.value[objectId] - now < RENEW_WITHIN_MS) ask(objectId, 'lock_object')
+        continue
+      }
       if (now - (touched[objectId] || 0) > IDLE_RELEASE_MS) {
         end(objectId)
         continue
@@ -201,7 +260,7 @@ export function useBenchLocks() {
     }
     if (timer) clearInterval(timer)
     if (refusalTimer) clearTimeout(refusalTimer)
-    releaseAll()
+    releaseAll(true)
   })
 
   return {
@@ -209,10 +268,13 @@ export function useBenchLocks() {
     held,
     refused,
     holds,
+    unsaved,
     ensure,
     end,
+    saved,
     releaseAll,
     takeOver,
+    refuseHere,
     start,
   }
 }
