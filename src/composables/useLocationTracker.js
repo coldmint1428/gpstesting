@@ -22,7 +22,9 @@ import { Capacitor } from '@capacitor/core'
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
 
 const MAX_READINGS = 20 // rows kept for the table
-const ANDROID_INTERVAL_MS = 30000 // Android app: record + upload a position every 30 s, even when standing still
+// Android app: record + upload a position every 10 s, moving or standing still. 10 s keeps the live
+// map smooth (markers glide between readings); tested 30 s used ~2.7 %/h battery, 10 s ~4 %/h expected.
+const ANDROID_INTERVAL_MS = 10000
 const SAVE_EVERY_MS = 5000 // web only: at most one insert every 5 s
 
 // Load the Transistorsoft plugin only inside the app, so the web bundle never needs it
@@ -237,7 +239,7 @@ function createTracker() {
       }
       sharingEventId.value = ids.eventId
       isTracking.value = true
-      if (!state.isMoving) await bg.changePace(true) // keep the 30 s timer running (see startNative)
+      if (!state.isMoving) await bg.changePace(true) // keep the 10 s timer running (see startNative)
       await checkPhoneSettings()
       dbStatus.value = 'Tracking in background'
     }
@@ -370,7 +372,7 @@ function createTracker() {
     await bg.reset(buildNativeConfig(pass))
     await bg.start()
     // start() begins in "stationary" mode (GPS mostly off) until the phone moves. Switch to
-    // "moving" right away so the 30 s timer runs even if the IC is standing still. Stop
+    // "moving" right away so the 10 s timer runs even if the IC is standing still. Stop
     // detection is disabled, so it then stays in moving mode until Stop is pressed.
     await bg.changePace(true)
     await checkPhoneSettings()
@@ -459,7 +461,7 @@ function createTracker() {
     // so every 60 s we record one position anyway. This lets the dashboard tell
     // "standing still" apart from "phone died".
     bg.onHeartbeat(() => {
-      // Android records every 30 s natively (see buildNativeConfig), so only iOS needs this
+      // Android records every 10 s natively (see buildNativeConfig), so only iOS needs this
       if (Capacitor.getPlatform() === 'android') return
       console.log('[tracker] heartbeat: taking a position')
       bg.getCurrentPosition({ samples: 1, persist: true, timeout: 30 })
@@ -498,7 +500,7 @@ function createTracker() {
         showsBackgroundLocationIndicator: true, // iOS: blue location pill while sharing (iOS has no sticky notifications)
         ...(isAndroid
           ? {
-              // ANDROID: record on a timer, not by distance: one position every 30 s, moving or
+              // ANDROID: record on a timer, not by distance: one position every 10 s, moving or
               // not. All native (no app code needed), so it keeps working when locked or swiped away.
               distanceFilter: 0,
               locationUpdateInterval: ANDROID_INTERVAL_MS,
@@ -510,7 +512,7 @@ function createTracker() {
             }),
       },
       activity: {
-        // Never switch to "stationary" (GPS off) while sharing. Android: keeps the 30 s timer
+        // Never switch to "stationary" (GPS off) while sharing. Android: keeps the 10 s timer
         // running. iOS: iOS only keeps a background app alive while it is using location.
         disableStopDetection: true,
       },

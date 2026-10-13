@@ -1,24 +1,34 @@
 <script setup>
 // Live map of one event: a round marker with initials for every person I may see,
 // in their group's colour (faded when stale, grey when offline), plus a diamond for
-// each group's combined position. Hover (or tap) a marker for name, place name,
-// coordinates, accuracy and "last seen".
+// each group's combined position. Markers glide steadily between readings (markerMotion.js).
+//
+// Tap a person's marker: their info card + their TRAIL for the current live session
+// (solid where readings arrived on time, dashed over gaps, a dot every 2 minutes).
+// Hover / tap the trail: when they were there + the place name. The trail only covers the
+// session that is live now, so the next event starts with a clean map.
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles + reverse geocoding (c) Singapore Land Authority
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { supabase } from '../lib/supabase'
 import { createSingaporeMap } from '../utils/onemap'
-import { moveMarker } from '../utils/markerMotion'
+import { moveMarker, isBadFix } from '../utils/markerMotion'
 import { placeName } from '../composables/useReverseGeocode'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
+import { formatTime, formatTimeSeconds } from '../utils/time'
+import { GAP_MS } from '../utils/playback'
 
 const props = defineProps({
+  eventId: { type: String, required: true },
   positions: { type: Object, required: true }, // from useLiveLocations (EventView)
   now: { type: Number, required: true }, // ticking clock from useLiveLocations
   liveError: { type: String, default: '' },
+  liveSince: { type: Number, default: null }, // start of the live session (ms), null = not live
+  onReading: { type: Function, default: null }, // useLiveLocations: subscribe to new readings
   members: { type: Array, required: true }, // from useEventData
   groups: { type: Array, required: true },
   myUserId: { type: String, default: null },
@@ -79,8 +89,9 @@ function tooltipHtml(person) {
     '<br>' + person.lat.toFixed(6) + ', ' + person.lng.toFixed(6) +
     ' (±' + Math.round(person.accuracy || 0) + ' m)' +
     (person.state === 'stopped'
-      ? '<br><strong>Stopped sharing</strong> at ' + person.time.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' })
-      : '<br>Last seen ' + timeAgo(person.time, now.value))
+      ? '<br><strong>Stopped sharing</strong> at ' + formatTime(person.time)
+      : '<br>Last seen ' + timeAgo(person.time, now.value)) +
+    (selectedId.value === person.userId && props.liveSince ? '<br><span class="text-muted">Trail shown · tap the map to hide</span>' : '')
   )
 }
 
@@ -100,15 +111,22 @@ function refreshTooltip(userId) {
 // ---------- Draw / update markers ----------
 function personIcon(person) {
   const me = person.userId === props.myUserId ? ' pm-me' : ''
+  const selected = person.userId === selectedId.value ? ' pm-selected' : ''
   return L.divIcon({
     className: '', // no default white square
     html:
-      '<div class="pm pm-' + person.state + me + '" style="background:' + person.colour + '">' +
+      '<div class="pm pm-' + person.state + me + selected + '" style="background:' + person.colour + '">' +
       escapeHtml(initials(person.name)) + '</div>',
     iconSize: [34, 34],
     iconAnchor: [17, 17],
     tooltipAnchor: [0, -18],
   })
+}
+
+// While a marker glides: follow mode keeps it centred, and the trail's last piece follows it
+function onMarkerStep(userId, latlng) {
+  if (followedId.value === userId && map) map.panTo(latlng, { animate: false })
+  if (selectedId.value === userId) updateTrailTip(latlng)
 }
 
 function render() {
@@ -119,31 +137,42 @@ function render() {
   for (const person of people.value) {
     seen.add(person.userId)
     let marker = personMarkers[person.userId]
-    const iconKey = person.state + person.colour + person.name
+    const iconKey = person.state + person.colour + person.name + (person.userId === selectedId.value)
 
     if (!marker) {
       marker = L.marker([person.lat, person.lng], { icon: personIcon(person) }).addTo(map)
       marker.bindTooltip('', { direction: 'top' })
       // Look up the place name only when someone actually opens the tooltip
       marker.on('tooltipopen', () => lookUpPlace(person.userId))
-      marker.on('click', () => marker.toggleTooltip()) // phones have no hover
+      marker.on('click', () => select(person.userId)) // tap = card + trail
       marker.iconKey = iconKey
       marker.readingTime = person.time
+      marker.readingAccuracy = person.accuracy
       personMarkers[person.userId] = marker
-    } else {
-      // Glide to the new reading, or ignore it if it is only GPS wobble (utils/markerMotion.js)
-      const gapMs = marker.readingTime ? person.time - marker.readingTime : 0
+    } else if (person.time > marker.readingTime) {
+      // A new reading: glide to it (or ignore it as GPS wobble / one bad fix)
+      const gapMs = person.time - marker.readingTime
+      const badFix = isBadFix(person.accuracy, marker.readingAccuracy, gapMs)
       marker.readingTime = person.time
-      const moved = moveMarker(marker, L.latLng(person.lat, person.lng), { accuracy: person.accuracy, gapMs })
-      if (marker.iconKey !== iconKey) {
-        marker.setIcon(personIcon(person))
-        marker.iconKey = iconKey
-      }
-      if (moved) {
-        delete places[person.userId] // new position = new place name
-        if (marker.isTooltipOpen()) lookUpPlace(person.userId)
+      if (!badFix) {
+        marker.readingAccuracy = person.accuracy
+        const userId = person.userId
+        const moved = moveMarker(marker, L.latLng(person.lat, person.lng), {
+          accuracy: person.accuracy,
+          gapMs,
+          onStep: (latlng) => onMarkerStep(userId, latlng),
+        })
+        if (moved) {
+          delete places[person.userId] // new position = new place name
+          if (marker.isTooltipOpen()) lookUpPlace(person.userId)
+        }
       }
     }
+    if (marker.iconKey !== iconKey) {
+      marker.setIcon(personIcon(person))
+      marker.iconKey = iconKey
+    }
+    marker.setZIndexOffset(person.userId === selectedId.value ? 1000 : 0)
     marker.setTooltipContent(tooltipHtml(person))
   }
   // Remove people who are no longer visible (e.g. moved to another group)
@@ -151,6 +180,7 @@ function render() {
     if (!seen.has(userId)) {
       personMarkers[userId].remove()
       delete personMarkers[userId]
+      if (selectedId.value === userId) deselect()
     }
   }
 
@@ -181,17 +211,12 @@ function render() {
       marker.bindTooltip(text, { direction: 'top' })
       groupMarkers[group.id] = marker
     } else {
-      moveMarker(marker, L.latLng(mid.lat, mid.lng)) // glide; tiny changes ignored (min 5 m)
+      moveMarker(marker, L.latLng(mid.lat, mid.lng), { gapMs: 3000 }) // short glide; tiny changes ignored
       marker.setTooltipContent(text)
     }
   }
 
-  // Follow mode: pan to where the followed marker is going (glides with it)
-  if (followedId.value) {
-    const marker = personMarkers[followedId.value]
-    if (marker) map.panTo(marker.shownLatLng || marker.getLatLng(), { animate: true, duration: 1 })
-    else stopFollowing() // they're no longer on the map
-  }
+  if (followedId.value && !personMarkers[followedId.value]) stopFollowing() // they're no longer on the map
 
   // Zoom to everyone the first time we have data
   if (!fittedOnce && people.value.length > 0) {
@@ -211,35 +236,239 @@ watch(
   },
 )
 
+// ---------- Trail of the selected person (current live session only) ----------
+const selectedId = ref(null)
+let trailPoints = [] // [{ t, lat, lng, accuracy, source }] oldest first
+let trailLayer = null // solid + dashed lines and dots
+let trailTip = null // last piece: last reading -> the gliding marker
+let hoverLine = null // wide invisible line that catches hover / taps
+let hoverMarker = null // small ring on the hovered point
+let loadToken = 0
+
+async function select(userId) {
+  if (selectedId.value === userId) return deselect() // tap again = hide
+  selectedId.value = userId
+  render()
+  const marker = personMarkers[userId]
+  if (marker) marker.openTooltip()
+  await loadTrail(userId)
+}
+
+function deselect() {
+  selectedId.value = null
+  trailPoints = []
+  clearTrail()
+  render()
+}
+
+function clearTrail() {
+  if (trailLayer) trailLayer.clearLayers()
+  if (hoverMarker) hoverMarker.remove()
+  trailTip = null
+  hoverLine = null
+  hoverMarker = null
+}
+
+// The person's readings since the live session started (RLS: only people I may see).
+// Pages of 1000 (the API's limit per request).
+async function loadTrail(userId) {
+  clearTrail()
+  trailPoints = []
+  if (!props.liveSince) return
+  const token = ++loadToken
+  const since = new Date(props.liveSince).toISOString()
+  const rows = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('locations')
+      .select('lat, lng, accuracy, source, recorded_at')
+      .eq('event_id', props.eventId)
+      .eq('user_id', userId)
+      .gte('recorded_at', since)
+      .order('recorded_at')
+      .range(from, from + 999)
+    if (error || token !== loadToken) return
+    rows.push(...data)
+    if (data.length < 1000) break
+  }
+  if (selectedId.value !== userId) return
+  trailPoints = rows.map((r) => ({ t: new Date(r.recorded_at).getTime(), lat: r.lat, lng: r.lng, accuracy: r.accuracy, source: r.source }))
+  drawTrail()
+}
+
+// New reading for the selected person (from Realtime): extend the trail
+function onNewReading(row) {
+  if (!selectedId.value || row.user_id !== selectedId.value || !props.liveSince) return
+  const t = new Date(row.recorded_at).getTime()
+  if (t < props.liveSince) return
+  trailPoints.push({ t, lat: row.lat, lng: row.lng, accuracy: row.accuracy, source: row.source })
+  trailPoints.sort((a, b) => a.t - b.t)
+  drawTrail()
+}
+
+function selectedColour() {
+  const p = positions.value[selectedId.value]
+  const g = p ? groupOf(p.groupId) : null
+  return g ? g.colour : '#0d6efd'
+}
+
+function drawTrail() {
+  clearTrail()
+  if (!map || trailPoints.length === 0) return
+  const colour = selectedColour()
+
+  // Split into solid parts and dashed gaps (> 2 min without readings, or after a Stop)
+  const solid = []
+  const dashed = []
+  let line = []
+  let prev = null
+  for (const p of trailPoints) {
+    if (prev && (p.t - prev.t > GAP_MS || prev.source === 'stop')) {
+      if (line.length > 1) solid.push(line)
+      dashed.push([[prev.lat, prev.lng], [p.lat, p.lng]])
+      line = []
+    }
+    line.push([p.lat, p.lng])
+    prev = p
+  }
+  if (line.length > 1) solid.push(line)
+
+  L.polyline(dashed, { color: colour, weight: 3, opacity: 0.7, dashArray: '6 8', interactive: false }).addTo(trailLayer)
+  L.polyline(solid, { color: colour, weight: 4, opacity: 0.85, interactive: false }).addTo(trailLayer)
+
+  // Breadcrumb dots: the start, then one every 2 minutes
+  let lastDot = -Infinity
+  trailPoints.forEach((p, i) => {
+    const isStart = i === 0
+    if (!isStart && p.t - lastDot < 2 * 60 * 1000) return
+    lastDot = p.t
+    L.circleMarker([p.lat, p.lng], {
+      radius: isStart ? 6 : 3.5,
+      color: isStart ? '#198754' : colour,
+      weight: 2,
+      fillColor: '#fff',
+      fillOpacity: 1,
+      interactive: false,
+    }).addTo(trailLayer)
+  })
+
+  // Last piece follows the gliding marker
+  const last = trailPoints[trailPoints.length - 1]
+  const marker = personMarkers[selectedId.value]
+  trailTip = L.polyline([[last.lat, last.lng], marker ? marker.getLatLng() : [last.lat, last.lng]], {
+    color: colour,
+    weight: 4,
+    opacity: 0.85,
+    interactive: false,
+  }).addTo(trailLayer)
+
+  // Hover / tap anywhere along the trail: time + place of the nearest reading
+  hoverLine = L.polyline(trailPoints.map((p) => [p.lat, p.lng]), { color: '#000', weight: 22, opacity: 0, className: 'trail-hover', bubblingMouseEvents: false }).addTo(trailLayer)
+  hoverLine.on('mousemove click', (e) => showPointInfo(e.latlng))
+  hoverLine.on('mouseout', hidePointInfo)
+}
+
+function updateTrailTip(latlng) {
+  if (!trailTip || trailPoints.length === 0) return
+  const last = trailPoints[trailPoints.length - 1]
+  trailTip.setLatLngs([[last.lat, last.lng], latlng])
+}
+
+// Nearest reading to where the pointer is
+function nearestPoint(latlng) {
+  let best = null
+  let bestDistance = Infinity
+  for (const p of trailPoints) {
+    const d = map.distance(latlng, [p.lat, p.lng])
+    if (d < bestDistance) {
+      bestDistance = d
+      best = p
+    }
+  }
+  return best
+}
+
+let hoverTimer = null
+let hoveredPoint = null
+function showPointInfo(latlng) {
+  const p = nearestPoint(latlng)
+  if (!p) return
+  if (!hoverMarker) {
+    hoverMarker = L.circleMarker([p.lat, p.lng], { radius: 7, color: '#212529', weight: 2, fillColor: selectedColour(), fillOpacity: 1, interactive: false })
+      .bindTooltip('', { direction: 'top', offset: [0, -6] })
+      .addTo(map)
+  }
+  hoverMarker.setLatLng([p.lat, p.lng])
+  if (hoveredPoint === p) return
+  hoveredPoint = p
+  const name = memberOf(selectedId.value) ? memberOf(selectedId.value).display_name : ''
+  const head = '<strong>' + formatTimeSeconds(p.t) + '</strong>' + (name ? ' · ' + escapeHtml(name) : '')
+  hoverMarker.setTooltipContent(head + '<br><em>Finding place name...</em>').openTooltip()
+  // Place names cost an API call: only for the point the pointer rests on (cached by position)
+  clearTimeout(hoverTimer)
+  hoverTimer = setTimeout(async () => {
+    const place = await placeName(p.lat, p.lng)
+    if (hoveredPoint === p && hoverMarker) hoverMarker.setTooltipContent(head + '<br>' + escapeHtml(place || 'Place name unavailable'))
+  }, 250)
+}
+
+function hidePointInfo() {
+  clearTimeout(hoverTimer)
+  hoveredPoint = null
+  if (hoverMarker) {
+    hoverMarker.remove()
+    hoverMarker = null
+  }
+}
+
+// A new live session (or the event ended): the old trail doesn't belong to it
+watch(
+  () => props.liveSince,
+  () => {
+    if (selectedId.value) loadTrail(selectedId.value)
+  },
+)
+
+// ---------- List under the map ----------
 // Text on the right of the people list
 function statusText(p) {
   if (p.state === 'live') return 'Live'
-  if (p.state === 'stopped') return 'Stopped ' + p.time.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' })
+  if (p.state === 'stopped') return 'Stopped ' + formatTime(p.time)
   if (p.state === 'offline') return 'Lost contact · ' + timeAgo(p.time, now.value)
   return timeAgo(p.time, now.value)
 }
 
-// Tap a person in the list: zoom to them and follow them as they move
+// Tap a person in the list: zoom to them, follow them as they move, and show their trail
 function focus(person) {
   followedId.value = person.userId
   const marker = personMarkers[person.userId]
-  map.setView(marker ? marker.shownLatLng || marker.getLatLng() : [person.lat, person.lng], 18)
-  if (marker) marker.openTooltip()
+  map.setView(marker ? marker.getLatLng() : [person.lat, person.lng], 18)
+  if (selectedId.value !== person.userId) select(person.userId)
+  else if (marker) marker.openTooltip()
 }
 
 function stopFollowing() {
   followedId.value = null
 }
 
+let unsubscribe = null
 onMounted(() => {
   // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
   map = createSingaporeMap(mapEl.value)
+  trailLayer = L.layerGroup().addTo(map)
   // Dragging the map yourself means "let me look around": stop following
   map.on('dragstart', stopFollowing)
+  // Tap empty map: hide the trail
+  map.on('click', () => {
+    if (selectedId.value) deselect()
+  })
+  if (props.onReading) unsubscribe = props.onReading(onNewReading)
   render()
 })
 
 onUnmounted(() => {
+  if (unsubscribe) unsubscribe()
+  clearTimeout(hoverTimer)
   if (map) map.remove()
 })
 </script>
@@ -262,10 +491,11 @@ onUnmounted(() => {
       <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0d6efd"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
+      <span v-if="liveSince">Tap a marker to see their trail</span>
     </div>
 
     <h2 class="h6 mb-0">People on the map</h2>
-    <p class="small text-muted mb-2">Tap a person to follow them on the map.</p>
+    <p class="small text-muted mb-2">Tap a person to follow them and see their trail.</p>
     <p v-if="people.length === 0" class="text-muted small" data-testid="no-positions">
       No one is sharing yet. Only ICs share their location.
     </p>
@@ -329,5 +559,7 @@ onUnmounted(() => {
   background-color: transparent !important;
   border: 2px dashed #6c757d;
 }
-
+:global(.trail-hover) {
+  cursor: pointer;
+}
 </style>

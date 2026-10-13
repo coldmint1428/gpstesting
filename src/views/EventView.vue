@@ -208,7 +208,10 @@ async function leaveEvent() {
       <LiveMap
         v-show="tab === 'map'"
         :active="tab === 'map'"
+        :event-id="id"
         :positions="live.positions.value"
+        :live-since="liveSession ? liveSession.startsAt.getTime() : null"
+        :on-reading="live.onReading"
         :now="live.now.value"
         :live-error="live.errorMsg.value"
         :members="members"

@@ -1,57 +1,62 @@
-// Smooth marker movement for the live map (used by the website and the phone app).
+// Smooth marker movement for the live map (website and phone app).
 //
-// 1. Glide: instead of jumping to each new reading (about every 30 s), a marker slides to
-//    the new spot over ANIMATION_MS. Big jumps (train/bus, or after a long gap such as a
-//    tunnel) still jump, so a marker never "flies" through buildings for kilometres.
-// 2. Ignore GPS wobble: a phone lying still reports positions a few metres apart (noise).
-//    If a new reading is closer than the wobble threshold to where the marker is shown,
-//    the marker stays put. Slow real movement still adds up and moves it once it exceeds
-//    the threshold, because we compare with the SHOWN position, not the last reading.
+// Readings arrive every ~10 s (phone app). Instead of jumping - or sliding for 1 s and then
+// standing still until the next reading - a marker moves at a STEADY speed across the whole
+// time between two readings, so it is always gliding, like a taxi on a ride-hailing map.
+// It reaches each reading roughly when the next one arrives, so what you see is at most one
+// interval (~10 s) behind.
 //
-// Thresholds come from our outing test: when still, readings moved 3 m (median) / 9 m (90%)
-// with ~16 m accuracy; walking moved ~26 m per update; train/bus 300-1200 m.
+// - GPS wobble: a reading closer than about half its accuracy to where the marker is going
+//   counts as noise and is ignored (standing still stays still).
+// - Very big moves (>1 km, train / car after a tunnel) or long gaps (>2 min) jump instead of
+//   "flying" through buildings.
+// - One bad fix (accuracy >100 m right after good readings) is skipped, see isBadFix().
 
-export const ANIMATION_MS = 1000 // how long a glide takes
-export const MAX_GLIDE_METRES = 500 // bigger jumps (vehicles) are not animated
-export const MAX_GLIDE_GAP_MS = 90 * 1000 // after a gap longer than this (e.g. tunnel): jump
+export const MIN_GLIDE_MS = 1000
+export const MAX_GLIDE_MS = 12000 // longer gaps: glide 12 s, then wait for the next reading
+export const JUMP_METRES = 1000
+export const JUMP_GAP_MS = 2 * 60 * 1000
 
-// Movements smaller than this (metres) count as GPS noise: the reading's accuracy,
-// but at least 5 m and at most 25 m (so a slow walker still moves on the map)
+// Movements smaller than this (metres) are GPS noise: half the reading's accuracy, 4-15 m.
+// (Still phones moved 3 m median / 9 m 90% in our tests; walkers ~14 m per 10 s.)
 export function wobbleThreshold(accuracy) {
-  return Math.min(Math.max(accuracy || 0, 5), 25)
+  return Math.min(Math.max((accuracy || 0) * 0.5, 4), 15)
 }
 
-// Ease in and out: start slow, speed up, slow down at the end
-function ease(t) {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+// A reading much worse than the last good one, soon after it, is usually a bad fix
+// (reflection off buildings) - skip it; real gaps (tunnels) are longer than 2 min.
+export function isBadFix(accuracy, previousAccuracy, gapMs) {
+  return accuracy > 100 && previousAccuracy > 0 && previousAccuracy <= 50 && gapMs < JUMP_GAP_MS
 }
 
 // Move a Leaflet marker towards `target` (L.LatLng).
-//   accuracy : accuracy of the new reading in metres (for the wobble check)
-//   gapMs    : time since the previous reading of this marker
-// Returns true if the marker moved, false if the change was ignored as wobble.
-export function moveMarker(marker, target, { accuracy = 0, gapMs = 0 } = {}) {
-  const shown = marker.shownLatLng || marker.getLatLng()
-  const distance = shown.distanceTo(target) // metres (Leaflet helper)
-
-  // Within the wobble threshold = GPS noise: keep the marker where it is (even after a gap)
+//   accuracy : accuracy of the new reading (metres)
+//   gapMs    : time between this reading and the marker's previous one (glide length)
+//   onStep   : called with each position while gliding (e.g. follow mode pans the map)
+// Returns true if the marker moves, false if the change was ignored as wobble.
+export function moveMarker(marker, target, { accuracy = 0, gapMs = 0, onStep = null } = {}) {
+  const goal = marker.goalLatLng || marker.getLatLng()
+  const distance = goal.distanceTo(target)
   if (distance === 0 || distance <= wobbleThreshold(accuracy)) return false
 
-  marker.shownLatLng = target
+  marker.goalLatLng = target
   if (marker.glideFrame) cancelAnimationFrame(marker.glideFrame)
 
-  // Jump instead of gliding: vehicles, after long gaps, or when the tab isn't visible
-  if (distance > MAX_GLIDE_METRES || gapMs > MAX_GLIDE_GAP_MS || document.hidden) {
+  const from = marker.getLatLng() // where it is shown now (may be mid-glide)
+  if (from.distanceTo(target) > JUMP_METRES || gapMs > JUMP_GAP_MS || document.hidden) {
     marker.setLatLng(target)
+    if (onStep) onStep(target)
     return true
   }
 
-  const start = marker.getLatLng() // may be part-way through a previous glide
+  // Glide across (almost) the whole gap between readings, at a steady speed
+  const duration = Math.min(Math.max(gapMs * 0.9, MIN_GLIDE_MS), MAX_GLIDE_MS)
   const startTime = performance.now()
   function step(timeNow) {
-    const t = Math.min((timeNow - startTime) / ANIMATION_MS, 1)
-    const k = ease(t)
-    marker.setLatLng([start.lat + (target.lat - start.lat) * k, start.lng + (target.lng - start.lng) * k])
+    const t = Math.min((timeNow - startTime) / duration, 1)
+    const here = [from.lat + (target.lat - from.lat) * t, from.lng + (target.lng - from.lng) * t]
+    marker.setLatLng(here)
+    if (onStep) onStep(marker.getLatLng())
     marker.glideFrame = t < 1 ? requestAnimationFrame(step) : null
   }
   marker.glideFrame = requestAnimationFrame(step)

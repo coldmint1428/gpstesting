@@ -10,6 +10,13 @@ export function useLiveLocations(eventId) {
   const positions = ref({}) // { userId: { userId, groupId, lat, lng, accuracy, source, time } }
   const errorMsg = ref('')
   const now = ref(Date.now()) // ticks so "last seen" texts and stale colours update
+  const listeners = new Set() // functions called with every new row (e.g. the selected person's trail)
+
+  // Subscribe to new readings; returns a function that unsubscribes
+  function onReading(fn) {
+    listeners.add(fn)
+    return () => listeners.delete(fn)
+  }
 
   function apply(row) {
     const time = new Date(row.recorded_at)
@@ -42,7 +49,10 @@ export function useLiveLocations(eventId) {
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'locations', filter: 'event_id=eq.' + eventId },
-      (payload) => apply(payload.new),
+      (payload) => {
+        apply(payload.new)
+        for (const fn of listeners) fn(payload.new)
+      },
     )
     .subscribe((status) => {
       // Re-load after (re)connecting so nothing sent while disconnected is missed
@@ -56,5 +66,5 @@ export function useLiveLocations(eventId) {
     supabase.removeChannel(channel)
   })
 
-  return { positions, errorMsg, now, reload: load }
+  return { positions, errorMsg, now, reload: load, onReading }
 }

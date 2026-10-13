@@ -15,7 +15,7 @@ Status as of 2026-10-08. Source of truth for migrating into the team repo / new 
 - Phone uploads use a **tracking pass** (not the login token), so tracking runs for hours without the 1-hour login expiry.
 
 ```
- Phone app (IC) ──native HTTP every 30 s──►  rpc/report_location (pass)  ─┐
+ Phone app (IC) ──native HTTP every 10 s──►  rpc/report_location (pass)  ─┐
  Browser (IC)  ──supabase-js insert ≤ 5 s──►  table locations (RLS)      ─┤
                                                                           ▼
                                             Postgres  locations  ──Realtime──► Live map (viewers)
@@ -329,8 +329,8 @@ Applied with `bg.reset(config)` on every Start; `bg.ready({ reset: false })` onc
     locationAuthorizationRequest: 'Always',
     pausesLocationUpdatesAutomatically: false,
     allowIdenticalLocations: true,
-    // ANDROID: timer-based, every 30 s, moving or still
-    distanceFilter: 0, locationUpdateInterval: 30000, fastestLocationUpdateInterval: 30000,
+    // ANDROID: timer-based, every 10 s, moving or still (was 30 s until 13 Oct; tests below used 30 s)
+    distanceFilter: 0, locationUpdateInterval: 10000, fastestLocationUpdateInterval: 10000,
     // iOS instead: distanceFilter: 10   (+ 60 s heartbeat below)
   },
   activity: { disableStopDetection: true },                   // never go "stationary"
@@ -395,6 +395,10 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/marke
 | Security | user-typed names HTML-escaped before Leaflet HTML |
 
 ---
+
+### 12.1 Smooth movement + trail (13 Oct)
+- `utils/markerMotion.js`: a marker glides at a steady speed across the whole time between two readings (0.9 × gap, 1–12 s), so it never stops and starts; jumps only for > 1 km or > 2 min gaps. Noise filter: moves < half the accuracy (4–15 m) ignored; one bad fix (accuracy > 100 m right after ≤ 50 m, within 2 min) skipped. Follow mode pans every frame of the glide.
+- Trail: tap a marker (or a person in the list) → their readings **since the live session started** (`locations` via RLS, pages of 1000) + new ones from Realtime (`useLiveLocations().onReading`). Solid line, dashed over gaps > 2 min or after a Stop, dot every 2 min, green start dot; the last piece follows the gliding marker. Hover / tap the trail → nearest reading's time + place name (OneMap, cached). Tap the empty map or the marker again → hidden. New session / event ended → cleared.
 
 ## 13. App structure
 
