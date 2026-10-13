@@ -58,6 +58,17 @@ edit it at a time**. The database decides who: `claim_bench()` hands out a token
 save must present it, and a save with a stale token is refused rather than obeyed. The
 claim lapses after 5 minutes of silence (renewed by a heartbeat while the tab is visible).
 
+**Planners can see each other while that is true.** Each open page keeps a row in
+`public.layout_presence` — one row per tab, refreshed every 10 seconds and streamed over Realtime
+— so the bench shows who else is here, and puts a planner's name on the shape they have open, in
+their own colour, both on the map and in the list of areas. A second tab or a second browser of
+the *same* account is listed as its own planner, labelled as another window, because that is the
+case that used to be invisible. None of it is trusted: presence is a hint for the display, and
+what a planner may actually change is still decided by the database. The map view is now each
+planner's **own** (`public.layout_views`), so panning no longer carries anybody else's map along
+with it — the copy inside the canvas is only the fallback for a planner who has never panned. See
+`supabase/migrations/007_presence_and_views.sql`.
+
 The whole canvas — the map view, the floor plans (placement **and** the image itself,
 base64) and the areas — lives in one row of `public.layouts`, capped at **4 MB** by
 `save_bench()`. Every floor plan image is shrunk in the browser to under 512 KB before it goes

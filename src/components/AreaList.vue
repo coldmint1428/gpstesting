@@ -29,6 +29,10 @@ const props = defineProps({
   // What has been copied, so the Paste button can say whether it has anything to paste. The
   // clipboard itself lives on the page (composables/useBenchClipboard.js).
   clipboard: { type: Object, default: null },
+  // Who else has each area open (composables/useBenchPresence.js). A row shows the same names in
+  // the same colours as the chip on the shape, so the list and the map are recognisably telling
+  // the planner the same thing. This component only draws it and decides nothing.
+  presence: { type: Object, default: null },
 })
 
 const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-copied', 'area-pasted'])
@@ -36,6 +40,22 @@ const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-cop
 // Whether there is a copied area to paste, and what it is called -- so the button can promise
 // exactly what it will make.
 const copiedArea = computed(() => (props.clipboard ? props.clipboard.area.value : null))
+
+// Who has each area, keyed by the area's id. A plain object here rather than a ref, because a ref
+// inside a plain object is not unwrapped in a template.
+const watchers = computed(() => (props.presence ? props.presence.byObject.value : {}))
+
+function watchersFor(areaId) {
+  return watchers.value[areaId] || []
+}
+
+// A bar down the left of a row that somebody else has open, in their colour. The list is the one
+// place a planner can see the whole bench at once, so "which of these is somebody on" belongs
+// here as an edge rather than only as a badge inside the row.
+function otherMark(areaId) {
+  const who = watchersFor(areaId)
+  return who.length ? { boxShadow: 'inset 3px 0 0 ' + who[0].colour } : null
+}
 
 const total = computed(() => props.areas.length)
 
@@ -142,6 +162,7 @@ function paste() {
               :key="row.area.id"
               class="list-group-item py-2 area-row"
               :class="{ 'area-row-active': selected === row.area.id, 'area-row-pickable': editable }"
+              :style="otherMark(row.area.id)"
               :data-testid="'area-row-' + row.area.name"
               @click="editable && emit('area-edit', row.area.id)"
             >
@@ -175,6 +196,18 @@ function paste() {
                   class="area-swatch-triangle"
                   :style="{ borderBottomColor: row.colour }"
                 ></span>
+
+                <!-- Who else has this area open: the same names in the same colours as the chip on
+                     the shape, so the list and the map tell the planner the same thing. -->
+                <span
+                  v-for="who in watchersFor(row.area.id)"
+                  :key="who.presenceId"
+                  class="badge rounded-pill area-who"
+                  :style="{ color: who.colour, borderColor: who.colour, background: who.colour + '22' }"
+                  :data-testid="'area-who-' + who.name"
+                >
+                  {{ who.label }}
+                </span>
 
                 <input
                   v-if="editable"
@@ -289,6 +322,13 @@ function paste() {
   flex-shrink: 0;
   background: rgba(0, 0, 0, 0.04);
   border-radius: 3px;
+}
+/* A planner's badge, in their own colour for the text and the outline and at 13% for the fill:
+   tinted rather than white-on-colour so it stays readable at both ends of the palette. */
+.area-who {
+  border: 1px solid;
+  font-size: 0.65rem;
+  font-weight: 600;
 }
 .area-swatch-square {
   width: 0.9rem;

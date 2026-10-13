@@ -90,6 +90,10 @@ const props = defineProps({
   // What has been copied, so the paste buttons can say whether they have anything to paste.
   // The clipboard itself lives on the page (composables/useBenchClipboard.js).
   clipboard: { type: Object, default: null },
+  // Who else is on the bench and what each of them has open (composables/useBenchPresence.js).
+  // Handed in rather than owned here, like the history and the clipboard, because it is the PAGE's
+  // session -- one row and one socket. This component only draws it.
+  presence: { type: Object, default: null },
 })
 
 const emit = defineEmits([
@@ -130,6 +134,12 @@ const busy = ref(false)
 let map = null
 const planLayers = {} // plan id -> { img, plan, place, add, remove }
 const areaLayers = {} // area id -> L.polygon
+
+// Who else has what open, drawn as a name chip on the shape (see renderPresence). A chip is a
+// Leaflet marker carrying a divIcon, which lands in the marker pane ABOVE the floor-plan pictures
+// and the drawn outlines -- so a chip is never buried under the shape it belongs to.
+let presenceGroup = null
+const presenceChips = {} // presence id -> { marker, key }
 
 // Drawing state
 const draftPoints = ref([])
@@ -562,6 +572,99 @@ function applyAreaPoints(layer, points, crossing = false) {
   tip.setLatLng(centre)
 }
 
+// ---------- Who else is on the bench ----------
+// Presence is drawn from what is ALREADY on the map (the layers) rather than from the document, so
+// a chip stays on a shape that is being dragged -- and it is drawn on a layer of its own, because
+// presence changes on every heartbeat and none of that should cost a repaint of the shapes.
+//
+// Nothing here decides anything. A chip says "Ali has this open"; whether Ali may change it, and
+// whether I may, is settled by the database when a change is actually attempted (step 8).
+function presenceAnchor(objectId) {
+  const layer = areaLayers[objectId]
+  if (layer) {
+    try {
+      const centre = layer.getCenter() // the area's centroid, not the middle of its bounds
+      if (centre && Number.isFinite(centre.lat) && Number.isFinite(centre.lng)) return centre
+    } catch {
+      // A ring with too few points to have a centroid; the bounds below still describe it.
+    }
+    const bounds = layer.getBounds()
+    return bounds && bounds.isValid() ? bounds.getCenter() : null
+  }
+
+  const plan = props.plans.find((p) => p.id === objectId)
+  if (!plan) return null
+  // The four corners go through the same helper the handles use, so a chip on a turned picture
+  // sits where the picture is actually drawn rather than where its centre happens to be stored.
+  const bounds = L.latLngBounds(cornersOf(plan).map(([lat, lng]) => L.latLng(lat, lng)))
+  return bounds.isValid() ? bounds.getCenter() : null
+}
+
+// The chip itself. `offset` lifts each extra planner above the one below, so two people on one
+// shape read as a small stack instead of one smudged label; the constant 22px is what clears the
+// area's own name label, which Leaflet pins to the same centre point.
+function chipHtml(who, offset) {
+  const lock = who.active ? '<span class="bench-chip-lock" aria-hidden="true">&#128274;</span>' : ''
+  return (
+    '<div class="bench-chip" style="--chip:' +
+    who.colour +
+    '; transform: translate(-50%, calc(-50% - ' +
+    (22 + offset) +
+    'px))">' +
+    lock +
+    escapeHtml(who.label) +
+    '</div>'
+  )
+}
+
+function renderPresence() {
+  if (!map) return
+  if (!presenceGroup) presenceGroup = L.layerGroup().addTo(map)
+
+  const byObject = props.presence ? props.presence.byObject.value : {}
+  const seen = new Set()
+
+  for (const objectId of Object.keys(byObject)) {
+    const anchor = presenceAnchor(objectId)
+    if (!anchor) continue
+
+    byObject[objectId].forEach((who, index) => {
+      seen.add(who.presenceId)
+      const key = who.colour + '|' + who.label + '|' + (who.active ? '1' : '0') + '|' + index
+      let chip = presenceChips[who.presenceId]
+
+      if (chip && chip.key !== key) {
+        // The name, the colour or the stack position changed: redraw the icon in place rather than
+        // tearing the marker down, which would make every chip flicker on every heartbeat.
+        chip.marker.setIcon(
+          L.divIcon({ className: 'bench-chip-wrap', html: chipHtml(who, index * 18), iconSize: [0, 0] }),
+        )
+        chip.key = key
+      } else if (!chip) {
+        chip = {
+          key,
+          marker: L.marker(anchor, {
+            interactive: false, // a chip is a label: it must never swallow a press meant for the shape
+            keyboard: false,
+            icon: L.divIcon({ className: 'bench-chip-wrap', html: chipHtml(who, index * 18), iconSize: [0, 0] }),
+          }),
+        }
+        chip.marker.addTo(presenceGroup)
+        presenceChips[who.presenceId] = chip
+      }
+
+      chip.marker.setLatLng(anchor)
+    })
+  }
+
+  // Anyone who has left, or who has nothing open any more, loses their chip.
+  for (const id of Object.keys(presenceChips)) {
+    if (seen.has(id)) continue
+    presenceChips[id].marker.remove()
+    delete presenceChips[id]
+  }
+}
+
 function render() {
   if (!map) return
 
@@ -659,6 +762,11 @@ function render() {
       delete areaLayers[id]
     }
   }
+
+  // Drawn last, so a chip lands on a shape that already exists this pass. Everything that moves a
+  // shape ends up here (the page replaces the area or the plan and the watchers below call render),
+  // which is why the chips need no hooks of their own on the drag paths.
+  renderPresence()
 }
 
 // ---------- What the map's own pointer does ----------
@@ -2161,6 +2269,13 @@ watch(() => props.plans, () => {
 
 watch(() => props.areas, render, { deep: true })
 
+// Who is on what is not part of the canvas, so it gets a repaint of its own: presence changes with
+// every planner's heartbeat, and none of that should cost a re-render of every shape on the map.
+watch(
+  () => (props.presence ? props.presence.byObject.value : null),
+  () => renderPresence(),
+)
+
 // What on the map takes a click changes with the mode, and that is baked into the Leaflet layers
 // when they are built -- so it needs its own repaint.
 watch(shapesClickable, render)
@@ -2791,5 +2906,37 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 }
 :global(.area-label::before) {
   display: none;
+}
+
+/* Presence chips are Leaflet's too, so these are global for the same reason.
+   The wrapper is a zero-size point sitting exactly on the shape's centre (iconSize [0,0]) and the
+   chip inside it is placed around that point. Neither takes a press: a chip is a label, and one
+   that swallowed a press meant for the shape underneath would be worse than no chip at all. */
+:global(.bench-chip-wrap) {
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+:global(.bench-chip) {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--chip);
+  background: #fff;
+  color: var(--chip);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+:global(.bench-chip-lock) {
+  font-size: 0.65rem;
 }
 </style>

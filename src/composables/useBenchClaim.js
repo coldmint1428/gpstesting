@@ -27,6 +27,10 @@ import { LAYOUT_TOO_LARGE_MESSAGE, layoutBytes, MAX_LAYOUT_BYTES } from '../util
 
 const RENEW_MS = 60 * 1000
 
+// Where I left the map is a convenience, not a save: coalesce the reports a single pan produces
+// into one write, and let the last one win.
+const VIEW_SAVE_MS = 600
+
 // The document always has this shape, whatever the database hands back.
 function normalise(raw) {
   const doc = raw && typeof raw === 'object' ? raw : {}
@@ -85,8 +89,16 @@ export function useBenchClaim() {
   const heldBy = ref('') // display name of whoever else is editing
   const claimExpiresAt = ref(null)
 
+  // The bench's id, and where THIS planner left the map. Both are per-session server state the
+  // page needs: the id is what presence is filed under (see useBenchPresence.js), and the view is
+  // now a planner's own rather than a field of the shared canvas (see 007_presence_and_views.sql).
+  const layoutId = ref('')
+  const myView = ref(null)
+
   let token = null
   let renewTimer = null
+  let viewTimer = null // pending write of where I left the map (see saveView)
+  let pendingView = null
 
   // See rule 1 at the top of the file.
   let chain = Promise.resolve()
@@ -128,14 +140,15 @@ export function useBenchClaim() {
     }
 
     const { data: rows, error } = await supabase.rpc('open_bench')
-    loading.value = false
     if (error) {
+      loading.value = false
       errorMsg.value = error.message
       return null
     }
 
     const row = firstRow(rows)
     if (!row) {
+      loading.value = false
       errorMsg.value = 'The bench could not be opened.'
       return null
     }
@@ -143,13 +156,67 @@ export function useBenchClaim() {
     data.value = normalise(row.data)
     updatedAt.value = row.updated_at ? new Date(row.updated_at) : null
     bytes.value = layoutBytes(JSON.stringify(data.value))
+    layoutId.value = row.id || ''
+    myView.value = await loadMyView()
     heldBy.value = row.held_by || ''
     claimExpiresAt.value = row.claim_expires_at ? new Date(row.claim_expires_at) : null
+    // LAST, and not a moment earlier. The page draws the map as soon as `loading` is false, and the
+    // map takes the view it is given at that instant and never looks again -- so reading my own
+    // view above is what makes the bench open where I left it rather than at the home view.
+    loading.value = false
     return data.value
   }
 
   function open() {
     return enqueue(doOpen)
+  }
+
+  // ---------- Where I left the map ----------
+  // A planner's camera is their own. It used to be a field of the shared canvas, so one planner
+  // panning moved the next planner's map -- odd while one person edits at a time, wrong the
+  // moment two do (see 007_presence_and_views.sql). The stored copy inside the document is now
+  // only a fallback for a planner who has never panned: it is what stops the first planner after
+  // this change from being thrown at a default location.
+  async function loadMyView() {
+    if (!supabase) return null
+    // No filter: RLS shows a planner their own row and nobody else's, and there is one bench.
+    const { data: row, error } = await supabase
+      .from('layout_views')
+      .select('lat, lng, zoom')
+      .maybeSingle()
+
+    if (error || !row) return null
+    return { lat: row.lat, lng: row.lng, zoom: row.zoom }
+  }
+
+  // The map reports on every settle, so the write is debounced: one round trip for a drag of the
+  // map rather than one for every intermediate moveend.
+  function saveView(view) {
+    if (!view || !supabase) return
+    pendingView = { lat: view.lat, lng: view.lng, zoom: view.zoom }
+    if (viewTimer) return
+    viewTimer = setTimeout(flushView, VIEW_SAVE_MS)
+  }
+
+  async function flushView() {
+    if (viewTimer) {
+      clearTimeout(viewTimer)
+      viewTimer = null
+    }
+
+    const next = pendingView
+    pendingView = null
+    if (!next || !layoutId.value || !supabase) return
+
+    // Best effort, deliberately. The one way this fails is a view outside the box the bench draws
+    // in (the map can be panned past Singapore), and "I could not remember where you were looking"
+    // is not worth an error message in the middle of somebody's work.
+    const { error } = await supabase
+      .from('layout_views')
+      .upsert({ layout_id: layoutId.value, ...next }, { onConflict: 'layout_id,user_id' })
+
+    if (error) return
+    myView.value = next
   }
 
   // ---------- Claim ----------
@@ -355,6 +422,10 @@ export function useBenchClaim() {
 
   onUnmounted(() => {
     stopRenewing()
+    // A pan that has not been written yet is still worth writing: leaving the page is exactly the
+    // moment "where I was looking" should be remembered, so the debounce is flushed rather than
+    // dropped.
+    flushView()
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
@@ -385,5 +456,9 @@ export function useBenchClaim() {
     lostClaim,
     heldBy,
     claimExpiresAt,
+    // Per-session state that is not the claim: the bench's id, and my own camera.
+    layoutId,
+    myView,
+    saveView,
   }
 }

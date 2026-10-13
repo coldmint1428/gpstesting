@@ -13,6 +13,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useBenchClaim } from '../composables/useBenchClaim'
 import { useDocHistory } from '../composables/useDocHistory'
+import { useBenchPresence } from '../composables/useBenchPresence'
 import { PASTE_OFFSET_M, copyName, offsetLatLng, useBenchClipboard } from '../composables/useBenchClipboard'
 import { MAX_LAYOUT_BYTES, LAYOUT_TOO_LARGE_MESSAGE, layoutBytes } from '../utils/layoutLimits'
 import { firstAreaProblem } from '../utils/areaKinds'
@@ -35,6 +36,10 @@ const {
   lostClaim,
   heldBy,
   claimExpiresAt,
+  // Per-session state that is not the claim: the bench's id, and where this planner left the map.
+  layoutId,
+  myView,
+  saveView,
 } = useBenchClaim()
 
 // null | 'floorplan:<id>' | 'polygons' | 'area:<id>' -- what is being worked on, or nothing. It no
@@ -62,8 +67,28 @@ const stepsText = computed(() => {
 // composables/useBenchClipboard.js). Not the system clipboard, and not local storage.
 const clipboard = useBenchClipboard()
 
+// Who else is on the bench, and what each of them has open (see composables/useBenchPresence.js).
+// Created here and handed down like the clipboard and the history, because there is one row, one
+// socket and one heartbeat per open page -- not one per component.
+const presence = useBenchPresence()
+
+// A ref inside a plain object is not unwrapped in a template (see the note on canUndo above), so
+// what the header draws is a real computed rather than presence.others.
+const hereNow = computed(() => presence.others.value)
+
 const plans = computed(() => layout.value.floorPlans)
 const areas = computed(() => layout.value.polygons)
+
+// Where this map opens: this planner's own last view if they have one, and otherwise the view
+// stored in the document -- which nothing writes any more, so it is the bench's HOME view rather
+// than wherever the last planner happened to pan (see 007_presence_and_views.sql).
+const startView = computed(() => myView.value || layout.value.view)
+
+// Presence is filed under the bench's id, which only exists once the bench has been opened, so
+// joining waits for it instead of guessing.
+watch(layoutId, (id) => {
+  if (id) presence.join(id)
+})
 
 function formatClock(date) {
   if (!date) return ''
@@ -116,6 +141,19 @@ const sizeRatio = computed(() => bytes.value / MAX_LAYOUT_BYTES)
 watch(mode, async (value, oldValue) => {
   if (oldValue !== null && value === null) await saveNow()
 })
+
+// What I have open, reported to everyone else. This is how my name gets onto a shape on another
+// planner's screen before either of us has touched anything -- and it is a HINT that decides
+// nothing: the only thing that will ever refuse a change is the database (see the composable).
+watch(mode, (value) => presence.setSelection(objectIdOf(value)), { immediate: true })
+
+// 'area:<id>' and 'floorplan:<id>' both name a shape. 'polygons' -- a ring being drawn -- names
+// nothing, because what is being drawn is not part of the canvas yet.
+function objectIdOf(value) {
+  if (typeof value !== 'string') return ''
+  const cut = value.indexOf(':')
+  return cut === -1 ? '' : value.slice(cut + 1)
+}
 
 // If the claim goes away (taken over, or released), nothing may stay unlocked -- and the
 // history goes with it: a stack carried over from a previous session would let a planner undo
@@ -255,12 +293,13 @@ function deleteArea(id) {
   layout.value.polygons = layout.value.polygons.filter((a) => a.id !== id)
 }
 
-// The view is NOT a step. Panning and zooming report on every settle, so recording them would
-// bury every real edit under a pile of steps that only move the camera, and a "step" that
-// changes nothing visible reads as Undo being broken. The camera simply stays where it is: Undo
-// is about what was drawn, and a canvas put back is drawn on the map already on screen.
+// The view is NOT a step, and it is not the document's business either. Panning and zooming report
+// on every settle, so recording them would bury every real edit under a pile of steps that only
+// move the camera; and the camera is the one thing two planners must NOT share, or one of them
+// panning would carry the other's map along with it (see 007_presence_and_views.sql). It goes to
+// this planner's own row instead, and Undo stays about what was drawn.
 function setView(view) {
-  layout.value.view = view
+  saveView(view)
 }
 
 // Everything is over: the run of changes becomes one step. Called on pointerup, which is the one
@@ -415,6 +454,25 @@ onUnmounted(() => {
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
       <div>
         <h1 class="h4 mb-1">Polygon bench</h1>
+        <!-- Who else is on the bench. A planner working alone sees nothing here at all, which is
+             the point: collaboration chrome on an empty bench is noise. A planner's own other
+             window is listed too, labelled, because that is the case that used to be invisible. -->
+        <div
+          v-if="hereNow.length"
+          class="d-flex flex-wrap align-items-center gap-1"
+          data-testid="bench-here-now"
+        >
+          <span class="small text-muted">Also here:</span>
+          <span
+            v-for="who in hereNow"
+            :key="who.presenceId"
+            class="badge rounded-pill bench-who"
+            :style="{ color: who.colour, borderColor: who.colour, background: who.colour + '22' }"
+            :data-testid="'bench-who-' + who.name"
+          >
+            {{ who.label }}
+          </span>
+        </div>
       </div>
 
       <div class="d-flex flex-wrap align-items-center gap-2">
@@ -515,10 +573,11 @@ onUnmounted(() => {
       v-model:mode="mode"
       :plans="plans"
       :areas="areas"
-      :view="layout.view"
+      :view="startView"
       :can-edit="editing"
       :history="history"
       :clipboard="clipboard"
+      :presence="presence"
       :size-text="sizeText"
       :size-ratio="sizeRatio"
       @plan-added="addPlan"
@@ -537,6 +596,7 @@ onUnmounted(() => {
         :editable="editing"
         :selected="selectedAreaId"
         :clipboard="clipboard"
+        :presence="presence"
         @area-updated="updateArea"
         @area-copied="copyArea"
         @area-pasted="pasteArea"
@@ -561,5 +621,13 @@ onUnmounted(() => {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* A planner's badge: their own colour for the text and the outline, and the same colour at 13%
+   for the fill. Tinted rather than white-on-colour, because the palette has to be readable at
+   both ends of it -- white text disappears on a pale hue and black disappears on a dark one. */
+.bench-who {
+  border: 1px solid;
+  font-weight: 600;
 }
 </style>

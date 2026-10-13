@@ -1,7 +1,8 @@
 -- ============================================================
--- Tests for 005_layouts.sql
+-- Tests for the bench schema: 005_layouts.sql, 006_floor_plan_bounds.sql and
+-- 007_presence_and_views.sql
 --
--- Run in the Supabase SQL Editor (or with psql) AFTER the migration is applied.
+-- Run in the Supabase SQL Editor (or with psql) AFTER those migrations are applied.
 -- Everything happens inside ONE transaction that ends in ROLLBACK, so nothing is left
 -- behind -- the test users, the bench row and the claim all disappear.
 --
@@ -516,18 +517,280 @@ begin
 end $$;
 
 -- ============================================================
--- 18. Deleting the bench takes its claim with it (on delete cascade)
+-- 18. Presence: I can announce myself, and the row tells the TRUTH about me rather than
+--     whatever I sent.
+--
+--     The insert deliberately lies about both fields the trigger owns -- the name and the
+--     clock -- so this proves they are overwritten rather than merely defaulted. A presence
+--     row is what every other planner draws a name from, so a client that could set either
+--     one could impersonate somebody else, or look busy while it was gone.
 -- ============================================================
+do $$
+declare
+  v_pid uuid := '33333333-3333-3333-3333-333333333333';
+  v_row public.layout_presence;
+begin
+  insert into public.layout_presence (presence_id, layout_id, display_name, last_seen)
+  values (v_pid, current_setting('bench.id')::uuid, 'Bench Test B', now() - interval '1 hour');
+
+  select * into v_row from public.layout_presence where presence_id = v_pid;
+
+  if v_row.user_id <> '11111111-1111-1111-1111-111111111111' then
+    raise exception 'FAIL 18: the row was filed under %, not the session user', v_row.user_id;
+  end if;
+  if v_row.display_name <> 'Bench Test A' then
+    raise exception 'FAIL 18: I announced myself as %', v_row.display_name;
+  end if;
+  if v_row.last_seen < now() - interval '1 minute' then
+    raise exception 'FAIL 18: last_seen was left at the value I sent (%)', v_row.last_seen;
+  end if;
+
+  perform set_config('bench.presence_a', v_pid::text, true);
+end $$;
+
+-- ============================================================
+-- 19. I cannot announce myself as somebody else
+-- ============================================================
+do $$
+declare
+  v_blocked boolean := false;
+  v_msg text := '';
+begin
+  begin
+    insert into public.layout_presence (presence_id, layout_id, user_id)
+    values ('44444444-4444-4444-4444-444444444444', current_setting('bench.id')::uuid,
+            '22222222-2222-2222-2222-222222222222');
+  exception when others then
+    v_blocked := true;
+    v_msg := sqlerrm;
+  end;
+
+  if not v_blocked then
+    raise exception 'FAIL 19: I announced myself as another planner';
+  end if;
+  -- Named, so this cannot pass by failing for some other reason.
+  if v_msg not like '%row-level security%' then
+    raise exception 'FAIL 19: the insert was refused, but not by RLS (%)', v_msg;
+  end if;
+end $$;
+
+-- ============================================================
+-- 20. I cannot touch somebody else's row -- and the ghost-sweeping policy does not quietly
+--     turn a LIVE row into one I may delete. That second half is the point of the check: the
+--     sweep exists so abandoned tabs do not haunt the bench for ever, and it would be a
+--     disaster if it also let anyone clear a planner who is sitting right there.
+-- ============================================================
+set local request.jwt.claims = '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
+do $$
+declare
+  v_rows int;
+  v_kept int;
+begin
+  update public.layout_presence set selected_object_id = '55555555-5555-5555-5555-555555555555'
+  where presence_id = current_setting('bench.presence_a')::uuid;
+  get diagnostics v_rows = row_count;
+  if v_rows <> 0 then
+    raise exception 'FAIL 20: I changed somebody else''s presence row (% rows)', v_rows;
+  end if;
+
+  delete from public.layout_presence where presence_id = current_setting('bench.presence_a')::uuid;
+  get diagnostics v_rows = row_count;
+  if v_rows <> 0 then
+    raise exception 'FAIL 20: I deleted a live presence row that was not mine (% rows)', v_rows;
+  end if;
+
+  -- Reading it, on the other hand, is exactly what presence is for.
+  select count(*) into v_kept from public.layout_presence
+  where presence_id = current_setting('bench.presence_a')::uuid;
+  if v_kept <> 1 then
+    raise exception 'FAIL 20: another planner''s presence row was not visible to me';
+  end if;
+end $$;
+
+-- ============================================================
+-- 21. I can renew my own row -- and renewing still cannot rename me
+-- ============================================================
+set local request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+do $$
+declare
+  v_row public.layout_presence;
+begin
+  update public.layout_presence
+  set selected_object_id = '55555555-5555-5555-5555-555555555555', display_name = 'Not My Name'
+  where presence_id = current_setting('bench.presence_a')::uuid;
+
+  select * into v_row from public.layout_presence
+  where presence_id = current_setting('bench.presence_a')::uuid;
+
+  if v_row.selected_object_id <> '55555555-5555-5555-5555-555555555555' then
+    raise exception 'FAIL 21: my own selection did not stick';
+  end if;
+  if v_row.display_name <> 'Bench Test A' then
+    raise exception 'FAIL 21: an update renamed me to %', v_row.display_name;
+  end if;
+end $$;
+
+-- ============================================================
+-- 22. A ghost can be cleared by anyone, so an abandoned tab does not stay on the bench for
+--     ever without a cron job to sweep it.
+--
+--     The trigger rewrites last_seen on every write -- which is the point of it (check 18) --
+--     so the only way to build a ghost in a test is to stop the trigger, age the row, and
+--     start it again. Worth noticing what that implies: the sweep can only ever see rows that
+--     REAL TIME has aged, which is exactly what it is for.
+-- ============================================================
+reset role;
+alter table public.layout_presence disable trigger layout_presence_truthful;
+update public.layout_presence set last_seen = now() - interval '10 minutes'
+where presence_id = current_setting('bench.presence_a')::uuid;
+alter table public.layout_presence enable trigger layout_presence_truthful;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
+
+do $$
+declare
+  v_rows int;
+begin
+  delete from public.layout_presence where presence_id = current_setting('bench.presence_a')::uuid;
+  get diagnostics v_rows = row_count;
+  if v_rows <> 1 then
+    raise exception 'FAIL 22: a ghost was not clearable by another planner (% rows)', v_rows;
+  end if;
+end $$;
+
+-- ============================================================
+-- 23. My view is MINE: invisible to others rather than merely read-only, impossible to file
+--     under somebody else's name, and held to the same Singapore rule 005 applies to the view
+--     inside the canvas.
+-- ============================================================
+set local request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+do $$
+declare
+  v_rows int;
+begin
+  insert into public.layout_views (layout_id, lat, lng, zoom)
+  values (current_setting('bench.id')::uuid, 1.3521, 103.8198, 18);
+
+  select count(*) into v_rows from public.layout_views;
+  if v_rows <> 1 then
+    raise exception 'FAIL 23: I stored % view rows, expected 1', v_rows;
+  end if;
+
+  begin
+    update public.layout_views set lat = 3.1; -- Kuala Lumpur is not on this basemap
+    raise exception 'FAIL 23: a view outside Singapore was accepted';
+  exception when check_violation then null; -- expected
+  end;
+
+  begin
+    update public.layout_views set zoom = 40;
+    raise exception 'FAIL 23: an impossible zoom was accepted';
+  exception when check_violation then null; -- expected
+  end;
+end $$;
+
+set local request.jwt.claims = '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
+do $$
+declare
+  v_rows int;
+  v_blocked boolean := false;
+begin
+  select count(*) into v_rows from public.layout_views;
+  if v_rows <> 0 then
+    raise exception 'FAIL 23: I can see another planner''s camera (% rows)', v_rows;
+  end if;
+
+  begin
+    insert into public.layout_views (layout_id, user_id, lat, lng, zoom)
+    values (current_setting('bench.id')::uuid, '11111111-1111-1111-1111-111111111111',
+            1.3521, 103.8198, 18);
+  exception when others then
+    v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'FAIL 23: I stored a view under somebody else''s name';
+  end if;
+
+  update public.layout_views set zoom = 12;
+  get diagnostics v_rows = row_count;
+  if v_rows <> 0 then
+    raise exception 'FAIL 23: I moved another planner''s camera (% rows)', v_rows;
+  end if;
+end $$;
+
+-- ============================================================
+-- 23b. Anonymous visitors cannot reach either table AT ALL -- and the way that is refused is
+--      deliberately different from public.layouts. There, anon holds SELECT and RLS hides the
+--      rows, so the answer is an empty result (check 5). Here the GRANT is gone as well, so
+--      the answer is a permission error. Both are shut; this proves which kind of shut, which
+--      is the part a future migration could accidentally change.
+-- ============================================================
+set local role anon;
+do $$
+declare
+  v_blocked boolean := false;
+begin
+  begin
+    perform count(*) from public.layout_presence;
+  exception when others then
+    v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'FAIL 23b: anon could read presence';
+  end if;
+
+  v_blocked := false;
+  begin
+    perform count(*) from public.layout_views;
+  exception when others then
+    v_blocked := true;
+  end;
+  if not v_blocked then
+    raise exception 'FAIL 23b: anon could read the views';
+  end if;
+end $$;
+set local role authenticated;
+
+-- ============================================================
+-- 24. Deleting the bench takes the claim, the presence rows and the views with it
+--     (on delete cascade). Worth checking rather than assuming: a lock, a ghost or a camera
+--     left behind by a bench that no longer exists would look authoritative for ever.
+-- ============================================================
+set local request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+do $$
+begin
+  insert into public.layout_presence (presence_id, layout_id)
+  values ('66666666-6666-6666-6666-666666666666', current_setting('bench.id')::uuid);
+
+  -- Check 23 already left a view row for me, so this is the ordinary "I panned again" write:
+  -- an upsert on the pair that identifies it. Use the same shape the page uses, or this check
+  -- would be testing a statement the app never issues.
+  insert into public.layout_views (layout_id, lat, lng, zoom)
+  values (current_setting('bench.id')::uuid, 1.3521, 103.8198, 19)
+  on conflict (layout_id, user_id) do update
+    set lat = excluded.lat, lng = excluded.lng, zoom = excluded.zoom;
+end $$;
+
 reset role;
 delete from public.layouts;
 
 do $$
 declare
-  v_claims int;
+  v_rows int;
 begin
-  select count(*) into v_claims from public.layout_claims;
-  if v_claims <> 0 then
-    raise exception 'FAIL 18: the claim row survived the bench (% rows)', v_claims;
+  select count(*) into v_rows from public.layout_claims;
+  if v_rows <> 0 then
+    raise exception 'FAIL 24: the claim row survived the bench (% rows)', v_rows;
+  end if;
+
+  select count(*) into v_rows from public.layout_presence;
+  if v_rows <> 0 then
+    raise exception 'FAIL 24: % presence rows survived the bench', v_rows;
+  end if;
+
+  select count(*) into v_rows from public.layout_views;
+  if v_rows <> 0 then
+    raise exception 'FAIL 24: % view rows survived the bench', v_rows;
   end if;
 end $$;
 
