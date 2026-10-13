@@ -11,7 +11,7 @@
 // never written down. That buys three things at once:
 //
 //   - the database never sees a frame, so a drag cannot cost a write, and the thing that decides
-//     who wins is still the lock (008) and the merge in save_bench() -- never this;
+//     who wins is still the lock (008) -- never this;
 //   - a frame that is lost costs nothing, because the next one is more current than the one it
 //     replaced, which is also why reconnecting needs no catch-up read (unlike presence, which is a
 //     row and does);
@@ -28,7 +28,7 @@
 // 2. THE TAG IT PUBLISHES IS THE PRESENCE TAG, NEVER THE LOCK SESSION. The rule from 007 is that
 //    the id you publish is not the id you are authorised by: `from` is only ever used to order one
 //    sender's frames against each other, and anyone who learns it has learned nothing at all. The
-//    session id that save_bench() authorises with never leaves the browser.
+//    session id that save_object() authorises with never leaves the browser (see benchSession.js).
 import { onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { framePatch } from '../utils/benchFrame'

@@ -17,12 +17,11 @@
 //    than half-applying a shape.
 //
 // 2. A FRAME MAY NEVER MAKE THE CANVAS UNSAVEABLE. What a receiver draws is part of the document it
-//    will save, and save_bench() validates the WHOLE payload before it merges any of it (008) --
-//    so one shape outside the box the database accepts would make the next save of EVERY planner on
-//    the bench fail with "The layout data is not valid": a sentence about somebody else's shape, in
-//    the middle of somebody else's work, with nothing on screen to explain it. So a frame whose
-//    geometry leaves that box is dropped, and the shape on this screen stays where it was until the
-//    planner who owns it saves.
+//    holds, and that document is what the next write of each shape sends -- so geometry the database
+//    would refuse has no business being drawn on the strength of a message from another browser: the
+//    planner's own next write of that shape would be refused with a sentence about a shape they did not
+//    move. So a frame whose geometry leaves that box is dropped, and the shape on this screen stays
+//    where it was until the planner who owns it writes their own change.
 //
 // The box below is public.point_in_sg() in 005_layouts.sql, which is where it is enforced for real.
 // A crossing outline is deliberately NOT checked: the database has no such rule (refusing a

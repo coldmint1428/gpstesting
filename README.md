@@ -20,8 +20,10 @@ plan or an area to work on it, optionally lays a floor plan over the map, and dr
 (Zone, No-Go, Obstacle, Stage, Entrance) on top. Every area's points are stored as lat/lng,
 so everything travels with the map.
 
-One thing is worked on at a time (`null | 'floorplan:<id>' | 'polygons' | 'area:<id>'`), and
-putting it down is what saves — there is no Save button. **The map is never locked**: it pans
+One thing is worked on at a time (`null | 'floorplan:<id>' | 'polygons' | 'area:<id>'`), and **a change
+is written when it settles**: at the end of a drag, or a moment after an edit that is not one (a typed
+name, an opacity slider). There is no Save button, and nothing at all is written while a pointer is
+down. **The map is never locked**: it pans
 and zooms whenever you ask, and a shape is grabbed by its own parts (an outline by its body, a
 picture by the picture), which is what keeps a drag of one from moving the view. A **middle
 drag pans** whatever is underneath — on a shape, on a handle, and while an area is being drawn —
@@ -45,9 +47,10 @@ before the action rather than at the next save:
   splitting the longest edge if the end of the ring will not do.
 - **One message, one place**: a refusal is a single red sentence along the top of the map,
   whether you are drawing or adjusting.
-- **Undo and redo cover the whole canvas**, as arrow buttons next to Start / Stop editing (and
-  Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y). Client-side only. Copy and paste a floor plan or an area
-  with Ctrl+C / Ctrl+V.
+- **Undo and redo cover the whole canvas**, as arrow buttons in the header (and Ctrl+Z /
+  Ctrl+Shift+Z / Ctrl+Y). A step is a change to a shape, so putting one back is a write like any
+  other — including taking away a shape you made. Copy and paste a floor plan or an area with
+  Ctrl+C / Ctrl+V.
 - **A floor plan must fit inside Singapore**, not merely start there — see
   `supabase/migrations/006_floor_plan_bounds.sql`.
 - **How full the canvas is** is drawn as a ring on the Floor plans card, and an upload that
@@ -64,12 +67,20 @@ Nothing has to be pressed to start working: the lock is taken by the first chang
 let go when it is put down, when the tab is hidden, or after 45 seconds of quiet. A planner who is
 refused is told who has it and why nothing moved.
 
-The save itself **merges**. `save_bench()` walks the document object by object: what the planner
-holds a lock on is taken from them, everything else keeps the stored version and is named in the
-reply (so the page re-reads and says what happened), and an object missing from their copy is only
-treated as deleted if they hold its lock. A page with a stale copy of somebody else's work can
-therefore neither overwrite it nor delete it — with or without a lock, and whether or not the other
-planner has already finished. See `supabase/migrations/008_object_locks.sql`.
+**The canvas is rows, and a write is a patch.** `save_object()` lays the fields a planner changed over
+the row the database holds and hands the merged shape back — so a page whose copy is behind (a hidden
+tab, a screen that missed an event) writes what it changed and cannot undo what it did not. A floor
+plan's picture is a row of its own, keyed by the md5 of the image itself, so a copy of a plan costs its
+placement and a plan that is only being moved uploads nothing. A write is the SHAPE that changed, which
+is why a drag is written in about a second instead of the 19–34 seconds one save of the whole 3.7 MB
+document used to take. See `supabase/migrations/009_object_rows.sql`.
+
+**A shape somebody else makes or deletes arrives on its own.** `layout_objects` is published to
+Realtime, so an insert, a change and a deletion each reach every other open page as they happen — which
+the whole-document bench could not do at all: it had nothing to say about one shape, so a new shape
+waited for the other planner's next save. An event is a notification rather than the truth: the row it
+carries is checked against the revision this page already holds, and a shape this page is HOLDING is
+never taken from an event, because the lock is what decides who may say what.
 
 **Planners can see each other while all of that is going on.** Each open page keeps a row in
 `public.layout_presence` — one row per tab, refreshed every 10 seconds and streamed over Realtime
@@ -77,7 +88,7 @@ planner has already finished. See `supabase/migrations/008_object_locks.sql`.
 their own colour, both on the map and in the list of areas. A second tab or a second browser of
 the *same* account is listed as its own planner, labelled as another window, because that is the
 case that used to be invisible. None of it is trusted: presence is a hint for the display, and
-what a planner may actually change is decided by the locks and by the merge. The map view is each
+what a planner may actually change is decided by the locks, and by the database when a write arrives. The map view is each
 planner's **own** (`public.layout_views`), so panning no longer carries anybody else's map along
 with it — the copy inside the canvas is only the fallback for a planner who has never panned. See
 `supabase/migrations/007_presence_and_views.sql`.
@@ -89,20 +100,28 @@ and its row in the list of areas moves with it. Frames are broadcasts rather tha
 reach the database, so a drag costs no writes and a lost frame costs nothing (the next one is more
 current). They are not trusted either — a frame may only change the fields a drag changes (never an
 `id`, never a floor plan's image) and never into geometry the database would refuse, because what a
-planner's screen shows is what their *next* save sends. What decides who wins is still the lock, and
-what the server actually stores is still the merge. See `src/composables/useBenchFrames.js` and
-`src/utils/benchFrame.js`.
+planner's screen shows is in the patch of that shape's *next* write. The lock decides who may say what,
+and the database checks the merged shape before it stores it. See `src/composables/useBenchFrames.js`
+and `src/utils/benchFrame.js`.
 
-Two things a live frame deliberately does not do, both because it only ever patches a shape that is
-already on the other screen: a shape that did not exist a moment ago does not appear live, and a
-deleted shape does not vanish live. Both arrive with the next save, when the other planner's copy is
-overruled and re-read.
+A live frame only ever patches a shape that is already on the other screen — it is a drawing hint, not a
+row. A shape that is created or deleted arrives as a row event instead (see above), so both are seen as
+they happen rather than at somebody's next save.
 
-The whole canvas — the map view, the floor plans (placement **and** the image itself,
-base64) and the areas — lives in one row of `public.layouts`, capped at **4 MB** by
-`save_bench()`. Every floor plan image is shrunk in the browser to under 512 KB before it goes
-near the database, and a floor plan that would not fit inside Singapore is refused. See
-`supabase/migrations/005_layouts.sql` and `006_floor_plan_bounds.sql`.
+**How big the bench is** is counted over the rows by `layout_bytes()` and capped at **4 MB** by
+`save_object()`: the ring on the Floor plans card shows the database's own number (byte for byte, since
+the page has no way to know what is really stored), and a picture that would push the bench past the cap
+is refused before it is added. Every floor plan image is shrunk in the browser to under 512 KB before it
+goes near the database, and a floor plan that would not fit inside Singapore is refused (see
+`supabase/migrations/006_floor_plan_bounds.sql`).
+
+**The old whole-canvas column is gone.** `009_object_rows.sql` left it frozen in the bench's own row —
+3.7 MB that every read of the bench detoasted to get at the 200 bytes beside it — and
+`010_drop_frozen_canvas.sql` drops it, after moving the one thing still living inside it into a column of
+its own: the bench's **home view**, where a planner who has never panned opens the map (see
+`007_presence_and_views.sql`, which moved a planner's camera into a row of its own). The drop refuses to
+run if the document holds a shape with no row, because there is no second copy of a shape: a migration
+that cannot account for one stops with a sentence rather than tidying it away.
 
 ## Roles (per event, from the project spec)
 
@@ -145,13 +164,38 @@ BENCH_EMAIL=... BENCH_PASSWORD=... node tools/bench_harness.mjs http://localhost
 The account comes from the environment, with no default: this file is in the repository, and a test
 account's password in a repository is a password in a repository.
 
-It makes its own area, drags it, watches it arrive on the other screen, presses it from the losing
-side, deletes it and checks the bench was left as it found it. `tools/probe.mjs` asks one question of
-a page that is already open (`node tools/probe.mjs 9222 @question.js`), which is how most of the
-above was diagnosed. Nothing here runs in CI: it needs the browsers, a dev server and a login.
+It makes its own area, watches it appear on the other screen **with no reload**, drags it, watches the
+drag arrive, presses it from the losing side, undoes it, redoes it, deletes it and checks the other
+screen loses it on its own and that the bench was left as it found it. `tools/probe.mjs` asks one
+question of a page that is already open (`node tools/probe.mjs 9222 @question.js`), which is how most of
+the above was diagnosed. Nothing here runs in CI: it needs the browsers, a dev server and a login.
 
-Note: one save of a canvas this size takes **tens of seconds** (measured: 22 s at 3.7 MB of the 4 MB
-cap), so the harness waits accordingly — and so should anybody testing by hand.
+Note: a write is one shape now, so it takes about a **second** rather than the tens of seconds one save
+of the whole 3.7 MB document took — the harness reports what each write actually cost, which is the
+measurement that says whether that is true.
+
+### Checking the schema without a database (`npm run test:db`)
+
+The bench's rules are decided in SQL, and until round 4 the only way to find out whether a migration was
+even valid was to paste it into the Supabase SQL Editor against the real project. `npm run test:db`
+applies every file in `supabase/migrations/` **in order** to a Postgres that starts empty and is thrown
+away — PGlite, which is Postgres compiled to WebAssembly, running in this process — and then runs the
+bench's own SQL suites:
+
+- `supabase/tests/objects_rls.sql` — the rules 009 added: what a shape may be, who may write one, what a
+  refused write hands back, the patch that merges, the 4 MB cap and what a refused write leaves behind;
+- `supabase/tests/layouts_rls.sql` — the suites for 005–008, run against the schema they were written
+  for;
+- plus the migrations themselves, which is where the guards are checked: an empty database; a bench that
+  already holds a canvas (the split is checked shape by shape, re-running 009 must change nothing, and
+  then 010 drops the frozen document leaving the home view and every row); a canvas the split must
+  REFUSE rather than lose a shape to; and a bench whose rows do not account for a shape in the document,
+  which the drop must refuse rather than tidy away.
+
+What it cannot cover is Supabase's own parts — the roles, the `auth` schema and the Realtime publication
+are stubbed by `supabase/tests/stub_supabase.sql` — so it checks the schema and the rules, and the
+browser harness above checks what a page does with them. Both suites are also still runnable in the SQL
+Editor, in one transaction that rolls back.
 
 ### Supabase (one-time, for a new project)
 

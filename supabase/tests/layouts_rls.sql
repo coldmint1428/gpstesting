@@ -957,17 +957,31 @@ end $$;
 set local role authenticated;
 
 -- ============================================================
--- 17b. A JSON null for an optional section means "not provided".
---      The table's own default is {"view": null, "floorPlans": [], "polygons": []}, and
---      `jsonb -> 'view'` gives a JSON null (not SQL NULL) when the key is present and
---      null -- so this used to fail its own check constraint. Keep this check.
+-- 17b. A JSON null is NOT "not provided".
+--
+--      The table's default used to be {"view": null, ...}, and `jsonb -> 'view'` hands back a JSON
+--      null (not SQL NULL) when the key is present and null -- so the row could not be validated
+--      against its own default. 008 fixed that by giving the default no `view` key at all rather than
+--      by loosening the validator, and the strict reading is the one that shipped: a section that is
+--      PRESENT has to be the right type, and `null` is not an array.
+--
+--      THIS CHECK USED TO ASSERT THE OPPOSITE -- that save_bench() accepted a JSON-null section --
+--      which was never true of 005's validator or of 008's: it was written for an intention rather
+--      than for the code in front of it. Found by running this file against 001-008 on a database
+--      that starts empty (tools/pgtest.mjs, phase `legacy`), which is also why the checklist's
+--      "re-run layouts_rls.sql" was still outstanding.
 -- ============================================================
 do $$
 begin
-  perform public.save_bench(
-    p_data => '{"view": null, "floorPlans": null, "polygons": []}'::jsonb,
-    p_session => current_setting('bench.session_a')::uuid
-  );
+  begin
+    perform public.save_bench(
+      p_data => '{"view": null, "floorPlans": null, "polygons": []}'::jsonb,
+      p_session => current_setting('bench.session_a')::uuid
+    );
+    raise exception 'FAIL 17b: a JSON null section was accepted';
+  exception
+    when sqlstate '22023' then null; -- expected: invalid data
+  end;
 end $$;
 
 -- ============================================================

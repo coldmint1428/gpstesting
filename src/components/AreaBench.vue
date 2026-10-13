@@ -67,18 +67,24 @@ import {
 import { closingCrosses, pathCrossing, ringCrossing } from '../utils/areaShape'
 import { growRing } from '../utils/areaGrow.js'
 import { shrinkToUnder } from '../utils/imageShrink'
-import { LAYOUT_TOO_LARGE_MESSAGE, MAX_LAYOUT_BYTES, layoutBytes } from '../utils/layoutLimits'
+import { LAYOUT_TOO_LARGE_MESSAGE } from '../utils/layoutLimits'
 import { useHistory } from '../composables/useHistory'
 
 const props = defineProps({
   plans: { type: Array, default: () => [] },
   areas: { type: Array, default: () => [] },
   view: { type: Object, default: null }, // where the map was left
-  // How close the canvas is to the 4 MB cap save_bench() enforces, and the same thing as a
-  // fraction for the ring that shows it. Handed in rather than measured here because the PAGE
-  // owns the document -- see views/PolygonTestView.vue.
+  // How close the bench is to the 4 MB cap the DATABASE enforces, and the same thing as a fraction for
+  // the ring that shows it. Handed in rather than measured here because the PAGE owns the document: the
+  // number is the database's own (counted over the rows, see 009_object_rows.sql) and only the page
+  // knows it. See views/PolygonTestView.vue.
   sizeText: { type: String, default: '' },
   sizeRatio: { type: Number, default: 0 },
+  // Would this floor plan fit? A function from the page for the same reason `sizeText` is a string from
+  // it: a picture is stored ONCE however many floor plans use it, so what a new plan costs cannot be
+  // worked out from the shapes alone -- see utils/layoutLimits.addedBytes and the planFits() in
+  // PolygonTestView. Null means "do not ask" (an upload is then only checked by the database).
+  planFits: { type: Function, default: null },
   // May this planner work on the bench at all? TRUE for everybody now: there is no claim to hold
   // and no Start editing to press, and who may change a particular SHAPE is settled one object at a
   // time by `locks` below (see 008_object_locks.sql). Looking and working are the same state.
@@ -379,11 +385,13 @@ function refusePress(objectId) {
 }
 
 // The sentence the strip says when a change was refused because somebody else is on that shape --
-// or because it is this planner's own other window. One place says no, and this is it.
+// or because it is this planner's own other window, or because the database will not store the shape at
+// all (a ring dragged off the edge of Singapore, say). One place says no, and this is it.
 const lockNotice = computed(() => {
   const refused = props.locks ? props.locks.refused.value : null
   if (!refused) return ''
   if (refused.error) return refused.error
+  if (refused.problem) return refused.problem
   if (refused.mine) return 'You are editing this in another window.'
   return (refused.name || 'Somebody else') + ' is editing this.'
 })
@@ -2064,17 +2072,17 @@ function redoDraft() {
 // timeline. That is the whole point -- the stack used to reset the moment the planner clicked
 // away from the shape, so Ctrl+Z stopped working exactly when they came back to it.
 
-// Would adding a floor plan push the canvas over the 4 MB that save_bench() accepts?
+// Would adding this floor plan push the bench over the 4 MB the database accepts?
 //
-// Because EVERY lock saves the whole document, an addition that breaks the cap is refused by
-// the database at the next save -- and the planner would have no way of knowing which of
-// their edits did it. Catching it here means the file is never added, so the canvas stays
-// saveable. The document is rebuilt the way the page builds it (view + floorPlans + polygons)
-// so the byte count matches what would actually be stored.
+// The PAGE answers (see the `planFits` prop), because only the page knows how big the bench really is
+// and which pictures are already stored: the same picture used by two plans is stored once, so a copy of
+// an existing floor plan costs its placement and nothing else. Catching it here means the file is never
+// added, so the planner does not have to work out afterwards which edit was the one that did it.
+//
+// It is a courtesy rather than the rule. The rule is in save_object(), and a picture that gets past this
+// is refused there and taken back off the canvas (see useBenchDoc).
 function canvasWouldOverflow(addedPlan) {
-  const document = { view: props.view, floorPlans: [...props.plans, addedPlan], polygons: props.areas }
-  const size = layoutBytes(JSON.stringify(document))
-  if (size <= MAX_LAYOUT_BYTES) return false
+  if (typeof props.planFits !== 'function' || props.planFits(addedPlan)) return false
   errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
   return true
 }
@@ -2695,11 +2703,12 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
         <div v-if="canEdit" class="col-12 col-lg-6">
           <div class="card">
             <div class="card-body">
-              <!-- How close the canvas is to the 4 MB cap save_bench() enforces, as a ring. This is
+              <!-- How full the bench is, against the 4 MB the database enforces, as a ring. This is
                    the one number in the bench that the planner cannot see any other way, and the
                    pictures BELOW are what make it big -- so it belongs on this heading, next to
                    the thing that spends it, rather than off in the page header where it used to
-                   sit with no clue about what it was counting. -->
+                   sit with no clue about what it was counting. The number itself is the database's
+                   (layout_bytes in 009), handed in by the page. -->
               <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
                 <h2 class="h6 card-title mb-0">Floor plans</h2>
                 <div

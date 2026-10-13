@@ -1,7 +1,8 @@
 // Shrink an uploaded floor plan before it goes near the database.
 //
-// The image lives INSIDE the layout row (as a base64 data URL), so its size is part of
-// every page load and of the 4 MB cap enforced by public.save_bench(). 512 KB is the
+// The image is a row of its own (public.layout_images, see 009_object_rows.sql), so its size is part of
+// every page load and of the 4 MB cap enforced by save_object(). It is also stored once however many
+// floor plans are made from it, because the row is keyed by the md5 of the picture itself. 512 KB is the
 // ceiling we aim for.
 //
 // PNG comes first: a floor plan is line art, and PNG keeps it crisp and keeps the

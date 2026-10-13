@@ -63,14 +63,14 @@ export function isValidAreaName(name) {
 // Why would public.area_ok() refuse this area? Returns a sentence naming the area, or null
 // when this build can see nothing wrong with it.
 //
-// area_ok() answers true or false, and save_bench() turns a false into one sentence for
-// every rule it has: "The layout data is not valid". That is unactionable when the real
-// problem is one area with 500 points, so the client -- which can see the whole list and
-// knows each area's name -- says which one and what about it.
+// area_ok() answers true or false, and the database turns a false into a sentence of its own (see
+// shape_problem in 009_object_rows.sql): "Every point of an area has to be inside Singapore", about the
+// area the planner is working on. This file is the client's own reading of the same rules, for the cases
+// the page can see BEFORE anything is sent -- while a ring is being drawn, and while a name is typed.
 //
-// This mirrors area_ok(), it does not replace it: the function in the database is still the
-// authority, and a rule added there without a line here only costs a worse error message,
-// never an accepted bad save.
+// This mirrors area_ok(), it does not replace it: the function in the database is still the authority,
+// and a rule added there without a line here only costs a worse error message, never an accepted bad
+// write.
 export function areaPointProblem(area, index) {
   const name = String((area && area.name) || '').trim()
   const label = name ? '"' + (name.length > 30 ? name.slice(0, 30) + '...' : name) + '"' : 'Area ' + (index + 1)

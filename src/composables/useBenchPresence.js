@@ -206,7 +206,7 @@ export function useBenchPresence() {
     stopBeating()
     beatTimer = setInterval(() => {
       // A hidden tab is not on the bench: it stops beating and its row goes stale by itself,
-      // which is the same rule useBenchClaim uses to let go of the claim when nobody is looking.
+      // which is the same rule useBenchLocks uses to let go of every lock when nobody is looking.
       if (document.visibilityState === 'visible') beat()
     }, BEAT_MS)
   }

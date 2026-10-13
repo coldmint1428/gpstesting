@@ -1,57 +1,65 @@
 <script setup>
 // The planner drawing bench at /polygon.
 //
-// A standalone showcase: it is NOT tied to an event, and it touches none of the tables the
-// event pages use. There is ONE bench, shared by everyone who signs in, and only one person
-// may edit it at a time -- see composables/useBenchClaim.js for how that is arbitrated.
+// A standalone showcase: it is NOT tied to an event, and it touches none of the tables the event pages
+// use. There is ONE bench, shared by everyone who signs in, and everybody may work on it at once -- one
+// SHAPE at a time, decided by the database (see supabase/migrations/008_object_locks.sql).
 //
-// This page owns the data and the saving. AreaBench only draws it and reports what the
-// planner did, so there is exactly one place that writes.
+// This page owns the data and the writes. AreaBench only draws it and reports what the planner did, so
+// there is exactly one place that writes.
 //
-// EVERY LOCK IS A SAVE. `mode` going back to null is the only save trigger there is, which
-// is why there is no Save button anywhere on this page.
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useBenchClaim } from '../composables/useBenchClaim'
+// A WRITE IS A PATCH OF ONE SHAPE, and it happens when a change SETTLES: at the end of a gesture, or a
+// moment after an edit that is not one. `mode` going back to null no longer saves anything -- it only
+// lets go of the lock -- which is what 009_object_rows.sql changed and what
+// composables/useBenchDoc.js is written around.
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useBenchDoc } from '../composables/useBenchDoc'
 import { useDocHistory } from '../composables/useDocHistory'
 import { useBenchPresence } from '../composables/useBenchPresence'
 import { useBenchLocks } from '../composables/useBenchLocks'
 import { useBenchFrames } from '../composables/useBenchFrames'
 import { PASTE_OFFSET_M, copyName, offsetLatLng, useBenchClipboard } from '../composables/useBenchClipboard'
-import { MAX_LAYOUT_BYTES, LAYOUT_TOO_LARGE_MESSAGE, documentBytes, layoutBytes } from '../utils/layoutLimits'
-import { firstAreaProblem } from '../utils/areaKinds'
+import { MAX_LAYOUT_BYTES, LAYOUT_TOO_LARGE_MESSAGE, addedBytes } from '../utils/layoutLimits'
 import { applyAreaFrame, applyPlanFrame } from '../utils/benchFrame'
 import { formatBytes } from '../utils/imageShrink'
 import AreaBench from '../components/AreaBench.vue'
 import AreaList from '../components/AreaList.vue'
 import BenchAlert from '../components/BenchAlert.vue'
 
-const {
-  data: layout,
-  loading,
-  errorMsg,
-  save,
-  saving,
-  open,
-  reload,
-  // Per-session state that is not the document: the bench's id, and where this planner left the map.
-  layoutId,
-  myView,
-  saveView,
-} = useBenchClaim()
+// Who may change which shape (see composables/useBenchLocks.js). Created first, because the data layer
+// below reports a refusal through it: one strip of text, one source, whichever way the refusal arrived.
+const locks = useBenchLocks()
 
-// null | 'floorplan:<id>' | 'polygons' | 'area:<id>' -- what is being worked on, or nothing. It no
-// longer has anything to say about the view: the map pans and zooms in every one of these states,
-// except while an area is being drawn.
+// The canvas. The database keeps one row per shape (009_object_rows.sql) and this is what turns them
+// into the one document the bench draws -- and a planner's change back into a row. The options are the
+// three things it deliberately does not know: whether a shape is held by this tab, where a refusal is
+// said, and that a shape refused on its lock is no longer this tab's to hold.
+const bench = useBenchDoc({
+  holds: (id) => locks.holds(id),
+  refuse: (id, row) => locks.refuse(id, row),
+  say: (id, sentence) => locks.say(id, sentence),
+  lost: (id) => locks.end(id),
+})
+
+// "Has this shape got a change that has not been written yet?" A lock may only be let go of when the
+// answer is no, or the write that is still coming is refused by the database -- so the page tells the
+// locks, once, rather than the locks guessing from timestamps (see useBenchLocks).
+locks.watchBusy(bench.busy)
+
+const { data: layout, loading, errorMsg, saving, bytes, open, layoutId, myView, saveView } = bench
+
+// null | 'floorplan:<id>' | 'polygons' | 'area:<id>' -- what is being worked on, or nothing. It has
+// nothing to say about the view: the map pans and zooms in every one of these states, except while an
+// area is being drawn.
 const mode = ref(null)
 
-// One undo stack for the whole canvas, and it reads the document through this getter so the
-// state it captures is always the state as it is at that moment (see composables/useDocHistory).
+// One undo stack for the whole canvas, and it reads the document through this getter so the state it
+// captures is always the state as it is at that moment (see composables/useDocHistory).
 const history = useDocHistory(() => layout.value)
 
-// What the toolbar buttons bind to. A ref nested inside a plain object is NOT unwrapped in a
-// template -- `:disabled="!history.canUndo"` would read the ref itself, which is always truthy, and
-// the button would look enabled forever and do nothing when pressed. These are real computeds, so
-// the ref is read where Vue can see it.
+// What the toolbar buttons bind to. A ref nested inside a plain object is NOT unwrapped in a template --
+// `:disabled="!history.canUndo"` would read the ref itself, which is always truthy -- so these are real
+// computeds, so the ref is read where Vue can see it.
 const canUndo = computed(() => history.canUndo.value)
 const canRedo = computed(() => history.canRedo.value)
 const stepsText = computed(() => {
@@ -65,198 +73,114 @@ const stepsText = computed(() => {
 const clipboard = useBenchClipboard()
 
 // Who else is on the bench, and what each of them has open (see composables/useBenchPresence.js).
-// Created here and handed down like the clipboard and the history, because there is one row, one
-// socket and one heartbeat per open page -- not one per component.
+// Created here and handed down like the clipboard and the history, because there is one row, one socket
+// and one heartbeat per open page -- not one per component.
 const presence = useBenchPresence()
 
-// Who may change which shape, decided one object at a time (see composables/useBenchLocks.js).
-// Handed down for the same reason as the clipboard and the history, and for one more: every write
-// on this page asks it for the object first, so a change to something another planner is holding
-// never happens at all.
-const locks = useBenchLocks()
-
 // What everybody else is doing to a shape RIGHT NOW (see composables/useBenchFrames.js). A frame is
-// published by the page that is moving something and drawn by everybody else, which is what makes
-// one planner's drag visible on another planner's screen instead of arriving as a jump when the
-// shape is finally put down. Like the clipboard and the history, there is one of these per page.
+// published by the page that is moving something and drawn by everybody else, which is what makes one
+// planner's drag visible on another planner's screen instead of arriving as a jump when the shape is
+// finally put down. Like the clipboard and the history, there is one of these per page.
 const frames = useBenchFrames()
 
-// A ref inside a plain object is not unwrapped in a template (see the note on canUndo above), so
-// what the header draws is a real computed rather than presence.others.
+// A ref inside a plain object is not unwrapped in a template (see the note on canUndo above), so what
+// the header draws is a real computed rather than presence.others.
 const hereNow = computed(() => presence.others.value)
 
 const plans = computed(() => layout.value.floorPlans)
 const areas = computed(() => layout.value.polygons)
 
-// Where this map opens: this planner's own last view if they have one, and otherwise the view
-// stored in the document -- which nothing writes any more, so it is the bench's HOME view rather
-// than wherever the last planner happened to pan (see 007_presence_and_views.sql).
+// Where this map opens: this planner's own last view if they have one, and otherwise the bench's HOME
+// view -- which is the copy still inside the frozen document, read by open_bench() (see 007 and 009).
 const startView = computed(() => myView.value || layout.value.view)
 
-// Presence is filed under the bench's id, which only exists once the bench has been opened, so
-// joining waits for it instead of guessing. Live frames go out on the same moment: they are
-// published under the SAME tag presence publishes and never under the session the database
-// authorises with, which is the rule 007 set and this is the second thing to obey it (see
-// composables/useBenchFrames.js). `join` mints that tag before it returns, which is why it can be
-// read here.
+// Presence is filed under the bench's id, which only exists once the bench has been opened, so joining
+// waits for it instead of guessing. Live frames go out on the same moment: they are published under the
+// SAME tag presence publishes and never under the session the database authorises with, which is the
+// rule 007 set and this is the second thing to obey it (see composables/useBenchFrames.js).
 watch(layoutId, (id) => {
   if (!id) return
   presence.join(id)
   frames.start(id, presence.myPresenceId.value, applyFrame)
 })
 
-// Build the canvas as JSON text, which is what a save sends and what save_bench() counts the bytes
-// of. The round-trip through a string also strips Vue's reactive proxies, so supabase-js never sees
-// anything unexpected. This is a computed, so it is built when a save reads it and at no other
-// time: the size warning does NOT come from here any more, and the reason is worth knowing -- see
-// `bytes` below.
-const canvasText = computed(() => JSON.stringify(layout.value))
-
-// Why the database refused, in words the planner can act on.
+// How close the bench is to the 4 MB the database enforces. THE NUMBER IS THE DATABASE'S: it is counted
+// by layout_bytes() over the rows themselves (009) and arrives with open_bench() and with every write's
+// reply, so it cannot disagree with what is really stored.
 //
-// It only speaks for the areas, because that is the one rule this page can check for itself
-// and name the culprit for. Anything else -- a floor plan hanging off the map, say -- is left
-// to layout_problem() in the database, which sees the row as it is actually stored.
-function diagnose(payload) {
-  const areas = payload && Array.isArray(payload.polygons) ? payload.polygons : null
-  return firstAreaProblem(areas)
-}
-
-async function saveNow() {
-  // A write that is still waiting for its lock has not touched the document yet, and this save is
-  // about to read it. Letting the save go first is how a shape the planner had just drawn was left
-  // out of the canvas that was stored -- see `writing` below.
-  await settled()
-
-  // The moment this save's payload is taken. Only changes older than this are committed by it, so
-  // only those may have their lock let go of afterwards (see `end` in useBenchLocks): anything the
-  // planner touches while this is in flight is newer, stays locked, and is saved by the next one.
-  const since = Date.now()
-  const text = canvasText.value
-  const overruled = await save(JSON.parse(text), {
-    jsonText: text,
-    diagnose,
-    session: locks.session.value,
-  })
-
-  // A save that happened at all -- even one that was partly overruled -- has committed everything
-  // this page changed before `since`, which is what makes those locks safe to let go of.
-  if (overruled) locks.saved(since)
-
-  // The server kept its own version of something this save carried: an object somebody else was
-  // holding, or one this page's copy was simply behind on. Everything it did not take has to come
-  // back, and the merge decides what that means: what I hold stays on screen, because the planner
-  // may have moved it on since the save left, and everything else is taken from the bench as it
-  // now stands.
-  //
-  // UNLESS THE DOCUMENT HAS MOVED ON. A save is twenty seconds on a bench this size, and the planner
-  // works through all of them; read back now and the reply describes a state that is no longer on
-  // screen. That is not a small thing: the merge keeps anything the bench has and this page does not,
-  // which is right for a shape another planner just made and WRONG for one this planner just deleted
-  // -- it came back on screen, deleted and undead at the same time (measured; tools/bench_harness.mjs
-  // has the sequence). So a reply is only merged when nothing has been written since the payload was
-  // taken. What was overruled is not lost: the next save carries the newer document and finds out
-  // about it there.
-  if (overruled && overruled.length && !changedSince(since)) await resync(since)
-}
-
-async function resync(since) {
-  const server = await reload()
-  if (!server) return
-  // Checked AGAIN after the read, and this is the check that matters: reading the bench means
-  // downloading the whole canvas (3.7 MB here), so seconds pass, and the planner can have deleted a
-  // shape in the middle of it. The bench AS READ still has that shape, this page no longer does, and
-  // mergeById keeps what the bench has and this page only does not -- so the shape comes back on
-  // screen: deleted and undead at once. Measured, twice, before this line existed.
-  if (changedSince(since)) return
-  layout.value = {
-    view: layout.value.view,
-    floorPlans: mergeById(server.floorPlans, layout.value.floorPlans),
-    polygons: mergeById(server.polygons, layout.value.polygons),
-  }
-}
-
-// How close the canvas is to the 4 MB cap save_bench() enforces. The planner cannot see a
-// 3.9 MB document, so this is the only warning they get before a save is refused.
-//
-// Measured on every change rather than only when a save happens: this is what makes the ring in the
-// floor plans card move as a picture is added or deleted, instead of jumping at the next lock.
-//
-// It is the SAME number the save will be measured with -- byte for byte, including the pictures --
-// but it is not counted by writing the document out. It used to be, and that was fine while a change
-// meant a click: it stopped being fine once a change arrived twenty times a second from somebody
-// else's drag (see applyFrame and useBenchFrames), because writing the document out means escaping
-// every base64 image in it -- measured at 1.7 ms and 750 KB of garbage for one 700 KB floor plan,
-// per frame. utils/layoutLimits.documentBytes does the same arithmetic in pieces and remembers the
-// pieces, so the number is exact and the pictures are measured once.
-//
-// The page measures it rather than useBenchClaim, which measures its own copy of the document --
-// that copy has no `view`, so it would report the wrong number.
-const bytes = computed(() => documentBytes(layout.value))
+// This page used to count the document itself, byte for byte, and that stopped being possible the moment
+// a picture became a row of its own: the same picture used by two floor plans is stored ONCE, so a count
+// of what is on screen would report more than the bench costs. `addedBytes` below is what is left of the
+// arithmetic -- one shape, before it is added.
 const sizeText = computed(() => formatBytes(bytes.value) + ' of ' + formatBytes(MAX_LAYOUT_BYTES))
 const sizeRatio = computed(() => bytes.value / MAX_LAYOUT_BYTES)
 
-// The one and only save trigger, and the one and only place a shape is let go of -- which is why
-// they are the same watcher. Letting go has to happen AFTER the save and not beside it: an unlock
-// that overtook its own save would leave that save holding no lock at all, and the database would
-// (quite correctly) refuse every object in it, throwing the planner's work away.
+// Would this floor plan fit? A picture that cannot be stored should be refused before it joins the
+// canvas rather than taken back off it afterwards. Asked of the page because the page is the only side
+// that knows both the bench's size and which pictures are already on it.
+function planFits(plan) {
+  return bytes.value + addedBytes(plan, plans.value) <= MAX_LAYOUT_BYTES
+}
+
+// Leaving a shape. Whatever is still unwritten for it goes FIRST, because a lock may only be let go of
+// once the change it protects has been written: released early, the database refuses the write that is
+// still coming and the planner's work is gone with no error anywhere (see useBenchLocks.end).
 //
-// Leaving a shape for another one needs no save and nothing in flight, so it lets go at once.
-// Leaving a shape for another one. Clicking straight from one area to the next is the ordinary way to
-// work, and it does something the planner cannot see: it lets go of the first shape. A lock may only
-// be let go of once the change it protects has been saved (see `end` in useBenchLocks) -- so if that
-// shape has unsaved work, it is committed here, before the lock goes. Clicking between shapes without
-// editing anything costs nothing: there is nothing to save.
+// This is now the only thing `mode` does. It used to be the save trigger for the entire document --
+// "putting it down is the save" -- and now that a shape is its own row there is nothing left for it to
+// trigger: the change was written at the end of the gesture that made it.
 watch(mode, async (value, oldValue) => {
   const was = objectIdOf(oldValue)
-
-  if (value === null) {
-    if (oldValue !== null) await saveNow()
-    if (was) {
-      locks.end(was)
-      presence.setHolding('')
-    }
-    return
-  }
-
-  if (was && was !== objectIdOf(value)) {
-    if (locks.unsaved(was)) await saveNow()
-    locks.end(was)
-    presence.setHolding('')
-  }
+  if (!was) return
+  await bench.flush(was)
+  locks.end(was)
+  presence.setHolding('')
 })
 
 // What I have open, reported to everyone else. This is how my name gets onto a shape on another
-// planner's screen before either of us has touched anything -- and it is a HINT that decides
-// nothing: the only thing that will ever refuse a change is the database (see the composable).
+// planner's screen before either of us has touched anything -- and it is a HINT that decides nothing:
+// the only thing that will ever refuse a change is the database (see the composable).
 watch(mode, (value) => presence.setSelection(objectIdOf(value)), { immediate: true })
 
-// 'area:<id>' and 'floorplan:<id>' both name a shape. 'polygons' -- a ring being drawn -- names
-// nothing, because what is being drawn is not part of the canvas yet.
+// A shape that is not on the canvas cannot be the thing being edited. That happens two ways: this
+// planner deleted it, or somebody else did -- and the second one used to leave the panel open on a shape
+// that does not exist. Nothing is written here: letting go of `mode` only releases a lock.
+watch([plans, areas, mode], () => {
+  const id = objectIdOf(mode.value)
+  if (!id) return
+  if (!plans.value.some((p) => p.id === id) && !areas.value.some((a) => a.id === id)) mode.value = null
+})
+
+// 'area:<id>' and 'floorplan:<id>' both name a shape. 'polygons' -- a ring being drawn -- names nothing,
+// because what is being drawn is not part of the canvas yet.
 function objectIdOf(value) {
   if (typeof value !== 'string') return ''
   const cut = value.indexOf(':')
   return cut === -1 ? '' : value.slice(cut + 1)
 }
 
-// There is no editing session to start or stop any more, and nothing resets the history: everyone
-// works on the bench whenever they like, one object at a time. The stack belongs to this page, and
-// mergeById is what keeps Ctrl+Z from reaching into anybody else's work.
+// A pointer coming up anywhere is reliably the end of a drag: it is when a run of changes becomes the
+// one step it earned, and it is when what they changed is written. NOTHING IS WRITTEN WHILE A POINTER IS
+// DOWN (see useBenchDoc): a shape in motion is not a shape anybody should be sent, and "what the planner
+// meant" is not knowable until they let go.
+function beginGesture() {
+  bench.beginGesture()
+}
 
-// A pointer coming up anywhere is reliably the end of a drag, and the end of a drag is when a
-// run of changes becomes the one step it earned -- see endGesture and the listeners at the
-// bottom of this script.
+function endGesture() {
+  history.endRun()
+  bench.endGesture()
+}
 
-// Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y for the whole document, and Ctrl+C / Ctrl+V for the thing
-// being worked on. One listener for the page, because there is one timeline; the bench forwards
-// the press here for everything except the ring being drawn, which is not part of the document
-// yet.
+// Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y for the whole document, and Ctrl+C / Ctrl+V for the thing being worked
+// on. One listener for the page, because there is one timeline; the bench forwards the press here for
+// everything except the ring being drawn, which is not part of the document yet.
 function onKeyDown(event) {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return
   const el = event.target
   const tag = el && el.tagName
-  // Inside a text field every one of these belongs to the browser: a mistyped area name must come
-  // back as text, and a copied name as text too, not as a whole area.
+  // Inside a text field every one of these belongs to the browser: a mistyped area name must come back
+  // as text, and a copied name as text too, not as a whole area.
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
   const key = String(event.key || '').toLowerCase()
 
@@ -280,16 +204,16 @@ function onKeyDown(event) {
   else redo()
 }
 
-// The id of the area being worked on, for highlighting its row in the list. Empty when the
-// bench is not in an area mode.
+// The id of the area being worked on, for highlighting its row in the list. Empty when the bench is not
+// in an area mode.
 const selectedAreaId = computed(() => {
   const value = mode.value
   return typeof value === 'string' && value.startsWith('area:') ? value.slice('area:'.length) : ''
 })
 
-// The thing being worked on, if any, for the Ctrl+C shortcut: "copy what I am holding". The
-// bench derives these from `mode` too, and the two must agree, because the mode string is the
-// single source of truth for what is open.
+// The thing being worked on, if any, for the Ctrl+C shortcut: "copy what I am holding". The bench
+// derives these from `mode` too, and the two must agree, because the mode string is the single source of
+// truth for what is open.
 const selectedArea = computed(() => {
   const id = selectedAreaId.value
   return id ? areas.value.find((a) => a.id === id) || null : null
@@ -302,9 +226,9 @@ const selectedPlan = computed(() => {
   return plans.value.find((p) => p.id === id) || null
 })
 
-// Ctrl+C copies whatever is being worked on: the floor plan or the area the panel is showing.
-// Nothing open means nothing to copy, and the press is left to the browser -- so selecting text
-// on the page still copies text.
+// Ctrl+C copies whatever is being worked on: the floor plan or the area the panel is showing. Nothing
+// open means nothing to copy, and the press is left to the browser -- so selecting text on the page
+// still copies text.
 function copySelection() {
   if (selectedArea.value) {
     copyArea(selectedArea.value)
@@ -317,8 +241,8 @@ function copySelection() {
   return false
 }
 
-// Ctrl+V pastes whichever kind is on the clipboard. Which one is not a question: the clipboard
-// holds one thing at a time, and it remembers which.
+// Ctrl+V pastes whichever kind is on the clipboard. Which one is not a question: the clipboard holds one
+// thing at a time, and it remembers which.
 function pasteSelection() {
   if (clipboard.area.value) {
     pasteArea()
@@ -332,26 +256,26 @@ function pasteSelection() {
 }
 
 // ---------- What other planners are doing right now ----------
-// A live frame arrives while somebody else is dragging a shape, and is drawn on this screen so the
-// work is visible as it happens. That is ALL it does, and each of the three things it does not do is
+// A live frame arrives while somebody else is dragging a shape, and is drawn on this screen so the work
+// is visible as it happens. That is ALL it does, and each of the three things it does not do is
 // load-bearing:
 //
-//   - it is not a save. Nothing here goes near the database, and it never will: a frame is published
-//     by a browser, so a page that treated one as authoritative would be handing the bench to
-//     whoever felt like publishing. What makes that safe is the merge in save_bench() -- an object
-//     is taken from this page only if this page holds its LOCK -- so the geometry a frame put on
-//     this screen is in the payload of the next save and never wins anything with it.
+//   - it is not a save. Nothing here goes near the database, and it never will: a frame is published by
+//     a browser, so a page that treated one as authoritative would be handing the bench to whoever felt
+//     like publishing. What makes it safe is the LOCK -- save_object() writes nothing for a shape the
+//     caller does not hold -- so the geometry a frame put on this screen is in the patch of the next
+//     write and never wins anything with it.
 //   - it is not a step. `history.record()` is called by the write handlers below and by nothing else,
-//     and mergeById() keeps the live copy of everything this planner does not hold, so Ctrl+Z cannot
-//     reach into somebody else's hand.
-//   - it is not the whole shape. utils/benchFrame.js decides what a frame may carry (no id, no
-//     image) and refuses one that would leave this planner's canvas in a state the database would
-//     not store -- which matters because that canvas is what the NEXT save sends, and save_bench()
-//     judges the whole of it.
+//     and a shape this planner does not hold is never changed by an event (see useBenchDoc), so Ctrl+Z
+//     cannot reach into somebody else's hand.
+//   - it is not the whole shape. utils/benchFrame.js decides what a frame may carry (no id, no image)
+//     and refuses one that would leave this planner's canvas in a state the database would not store --
+//     which matters, because that canvas is what the next write of that shape sends, and the database
+//     checks the merged shape before it stores it.
 function applyFrame({ kind, id, patch }) {
-  // The database says this shape is mine, so somebody else's frames for it are not to be believed.
-  // Two planners can be on one shape for the moment before the lock answers, and that is the moment
-  // this is for: the one that loses is told, stops, and its geometry is never committed.
+  // The database says this shape is mine, so somebody else's frames for it are not to be believed. Two
+  // planners can be on one shape for the moment before the lock answers, and that is the moment this is
+  // for: the one that loses is told, stops, and its geometry is never committed.
   if (locks.holds(id)) return
 
   if (kind === 'plan') {
@@ -367,199 +291,201 @@ function applyFrame({ kind, id, patch }) {
 }
 
 // ---------- What AreaBench reports ----------
-// EVERY write records a step first. `history.record()` reads the document as it stands, so the
-// state it captures is the one before the change -- which is exactly what Undo has to put back.
-// Doing it here, at the one place that writes, is what makes the stack cover everything: a
-// dropped dot, a new area, a deleted floor plan and a renamed area are all just writes.
+// EVERY write records a step first. `history.record()` reads the document as it stands, so the state it
+// captures is the one before the change -- which is exactly what Undo has to put back. Doing it here, at
+// the one place that writes, is what makes the stack cover everything: a dropped dot, a new area, a
+// deleted floor plan and a renamed area are all just writes.
 //
-// AND EVERY WRITE ASKS FOR THE OBJECT'S LOCK FIRST. This is the one place a change to the canvas
-// begins, and the database will not store a change to an object nobody holds (see save_bench in
-// 008_object_locks.sql) -- so the refusal is taken here, before the change happens at all: the
-// shape never moves, no step is recorded, and useBenchLocks has already put the reason on screen.
+// AND EVERY WRITE ASKS FOR THE SHAPE'S LOCK FIRST. This is where a change to the canvas begins, and the
+// database will not store a change to a shape nobody holds (see save_object in 009_object_rows.sql) --
+// so the refusal is taken here, before the change happens at all: the shape never moves, no step is
+// recorded, and useBenchLocks has already put the reason on screen.
 async function mayWrite(id) {
   if (!id) return true
   const granted = await locks.ensure(id)
-  // Tell the others what I am holding. A page carries one active object in its presence row, so
-  // this is the most recent one rather than the whole set -- a hint for their screens, while the
-  // database holds every lock and is what actually refuses them.
+  // Tell the others what I am holding. A page carries one active shape in its presence row, so this is
+  // the most recent one rather than the whole set -- a hint for their screens, while the database holds
+  // every lock and is what actually refuses them.
   if (granted) presence.setHolding(id)
   return granted
 }
 
 // A shape being dragged, reported BEFORE it is committed. A dot's drag deliberately tells the page
-// nothing until it is let go (see AreaBench), so this is the only route the ring in flight has to
-// the other planners -- and it takes the same lock a change does, through the same `mayWrite`. That
-// is not a formality: a planner whose frames the others follow has to be the planner who owns the
-// shape, or two screens would be following two different answers. It also means the loser of a race
-// finds out at the first move instead of at the drop, while the shape is still under their finger.
+// nothing until it is let go (see AreaBench), so this is the only route the ring in flight has to the
+// other planners -- and it takes the same lock a change does, through the same `mayWrite`. That is not a
+// formality: a planner whose frames the others follow has to be the planner who owns the shape, or two
+// screens would be following two different answers. It also means the loser of a race finds out at the
+// first move instead of at the drop, while the shape is still under their finger.
 async function streamArea({ id, patch }) {
   if (!(await mayWrite(id))) return
   frames.send('area', id, patch)
 }
 
-// ---------- Writes that are still on their way in ----------
-// EVERY WRITE WAITS FOR A LOCK, and a lock is a round trip, so a write can still be on its way in
-// when the planner does the next thing. That is fine everywhere except in the one sequence that is
-// the most ordinary thing anybody does here: draw a shape and name it. finishDraft() hands the new
-// area to addArea() -- which now asks the database for that area's lock first -- and sets `mode` to
-// null in the SAME tick, and `mode` going to null is the save. So the save ran while addArea was
-// still waiting, and it wrote the canvas without the shape it had just been handed.
-//
-// It was not theoretical. tools/bench_harness.mjs drew an area, waited for the save, reloaded the
-// bench in a second browser, and the area was not there: drawn, on screen, saved, gone. (The save
-// itself took 22 seconds, because this bench is 3.7 MB of a 4 MB cap, which only made the window
-// wider.)
-//
-// So the page keeps its own writes in a list, and a save waits for them all. Nothing in flight is
-// the ordinary case and costs one loop check.
-let inFlight = []
-// When the document was last written to. A save remembers the moment it took its payload, so it can
-// tell whether the reply it gets back is still about the document on screen -- see saveNow.
-let lastWriteAt = 0
-
-function changedSince(stamp) {
-  return lastWriteAt > (Number(stamp) || 0)
-}
-
-function writing(work) {
-  const flight = work()
-  inFlight.push(flight)
-  const done = () => {
-    inFlight = inFlight.filter((other) => other !== flight)
-    lastWriteAt = Date.now()
-  }
-  flight.then(done, done)
-  return flight
-}
-
-async function settled() {
-  while (inFlight.length) await Promise.allSettled(inFlight.slice())
-}
-
+// A NEW shape is written at once, and waited for: everything else here is written when the change
+// settles, but a shape that only exists on one screen is not something the others can be told about
+// later -- and the planner's very next act is usually to click away from it, which must not be able to
+// leave it behind. (That was a measured bug of the whole-document save: draw an area, wait for the save,
+// reload in a second browser, and it was not there.)
 async function addPlan(plan) {
-  return writing(async () => {
-    if (!(await mayWrite(plan.id))) return
-    history.record()
-    layout.value.floorPlans = [...layout.value.floorPlans, plan]
-  })
+  if (!(await mayWrite(plan.id))) return
+  history.record()
+  madeHere.add(plan.id)
+  layout.value.floorPlans = [...layout.value.floorPlans, plan]
+  bench.change('plan', plan.id, plan)
+  await bench.flush(plan.id)
 }
 
 async function updatePlan({ id, patch }) {
-  return writing(async () => {
-    if (!(await mayWrite(id))) return
-    history.record()
-    layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? { ...p, ...patch } : p))
-    // And tell the others, so a picture being moved or turned travels across their screens instead of
-    // teleporting when it is put down. Whatever the drag reports -- a centre, an angle, a size, a
-    // rename -- is exactly what a frame may carry (see utils/benchFrame.js).
-    frames.send('plan', id, patch)
-  })
+  if (!(await mayWrite(id))) return
+  history.record()
+  layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? { ...p, ...patch } : p))
+  // And tell the others, so a picture being moved or turned travels across their screens instead of
+  // teleporting when it is put down. Whatever the drag reports -- a centre, an angle, a size, a rename
+  // -- is exactly what a frame may carry (see utils/benchFrame.js).
+  frames.send('plan', id, patch)
+  bench.change('plan', id, patch)
 }
 
 async function deletePlan(id) {
-  return writing(async () => {
-    if (!(await mayWrite(id))) return
-    history.record()
-    layout.value.floorPlans = layout.value.floorPlans.filter((p) => p.id !== id)
-    // Deleting the picture that is open puts it down at once. See deleteArea.
-    if (mode.value === 'floorplan:' + id) mode.value = null
-  })
+  if (!(await mayWrite(id))) return
+  history.record()
+  madeHere.delete(id)
+  layout.value.floorPlans = layout.value.floorPlans.filter((p) => p.id !== id)
+  // Deleting the picture that is open puts it down at once. See deleteArea.
+  if (mode.value === 'floorplan:' + id) mode.value = null
+  await bench.remove('plan', id)
 }
 
 async function addArea(area) {
-  return writing(async () => {
-    if (!(await mayWrite(area.id))) return
-    history.record()
-    layout.value.polygons = [...layout.value.polygons, area]
-  })
+  if (!(await mayWrite(area.id))) return
+  history.record()
+  madeHere.add(area.id)
+  layout.value.polygons = [...layout.value.polygons, area]
+  bench.change('area', area.id, area)
+  await bench.flush(area.id)
 }
 
 async function updateArea({ id, patch }) {
-  return writing(async () => {
-    if (!(await mayWrite(id))) return
-    history.record()
-    layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? { ...a, ...patch } : a))
-    // And tell the others. An outline dragged across the map reports on every move, so this is what
-    // the other planners watch it with: twenty frames a second, and one save when it is put down.
-    frames.send('area', id, patch)
-  })
+  if (!(await mayWrite(id))) return
+  history.record()
+  layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? { ...a, ...patch } : a))
+  // And tell the others. An outline dragged across the map reports on every move, so this is what the
+  // other planners watch it with: twenty frames a second, and one write when it is let go of.
+  frames.send('area', id, patch)
+  bench.change('area', id, patch)
 }
 
 async function deleteArea(id) {
-  return writing(async () => {
-    if (!(await mayWrite(id))) return
-    history.record()
-    layout.value.polygons = layout.value.polygons.filter((a) => a.id !== id)
-    // Deleting the shape that is open puts it down at once. `mode` would otherwise point at a shape
-    // that no longer exists -- and `mode` going to null is the ONLY save trigger on this page, so the
-    // deletion would sit in the browser until the planner happened to click somewhere else. The
-    // watcher runs after this function returns, and the save it starts waits for this write (see
-    // settled), so what goes to the database is the canvas with the shape already gone.
-    if (mode.value === 'area:' + id) mode.value = null
-  })
+  if (!(await mayWrite(id))) return
+  history.record()
+  madeHere.delete(id)
+  layout.value.polygons = layout.value.polygons.filter((a) => a.id !== id)
+  // Deleting the shape that is open puts it down at once: `mode` would otherwise point at a shape that
+  // no longer exists. Nothing is saved by doing it any more -- the deletion is written by the call below
+  // -- but the panel would otherwise stay open on a shape that is gone.
+  if (mode.value === 'area:' + id) mode.value = null
+  await bench.remove('area', id)
 }
 
-// The view is NOT a step, and it is not the document's business either. Panning and zooming report
-// on every settle, so recording them would bury every real edit under a pile of steps that only
-// move the camera; and the camera is the one thing two planners must NOT share, or one of them
-// panning would carry the other's map along with it (see 007_presence_and_views.sql). It goes to
-// this planner's own row instead, and Undo stays about what was drawn.
+// The view is NOT a step, and it is not the document's business either. Panning and zooming report on
+// every settle, so recording them would bury every real edit under a pile of steps that only move the
+// camera; and the camera is the one thing two planners must NOT share, or one of them panning would
+// carry the other's map along with it (see 007_presence_and_views.sql). It goes to this planner's own
+// row instead, and Undo stays about what was drawn.
 function setView(view) {
   saveView(view)
 }
 
-// Everything is over: the run of changes becomes one step. Called on pointerup, which is the one
-// moment that is reliably the end of a drag, so a dragged dot is one step rather than sixty.
-function endGesture() {
-  history.endRun()
-}
-
 // ---------- Undo / redo of the whole document ----------
-// A restore is NOT a reset: the states ahead of the one being put back have to stay reachable,
-// or redo would clear itself the moment undo ran. `settle` tells the stack what is on screen
-// now; only starting or ending a session resets it.
-// Objects I hold the lock on come from `preferred` (a snapshot, or the bench as the server has it);
-// everything else stays exactly as it is, because it is not mine to say. This is the SAME rule the
-// database applies to a save (see save_bench in 008_object_locks.sql), and it is what stops Ctrl+Z
-// from undoing somebody else's work -- with ONE stack for the whole canvas, putting a snapshot back
-// wholesale would do exactly that.
-function mergeById(preferred, current) {
-  const out = []
+// A restore is NOT a reset: the states ahead of the one being put back have to stay reachable, or redo
+// would clear itself the moment undo ran.
+//
+// WHAT A STEP MEANS NOW. Before 009 a restore only changed what was on screen and the next save carried
+// it; a step is now a set of WRITES -- a shape put back is a shape written, and a shape Undo takes away
+// is a shape deleted -- so this is the one place on the page that touches more than one shape at once.
+//
+// Shapes this planner does not hold are left exactly as they are, which is what stops Ctrl+Z from
+// reaching into somebody else's work. And a shape the step does not have, which THIS PLANNER made, is
+// one Undo made -- so Undo takes it away. That last rule is the one that was wrong before: the old merge
+// kept every shape its snapshot did not mention, on the reasoning that another planner might have made
+// it since, and the effect was that drawing an area and pressing Ctrl+Z left the area on the bench.
+const madeHere = new Set()
+
+// One list of shapes, put back to the state the step was taken in.
+//
+//   - a shape the step has: the step's version if it is mine to say, and otherwise the one on screen;
+//   - a shape the step does not have, which I made: taken away;
+//   - a shape the step does not have, which I did not make: left exactly where it is.
+//
+// Everything that has to be written is named, because a restore has to SAY what it changed rather than
+// rely on a later save to notice -- there is no later save any more.
+function restoreList(step, current, wasHeld) {
+  const list = []
+  const write = []
+  const drop = []
   const seen = new Set()
 
-  for (const item of preferred) {
-    const here = current.find((c) => c.id === item.id)
-    out.push(!here || locks.holds(item.id) ? item : here)
-    seen.add(item.id)
+  for (const shape of step) {
+    const here = current.find((c) => c.id === shape.id)
+    seen.add(shape.id)
+    if (!here || wasHeld(shape.id)) {
+      list.push(shape)
+      if (here !== shape) write.push(shape)
+    } else {
+      list.push(here)
+    }
   }
 
-  // Anything the other side has never heard of is not mine to remove either: another planner may
-  // have made it since.
-  for (const item of current) {
-    if (!seen.has(item.id)) out.push(item)
+  for (const shape of current) {
+    if (seen.has(shape.id)) continue
+    if (madeHere.has(shape.id)) {
+      drop.push(shape.id)
+      continue
+    }
+    list.push(shape)
   }
-  return out
+
+  return { list, write, drop }
 }
 
 function restore(snapshot) {
   if (!snapshot) return
-  // Put down whatever is being worked on first. Restoring can remove the very area being
-  // adjusted, and a mode pointing at something that is no longer there would leave the panel
-  // showing controls for a shape that does not exist. Leaving the mode alone when it is already
-  // null also avoids a pointless save of the pre-restore state.
+  // Put down whatever is being worked on first: restoring can remove the very shape being adjusted, and
+  // a mode pointing at something that is no longer there would leave the panel showing controls for a
+  // shape that does not exist. Leaving the mode alone when it is already null also avoids writing the
+  // pre-restore state of a shape nobody is working on.
   if (mode.value !== null) mode.value = null
-  layout.value = {
-    // The view is not the document's any more, so Undo leaves the camera where the planner has it
-    // (see setView below).
-    view: layout.value.view,
-    floorPlans: mergeById(snapshot.floorPlans, layout.value.floorPlans),
-    polygons: mergeById(snapshot.polygons, layout.value.polygons),
-  }
+
+  const before = layout.value
+  const floorPlans = restoreList(snapshot.floorPlans, before.floorPlans, locks.holds)
+  const polygons = restoreList(snapshot.polygons, before.polygons, locks.holds)
+
+  // The view is not the document's any more, so Undo leaves the camera where the planner has it.
+  layout.value = { view: before.view, floorPlans: floorPlans.list, polygons: polygons.list }
   history.settle(snapshot)
+
+  for (const shape of floorPlans.write) putBack('plan', shape)
+  for (const shape of polygons.write) putBack('area', shape)
+  for (const id of floorPlans.drop) takeAway('plan', id)
+  for (const id of polygons.drop) takeAway('area', id)
 }
 
-// Called by the bench for the toolbar and for Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y. One timeline for
-// the whole page, so there is no question of which stack a press means.
+async function putBack(kind, shape) {
+  if (!(await mayWrite(shape.id))) return
+  // A shape the bench does not have is one this page is CREATING (again), and Undo has to know it made
+  // it -- or the next Undo would leave it behind. See `madeHere` below.
+  if (!bench.known(shape.id)) madeHere.add(shape.id)
+  bench.replace(kind, shape.id, shape)
+}
+
+async function takeAway(kind, id) {
+  if (!(await mayWrite(id))) return
+  madeHere.delete(id)
+  await bench.remove(kind, id)
+}
+
+// Called by the bench for the toolbar and for Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y. One timeline for the whole
+// page, so there is no question of which stack a press means.
 function undo() {
   restore(history.undo())
 }
@@ -569,12 +495,12 @@ function redo() {
 }
 
 // ---------- Copy and paste ----------
-// A duplicate is a NEW thing built from the old one: a fresh id (or the two rows would be the
-// same row as far as the map, the list and Realtime are concerned), a name that is not already
-// taken, and a position a short step away so the copy is not hidden underneath the original.
+// A duplicate is a NEW thing built from the old one: a fresh id (or the two rows would be the same row as
+// far as the map, the list and Realtime are concerned), a name that is not already taken, and a position
+// a short step away so the copy is not hidden underneath the original.
 //
-// The duplicate is an ordinary change, so it records a step first and Undo takes it back -- a
-// paste that could not be undone would be a trap.
+// The duplicate is an ordinary change, so it records a step first and Undo takes it back -- a paste that
+// could not be undone would be a trap.
 
 function copyArea(area) {
   clipboard.copyArea(area)
@@ -597,9 +523,9 @@ function pasteArea() {
   }
   // addArea records the step, like every other write (see the section above).
   addArea(area)
-  // Selected, so the copy is the thing on screen: its name is in the list, and its dots can be
-  // dragged straight away. Pasting into the middle of a drawing session puts that down first, so
-  // the planner is looking at what they just made.
+  // Selected, so the copy is the thing on screen: its name is in the list, and its dots can be dragged
+  // straight away. Pasting into the middle of a drawing session puts that down first, so the planner is
+  // looking at what they just made.
   mode.value = 'area:' + area.id
 }
 
@@ -614,37 +540,29 @@ function pastePlan() {
     name: copyName(from.name, taken),
     centre: offsetLatLng(from.centre, PASTE_OFFSET_M),
   }
-  // The document is whole-canvas, so a copy of a floor plan is a copy of its image too: pasting
-  // enough of them can cross the 4 MB that save_bench() accepts. Measured before anything is
-  // added, so a paste that could not be saved never happens.
-  if (documentWouldOverflow(plan)) return
+  // A copy of a floor plan at least does not cost a second picture: the image is stored once, under the
+  // md5 of the image itself (009), so a paste of one that is already here adds its placement and
+  // nothing else. Measured here anyway, before anything is added.
+  if (!planFits(plan)) {
+    errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
+    return
+  }
   // addPlan records the step, like every other write (see the section above).
   addPlan(plan)
-  // Selected, so the copy is the thing on screen: its corners and its rotate knob appear
-  // straight away. The bench draws them from the new mode on its own.
+  // Selected, so the copy is the thing on screen: its corners and its rotate knob appear straight away.
+  // The bench draws them from the new mode on its own.
   mode.value = 'floorplan:' + plan.id
 }
 
-// Would adding this floor plan push the canvas over the cap save_bench() enforces? The document
-// is rebuilt the way the page builds it (view + floorPlans + polygons), and measured with the
-// same helper and the same byte count the save itself uses, so the two cannot disagree.
-function documentWouldOverflow(addedPlan) {
-  const doc = { view: layout.value.view, floorPlans: [...plans.value, addedPlan], polygons: areas.value }
-  if (layoutBytes(JSON.stringify(doc)) <= MAX_LAYOUT_BYTES) return false
-  errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE
-  return true
-}
-
-// A fresh id for a pasted thing. crypto.randomUUID is not available in every browser the app
-// runs in (and not over plain http), so there is a fallback -- two rows sharing an id would be a
-// far worse bug than a slightly weaker one.
+// A fresh id for a pasted thing. crypto.randomUUID is not available in every browser the app runs in
+// (and not over plain http), so there is a fallback -- two rows sharing an id would be a far worse bug
+// than a slightly weaker one.
 function newId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return 'x' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-// Clicking an area -- on the map or in the list -- selects it. Clicking it again puts it
-// back down, which is a lock, which is the save.
+// Clicking an area -- on the map or in the list -- selects it. Clicking it again puts it back down.
 function selectArea(id) {
   mode.value = mode.value === 'area:' + id ? null : 'area:' + id
 }
@@ -653,14 +571,16 @@ onMounted(() => {
   open()
   locks.start()
   window.addEventListener('keydown', onKeyDown)
-  // A gesture ends when the pointer comes up, wherever it is: that is when a run of changes
-  // becomes the one step it earned, rather than waiting for the quiet timer.
+  // A gesture begins when a pointer goes down anywhere and ends when it comes up, wherever it is: that
+  // is when a run of changes becomes the one step it earned, and when what it changed is written.
+  window.addEventListener('pointerdown', beginGesture)
   window.addEventListener('pointerup', endGesture)
   window.addEventListener('pointercancel', endGesture)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('pointerdown', beginGesture)
   window.removeEventListener('pointerup', endGesture)
   window.removeEventListener('pointercancel', endGesture)
 })
@@ -763,6 +683,7 @@ onUnmounted(() => {
       :presence="presence"
       :size-text="sizeText"
       :size-ratio="sizeRatio"
+      :plan-fits="planFits"
       @plan-added="addPlan"
       @plan-updated="updatePlan"
       @plan-deleted="deletePlan"
