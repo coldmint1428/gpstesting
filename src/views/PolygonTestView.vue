@@ -14,9 +14,12 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useBenchClaim } from '../composables/useBenchClaim'
 import { useDocHistory } from '../composables/useDocHistory'
 import { useBenchPresence } from '../composables/useBenchPresence'
+import { useBenchLocks } from '../composables/useBenchLocks'
+import { useBenchFrames } from '../composables/useBenchFrames'
 import { PASTE_OFFSET_M, copyName, offsetLatLng, useBenchClipboard } from '../composables/useBenchClipboard'
-import { MAX_LAYOUT_BYTES, LAYOUT_TOO_LARGE_MESSAGE, layoutBytes } from '../utils/layoutLimits'
+import { MAX_LAYOUT_BYTES, LAYOUT_TOO_LARGE_MESSAGE, documentBytes, layoutBytes } from '../utils/layoutLimits'
 import { firstAreaProblem } from '../utils/areaKinds'
+import { applyAreaFrame, applyPlanFrame } from '../utils/benchFrame'
 import { formatBytes } from '../utils/imageShrink'
 import AreaBench from '../components/AreaBench.vue'
 import AreaList from '../components/AreaList.vue'
@@ -72,6 +75,12 @@ const presence = useBenchPresence()
 // never happens at all.
 const locks = useBenchLocks()
 
+// What everybody else is doing to a shape RIGHT NOW (see composables/useBenchFrames.js). A frame is
+// published by the page that is moving something and drawn by everybody else, which is what makes
+// one planner's drag visible on another planner's screen instead of arriving as a jump when the
+// shape is finally put down. Like the clipboard and the history, there is one of these per page.
+const frames = useBenchFrames()
+
 // A ref inside a plain object is not unwrapped in a template (see the note on canUndo above), so
 // what the header draws is a real computed rather than presence.others.
 const hereNow = computed(() => presence.others.value)
@@ -85,15 +94,22 @@ const areas = computed(() => layout.value.polygons)
 const startView = computed(() => myView.value || layout.value.view)
 
 // Presence is filed under the bench's id, which only exists once the bench has been opened, so
-// joining waits for it instead of guessing.
+// joining waits for it instead of guessing. Live frames go out on the same moment: they are
+// published under the SAME tag presence publishes and never under the session the database
+// authorises with, which is the rule 007 set and this is the second thing to obey it (see
+// composables/useBenchFrames.js). `join` mints that tag before it returns, which is why it can be
+// read here.
 watch(layoutId, (id) => {
-  if (id) presence.join(id)
+  if (!id) return
+  presence.join(id)
+  frames.start(id, presence.myPresenceId.value, applyFrame)
 })
 
-// Build the canvas as JSON text, which is what save_bench() counts the bytes of. The
-// round-trip through a string also strips Vue's reactive proxies, so supabase-js never sees
-// anything unexpected. The one string serves both the size check and the request body, so
-// the document is serialised once per save instead of twice.
+// Build the canvas as JSON text, which is what a save sends and what save_bench() counts the bytes
+// of. The round-trip through a string also strips Vue's reactive proxies, so supabase-js never sees
+// anything unexpected. This is a computed, so it is built when a save reads it and at no other
+// time: the size warning does NOT come from here any more, and the reason is worth knowing -- see
+// `bytes` below.
 const canvasText = computed(() => JSON.stringify(layout.value))
 
 // Why the database refused, in words the planner can act on.
@@ -135,13 +151,20 @@ async function resync() {
 // How close the canvas is to the 4 MB cap save_bench() enforces. The planner cannot see a
 // 3.9 MB document, so this is the only warning they get before a save is refused.
 //
-// Measured from the very string a save would send (canvasText, above), and measured on every
-// change rather than only when a save happens: this is what makes the ring in the floor plans card
-// move as a picture is added or deleted, instead of jumping at the next lock.
+// Measured on every change rather than only when a save happens: this is what makes the ring in the
+// floor plans card move as a picture is added or deleted, instead of jumping at the next lock.
+//
+// It is the SAME number the save will be measured with -- byte for byte, including the pictures --
+// but it is not counted by writing the document out. It used to be, and that was fine while a change
+// meant a click: it stopped being fine once a change arrived twenty times a second from somebody
+// else's drag (see applyFrame and useBenchFrames), because writing the document out means escaping
+// every base64 image in it -- measured at 1.7 ms and 750 KB of garbage for one 700 KB floor plan,
+// per frame. utils/layoutLimits.documentBytes does the same arithmetic in pieces and remembers the
+// pieces, so the number is exact and the pictures are measured once.
 //
 // The page measures it rather than useBenchClaim, which measures its own copy of the document --
 // that copy has no `view`, so it would report the wrong number.
-const bytes = computed(() => layoutBytes(canvasText.value))
+const bytes = computed(() => documentBytes(layout.value))
 const sizeText = computed(() => formatBytes(bytes.value) + ' of ' + formatBytes(MAX_LAYOUT_BYTES))
 const sizeRatio = computed(() => bytes.value / MAX_LAYOUT_BYTES)
 
@@ -274,6 +297,41 @@ function pasteSelection() {
   return false
 }
 
+// ---------- What other planners are doing right now ----------
+// A live frame arrives while somebody else is dragging a shape, and is drawn on this screen so the
+// work is visible as it happens. That is ALL it does, and each of the three things it does not do is
+// load-bearing:
+//
+//   - it is not a save. Nothing here goes near the database, and it never will: a frame is published
+//     by a browser, so a page that treated one as authoritative would be handing the bench to
+//     whoever felt like publishing. What makes that safe is the merge in save_bench() -- an object
+//     is taken from this page only if this page holds its LOCK -- so the geometry a frame put on
+//     this screen is in the payload of the next save and never wins anything with it.
+//   - it is not a step. `history.record()` is called by the write handlers below and by nothing else,
+//     and mergeById() keeps the live copy of everything this planner does not hold, so Ctrl+Z cannot
+//     reach into somebody else's hand.
+//   - it is not the whole shape. utils/benchFrame.js decides what a frame may carry (no id, no
+//     image) and refuses one that would leave this planner's canvas in a state the database would
+//     not store -- which matters because that canvas is what the NEXT save sends, and save_bench()
+//     judges the whole of it.
+function applyFrame({ kind, id, patch }) {
+  // The database says this shape is mine, so somebody else's frames for it are not to be believed.
+  // Two planners can be on one shape for the moment before the lock answers, and that is the moment
+  // this is for: the one that loses is told, stops, and its geometry is never committed.
+  if (locks.holds(id)) return
+
+  if (kind === 'plan') {
+    const plan = layout.value.floorPlans.find((p) => p.id === id)
+    const next = plan ? applyPlanFrame(plan, patch) : null
+    if (next) layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? next : p))
+    return
+  }
+
+  const area = layout.value.polygons.find((a) => a.id === id)
+  const next = area ? applyAreaFrame(area, patch) : null
+  if (next) layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? next : a))
+}
+
 // ---------- What AreaBench reports ----------
 // EVERY write records a step first. `history.record()` reads the document as it stands, so the
 // state it captures is the one before the change -- which is exactly what Undo has to put back.
@@ -294,6 +352,17 @@ async function mayWrite(id) {
   return granted
 }
 
+// A shape being dragged, reported BEFORE it is committed. A dot's drag deliberately tells the page
+// nothing until it is let go (see AreaBench), so this is the only route the ring in flight has to
+// the other planners -- and it takes the same lock a change does, through the same `mayWrite`. That
+// is not a formality: a planner whose frames the others follow has to be the planner who owns the
+// shape, or two screens would be following two different answers. It also means the loser of a race
+// finds out at the first move instead of at the drop, while the shape is still under their finger.
+async function streamArea({ id, patch }) {
+  if (!(await mayWrite(id))) return
+  frames.send('area', id, patch)
+}
+
 async function addPlan(plan) {
   if (!(await mayWrite(plan.id))) return
   history.record()
@@ -304,6 +373,10 @@ async function updatePlan({ id, patch }) {
   if (!(await mayWrite(id))) return
   history.record()
   layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? { ...p, ...patch } : p))
+  // And tell the others, so a picture being moved or turned travels across their screens instead of
+  // teleporting when it is put down. Whatever the drag reports -- a centre, an angle, a size, a
+  // rename -- is exactly what a frame may carry (see utils/benchFrame.js).
+  frames.send('plan', id, patch)
 }
 
 async function deletePlan(id) {
@@ -322,6 +395,9 @@ async function updateArea({ id, patch }) {
   if (!(await mayWrite(id))) return
   history.record()
   layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? { ...a, ...patch } : a))
+  // And tell the others. An outline dragged across the map reports on every move, so this is what
+  // the other planners watch it with: twenty frames a second, and one save when it is put down.
+  frames.send('area', id, patch)
 }
 
 async function deleteArea(id) {
@@ -601,6 +677,7 @@ onUnmounted(() => {
       @plan-pasted="pastePlan"
       @area-added="addArea"
       @area-updated="updateArea"
+      @area-frame="streamArea"
       @area-copied="copyArea"
       @area-pasted="pasteArea"
       @view-changed="setView"

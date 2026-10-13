@@ -82,6 +82,22 @@ planner's **own** (`public.layout_views`), so panning no longer carries anybody 
 with it — the copy inside the canvas is only the fallback for a planner who has never panned. See
 `supabase/migrations/007_presence_and_views.sql`.
 
+**And a drag is visible while it is happening.** The planner moving a shape publishes its geometry
+to the other open pages about twenty times a second over the same Realtime socket, so an outline
+follows a finger across everybody's screen instead of jumping to its new place when it is put down,
+and its row in the list of areas moves with it. Frames are broadcasts rather than rows: they never
+reach the database, so a drag costs no writes and a lost frame costs nothing (the next one is more
+current). They are not trusted either — a frame may only change the fields a drag changes (never an
+`id`, never a floor plan's image) and never into geometry the database would refuse, because what a
+planner's screen shows is what their *next* save sends. What decides who wins is still the lock, and
+what the server actually stores is still the merge. See `src/composables/useBenchFrames.js` and
+`src/utils/benchFrame.js`.
+
+Two things a live frame deliberately does not do, both because it only ever patches a shape that is
+already on the other screen: a shape that did not exist a moment ago does not appear live, and a
+deleted shape does not vanish live. Both arrive with the next save, when the other planner's copy is
+overruled and re-read.
+
 The whole canvas — the map view, the floor plans (placement **and** the image itself,
 base64) and the areas — lives in one row of `public.layouts`, capped at **4 MB** by
 `save_bench()`. Every floor plan image is shrunk in the browser to under 512 KB before it goes

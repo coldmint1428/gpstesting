@@ -107,6 +107,10 @@ const emit = defineEmits([
   'plan-deleted',
   'area-added',
   'area-updated',
+  // A shape being dragged, before the drop: the ring as it is at this moment, reported so the page
+  // can publish it to the other planners (see useBenchFrames). NOT `area-updated`: nothing has been
+  // decided yet, and a dot's drag is deliberately kept out of the document until it is let go.
+  'area-frame',
   'view-changed',
   // A copy is just news -- the page keeps the clipboard. A paste is a request for a new thing,
   // built by the page because the page owns the document.
@@ -705,6 +709,16 @@ function renderPresence() {
   }
 }
 
+// Is a dot of this area under the planner's finger right now? A dot's drag is the one gesture that
+// does NOT report to the page until it is let go (see onVertexMove), so while it is happening the
+// props still hold the ring as it was and the layer is ahead of them. Everything that would draw the
+// shape from the document has to leave both the dot and the outline alone until the drop, or a
+// render caused by anything else at all -- another planner's live frame, most of all -- would flick
+// the outline back to where the drag started, twenty times a second.
+function draggingVertices(objectId) {
+  return Boolean(vertexDrag && vertexDrag.id === objectId)
+}
+
 function render() {
   if (!map) return
 
@@ -783,7 +797,10 @@ function render() {
       // Shape and look are compared separately: dragging an area rewrites its points many
       // times a second, and there is no reason to rewrite the colour and the label too.
       const styleKey = area.kind + '\u0000' + area.name
-      if (layer.benchKey !== key) {
+      if (layer.benchKey !== key && !draggingVertices(area.id)) {
+        // `benchKey` is deliberately NOT updated for an area whose dot is being dragged: the layer
+        // is where the drag has drawn it, the props are behind, and leaving the key alone is what
+        // makes the next render after the drop put the shape back in step with the document.
         applyAreaPoints(layer, area.points)
         layer.benchKey = key
       }
@@ -1444,7 +1461,14 @@ function drawAreaVertices() {
   // which an added or removed point genuinely needs -- is too much to do once per frame of
   // a drag, and it would destroy the very dot being dragged.
   if (areaVertexMarkers.benchArea === area.id && areaVertexMarkers.length === points.length) {
-    points.forEach((point, index) => areaVertexMarkers[index].setLatLng(point))
+    points.forEach((point, index) => {
+      // The dot under the planner's finger is not the props' business. This runs whenever the areas
+      // change at all, and since a live frame from another planner arrives twenty times a second
+      // while they drag anything (see useBenchFrames), that is now often: putting the dragged dot
+      // back where the document still has it would make it fight the finger it is following.
+      if (vertexDrag && vertexDrag.id === area.id && vertexDrag.index === index) return
+      areaVertexMarkers[index].setLatLng(point)
+    })
     return
   }
 
@@ -1559,6 +1583,16 @@ function onVertexPointerDown(id, index, event) {
 
 function onVertexMove(event) {
   if (!vertexDrag || !map) return
+
+  // The refusal can arrive while the finger is still down: the lock is answered by the database
+  // while this drag is being drawn. A drag that carried on would leave the outline somewhere that
+  // is not saved and cannot be, so the gesture ends here and the ring goes back -- see
+  // cancelVertexDrag.
+  if (blockedBy(vertexDrag.id)) {
+    cancelVertexDrag()
+    return
+  }
+
   trackPointer(event)
   const here = map.mouseEventToContainerPoint(event)
 
@@ -1590,7 +1624,14 @@ function onVertexMove(event) {
   // snapped away from it. This is feedback only, and the red IS the message: the planner can see the
   // line that overlaps, and a paragraph repeating it would be noise in the corner of the thing they
   // are looking at. The one thing said out loud is the refusal they cannot see, on the drop.
-  applyAreaPoints(areaLayers[vertexDrag.id], next, Boolean(ringCrossing(next)))
+  const crossing = Boolean(ringCrossing(next))
+  applyAreaPoints(areaLayers[vertexDrag.id], next, crossing)
+
+  // The others watch the dot travel -- that is what a live frame is for. They do NOT watch it
+  // somewhere the drop would refuse: refusing a crossing ring is the bench's own rule, not the
+  // database's, so a frame carrying one would put a shape on every other screen that no drop can
+  // ever commit. What they see instead is the dot stop at the last place it could have been let go.
+  if (!crossing) emit('area-frame', { id: vertexDrag.id, patch: { points: next } })
 }
 
 // The drop, judged on where the dot LANDS and never on the path it took to get there. One drag that
@@ -1629,6 +1670,23 @@ function stopVertexDrag() {
   window.removeEventListener('pointercancel', endVertexDrag)
   stopAutoPan()
   endHistoryRun()
+}
+
+// A dot stopped being this planner's to move, mid-drag. The gesture ends and the ring is drawn from
+// the document again, because the document is the only thing here that is true: the drag was drawing
+// a shape that was never reported to the page (see onVertexMove), so what the props hold is what is
+// really there. The watcher in the page does the same for a refusal that lands with no drag in
+// flight; this is the case it cannot cover, because the drag would redraw its own ring on the very
+// next move.
+function cancelVertexDrag() {
+  const drag = vertexDrag
+  stopVertexDrag()
+  if (!drag) return
+
+  const area = props.areas.find((a) => a.id === drag.id)
+  if (!area) return
+  if (drag.marker) drag.marker.setLatLng(area.points[drag.index] || area.points[0])
+  applyAreaPoints(areaLayers[drag.id], area.points)
 }
 
 // A new point has to go somewhere legal, and then the planner drags it into place.
@@ -1718,6 +1776,16 @@ function onAreaPointerDown(id, event) {
 // anchor is: see reanchor, which moves it while the view moves under the drag.
 function onAreaDragMove(event) {
   if (!areaDrag || !map) return
+
+  // Same as a dragged dot: losing the shape mid-gesture ends the gesture, rather than letting the
+  // outline carry on to a place the save will refuse. Unlike a dot, the outline may already have
+  // been reported (this drag reports on every move), so what the document holds is the last
+  // position that WAS accepted -- which is what the shape goes back to.
+  if (blockedBy(areaDrag.id)) {
+    cancelAreaDrag()
+    return
+  }
+
   trackPointer(event)
   const from = areaDrag.from
   const here = map.containerPointToLatLng(map.mouseEventToContainerPoint(event))
@@ -1734,6 +1802,16 @@ function endAreaDrag() {
   window.removeEventListener('pointercancel', endAreaDrag)
   stopAutoPan()
   endHistoryRun()
+}
+
+// The outline stopped being this planner's to move, mid-drag. See onAreaDragMove.
+function cancelAreaDrag() {
+  const drag = areaDrag
+  endAreaDrag()
+  if (!drag) return
+
+  const area = props.areas.find((a) => a.id === drag.id)
+  if (area) applyAreaPoints(areaLayers[drag.id], area.points)
 }
 
 // ---------- Drawing, and the map's two clicks ----------
