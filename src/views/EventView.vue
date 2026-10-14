@@ -28,6 +28,7 @@ import InvitePanel from '../components/InvitePanel.vue'
 import BenchAlert from '../components/BenchAlert.vue'
 import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
+import SimulatorPanel from '../components/SimulatorPanel.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -63,7 +64,7 @@ const myNoGo = computed(() => {
 // Latest positions (one connection for the map and the "Not sharing yet" badges)
 const live = useLiveLocations(props.id)
 
-const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback' | 'zones'
+const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback' | 'zones' | 'simulator'
 
 // ---------- One-tap sharing (same tracker as the Share page and navbar) ----------
 const tracker = useLocationTracker()
@@ -164,10 +165,16 @@ async function leaveEvent() {
       <div class="mb-3">
         <h1 class="h4 mb-1" data-testid="event-name">{{ event.name }}</h1>
         <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
+        <span v-if="event.is_simulation" class="badge text-bg-warning me-1" data-testid="sim-badge">SIMULATION</span>
         <span class="badge text-bg-secondary me-1" data-testid="event-role-badge">{{ eventRoleLabel(myRoles) }}</span>
         <span v-if="myGroup" class="badge text-bg-info me-1" data-testid="group-role-badge">
           {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}
         </span>
+      </div>
+
+      <div v-if="event.is_simulation" class="alert alert-warning py-2 small" data-testid="sim-banner">
+        <strong>Simulation event.</strong> Groups named SIM-… and their ICs are virtual: the server moves them every 10 s
+        to test zones and alerts at scale. Nothing here is a real person.
       </div>
 
       <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount">
@@ -238,6 +245,12 @@ async function leaveEvent() {
             Zones
           </button>
         </li>
+        <!-- Simulation events only (merger Stage 3): the root runs the virtual groups from here -->
+        <li v-if="event.is_simulation && isRoot" class="nav-item">
+          <button class="nav-link" :class="{ active: tab === 'simulator' }" data-testid="tab-simulator" @click="tab = 'simulator'">
+            Simulator
+          </button>
+        </li>
       </ul>
 
       <!-- v-show keeps the map alive (and its live connection) when switching tabs -->
@@ -287,6 +300,8 @@ async function leaveEvent() {
 
       <!-- v-if: the bench holds locks and a presence row only while it is open -->
       <PolygonTestView v-if="canManage && tab === 'zones'" :event-id="id" embedded />
+
+      <SimulatorPanel v-if="event.is_simulation && isRoot && tab === 'simulator'" :event-id="id" @changed="load" />
 
       <button v-if="me && !isRoot" class="btn btn-link text-danger px-0 mt-4" @click="leaveEvent">Leave event</button>
     </template>

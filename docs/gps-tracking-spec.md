@@ -417,6 +417,13 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveM
 - RLS: presence and group positions like `locations` (root / planner / marshal everything, others their group); alerts to ops roles and the IC concerned. All three published to Realtime (presence changes only on enter / blip / exit).
 - Client: `composables/useZoneActivity.js` (event page) loads + subscribes; `LiveMap` gets `zoneStays`, `zoneCounts`, `noGoOccupied`, `groupPositions`.
 
+### 12.4 Simulator (merger Stage 3, 15 Oct)
+
+- Only in simulation events (`events.is_simulation`, set by `create_simulation_event`, never on a real event). Root only (`sim_check`).
+- `sim_setup(event, groups, ics_min, ics_max, mix)`: groups `SIM-001…` (category "Simulated"), 1–3 virtual ICs each (fake Auth users, `@simulation.invalid`, no password / identity, username `sim_<event6>_<n>`, `profiles.is_simulated`), event role participant, group IC. Each group walks from a random point 200–600 m from a zone's centre to it (a No-Go zone for `wrong_zone`), 1.0–1.5 m/s. Behaviours: on_time, late_2min (+120 s), stops_halfway, loses_signal (silent 150 s from 40 % of the way), wrong_zone.
+- `sim_tick()` (pg_cron `gps-sim-tick`, 10 s): for running simulations whose event is live, advances each group (`active_s`, `travelled_m`), then inserts one reading per virtual IC at the interpolated point + 5–15 m noise, accuracy 5–15 m, `recorded_at = now()`. An ended event pauses its simulation.
+- `sim_reset(event)`: deletes the virtual ICs' readings, the `sim_ics` rows (trigger deletes the Auth users → profiles, memberships, presence cascade), the SIM groups and the run.
+
 ## 13. App structure
 
 | Route | View | Notes |

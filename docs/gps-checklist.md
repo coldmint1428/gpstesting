@@ -616,6 +616,14 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 - [ ] Phone walk test (Stages 0–2 together): draw a zone around where you stand + a No-Go nearby, share from the phone, walk in and out; laptop shows "Inside … since", the No-Go toast and banner
 - [ ] Later (Stage 8): push notification to the IC for a No-Go entry when the app is closed
 
+## 4f. Merger Stage 3 – simulator (built 15 Oct)
+
+- [x] Migration `022_simulator.sql`: `events.is_simulation`, `profiles.is_simulated`, `sim_scripts` (5 behaviours), `sim_runs`, `sim_groups`, `sim_ics`; functions `create_simulation_event`, `sim_setup`, `sim_start`, `sim_pause`, `sim_reset`, `sim_tick`; pg_cron `gps-sim-tick` every 10 s – rolled-back test passed
+- [x] My events: "Simulation event" checkbox; SIMULATION badge in the list and on the event page, plus a banner
+- [x] Simulator tab (root of a simulation event): status and counts, Add groups (count, ICs per group, behaviour mix), Start / Pause / Reset
+- [ ] First live run (Komin): simulation event → Zones tab: 2–3 zones + 1 No-Go → Simulator: 120 groups → Start → watch 15 min (map smooth, presence counts, No-Go alerts) → Reset
+- [ ] Note Realtime messages per minute and database CPU during the run (Supabase dashboard) for the Pro-plan decision
+
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)

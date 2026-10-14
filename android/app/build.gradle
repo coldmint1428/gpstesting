@@ -46,11 +46,11 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+// Firebase config (gitignored, so a branch switch or fresh clone can lose it). Without it the app
+// crashes on start ("Default FirebaseApp is not initialized" when push registers), so stop the build.
+def servicesJSON = file('google-services.json')
+if (!servicesJSON.exists() || !servicesJSON.text.trim()) {
+    throw new GradleException("android/app/google-services.json is missing. Download it from Firebase " +
+        "(project wad2-project-26093, app sg.edu.smu.is216.g11) and put it in android/app/. Without it the app crashes on start.")
 }
+apply plugin: 'com.google.gms.google-services'

@@ -5,6 +5,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 import BenchAlert from '../components/BenchAlert.vue'
+import { eventRoleLabel } from '../utils/people'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -12,6 +13,7 @@ const router = useRouter()
 const events = ref([]) // [{ id, name, roles: ['root', ...] }]
 const loading = ref(true)
 const newName = ref('')
+const asSimulation = ref(false) // merger Stage 3: a test event for virtual groups
 const joinCode = ref('')
 const errorMsg = ref('')
 
@@ -20,7 +22,7 @@ async function loadEvents() {
   // My role rows, each with its event (RLS only returns events I belong to)
   const { data, error } = await supabase
     .from('event_roles')
-    .select('role, events (id, name, created_at)')
+    .select('role, events (id, name, created_at, is_simulation)')
     .eq('user_id', auth.user.id)
   loading.value = false
   if (error) {
@@ -32,7 +34,7 @@ async function loadEvents() {
   const byId = {}
   for (const row of data) {
     const ev = row.events
-    if (!byId[ev.id]) byId[ev.id] = { id: ev.id, name: ev.name, created_at: ev.created_at, roles: [] }
+    if (!byId[ev.id]) byId[ev.id] = { id: ev.id, name: ev.name, created_at: ev.created_at, isSimulation: ev.is_simulation, roles: [] }
     byId[ev.id].roles.push(row.role)
   }
   events.value = Object.values(byId).sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -40,7 +42,7 @@ async function loadEvents() {
 
 async function createEvent() {
   errorMsg.value = ''
-  const { data: id, error } = await supabase.rpc('create_event', { p_name: newName.value })
+  const { data: id, error } = await supabase.rpc(asSimulation.value ? 'create_simulation_event' : 'create_event', { p_name: newName.value })
   if (error) {
     errorMsg.value = error.message
     return
@@ -105,6 +107,12 @@ onMounted(loadEvents)
               <button class="btn btn-success" type="submit" data-testid="create-event-btn">Create</button>
             </div>
             <div class="form-text">You become the event's Root.</div>
+            <div class="form-check mt-2">
+              <input id="as-simulation" v-model="asSimulation" class="form-check-input" type="checkbox" data-testid="as-simulation" />
+              <label class="form-check-label small" for="as-simulation">
+                Simulation event (virtual groups for testing, clearly labelled)
+              </label>
+            </div>
           </div>
         </form>
       </div>
@@ -123,7 +131,8 @@ onMounted(loadEvents)
       >
         <span>{{ ev.name }}</span>
         <span>
-          <span v-for="r in ev.roles" :key="r" class="badge text-bg-secondary ms-1 text-capitalize">{{ r }}</span>
+          <span v-if="ev.isSimulation" class="badge text-bg-warning ms-1">SIMULATION</span>
+          <span class="badge text-bg-secondary ms-1">{{ eventRoleLabel(ev.roles) }}</span>
         </span>
       </RouterLink>
     </div>

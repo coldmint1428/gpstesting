@@ -1243,6 +1243,13 @@ function wantsPan(event) {
 // moment after a middle pan is an ordinary click, and leaving the answer from the previous press
 // standing would throw its point away.
 function onMapPointerDown(event) {
+  // A second finger on a touch screen is a pinch, and the pinch is Leaflet's (touchZoom). The pan the
+  // first finger started has to stop, or it moves the view at the same time as the zoom and the two
+  // fight. endPan is called without the event because it ignores any pointer but the pan's own.
+  if (panFrom && event.pointerId !== panPointerId) {
+    endPan()
+    return
+  }
   panMoved = false
   startPan(event)
 }
@@ -2305,6 +2312,12 @@ onMounted(() => {
 
   // The map is a wall against page scrolling: see onMapWheel.
   map.getContainer().addEventListener('wheel', onMapWheel, WHEEL_OPTIONS)
+  // The same wall for a finger. With Leaflet's own drag off (see applyMapHandlers) its CSS leaves the
+  // map at `touch-action: pan-x pan-y`, which tells a phone's browser that a one-finger swipe is a page
+  // scroll: it takes the gesture over and sends pointercancel, so a shape or the view stopped following
+  // the finger after a few pixels. Every touch gesture on the map is handled here or by Leaflet's
+  // pinch zoom, so the browser gets none of them. Inline, because Leaflet only ever changes classes.
+  map.getContainer().style.touchAction = 'none'
   // On the container rather than on the map, because Leaflet drops every press that has already
   // been stopped -- and a press on a shape has been. A pan has to be able to start there.
   map.getContainer().addEventListener('pointerdown', onMapPointerDown)
