@@ -27,7 +27,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'go-live', 'download'])
 
-const SPEEDS = [1, 2, 5, 10, 30, 60]
+const SPEEDS = [1, 2, 5, 10, 30, 60, 120]
 const SKIPS = [
   { label: '⏪ 10 min', ms: -10 * 60000 },
   { label: '⏪ 1 min', ms: -60000 },
