@@ -12,9 +12,17 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: HomeView },
-    // The planner drawing bench. Signed-in only: it reads and writes the shared bench, so
-    // the database policies need a user. It is NOT tied to an event.
-    { path: '/polygon', name: 'polygon', component: PolygonTestView, meta: { requiresAuth: true } },
+    // The DEMO drawing bench (no event). Zones are drawn in each event's Zones tab now, so this page is
+    // out of the menu and only reachable on local dev (npm run dev) -- for the teammate's editor tests and
+    // tools/bench_harness.mjs. On the deployed site it redirects to the events list. To be removed once
+    // those tests use an event's Zones tab.
+    {
+      path: '/polygon',
+      name: 'polygon',
+      component: PolygonTestView,
+      meta: { requiresAuth: true },
+      beforeEnter: () => (import.meta.env.DEV ? true : { name: 'events' }),
+    },
     { path: '/login', name: 'login', component: LoginView },
 
     // Pages below need a logged-in user (meta.requiresAuth)

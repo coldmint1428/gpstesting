@@ -19,6 +19,7 @@ import { clearPushReminders } from '../composables/usePushNotifications'
 import { askConfirm, toast } from '../composables/useNotify'
 import { useZoneActivity } from '../composables/useZoneActivity'
 import { formatDayTime, formatTimeSeconds } from '../utils/time'
+import { eventRoleLabel, groupRoleLabel } from '../utils/people'
 import SharingWarnings from '../components/SharingWarnings.vue'
 import EventStatus from '../components/EventStatus.vue'
 import LiveMap from '../components/LiveMap.vue'
@@ -162,9 +163,11 @@ async function leaveEvent() {
     <template v-else>
       <div class="mb-3">
         <h1 class="h4 mb-1" data-testid="event-name">{{ event.name }}</h1>
-        <span v-for="r in myRoles" :key="r" class="badge text-bg-secondary me-1 text-capitalize">{{ r }}</span>
-        <span v-if="me && me.isAdmin" class="badge text-bg-info me-1">Group admin</span>
-        <span v-if="me && me.isIC" class="badge text-bg-success me-1">IC</span>
+        <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
+        <span class="badge text-bg-secondary me-1" data-testid="event-role-badge">{{ eventRoleLabel(myRoles) }}</span>
+        <span v-if="myGroup" class="badge text-bg-info me-1" data-testid="group-role-badge">
+          {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}
+        </span>
       </div>
 
       <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount">

@@ -7,7 +7,7 @@
 // The database checks every action again (see 002_users_events_groups.sql).
 import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
-import { initials } from '../utils/people'
+import { initials, eventRoleLabel } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { askConfirm, toast } from '../composables/useNotify'
 
@@ -215,7 +215,7 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
             </div>
 
             <div class="mb-2">
-              <span v-for="r in m.roles" :key="r" class="badge text-bg-secondary me-1 text-capitalize">{{ r }}</span>
+              <span class="badge text-bg-secondary me-1" :data-testid="'role-badge-' + m.username">{{ eventRoleLabel(m.roles) }}</span>
               <span v-if="m.isAdmin" class="badge text-bg-info me-1">Group admin</span>
               <span v-if="m.isIC" class="badge text-bg-success me-1">IC</span>
               <span v-if="sharingStatus[m.id] === true" class="badge text-bg-light border border-success text-success me-1" data-testid="badge-sharing">

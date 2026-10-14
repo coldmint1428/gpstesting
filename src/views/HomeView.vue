@@ -1,5 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router'
+
+const isDev = import.meta.env.DEV // the demo bench is only reachable on local dev
 </script>
 
 <template>
@@ -15,12 +17,13 @@ import { RouterLink } from 'vue-router'
           </div>
         </div>
       </div>
-      <div class="col-12 col-md-6">
+      <!-- Zones are drawn in each event's Zones tab; the demo bench is a local-dev tool only -->
+      <div v-if="isDev" class="col-12 col-md-6">
         <div class="card h-100">
           <div class="card-body">
-            <h2 class="h5 card-title">Polygons</h2>
-            <p class="card-text">Draw zones, no-go areas and exits on the map.</p>
-            <RouterLink to="/polygon" class="btn btn-primary">Open polygon test</RouterLink>
+            <h2 class="h5 card-title">Demo bench <span class="badge text-bg-warning align-middle">dev only</span></h2>
+            <p class="card-text">The polygon editor without an event, for testing. Real zones: open an event → Zones.</p>
+            <RouterLink to="/polygon" class="btn btn-outline-primary">Open demo bench</RouterLink>
           </div>
         </div>
       </div>
