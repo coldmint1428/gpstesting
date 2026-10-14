@@ -125,7 +125,9 @@ Tests passed on the phone:
 
 - [x] Fixed (code): map went blank at the last zoom step (`detectRetina` lowered the tile layer's max zoom) → shared `src/utils/onemap.js`, no detectRetina, `maxNativeZoom: 19` (zoom 20 enlarges zoom-19 tiles)
 - [ ] Check the zoom fix on the website (after push/deploy) and in the phone app (next install)
-- [x] Smooth live map (`src/utils/markerMotion.js`): markers **glide** (1 s) instead of jumping; big jumps (> 500 m or after > 90 s gap) still jump; **GPS wobble ignored** (moves smaller than the reading's accuracy, 5–25 m)
+- [x] Smooth live map (`src/utils/markerMotion.js`, replaced 14 Oct): markers **glide** (1 s) instead of jumping; big jumps (> 500 m or after > 90 s gap) still jump; **GPS wobble ignored** (moves smaller than the reading's accuracy, 5–25 m)
+- [x] Live map rewrite (14 Oct, `src/utils/liveMotion.js`): playhead ~12 s behind, slides along real readings; late/batched readings fast-forward instead of jumping; trail only up to the marker; tap trail/dot = time + place popup; group diamond only for 2+ ICs; "Reconnecting…" + auto catch-up after background/offline (no more "TypeError: Failed to fetch")
+- [ ] Phone test: watch an IC walk / bus / MRT with the viewer tab switched away and back; check no box, no dashed lines without a real 2 min gap, trail ends at the marker
 - [x] Replayed the 7.7 h outing (574 readings): still → marker stays put 94% of the time (no twitching); walking → 63 glides; vehicle → 62 glides + 25 jumps; tunnel gaps → 18 jumps; marker never more than 22 m from the real reading
 - [x] Follow mode: tap a person in the list → map zooms in and keeps them centred as they move (pans with the glide); "Following X · Stop" bar on the map; dragging the map stops following
 - [ ] Check the smooth map + follow mode on the website (after push/deploy) and in the phone app (next install)

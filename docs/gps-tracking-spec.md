@@ -379,7 +379,7 @@ Phone settings checks: `bg.isPowerSaveMode()` and Android `bg.deviceSettings.isI
 
 ## 12. Live map (viewers)
 
-Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/markerMotion.js`, `utils/groupPosition.js`, `utils/people.js`, `utils/onemap.js`, `composables/useReverseGeocode.js`.
+Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveMotion.js`, `utils/groupPosition.js`, `utils/people.js`, `utils/onemap.js`, `composables/useReverseGeocode.js`.
 
 | Topic | Rule |
 |---|---|
@@ -397,7 +397,9 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/marke
 ---
 
 ### 12.1 Smooth movement + trail (13 Oct)
-- `utils/markerMotion.js`: a marker glides at a steady speed across the whole time between two readings (0.9 × gap, 1–12 s), so it never stops and starts; jumps only for > 1 km or > 2 min gaps. Noise filter: moves < half the accuracy (4–15 m) ignored; one bad fix (accuracy > 100 m right after ≤ 50 m, within 2 min) skipped. Follow mode pans every frame of the glide.
+- `utils/liveMotion.js` (14 Oct, replaces markerMotion.js): each person has a track of recent readings and a **playhead** drawn ~12 s in the past (+ that phone's measured delivery delay), sliding between two real readings, so the marker follows the real path. Out of readings: it waits at the newest one. Readings late (tunnel, battery saver, slow upload): they slot into the track and the playhead fast-forwards (up to 6x) until on time, so no jumps. Map off screen (tab hidden) and 30+ s behind: jumps to the present instead of replaying. Real gap (> 2 min or after Stop): no sliding across it. Noise: moves < half the accuracy (4–15 m) flattened; one bad fix (> 100 m after ≤ 50 m) and impossible jumps (> 70 m/s) skipped. One animation loop for all markers, only while the map is on screen.
+- Trail (selected person): drawn only up to the marker; dashed only over real gaps; tap the trail or a dot = popup with time + place; first tap on the empty map closes the popup, the next hides the trail. Group diamond only for groups with 2+ ICs, placed from the drawn IC positions.
+- `composables/useLiveLocations.js`: on page shown again / back online / every minute: rebuild a dead Realtime channel, fetch readings missed (last 3 min, else just the latest positions). Network errors show "Reconnecting…" on the map and retry (2 s → 30 s), never a red error.
 - Trail: tap a marker (or a person in the list) → their readings **since the live session started** (`locations` via RLS, pages of 1000) + new ones from Realtime (`useLiveLocations().onReading`). Solid line, dashed over gaps > 2 min or after a Stop, dot every 2 min, green start dot; the last piece follows the gliding marker. Hover / tap the trail → nearest reading's time + place name (OneMap, cached). Tap the empty map or the marker again → hidden. New session / event ended → cleared.
 
 ## 13. App structure

@@ -214,6 +214,7 @@ async function leaveEvent() {
         :on-reading="live.onReading"
         :now="live.now.value"
         :live-error="live.errorMsg.value"
+        :reconnecting="live.reconnecting.value"
         :members="members"
         :groups="groups"
         :my-user-id="auth.user ? auth.user.id : null"
