@@ -1,7 +1,7 @@
 -- ============================================================
--- Tests for the bench as ROWS: 009_object_rows.sql
+-- Tests for the bench as ROWS: 017_object_rows.sql
 --
--- Run in the Supabase SQL Editor (or with psql) AFTER 009 is applied -- and run locally, on a database
+-- Run in the Supabase SQL Editor (or with psql) AFTER 017 is applied -- and run locally, on a database
 -- that starts empty, by `node tools/pgtest.mjs`. Everything happens inside ONE transaction that ends
 -- in ROLLBACK, so nothing is left behind: the test users, the bench, the shapes, the pictures and the
 -- locks all disappear. Each check raises 'FAIL n: ...', which aborts the transaction and names it.
@@ -73,8 +73,8 @@ end $$;
 
 -- ============================================================
 -- 1b. The bench still has a HOME view, and it still comes out of the document that used to hold the
---     whole canvas: 007 moved a planner's camera into public.layout_views and left the copy inside the
---     canvas as the view a planner who has never panned opens at. 010 moved that value into a column of
+--     whole canvas: 015 moved a planner's camera into public.layout_views and left the copy inside the
+--     canvas as the view a planner who has never panned opens at. 018 moved that value into a column of
 --     its own and dropped the document around it, so this is where it lives now.
 -- ============================================================
 reset role;
@@ -179,7 +179,7 @@ end $$;
 -- 4. A WRITE IS A PATCH. The row is given a name by hand -- as if another planner had renamed it and
 --    this page had missed the event -- and then the holder writes only the points. The name they never
 --    mentioned has to survive, because a page whose copy is behind must not be able to undo work it
---    cannot see. (Under 008 the same write carried the whole object, and the whole object won.)
+--    cannot see. (Under 016 the same write carried the whole object, and the whole object won.)
 -- ============================================================
 reset role;
 update public.layout_objects
@@ -455,7 +455,7 @@ begin
   end if;
   -- (That the lock went with the shape is checked in 10d, from the other planner's side: a lock row
   -- that outlived its shape would refuse them for the next 45 seconds. layout_locks is not readable
-  -- from here on purpose -- see 008 -- so the check is about what it does, not what it holds.)
+  -- from here on purpose -- see 016 -- so the check is about what it does, not what it holds.)
 
   -- The last plan pointing at the picture takes it with it.
   perform public.lock_object('plan-1', '33333333-3333-3333-3333-333333333333');
@@ -735,7 +735,7 @@ end $$;
 
 do $$
 begin
-  raise notice 'All 009 checks passed: the canvas is rows, a write is a patch, and the lock is the permission.';
+  raise notice 'All 017 checks passed: the canvas is rows, a write is a patch, and the lock is the permission.';
 end $$;
 
 rollback;

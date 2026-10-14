@@ -496,12 +496,12 @@ Still to do:
       quota in the hundreds of megabytes, and a silent fall back to memory).
 - [ ] The no-crossing rule is enforced in the **browser only**: `public.area_ok()` still accepts
       a ring that crosses itself. Making it a CHECK constraint would be retroactive in the way
-      `006` was -- the constraint re-validates the row on every write, and adding it fails
-      outright if any stored bench already holds an hourglass -- which is exactly why `006`
+      `014` was -- the constraint re-validates the row on every write, and adding it fails
+      outright if any stored bench already holds an hourglass -- which is exactly why `014`
       needed its pre-flight audit. Not added: the bench is the only thing that writes areas, and
       it no longer draws one. If a constraint is ever wanted, run an audit over
       `public.layouts` first (a `ringCrossing`-style check in SQL, or a one-off query here).
-- [x] `006_floor_plan_bounds.sql` **written here, run in Supabase, and verified** (this item
+- [x] `014_floor_plan_bounds.sql` **written here, run in Supabase, and verified** (this item
       used to be the "run it" warning, kept below because the warning is the interesting part):
       the step 0 audit query returned no rows, so the retroactive rule had nothing to reject,
       and the migration then applied cleanly. Checked in the database afterwards: the old
@@ -518,7 +518,7 @@ Still to do:
       *required* there would have been the real hazard, because the constraint re-validates
       the whole document on every write, so one old plan without a name would have turned the
       bench into one nobody could save again.
-- [x] `006_floor_plan_bounds.sql` — a floor plan must FIT inside Singapore, not just start
+- [x] `014_floor_plan_bounds.sql` — a floor plan must FIT inside Singapore, not just start
       there. `floor_plan_ok()` checked only the plan's centre against `point_in_sg()` and its
       size against a separate 20 km sanity limit, so a plan centred just inside the box could
       extend kilometres outside it: floor area where the basemap has no tiles, the
@@ -546,11 +546,11 @@ Still to do:
 - [ ] Be ready to explain: roles + RLS, join codes, Realtime, weighted midpoint, 5 s save limit,
       background GPS, and **why the no-crossing rule lives in the browser and not in
       `area_ok()`** (a CHECK constraint is retroactive and would fail to apply over an existing
-      hourglass — same trap `006` had to audit for)
+      hourglass — same trap `014` had to audit for)
 
 ## 6. Moving to the teammate's new Supabase project
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Run every file in `supabase/migrations/` in order (001 → 006)
+- [ ] Run every file in `supabase/migrations/` in order (001 → 018)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app

@@ -64,7 +64,7 @@ export function isValidAreaName(name) {
 // when this build can see nothing wrong with it.
 //
 // area_ok() answers true or false, and the database turns a false into a sentence of its own (see
-// shape_problem in 009_object_rows.sql): "Every point of an area has to be inside Singapore", about the
+// shape_problem in 017_object_rows.sql): "Every point of an area has to be inside Singapore", about the
 // area the planner is working on. This file is the client's own reading of the same rules, for the cases
 // the page can see BEFORE anything is sent -- while a ring is being drawn, and while a name is typed.
 //

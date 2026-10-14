@@ -52,7 +52,7 @@ before the action rather than at the next save:
   other — including taking away a shape you made. Copy and paste a floor plan or an area with
   Ctrl+C / Ctrl+V.
 - **A floor plan must fit inside Singapore**, not merely start there — see
-  `supabase/migrations/006_floor_plan_bounds.sql`.
+  `supabase/migrations/014_floor_plan_bounds.sql`.
 - **How full the canvas is** is drawn as a ring on the Floor plans card, and an upload that
   would push the canvas over 4 MB is refused before it is added.
 
@@ -73,7 +73,7 @@ tab, a screen that missed an event) writes what it changed and cannot undo what 
 plan's picture is a row of its own, keyed by the md5 of the image itself, so a copy of a plan costs its
 placement and a plan that is only being moved uploads nothing. A write is the SHAPE that changed, which
 is why a drag is written in about a second instead of the 19–34 seconds one save of the whole 3.7 MB
-document used to take. See `supabase/migrations/009_object_rows.sql`.
+document used to take. See `supabase/migrations/017_object_rows.sql`.
 
 **A shape somebody else makes or deletes arrives on its own.** `layout_objects` is published to
 Realtime, so an insert, a change and a deletion each reach every other open page as they happen — which
@@ -91,7 +91,7 @@ case that used to be invisible. None of it is trusted: presence is a hint for th
 what a planner may actually change is decided by the locks, and by the database when a write arrives. The map view is each
 planner's **own** (`public.layout_views`), so panning no longer carries anybody else's map along
 with it — the copy inside the canvas is only the fallback for a planner who has never panned. See
-`supabase/migrations/007_presence_and_views.sql`.
+`supabase/migrations/015_presence_and_views.sql`.
 
 **And a drag is visible while it is happening.** The planner moving a shape publishes its geometry
 to the other open pages about twenty times a second over the same Realtime socket, so an outline
@@ -113,13 +113,13 @@ they happen rather than at somebody's next save.
 the page has no way to know what is really stored), and a picture that would push the bench past the cap
 is refused before it is added. Every floor plan image is shrunk in the browser to under 512 KB before it
 goes near the database, and a floor plan that would not fit inside Singapore is refused (see
-`supabase/migrations/006_floor_plan_bounds.sql`).
+`supabase/migrations/014_floor_plan_bounds.sql`).
 
-**The old whole-canvas column is gone.** `009_object_rows.sql` left it frozen in the bench's own row —
+**The old whole-canvas column is gone.** `017_object_rows.sql` left it frozen in the bench's own row —
 3.7 MB that every read of the bench detoasted to get at the 200 bytes beside it — and
-`010_drop_frozen_canvas.sql` drops it, after moving the one thing still living inside it into a column of
+`018_drop_frozen_canvas.sql` drops it, after moving the one thing still living inside it into a column of
 its own: the bench's **home view**, where a planner who has never panned opens the map (see
-`007_presence_and_views.sql`, which moved a planner's camera into a row of its own). The drop refuses to
+`015_presence_and_views.sql`, which moved a planner's camera into a row of its own). The drop refuses to
 run if the document holds a shape with no row, because there is no second copy of a shape: a migration
 that cannot account for one stops with a sentence rather than tidying it away.
 
@@ -182,13 +182,13 @@ applies every file in `supabase/migrations/` **in order** to a Postgres that sta
 away — PGlite, which is Postgres compiled to WebAssembly, running in this process — and then runs the
 bench's own SQL suites:
 
-- `supabase/tests/objects_rls.sql` — the rules 009 added: what a shape may be, who may write one, what a
+- `supabase/tests/objects_rls.sql` — the rules 017 added: what a shape may be, who may write one, what a
   refused write hands back, the patch that merges, the 4 MB cap and what a refused write leaves behind;
-- `supabase/tests/layouts_rls.sql` — the suites for 005–008, run against the schema they were written
+- `supabase/tests/layouts_rls.sql` — the suites for 005 and 014–016, run against the schema they were written
   for;
 - plus the migrations themselves, which is where the guards are checked: an empty database; a bench that
-  already holds a canvas (the split is checked shape by shape, re-running 009 must change nothing, and
-  then 010 drops the frozen document leaving the home view and every row); a canvas the split must
+  already holds a canvas (the split is checked shape by shape, re-running 017 must change nothing, and
+  then 018 drops the frozen document leaving the home view and every row); a canvas the split must
   REFUSE rather than lose a shape to; and a bench whose rows do not account for a shape in the document,
   which the drop must refuse rather than tidy away.
 

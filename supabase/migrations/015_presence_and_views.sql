@@ -1,5 +1,5 @@
 -- Step 7: presence on the bench, and a view of my own.
--- Run AFTER 006_floor_plan_bounds.sql (Supabase -> SQL Editor, or apply as a migration).
+-- Run AFTER 014_floor_plan_bounds.sql (Supabase -> SQL Editor, or apply as a migration).
 --
 -- Where this is going, in one paragraph. 005 decided who may edit the bench: exactly ONE
 -- person, holding a token in public.layout_claims. That is about to become a lock PER OBJECT,

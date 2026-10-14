@@ -1,7 +1,7 @@
 // useBenchDoc - the bench's canvas: what is on it, and how a change to it gets written.
 //
 // THIS REPLACES useBenchClaim, whose name was already a leftover and whose whole design -- one row
-// holding the entire canvas, saved by merging the whole document -- is what 009_object_rows.sql
+// holding the entire canvas, saved by merging the whole document -- is what 017_object_rows.sql
 // replaced. The canvas is now ROWS: one per area and per floor plan, each with its own revision, and
 // each floor plan's PICTURE is a row of its own that its shape only points at. What this file does is
 // turn those rows into the document the bench draws, and turn a planner's change back into a row.
@@ -77,7 +77,7 @@ export function useBenchDoc(options = {}) {
   const loading = ref(true)
   const errorMsg = ref('')
   const saving = ref(false)
-  // How full the bench is, IN THE BYTES THE DATABASE COUNTS (layout_bytes in 009). It comes from the
+  // How full the bench is, IN THE BYTES THE DATABASE COUNTS (layout_bytes in 017). It comes from the
   // server -- open_bench and every write reply carry it -- because the server is the only side that
   // knows what is really stored.
   const bytes = ref(0)
@@ -207,7 +207,7 @@ export function useBenchDoc(options = {}) {
     if (!Array.isArray(row.shapes) || !row.images) {
       loading.value = false
       errorMsg.value =
-        'This bench needs its database upgraded: run supabase/migrations/009_object_rows.sql in the Supabase SQL Editor.'
+        'This bench needs its database upgraded: run supabase/migrations/017_object_rows.sql in the Supabase SQL Editor.'
       return null
     }
 

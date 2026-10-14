@@ -1,6 +1,6 @@
 -- ============================================================
--- Tests for the bench schema: 005_layouts.sql, 006_floor_plan_bounds.sql,
--- 007_presence_and_views.sql and 008_object_locks.sql
+-- Tests for the bench schema: 005_layouts.sql, 014_floor_plan_bounds.sql,
+-- 015_presence_and_views.sql and 016_object_locks.sql
 --
 -- Run in the Supabase SQL Editor (or with psql) AFTER those migrations are applied.
 -- Everything happens inside ONE transaction that ends in ROLLBACK, so nothing is left
@@ -14,9 +14,9 @@
 -- the bench is not public). Owner-only steps use `reset role`.
 --
 -- What is where: checks 1-5 are the bench row itself (005), 6 proves a direct write is
--- refused at the table, 7-14d are the OBJECT locks and the merging save that 008 replaced
--- the whole-bench claim with, 15-17g are the layout validators (005 and 006), 18-23b are
--- presence and views (007), and 24 is the cascade when the bench is deleted.
+-- refused at the table, 7-14d are the OBJECT locks and the merging save that 016 replaced
+-- the whole-bench claim with, 15-17g are the layout validators (005 and 014), 18-23b are
+-- presence and views (015), and 24 is the cascade when the bench is deleted.
 -- ============================================================
 
 begin;
@@ -93,7 +93,7 @@ end $$;
 --     this file has to be able to reason about totals.
 --
 --     The document is written with NO `view` key rather than a null one: a JSON null is not a SQL
---     null, and 005's validator refuses `{"view": null}` (which is why 008 changes the table
+--     null, and 005's validator refuses `{"view": null}` (which is why 016 changes the table
 --     default). Everything here is inside the transaction and rolled back at the end.
 -- ============================================================
 reset role;
@@ -174,7 +174,7 @@ set local role authenticated;
 --    than 005's table was.
 --
 --    public.layout_claims (005) had RLS and no policies, so a direct write died as "new
---    row violates row-level security policy". public.layout_locks (008) goes one step
+--    row violates row-level security policy". public.layout_locks (016) goes one step
 --    further and has NO GRANTS either -- the session id inside it IS the credential, so the
 --    table is never published at all. The refusal is therefore a PERMISSION error, and that
 --    is what this check names: the difference is the migration's "no grants at all" rule
@@ -206,7 +206,7 @@ end $$;
 
 -- ============================================================
 -- 7. A locks one OBJECT and is granted, with an expiry in the future.
---    008 replaced the whole-bench claim with a lock per object, held by a SESSION (one per
+--    016 replaced the whole-bench claim with a lock per object, held by a SESSION (one per
 --    open tab): nothing is claimed as a whole any more, so there is no token to carry about.
 -- ============================================================
 do $$
@@ -217,7 +217,7 @@ declare
   v_expires timestamptz;
 begin
   -- The sessions this section works with: A's tab, B's tab, and A's SECOND tab. The last of
-  -- those is the bug 008 exists for -- same account, different editor.
+  -- those is the bug 016 exists for -- same account, different editor.
   perform set_config('bench.session_a',  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', true);
   perform set_config('bench.session_b',  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', true);
   perform set_config('bench.session_a2', 'cccccccc-cccc-cccc-cccc-cccccccccccc', true);
@@ -268,7 +268,7 @@ begin
   end if;
 end $$;
 
--- The lock table has no grants at all (008 section 2), so it is only ever read as the owner.
+-- The lock table has no grants at all (016 section 2), so it is only ever read as the owner.
 reset role;
 do $$
 declare
@@ -766,7 +766,7 @@ begin
 end $$;
 set local role authenticated;
 
--- The internal machine, this time as a signed-in planner: 008 revokes it from authenticated
+-- The internal machine, this time as a signed-in planner: 016 revokes it from authenticated
 -- as well, so the only way to force a lock away is take_over_object().
 set local request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
 do $$
@@ -793,7 +793,7 @@ end $$;
 --      the locks and puts the canvas back to a clean document.
 --
 --      The document's `view` is seeded with a real HOME view on purpose: no save writes that
---      field any more (007 section 4 -- a planner's camera lives in public.layout_views), so
+--      field any more (015 section 4 -- a planner's camera lives in public.layout_views), so
 --      check 17 can only prove that a document comes back unchanged if the home view the save
 --      preserves is already the one that check sends.
 -- ============================================================
@@ -925,8 +925,8 @@ begin
   -- Compared OBJECT BY OBJECT rather than as a whole document. The bench may legitimately hold
   -- objects this test never sent -- the merge keeps whatever the caller does not hold (see check
   -- 10) -- and what this check is about is what happened to the two objects that WERE sent. The
-  -- view is left out entirely: 008 never takes the caller's view, because that field is the bench's
-  -- home view now (007), so comparing it would only be testing that two unrelated things differ.
+  -- view is left out entirely: 016 never takes the caller's view, because that field is the bench's
+  -- home view now (015), so comparing it would only be testing that two unrelated things differ.
   if (select s from jsonb_array_elements(v_saved -> 'floorPlans') s where s ->> 'id' = 'p1')
      is distinct from
      (select s from jsonb_array_elements(v_good -> 'floorPlans') s where s ->> 'id' = 'p1') then
@@ -961,12 +961,12 @@ set local role authenticated;
 --
 --      The table's default used to be {"view": null, ...}, and `jsonb -> 'view'` hands back a JSON
 --      null (not SQL NULL) when the key is present and null -- so the row could not be validated
---      against its own default. 008 fixed that by giving the default no `view` key at all rather than
+--      against its own default. 016 fixed that by giving the default no `view` key at all rather than
 --      by loosening the validator, and the strict reading is the one that shipped: a section that is
 --      PRESENT has to be the right type, and `null` is not an array.
 --
 --      THIS CHECK USED TO ASSERT THE OPPOSITE -- that save_bench() accepted a JSON-null section --
---      which was never true of 005's validator or of 008's: it was written for an intention rather
+--      which was never true of 005's validator or of 016's: it was written for an intention rather
 --      than for the code in front of it. Found by running this file against 001-008 on a database
 --      that starts empty (tools/pgtest.mjs, phase `legacy`), which is also why the checklist's
 --      "re-run layouts_rls.sql" was still outstanding.
@@ -987,7 +987,7 @@ end $$;
 -- ============================================================
 -- 17c. A floor plan saved BEFORE names existed still passes. The name is optional on
 --      purpose: the check constraint re-validates every save, so making it required would
---      turn one old row into a bench nobody can ever save again. (008 does require an ID on
+--      turn one old row into a bench nobody can ever save again. (016 does require an ID on
 --      every shape, because its merge matches objects by id -- so this plan, ancient as it
 --      is, carries one.)
 -- ============================================================
@@ -1001,7 +1001,7 @@ end $$;
 
 -- ============================================================
 -- 17d. A floor plan whose CENTRE is inside Singapore but whose CORNERS are not is refused.
---      This is what 006_floor_plan_bounds.sql added: before it, only the centre was checked,
+--      This is what 014_floor_plan_bounds.sql added: before it, only the centre was checked,
 --      so a picture could hang kilometres off the edge of the basemap. The centre here is
 --      ~1.5 km east of the 103.5 boundary while half the 4 km width is 2 km, so the west
 --      corners fall outside.

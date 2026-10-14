@@ -1,7 +1,7 @@
 -- Step 10: the frozen canvas goes, and the bench's home view moves out of it.
--- Run AFTER 009_object_rows.sql (Supabase -> SQL Editor, or apply as a migration).
+-- Run AFTER 017_object_rows.sql (Supabase -> SQL Editor, or apply as a migration).
 --
--- WHAT THIS REMOVES. 009 split the one-row canvas into a row per shape and left public.layouts.data
+-- WHAT THIS REMOVES. 017 split the one-row canvas into a row per shape and left public.layouts.data
 -- exactly as it was: 3.7 MB of document that nothing reads and nothing writes, kept only so that a
 -- mistake in the split would be recoverable by hand. The split has since been checked against the real
 -- bench -- 6 floor plans and 9 areas came back as 15 rows, all of them drawn, with the six plans' two
@@ -11,7 +11,7 @@
 -- of the bench detoasts 3.7 MB to get at the 200 bytes beside it.
 --
 -- THE HOME VIEW IS THE ONE THING STILL LIVING IN IT, so it is carried into a column of its own first.
--- 007 moved a planner's camera into public.layout_views and left the copy inside the document as the
+-- 015 moved a planner's camera into public.layout_views and left the copy inside the document as the
 -- view a planner who has never panned opens at; this is that value, kept, so nothing about where the
 -- map opens changes.
 --
@@ -21,12 +21,12 @@
 -- migration that stops with a sentence naming the shapes than a bench that quietly lost one.
 --
 -- RE-RUNNABLE, like the rest of them: every statement is `if exists` / `if not exists`, and a second run
--- finds nothing left to do. (009 is NOT re-runnable AFTER this, deliberately: it describes the split,
+-- finds nothing left to do. (017 is NOT re-runnable AFTER this, deliberately: it describes the split,
 -- and the document it split is gone. Run these files in order, once.)
 --
 -- WHAT IT DROPS BESIDES THE COLUMN, and why: the four functions that only ever described that one
 -- document -- layout_problem(), layout_data_ok(), floor_plan_ok() and layout_list(). None of them can be
--- reached any more: a shape is checked by shape_problem() as it is written (009) and by the table's own
+-- reached any more: a shape is checked by shape_problem() as it is written (017) and by the table's own
 -- constraints as it is stored, and nothing asks about a whole canvas, because there is no whole canvas.
 -- A function called layout_data_ok() that nothing calls is a description of a rule that no longer
 -- exists, so it goes rather than sitting there looking authoritative.
@@ -34,7 +34,7 @@
 do $$
 begin
   if to_regclass('public.layouts') is null or to_regclass('public.layout_objects') is null then
-    raise exception 'Run 005_layouts.sql and 009_object_rows.sql before this migration';
+    raise exception 'Run 005_layouts.sql and 017_object_rows.sql before this migration';
   end if;
 end $$;
 
@@ -94,7 +94,7 @@ end $$;
 
 -- ============================================================
 -- 3. The column, and the constraint that was about it.
---    The constraint is dropped by whatever name it has, the way 006 dropped 005's, so that no name of
+--    The constraint is dropped by whatever name it has, the way 014 dropped 005's, so that no name of
 --    a check constraint has to be remembered here.
 -- ============================================================
 do $$
@@ -126,7 +126,7 @@ drop function if exists public.layout_list(jsonb, text);
 -- ============================================================
 -- 5. open_bench() reads the home view from where it now lives. Same signature and the same reply, so
 --    this is a `create or replace` rather than a drop and a rebuild -- and the page needs no change at
---    all: it has read `row.home` since 009.
+--    all: it has read `row.home` since 017.
 -- ============================================================
 create or replace function public.open_bench()
 returns table (

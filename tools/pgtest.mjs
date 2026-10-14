@@ -16,13 +16,13 @@
 //
 // It runs five phases, each on a database of its own, and reports every one of them:
 //
-//   empty    a database with no bench at all: the migrations must apply in order, 001 to 009
-//   split    a bench that already holds a canvas, migrated from 008 to 009: the split is checked
-//            shape by shape, the old document is checked to be untouched, and re-running 009 must
+//   empty    a database with no bench at all: the migrations must apply in order, 001–005 then 014–018
+//   split    a bench that already holds a canvas, migrated from 016 to 017: the split is checked
+//            shape by shape, the old document is checked to be untouched, and re-running 017 must
 //            change nothing
-//   guard    a bench whose canvas holds a shape with no id: 009 must REFUSE it rather than lose it
+//   guard    a bench whose canvas holds a shape with no id: 017 must REFUSE it rather than lose it
 //   objects  the new behaviour, from supabase/tests/objects_rls.sql
-//   legacy   supabase/tests/layouts_rls.sql, the suite for the schema 001-008 built
+//   legacy   supabase/tests/layouts_rls.sql, the suite for the schema 001-005 and 014-016 built
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -44,16 +44,20 @@ const MIGRATION_FILES = [
   '003_stop_sharing.sql',
   '004_tracking_passes.sql',
   '005_layouts.sql',
-  '006_floor_plan_bounds.sql',
-  '007_presence_and_views.sql',
-  '008_object_locks.sql',
-  '009_object_rows.sql',
-  '010_drop_frozen_canvas.sql',
+  '014_floor_plan_bounds.sql',
+  '015_presence_and_views.sql',
+  '016_object_locks.sql',
+  '017_object_rows.sql',
+  '018_drop_frozen_canvas.sql',
 ]
 const MIGRATIONS = MIGRATION_FILES.map((name) => ({ name, sql: read('supabase/migrations/' + name) }))
 const named = (name) => MIGRATIONS.find((m) => m.name === name)
 // The schema the suite in phase `legacy` was written for: everything before the canvas became rows.
-const UP_TO_008 = MIGRATIONS.filter((m) => Number(m.name.slice(0, 3)) <= 8)
+// (001-005, then the bench's 014-016: 006-013 are the event app's and the bench never needed them)
+const UP_TO_016 = MIGRATIONS.filter((m) => {
+  const n = Number(m.name.slice(0, 3))
+  return n <= 5 || (n >= 14 && n <= 16)
+})
 
 const USER_A = '11111111-1111-1111-1111-111111111111'
 const USER_B = '22222222-2222-2222-2222-222222222222'
@@ -252,19 +256,19 @@ await phase('empty', {
     const images = await one(db, 'select count(*)::int from public.layout_images')
     check('no pictures either', Number(images) === 0, `found ${images}`)
 
-    return ['001 to 010 applied in order and left an empty, working schema']
+    return ['001–005 and 014–018 applied in order and left an empty, working schema']
   },
 })
 
 // ---------- phase 2: the split, and the frozen canvas going ----------
 await phase('split', {
-  migrations: UP_TO_008,
+  migrations: UP_TO_016,
   setup: SEED_USERS + seedCanvas(),
   body: async (db) => {
     const before = await one(db, 'select octet_length(data::text)::int from public.layouts')
     check('the old canvas is there to split', before > 0)
 
-    await runSql(db, named('009_object_rows.sql').sql, '009_object_rows.sql')
+    await runSql(db, named('017_object_rows.sql').sql, '017_object_rows.sql')
 
     const plans = await one(db, `select count(*)::int from public.layout_objects where kind = 'plan'`)
     const areas = await one(db, `select count(*)::int from public.layout_objects where kind = 'area'`)
@@ -307,7 +311,7 @@ await phase('split', {
     // Re-running the file, which is what happens when somebody edits it and pastes it again, must
     // change nothing at all -- and must not wind the revision counter back, which every open page
     // compares against.
-    await runSql(db, named('009_object_rows.sql').sql, '009_object_rows.sql a second time')
+    await runSql(db, named('017_object_rows.sql').sql, '017_object_rows.sql a second time')
     const twice = await db.query(
       `select (select count(*)::int from public.layout_objects) as objects,
               (select count(*)::int from public.layout_images) as images,
@@ -335,7 +339,7 @@ await phase('split', {
 
     // ---- and now the frozen canvas goes ---------------------------------
     const frozenBytes = await one(db, 'select octet_length(data::text)::int from public.layouts')
-    await runSql(db, named('010_drop_frozen_canvas.sql').sql, '010_drop_frozen_canvas.sql')
+    await runSql(db, named('018_drop_frozen_canvas.sql').sql, '018_drop_frozen_canvas.sql')
 
     const stillThere = await one(
       db,
@@ -363,23 +367,23 @@ await phase('split', {
     check('and the rules a shape still has to meet are still there', Number(kept) === 3, `${kept} left`)
 
     // A second run finds nothing left to do, and cannot fail on the column it just dropped.
-    await runSql(db, named('010_drop_frozen_canvas.sql').sql, '010_drop_frozen_canvas.sql a second time')
+    await runSql(db, named('018_drop_frozen_canvas.sql').sql, '018_drop_frozen_canvas.sql a second time')
 
     return [
       `split: 3 plans + 2 areas into 2 pictures, ${before} bytes before and ${after} after`,
-      'a second run of 009 changed nothing, and the old document was still there for it',
-      `then 010 dropped the ${frozenBytes} bytes of frozen canvas, leaving the home view and every row`,
+      'a second run of 017 changed nothing, and the old document was still there for it',
+      `then 018 dropped the ${frozenBytes} bytes of frozen canvas, leaving the home view and every row`,
     ]
   },
 })
 
 // ---------- phase 3: the two guards ----------
 await phase('guard', {
-  migrations: UP_TO_008,
+  migrations: UP_TO_016,
   setup: SEED_USERS + seedCanvas({ broken: true }),
   body: async (db) => {
-    const message = await refused(db, named('009_object_rows.sql').sql)
-    check('009 refuses a canvas it cannot split', /no id/.test(message), message || 'it did not refuse')
+    const message = await refused(db, named('017_object_rows.sql').sql)
+    check('017 refuses a canvas it cannot split', /no id/.test(message), message || 'it did not refuse')
 
     // Refused means refused: the tables it had begun to build must not be left half-made.
     const objects = await one(db, `select to_regclass('public.layout_objects')::text`)
@@ -392,16 +396,16 @@ await phase('guard', {
 // The other guard, and the more important one: the drop of the frozen canvas must refuse to happen if
 // the rows are not the whole bench. A shape with no row would be lost for good -- there is no copy of it
 // anywhere else -- so this puts the bench in exactly that state (by taking a row away as the owner, which
-// is a state no page can reach) and checks that 010 will not have it.
+// is a state no page can reach) and checks that 018 will not have it.
 await phase('frozen', {
-  migrations: UP_TO_008,
+  migrations: UP_TO_016,
   setup: SEED_USERS + seedCanvas(),
   body: async (db) => {
-    await runSql(db, named('009_object_rows.sql').sql, '009_object_rows.sql')
+    await runSql(db, named('017_object_rows.sql').sql, '017_object_rows.sql')
     await runSql(db, `delete from public.layout_objects where object_id = 'area-2'`, 'losing a row')
 
-    const message = await refused(db, named('010_drop_frozen_canvas.sql').sql)
-    check('010 refuses to drop a canvas the rows do not account for', /no row/.test(message), message || 'it dropped it anyway')
+    const message = await refused(db, named('018_drop_frozen_canvas.sql').sql)
+    check('018 refuses to drop a canvas the rows do not account for', /no row/.test(message), message || 'it dropped it anyway')
 
     const stillThere = await one(
       db,
@@ -423,9 +427,9 @@ await phase('objects', {
   },
 })
 
-// ---------- phase 5: the suite for 001-008 ----------
+// ---------- phase 5: the suite for 001-005 and 014-016 ----------
 await phase('legacy', {
-  migrations: UP_TO_008,
+  migrations: UP_TO_016,
   body: async (db) => {
     await runSql(db, read('supabase/tests/layouts_rls.sql'), 'layouts_rls.sql')
     return ['supabase/tests/layouts_rls.sql passed against the schema it was written for']

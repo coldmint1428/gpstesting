@@ -9,7 +9,7 @@
 --   2. the `auth` schema: `auth.users`, which 002 puts a trigger on, and `auth.uid()`, which is the
 --      identity everything else is decided by -- and which the tests drive with
 --      `set local request.jwt.claims = '{"sub": "..."}'`, exactly as the Supabase SQL Editor does;
---   3. the `supabase_realtime` publication, which 007 and 009 add their tables to.
+--   3. the `supabase_realtime` publication, which 015 and 017 add their tables to.
 --
 -- What it does NOT fake is Postgres itself: the same parser, the same plpgsql, the same RLS, the same
 -- constraints. What it cannot cover is Supabase's own parts -- GoTrue, PostgREST, the Realtime socket
@@ -55,7 +55,7 @@ grant usage on schema auth to anon, authenticated;
 
 -- Supabase's own default privileges, which is why no migration in this repository ever writes a plain
 -- `grant select on table ... to authenticated` for the tables it creates: a table made in `public`
--- already carries ALL for these roles, and each migration REVOKES what it does not want (005 and 009
+-- already carries ALL for these roles, and each migration REVOKES what it does not want (005 and 017
 -- both do exactly that). Without this line a local run would fail on "permission denied for table
 -- layouts" in a place where the real project is fine.
 alter default privileges in schema public

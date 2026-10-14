@@ -1,6 +1,6 @@
 // useBenchPresence - who else is on the bench, and what each of them has hold of.
 //
-// One row per open page in public.layout_presence (007), written straight from here and streamed
+// One row per open page in public.layout_presence (015), written straight from here and streamed
 // back to everyone through Realtime. This composable owns THIS TAB's row: it joins, beats, says
 // what is selected, and leaves. Everything else it only reads.
 //

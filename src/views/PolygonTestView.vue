@@ -3,14 +3,14 @@
 //
 // A standalone showcase: it is NOT tied to an event, and it touches none of the tables the event pages
 // use. There is ONE bench, shared by everyone who signs in, and everybody may work on it at once -- one
-// SHAPE at a time, decided by the database (see supabase/migrations/008_object_locks.sql).
+// SHAPE at a time, decided by the database (see supabase/migrations/016_object_locks.sql).
 //
 // This page owns the data and the writes. AreaBench only draws it and reports what the planner did, so
 // there is exactly one place that writes.
 //
 // A WRITE IS A PATCH OF ONE SHAPE, and it happens when a change SETTLES: at the end of a gesture, or a
 // moment after an edit that is not one. `mode` going back to null no longer saves anything -- it only
-// lets go of the lock -- which is what 009_object_rows.sql changed and what
+// lets go of the lock -- which is what 017_object_rows.sql changed and what
 // composables/useBenchDoc.js is written around.
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useBenchDoc } from '../composables/useBenchDoc'
@@ -30,7 +30,7 @@ import BenchAlert from '../components/BenchAlert.vue'
 // below reports a refusal through it: one strip of text, one source, whichever way the refusal arrived.
 const locks = useBenchLocks()
 
-// The canvas. The database keeps one row per shape (009_object_rows.sql) and this is what turns them
+// The canvas. The database keeps one row per shape (017_object_rows.sql) and this is what turns them
 // into the one document the bench draws -- and a planner's change back into a row. The options are the
 // three things it deliberately does not know: whether a shape is held by this tab, where a refusal is
 // said, and that a shape refused on its lock is no longer this tab's to hold.
@@ -91,13 +91,13 @@ const plans = computed(() => layout.value.floorPlans)
 const areas = computed(() => layout.value.polygons)
 
 // Where this map opens: this planner's own last view if they have one, and otherwise the bench's HOME
-// view -- which is the copy still inside the frozen document, read by open_bench() (see 007 and 009).
+// view -- which is the copy still inside the frozen document, read by open_bench() (see 015 and 017).
 const startView = computed(() => myView.value || layout.value.view)
 
 // Presence is filed under the bench's id, which only exists once the bench has been opened, so joining
 // waits for it instead of guessing. Live frames go out on the same moment: they are published under the
 // SAME tag presence publishes and never under the session the database authorises with, which is the
-// rule 007 set and this is the second thing to obey it (see composables/useBenchFrames.js).
+// rule 015 set and this is the second thing to obey it (see composables/useBenchFrames.js).
 watch(layoutId, (id) => {
   if (!id) return
   presence.join(id)
@@ -105,7 +105,7 @@ watch(layoutId, (id) => {
 })
 
 // How close the bench is to the 4 MB the database enforces. THE NUMBER IS THE DATABASE'S: it is counted
-// by layout_bytes() over the rows themselves (009) and arrives with open_bench() and with every write's
+// by layout_bytes() over the rows themselves (017) and arrives with open_bench() and with every write's
 // reply, so it cannot disagree with what is really stored.
 //
 // This page used to count the document itself, byte for byte, and that stopped being possible the moment
@@ -297,7 +297,7 @@ function applyFrame({ kind, id, patch }) {
 // deleted floor plan and a renamed area are all just writes.
 //
 // AND EVERY WRITE ASKS FOR THE SHAPE'S LOCK FIRST. This is where a change to the canvas begins, and the
-// database will not store a change to a shape nobody holds (see save_object in 009_object_rows.sql) --
+// database will not store a change to a shape nobody holds (see save_object in 017_object_rows.sql) --
 // so the refusal is taken here, before the change happens at all: the shape never moves, no step is
 // recorded, and useBenchLocks has already put the reason on screen.
 async function mayWrite(id) {
@@ -390,7 +390,7 @@ async function deleteArea(id) {
 // The view is NOT a step, and it is not the document's business either. Panning and zooming report on
 // every settle, so recording them would bury every real edit under a pile of steps that only move the
 // camera; and the camera is the one thing two planners must NOT share, or one of them panning would
-// carry the other's map along with it (see 007_presence_and_views.sql). It goes to this planner's own
+// carry the other's map along with it (see 015_presence_and_views.sql). It goes to this planner's own
 // row instead, and Undo stays about what was drawn.
 function setView(view) {
   saveView(view)
@@ -400,7 +400,7 @@ function setView(view) {
 // A restore is NOT a reset: the states ahead of the one being put back have to stay reachable, or redo
 // would clear itself the moment undo ran.
 //
-// WHAT A STEP MEANS NOW. Before 009 a restore only changed what was on screen and the next save carried
+// WHAT A STEP MEANS NOW. Before 017 a restore only changed what was on screen and the next save carried
 // it; a step is now a set of WRITES -- a shape put back is a shape written, and a shape Undo takes away
 // is a shape deleted -- so this is the one place on the page that touches more than one shape at once.
 //
@@ -541,7 +541,7 @@ function pastePlan() {
     centre: offsetLatLng(from.centre, PASTE_OFFSET_M),
   }
   // A copy of a floor plan at least does not cost a second picture: the image is stored once, under the
-  // md5 of the image itself (009), so a paste of one that is already here adds its placement and
+  // md5 of the image itself (017), so a paste of one that is already here adds its placement and
   // nothing else. Measured here anyway, before anything is added.
   if (!planFits(plan)) {
     errorMsg.value = LAYOUT_TOO_LARGE_MESSAGE

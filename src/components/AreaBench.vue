@@ -76,7 +76,7 @@ const props = defineProps({
   view: { type: Object, default: null }, // where the map was left
   // How close the bench is to the 4 MB cap the DATABASE enforces, and the same thing as a fraction for
   // the ring that shows it. Handed in rather than measured here because the PAGE owns the document: the
-  // number is the database's own (counted over the rows, see 009_object_rows.sql) and only the page
+  // number is the database's own (counted over the rows, see 017_object_rows.sql) and only the page
   // knows it. See views/PolygonTestView.vue.
   sizeText: { type: String, default: '' },
   sizeRatio: { type: Number, default: 0 },
@@ -87,7 +87,7 @@ const props = defineProps({
   planFits: { type: Function, default: null },
   // May this planner work on the bench at all? TRUE for everybody now: there is no claim to hold
   // and no Start editing to press, and who may change a particular SHAPE is settled one object at a
-  // time by `locks` below (see 008_object_locks.sql). Looking and working are the same state.
+  // time by `locks` below (see 016_object_locks.sql). Looking and working are the same state.
   canEdit: { type: Boolean, default: true },
   // The per-object locks (composables/useBenchLocks.js). Handed in like the history and the
   // clipboard, because it is the page's session. Read here for two things: the sentence in the
@@ -2708,7 +2708,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                    pictures BELOW are what make it big -- so it belongs on this heading, next to
                    the thing that spends it, rather than off in the page header where it used to
                    sit with no clue about what it was counting. The number itself is the database's
-                   (layout_bytes in 009), handed in by the page. -->
+                   (layout_bytes in 017), handed in by the page. -->
               <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
                 <h2 class="h6 card-title mb-0">Floor plans</h2>
                 <div

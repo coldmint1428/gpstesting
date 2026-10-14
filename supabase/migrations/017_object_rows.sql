@@ -1,11 +1,11 @@
 -- Step 9: one row per shape, and the picture beside it.
--- Run AFTER 008_object_locks.sql (Supabase -> SQL Editor, or apply as a migration).
+-- Run AFTER 016_object_locks.sql (Supabase -> SQL Editor, or apply as a migration).
 --
--- RE-RUNNABLE, deliberately, the same rule as 007 and 008: every statement is `if not exists`,
+-- RE-RUNNABLE, deliberately, the same rule as 015 and 016: every statement is `if not exists`,
 -- `if exists` or `create or replace`, and the split of the old document is written so that applying
 -- this file a second time can neither duplicate nor overwrite anything. Nothing here deletes data.
 --
--- WHAT THIS REPLACES, AND WHY. 005 put the whole canvas in ONE jsonb column and 008 made saving it a
+-- WHAT THIS REPLACES, AND WHY. 005 put the whole canvas in ONE jsonb column and 016 made saving it a
 -- merge. The merge is what made a lock worth anything, and it worked -- but every change saved
 -- EVERYTHING, and the bench has outgrown that. Measured on the real bench (tools/bench_harness.mjs,
 -- round 3): 3.7 MB of a 4 MB cap, and a save of one moved dot took 19 to 34 SECONDS, because it
@@ -27,7 +27,7 @@
 -- them over the STORED row, so a planner whose copy is behind -- a hidden tab, a screen that missed
 -- an event -- cannot silently undo somebody else's rename: their patch is merged onto what the bench
 -- has, the merged row comes back, and that is what their screen takes. The lock is still the
--- permission, exactly as 008 left it (save_object() writes nothing for a shape the caller does not
+-- permission, exactly as 016 left it (save_object() writes nothing for a shape the caller does not
 -- hold), and the merge that used to be the safety net is now simply the way every write happens.
 --
 -- THE OLD COLUMN IS KEPT, FROZEN. public.layouts.data still holds the canvas as it was the moment
@@ -48,14 +48,14 @@
 do $$
 begin
   if to_regclass('public.layouts') is null or to_regclass('public.layout_locks') is null then
-    raise exception 'Run 005_layouts.sql and 008_object_locks.sql before this migration';
+    raise exception 'Run 005_layouts.sql and 016_object_locks.sql before this migration';
   end if;
 end $$;
 
 -- ============================================================
 -- 1. A floor plan's PLACEMENT, checked without its picture.
 --
---    006's floor_plan_ok() asks for the image as well, because the whole document carries it. A row
+--    014's floor_plan_ok() asks for the image as well, because the whole document carries it. A row
 --    in layout_objects does NOT: the picture lives in layout_images and the row only points at it,
 --    so the rule that a row has to satisfy is the placement, and the picture is checked separately
 --    (by the foreign key's existence and by save_object() before it stores one).
@@ -93,7 +93,7 @@ begin
   if v_h <= 0 or v_h > 20000 then return false; end if;
   if v_opacity < 0 or v_opacity > 1 then return false; end if;
 
-  -- The picture itself has to fit on the map, not just its centre point (006).
+  -- The picture itself has to fit on the map, not just its centre point (014).
   return public.floor_plan_in_sg(p_plan -> 'centre', v_w, v_h, v_angle);
 end;
 $$;
@@ -377,7 +377,7 @@ grant select on table public.layout_images to authenticated;
 -- ============================================================
 
 -- Why a shape was refused, in a sentence a planner can act on, or NULL when there is nothing wrong
--- with it. This is 006's layout_problem() for ONE shape, and it exists because a per-shape write can
+-- with it. This is 014's layout_problem() for ONE shape, and it exists because a per-shape write can
 -- say which shape and what about it -- which the whole-document save never could: it could only
 -- answer "The layout data is not valid" about a canvas with twenty things on it.
 --
@@ -538,7 +538,7 @@ begin
   if auth.uid() is null then raise exception 'Not signed in'; end if;
 
   -- A page with no session can hold nothing and therefore write nothing. This is the one hard
-  -- refusal left (the same one 008 has), and it is an error rather than a refusal row because it
+  -- refusal left (the same one 016 has), and it is an error rather than a refusal row because it
   -- means the page cannot work at all: there is nothing about a shape to say.
   if p_session is null then
     raise exception 'This page has no session, so nothing can be saved' using errcode = 'PT409';
@@ -700,7 +700,7 @@ begin
   end if;
 
   -- A save is also a sign of life for everything this session is holding, the way it was for the
-  -- claim in 005 and for the whole-document save in 008.
+  -- claim in 005 and for the whole-document save in 016.
   update public.layout_locks
   set last_seen = now(), expires_at = now() + interval '45 seconds'
   where session_id = p_session;
@@ -857,7 +857,7 @@ begin
   -- Safe under concurrency: the singleton index makes the loser a no-op.
   insert into public.layouts (created_by) values (auth.uid()) on conflict do nothing;
 
-  -- `data -> 'view'` is the one thing still read out of the frozen document: 007 moved a planner's
+  -- `data -> 'view'` is the one thing still read out of the frozen document: 015 moved a planner's
   -- camera into public.layout_views and left the copy inside the canvas as the bench's home view, and
   -- that is what it still is. Reading it here costs a detoast of the old column on opening the bench
   -- and nothing on any write.
@@ -907,7 +907,7 @@ end;
 $$;
 
 -- ============================================================
--- 7. Permissions, the same pattern as 005, 007 and 008: internal by default, and only the four doors
+-- 7. Permissions, the same pattern as 005, 015 and 016: internal by default, and only the four doors
 --    the page uses are opened. (A function created by a later migration is granted to PUBLIC by
 --    default, so every one of these revokes is load-bearing.)
 -- ============================================================

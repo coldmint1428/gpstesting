@@ -31,7 +31,7 @@
 //
 // A NOTE ON PATIENCE, WHICH ROUND 4 CHANGED. The canvas is 3.7 MB of a 4 MB cap, and while it was ONE
 // document every save of it took 19 to 34 seconds, so this file waited accordingly. A save is now the
-// SHAPE that changed (009_object_rows.sql), which is a few hundred bytes, and the checks below report
+// SHAPE that changed (017_object_rows.sql), which is a few hundred bytes, and the checks below report
 // what each one actually took -- which is the measurement that says whether that worked.
 
 import { Driver, sleep } from './bidi.mjs'
@@ -523,7 +523,7 @@ async function main() {
 
     // ---- a floor plan: the other kind of shape, and the one that carries a picture -----------
     // This is the half of the bench the harness has never touched. It matters more now than it did: a
-    // picture is a row of its own (009_object_rows.sql), keyed by the md5 of the image, so what is
+    // picture is a row of its own (017_object_rows.sql), keyed by the md5 of the image, so what is
     // checked here is the two things a picture does that an area cannot -- that a plan uploaded on one
     // screen reaches the other one with no reload, and that the PICTURE comes with it, which is a fetch
     // the receiving page only makes when it does not already have that image.

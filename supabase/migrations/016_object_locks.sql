@@ -1,5 +1,5 @@
 -- Step 8: a lock per OBJECT, and a save that merges.
--- Run AFTER 007_presence_and_views.sql (Supabase -> SQL Editor, or apply as a migration).
+-- Run AFTER 015_presence_and_views.sql (Supabase -> SQL Editor, or apply as a migration).
 --
 -- RE-RUNNABLE, deliberately: every statement is `if not exists`, `if exists` or `create or replace`,
 -- so applying this file a second time after an edit replaces a function in place rather than dying
@@ -25,7 +25,7 @@
 --
 -- THE SESSION IS A SECRET. public.layout_locks holds it, so that table is NEVER published, has
 -- no policies and no grants, and is reached only through the functions below. This is the same
--- rule 007 states for presence, from the other side: the id a page PUBLISHES (its presence tag)
+-- rule 015 states for presence, from the other side: the id a page PUBLISHES (its presence tag)
 -- is never the id it is AUTHORISED by.
 --
 -- AND THE SAVE MERGES, WHICH IS WHAT MAKES ALL OF IT SAFE. save_bench() no longer writes whatever
@@ -51,7 +51,7 @@
 -- ============================================================
 create table if not exists public.layout_locks (
   -- The shape's id inside the canvas document, which is not a table and whose ids are not always
-  -- uuids (see 007), so this is text and has no foreign key to point at.
+  -- uuids (see 015), so this is text and has no foreign key to point at.
   object_id text primary key,
   layout_id uuid not null references public.layouts (id) on delete cascade,
   user_id uuid not null default auth.uid() references public.profiles (id) on delete cascade,
@@ -337,7 +337,7 @@ begin
   end loop;
 
   -- The view inside the document is the bench's HOME view now; a planner's camera lives in
-  -- public.layout_views (007) and nothing writes this one any more, so it is preserved as it is
+  -- public.layout_views (015) and nothing writes this one any more, so it is preserved as it is
   -- rather than taken from whoever saves last.
   --
   -- Carried over only when the stored document really HAS the key. jsonb_build_object turns a SQL
@@ -402,7 +402,7 @@ end;
 $$;
 
 -- ============================================================
--- 6. Permissions, the same pattern as 005's section 5 and 007's.
+-- 6. Permissions, the same pattern as 005's section 5 and 015's.
 --    The machine is internal; the two doors to it, the release, the save and the read are not.
 -- ============================================================
 revoke execute on function public.claim_object(text, uuid, boolean) from public, anon, authenticated;

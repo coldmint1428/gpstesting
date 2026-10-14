@@ -51,7 +51,7 @@ function watchersFor(areaId) {
 
 // Somebody else is WORKING on this area -- not merely looking at it -- so its row cannot be
 // changed, and the name of whoever has it is already shown on the row. The database would refuse
-// the change anyway (see 008_object_locks.sql); refusing it here means the planner never types
+// the change anyway (see 016_object_locks.sql); refusing it here means the planner never types
 // something that cannot be saved.
 function blocked(areaId) {
   return watchersFor(areaId).find((who) => who.active) || null

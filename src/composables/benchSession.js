@@ -5,7 +5,7 @@
 // it cannot also be what tells two of my tabs apart. Two tabs of one account are two editors here,
 // which was the bench's oldest bug, and the count of that fix lives in this value and nowhere else.
 //
-// IT MUST NEVER BE PUBLISHED, and that is the rule 007 set from the other side: the id a page
+// IT MUST NEVER BE PUBLISHED, and that is the rule 015 set from the other side: the id a page
 // PUBLISHES (its presence tag, see useBenchPresence) is not the id it is AUTHORISED by. So this tag is
 // stored under a key of its own, is never put in a presence row and never in a broadcast frame, and is
 // sent only to the functions that decide who may write what.

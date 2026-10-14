@@ -1,6 +1,6 @@
 // useBenchLocks - who may change which shape, decided one object at a time.
 //
-// The database is the authority (008_object_locks.sql): a lock lives in public.layout_locks, keyed by an
+// The database is the authority (016_object_locks.sql): a lock lives in public.layout_locks, keyed by an
 // object and owned by a SESSION (see composables/benchSession.js -- the tag is a secret, and it is never
 // the tag presence publishes). save_object() writes nothing for a shape the caller does not hold, so
 // everything here is about two things: taking a lock at the moment a planner first changes something,
@@ -25,7 +25,7 @@ import { supabase } from '../lib/supabase'
 import { benchSession } from './benchSession'
 
 const TICK_MS = 5 * 1000
-// What the database gives a lock (008), kept here too so the page can reason about it without having to
+// What the database gives a lock (016), kept here too so the page can reason about it without having to
 // read the expiry back out of every reply.
 const LOCK_MS = 45 * 1000
 // Renewing with 20 to spare means one lost round trip, or one slow one, is not enough to lose a lock

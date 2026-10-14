@@ -1,6 +1,6 @@
 // How big the bench is allowed to be, and what a shape costs.
 //
-// THE AUTHORITY IS THE DATABASE: public.layout_bytes() in 009_object_rows.sql measures the bench as the
+// THE AUTHORITY IS THE DATABASE: public.layout_bytes() in 017_object_rows.sql measures the bench as the
 // sum of the JSON text of every shape plus every picture, save_object() refuses a write that would push
 // it past 4 MB, and every reply carries the number -- so the page can SHOW the size without working it
 // out. That number is what the ring in the floor plans card draws, and it is the number the planner is
@@ -24,7 +24,7 @@ export function layoutBytes(jsonText) {
 }
 
 // A shape as its ROW holds it: everything except the picture, which is a row in layout_images that the
-// shape only points at (see 009_object_rows.sql). This is the split, client side.
+// shape only points at (see 017_object_rows.sql). This is the split, client side.
 export function withoutImage(shape) {
   if (!shape) return shape
   const { image, ...rest } = shape
