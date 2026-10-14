@@ -16,7 +16,7 @@
 //
 // It runs five phases, each on a database of its own, and reports every one of them:
 //
-//   empty    a database with no bench at all: the migrations must apply in order, 001–005 then 014–018
+//   empty    a database with no bench at all: the migrations must apply in order, 001–005 then 014–019
 //   split    a bench that already holds a canvas, migrated from 016 to 017: the split is checked
 //            shape by shape, the old document is checked to be untouched, and re-running 017 must
 //            change nothing
@@ -49,6 +49,7 @@ const MIGRATION_FILES = [
   '016_object_locks.sql',
   '017_object_rows.sql',
   '018_drop_frozen_canvas.sql',
+  '019_bench_head.sql',
 ]
 const MIGRATIONS = MIGRATION_FILES.map((name) => ({ name, sql: read('supabase/migrations/' + name) }))
 const named = (name) => MIGRATIONS.find((m) => m.name === name)
@@ -256,7 +257,7 @@ await phase('empty', {
     const images = await one(db, 'select count(*)::int from public.layout_images')
     check('no pictures either', Number(images) === 0, `found ${images}`)
 
-    return ['001–005 and 014–018 applied in order and left an empty, working schema']
+    return ['001–005 and 014–019 applied in order and left an empty, working schema']
   },
 })
 

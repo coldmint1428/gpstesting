@@ -72,6 +72,11 @@ export function useBenchDoc(options = {}) {
   const refuse = options.refuse || (() => {})
   const say = options.say || (() => {})
   const lost = options.lost || (() => {})
+  // A stored version of somebody else's shape has just been drawn (or the shape is gone): the page drops
+  // any live frame it was showing for it (see applyFrame in PolygonTestView).
+  const applied = options.applied || (() => {})
+  // Before a failed write is tried again: make sure this tab still has the shape's lock (useBenchLocks.keep).
+  const reclaim = options.reclaim || (() => Promise.resolve(true))
 
   const data = ref(emptyCanvas())
   const loading = ref(true)
@@ -95,6 +100,9 @@ export function useBenchDoc(options = {}) {
   // The revision this page holds for each shape. Two jobs: it tells a stale event from a current one, and
   // it is how the page knows whether the bench has ever heard of a shape at all (see `known`).
   const revOf = new Map()
+  // The revision of the last write THIS PAGE made to each shape. When it equals revOf, nobody else has
+  // written the shape since -- which is what Undo asks before it puts a shape back (see isMine).
+  const ownRev = new Map()
 
   // What the planner has changed and the database has not been told yet: shape id -> { kind, patch }.
   // One patch per shape however many fields it touched, and the LAST value of each field wins.
@@ -106,6 +114,9 @@ export function useBenchDoc(options = {}) {
   const flying = new Set()
 
   let alone = true // true while no pointer is down: see idea 2 at the top
+  // A write that failed (no connection) is tried again by itself: 2 s, 4 s, ... up to 30 s apart.
+  const retryTimers = new Map()
+  const retryDelay = new Map()
   let channel = null
   let joined = false
   let viewTimer = null
@@ -123,12 +134,21 @@ export function useBenchDoc(options = {}) {
     return revOf.has(shapeId)
   }
 
+  // Is the shape as the bench has it THIS PAGE's work -- so Undo may put it back? True when this page
+  // made the latest stored version, when it has a change to it still on the way (only the lock holder
+  // can, so nobody else has written it since), or when the bench has never heard of it.
+  function isMine(shapeId) {
+    if (!revOf.has(shapeId) || busy(shapeId)) return true
+    return ownRev.get(shapeId) === revOf.get(shapeId)
+  }
+
   function shapeList(kind) {
     return kind === 'plan' ? data.value.floorPlans : data.value.polygons
   }
 
   function forget(shapeId) {
     revOf.delete(shapeId)
+    ownRev.delete(shapeId)
     imageOf.delete(shapeId)
   }
 
@@ -229,40 +249,91 @@ export function useBenchDoc(options = {}) {
     return doOpen()
   }
 
-  // Has the bench moved on without me? This is what the bench's revision counter is for: a page that
-  // has been hidden, or whose socket reconnected, compares its own number with the server's -- one
-  // small query -- and only reads the canvas again if it really has missed something.
+  // Has the bench moved on without me? Asked when the socket (re)joins and when the tab comes back.
+  //
+  // SHAPE BY SHAPE, not by one number. bench_head() (019) hands back every shape's own revision, and
+  // this page fetches only the rows that are newer than what it shows and drops the ones that are gone.
+  // Comparing the bench's highest revision with this page's highest cannot answer the question: a page
+  // that missed somebody else's write at rev 12 and then made its own at rev 13 compares equal and keeps
+  // the stale shape until a reload. And no pictures are sent again: a plan's picture is fetched only if
+  // this page does not have it.
+  //
+  // A row is applied only if it is still newer than what the page holds AT THAT MOMENT, so an event
+  // that arrived while this was in flight is never overwritten by the older answer. Shapes this page is
+  // HOLDING are left alone (the lock says they are this planner's to say). One catch-up at a time: a
+  // second request while one runs makes it run once more at the end.
   //
   // Anything this page has changed but not written goes first, which is also the second chance a write
   // that failed (a lost connection) gets.
-  async function catchUp() {
+  let catching = null
+  let catchAgain = false
+
+  function catchUp() {
+    if (catching) {
+      catchAgain = true
+      return catching
+    }
+    catching = (async () => {
+      let changed = false
+      try {
+        do {
+          catchAgain = false
+          changed = (await catchUpOnce()) || changed
+        } while (catchAgain)
+      } finally {
+        catching = null
+      }
+      return changed
+    })()
+    return catching
+  }
+
+  async function catchUpOnce() {
     if (!supabase || !layoutId.value) return false
     await flushAll()
 
-    const { data: row, error } = await supabase.from('layouts').select('rev').maybeSingle()
-    if (error || !row) return false
-    if (Number(row.rev) <= rev.value) return false
+    const { data: rows, error } = await supabase.rpc('bench_head')
+    const head = firstRow(rows)
+    if (error || !head) return false
+    const benchRev = Number(head.rev) || 0
+    const server = head.shapes || {}
+    if (head.bytes != null) bytes.value = Number(head.bytes) || 0
 
-    const { row: fresh, error: readError } = await read()
-    if (readError) return false
+    let changed = false
 
-    // Everything this page is HOLDING stays exactly as it is (the lock says it is this planner's to
-    // say, and their change may be on its way in); everything else becomes the bench's version.
-    const mine = []
-    for (const kind of ['plan', 'area']) {
-      for (const shape of shapeList(kind)) {
-        if (holds(shape.id)) mine.push({ kind, shape })
+    // Gone from the bench. Only shapes this page learned about at or before the revision just read:
+    // one created after it (an event that is newer than this answer) is simply not in it yet.
+    for (const shapeId of [...revOf.keys()]) {
+      if (shapeId in server || holds(shapeId)) continue
+      if ((revOf.get(shapeId) || 0) > benchRev) continue
+      dropEverywhere(shapeId)
+      forget(shapeId)
+      applied(shapeId)
+      changed = true
+    }
+
+    // Newer on the bench than on this screen
+    const stale = Object.keys(server).filter(
+      (shapeId) => Number(server[shapeId]) > (revOf.get(shapeId) || 0) && !holds(shapeId),
+    )
+    for (let i = 0; i < stale.length; i += 100) {
+      const { data: fresh, error: rowError } = await supabase
+        .from('layout_objects')
+        .select('object_id, kind, data, image_id, rev')
+        .eq('layout_id', layoutId.value)
+        .in('object_id', stale.slice(i, i + 100))
+      if (rowError) return changed
+      for (const row of fresh || []) {
+        const at = Number(row.rev) || 0
+        if (holds(row.object_id) || at <= (revOf.get(row.object_id) || 0)) continue
+        revOf.set(row.object_id, at)
+        applyRow(row.object_id, row)
+        changed = true
       }
     }
 
-    images.clear()
-    rememberImages(fresh.images)
-    adopt(fresh.shapes, fresh.home)
-    for (const held of mine) replaceShape(held.kind, held.shape.id, held.shape)
-
-    rev.value = Number(fresh.rev) || 0
-    bytes.value = Number(fresh.bytes) || 0
-    return true
+    rev.value = Math.max(rev.value, benchRev)
+    return changed
   }
 
   // ---------- Writing ----------
@@ -346,13 +417,15 @@ export function useBenchDoc(options = {}) {
 
     if (error || !row) {
       // The call did not happen, or did not answer. The change is still the planner's and is still
-      // unwritten, so it goes back to waiting -- the next change to that shape, the end of the next
-      // gesture, or coming back to the tab writes it. Nothing is thrown away, and nothing is retried on
-      // a timer.
+      // unwritten, so it goes back to waiting and is tried again by itself (see retryLater) -- or sooner,
+      // by the next change to that shape, the end of the next gesture, or coming back to the tab.
+      // Nothing is thrown away, and its lock is kept meanwhile (useBenchLocks `keeping`).
       errorMsg.value = error ? explain(error) : 'The bench did not answer.'
       requeue(shapeId, item)
+      retryLater(shapeId)
       return false
     }
+    retryDelay.delete(shapeId)
 
     noteReply(shapeId, row, sentImage)
     if (row.ok) {
@@ -369,7 +442,10 @@ export function useBenchDoc(options = {}) {
   function noteReply(shapeId, row, sentImage) {
     rev.value = Math.max(rev.value, Number(row.rev) || 0)
     if (row.bytes != null) bytes.value = Number(row.bytes) || 0
-    if (row.ok) revOf.set(shapeId, Number(row.rev) || 0)
+    if (row.ok) {
+      revOf.set(shapeId, Number(row.rev) || 0)
+      ownRev.set(shapeId, Number(row.rev) || 0)
+    }
     if (sentImage && row.image_id) images.set(row.image_id, sentImage)
   }
 
@@ -394,6 +470,22 @@ export function useBenchDoc(options = {}) {
     // refusal, and a refusal nobody can see is indistinguishable from a broken page, so it is said.
     say(shapeId, 'That change was not stored: this page no longer holds this shape. Do it again.')
     lost(shapeId)
+  }
+
+  function retryLater(shapeId) {
+    if (retryTimers.has(shapeId)) return
+    const wait = retryDelay.get(shapeId) || 2000
+    retryDelay.set(shapeId, Math.min(wait * 2, 30000))
+    retryTimers.set(
+      shapeId,
+      setTimeout(async () => {
+        retryTimers.delete(shapeId)
+        if (!pending.has(shapeId)) return // already written by something else
+        if (!alone) return retryLater(shapeId) // a gesture is in progress: not now
+        await reclaim(shapeId)
+        flush(shapeId)
+      }, wait),
+    )
   }
 
   function requeue(shapeId, item) {
@@ -431,8 +523,13 @@ export function useBenchDoc(options = {}) {
     }
 
     let image = imageId ? images.get(imageId) || '' : ''
-    if (!image && imageId) image = await fetchImage(imageId)
-    replaceShape(kind, shapeId, { ...data, image })
+    if (!image && imageId) {
+      const at = revOf.get(shapeId)
+      image = await fetchImage(imageId)
+      // Something newer arrived (or the shape was deleted) while the picture loaded: that wins.
+      if (revOf.get(shapeId) !== at) return
+    }
+    replaceShape(kind, shapeId, { ...mergeWaiting(shapeId, row.data), image })
   }
 
   // Put the bench's version of a shape back on this screen. Called when a write was REFUSED: what the
@@ -452,7 +549,10 @@ export function useBenchDoc(options = {}) {
 
     let image
     if (kind === 'plan') {
+      const at = revOf.get(shapeId)
       image = imageId ? images.get(imageId) || (await fetchImage(imageId)) || '' : ''
+      // Something newer arrived (or the shape was deleted) while the picture loaded: that wins.
+      if (revOf.get(shapeId) !== at) return
     }
     // A change the planner has made since the refused one is theirs and is written next; the refused one
     // is not. So the bench's shape goes back with the newer change still on it.
@@ -539,6 +639,7 @@ export function useBenchDoc(options = {}) {
     if (payload.eventType === 'DELETE') {
       dropEverywhere(shapeId)
       forget(shapeId)
+      applied(shapeId)
       return
     }
 
@@ -558,14 +659,22 @@ export function useBenchDoc(options = {}) {
 
     if (kind !== 'plan') {
       replaceShape(kind, shapeId, row.data)
+      applied(shapeId)
       return
     }
 
     let image = imageId ? images.get(imageId) || '' : ''
-    if (!image && imageId) image = await fetchImage(imageId)
+    if (!image && imageId) {
+      const at = revOf.get(shapeId)
+      image = await fetchImage(imageId)
+      // A newer version (or a deletion) arrived while the picture loaded: drawing this one now would
+      // put the shape back in time.
+      if (revOf.get(shapeId) !== at) return
+    }
     // The shape is drawn even when its picture is not here yet: an outline-less plan for a moment is
     // better than a shape that arrives late, and the next event (or a reload) brings the picture.
     replaceShape(kind, shapeId, { ...row.data, image })
+    applied(shapeId)
   }
 
   // A picture this page does not have. Read rather than streamed: layout_images is not published,
@@ -667,6 +776,8 @@ export function useBenchDoc(options = {}) {
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
     for (const shapeId of [...timers.keys()]) stopTimer(shapeId)
+    for (const timer of retryTimers.values()) clearTimeout(timer)
+    retryTimers.clear()
     // A pan that has not been written yet is still worth writing, and so is a change: the page is going
     // away, so this is fire and forget -- a fetch that does not finish simply does not happen.
     flushView()
@@ -697,6 +808,7 @@ export function useBenchDoc(options = {}) {
     replace,
     busy,
     known,
+    isMine,
     beginGesture,
     endGesture,
     // Reading one shape's picture (used by a shape that arrives without one)

@@ -14,9 +14,9 @@
 //
 // 1. THE TAG IS PER TAB, NOT PER PLANNER. Two tabs of one account are two planners as far as the
 //    bench is concerned, which is the entire point: the bench's oldest bug was that a second
-//    browser of the same login was indistinguishable from the first one. The tag lives in
-//    sessionStorage, so a reload keeps the row it already had instead of leaving a ghost of
-//    itself behind, while a new tab gets a tag of its own. It is stored PER USER ID too, because
+//    browser of the same login was indistinguishable from the first one. The tag is minted per
+//    PAGE LOAD (not kept in sessionStorage, which a duplicated tab copies), and the row is deleted
+//    as the page closes, so a reload does not leave a ghost behind. It is kept PER USER ID too, because
 //    a login that changes inside one tab must not inherit the previous planner's row -- the RLS
 //    policy would silently refuse the write and the new planner would be invisible.
 //
@@ -36,6 +36,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 import { uuid4 } from '../utils/uuid'
+import { sendOnExit } from '../utils/exitBeacon'
 
 const BEAT_MS = 10 * 1000 // how often this tab says it is still here
 const STALE_MS = 45 * 1000 // behind the freshest row on the bench: gone
@@ -55,19 +56,16 @@ export function plannerColour(userId) {
 // The tag has to be a real uuid: layout_presence.presence_id is a uuid column. It is an identifier
 // and never a secret, but it still has to be the right SHAPE, which is what utils/uuid.js is for --
 // crypto.randomUUID() alone would leave every plain-http origin unable to announce itself at all.
+//
+// ONE TAG PER PAGE LOAD (per account). It used to live in sessionStorage so a reload reused its row --
+// but a duplicated tab gets a COPY of sessionStorage, and two windows then shared one row and one name
+// chip. A fresh tag per load cannot be shared; the row of the page that closed is deleted as it closes
+// (see onPageHide), so a reload does not leave a ghost of itself either.
+const tags = new Map()
+
 function tabTag(userId) {
-  const key = 'bench.presence.' + userId
-  try {
-    const saved = sessionStorage.getItem(key)
-    if (saved) return saved
-    const tag = uuid4()
-    sessionStorage.setItem(key, tag)
-    return tag
-  } catch {
-    // Storage can be blocked (private mode). A fresh tag per page load is still correct -- it
-    // just means this tab leaves a ghost behind when it closes, which the sweep clears.
-    return uuid4()
-  }
+  if (!tags.has(userId)) tags.set(userId, uuid4())
+  return tags.get(userId)
 }
 
 function readRows(data) {
@@ -226,8 +224,27 @@ export function useBenchPresence() {
     load()
   }
 
+  // The page is closing: take my row away with a request the browser finishes after the page is gone, so
+  // other planners do not see a ghost of me for 45 s.
+  function onPageHide() {
+    stopBeating()
+    if (myPresenceId.value) {
+      sendOnExit('layout_presence?presence_id=eq.' + myPresenceId.value, { method: 'DELETE' })
+    }
+  }
+
+  // Back from the browser's page cache (Back button after leaving): announce myself again.
+  function onPageShow(event) {
+    if (event.persisted && joined.value) {
+      beat()
+      startBeating()
+    }
+  }
+
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
   }
 
   // Join the bench. Called by the page once the bench has been opened and its id is known.
@@ -290,6 +307,8 @@ export function useBenchPresence() {
   onUnmounted(() => {
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
     }
     leave()
   })

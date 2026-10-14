@@ -55,6 +55,9 @@ function signatureOf(snapshot) {
       Number(p.centre && p.centre[0]).toFixed(6),
       Number(p.centre && p.centre[1]).toFixed(6),
       Number(p.angleDeg) || 0,
+      // Size too: resizing a plan from a corner can keep its centre, and was then not a step at all.
+      Number(p.widthM) || 0,
+      Number(p.heightM) || 0,
       Number(p.opacity),
       p.visible === false ? 0 : 1,
     ].join('\u0001'),
@@ -68,7 +71,9 @@ function signatureOf(snapshot) {
       lng += Number(point[1]) || 0
     }
     const n = points.length || 1
-    return [a.id, a.name, a.kind, points.length, (lat / n).toFixed(6), (lng / n).toFixed(6)].join('\u0001')
+    // Every point, not only the centre: moving two dots in opposite directions keeps the centre.
+    const ring = points.map((point) => Number(point[0]).toFixed(7) + ',' + Number(point[1]).toFixed(7)).join(';')
+    return [a.id, a.name, a.kind, points.length, (lat / n).toFixed(6), (lng / n).toFixed(6), ring].join('\u0001')
   })
   return [plans.join('\u0002'), areas.join('\u0002')].join('\u0003')
 }

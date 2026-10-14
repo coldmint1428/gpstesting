@@ -21,6 +21,7 @@ import { useBenchFrames } from '../composables/useBenchFrames'
 import { PASTE_OFFSET_M, copyName, offsetLatLng, useBenchClipboard } from '../composables/useBenchClipboard'
 import { MAX_LAYOUT_BYTES, LAYOUT_TOO_LARGE_MESSAGE, addedBytes } from '../utils/layoutLimits'
 import { applyAreaFrame, applyPlanFrame } from '../utils/benchFrame'
+import { withoutImage } from '../utils/layoutLimits'
 import { formatBytes } from '../utils/imageShrink'
 import AreaBench from '../components/AreaBench.vue'
 import AreaList from '../components/AreaList.vue'
@@ -39,12 +40,18 @@ const bench = useBenchDoc({
   refuse: (id, row) => locks.refuse(id, row),
   say: (id, sentence) => locks.say(id, sentence),
   lost: (id) => locks.end(id),
+  reclaim: (id) => locks.keep(id),
+  applied: (id) => settleFrames(id),
 })
 
 // "Has this shape got a change that has not been written yet?" A lock may only be let go of when the
 // answer is no, or the write that is still coming is refused by the database -- so the page tells the
 // locks, once, rather than the locks guessing from timestamps (see useBenchLocks).
 locks.watchBusy(bench.busy)
+
+// A lock that was taken over: the changes the new holder made while this page still thought the shape
+// was its own were ignored, so fetch them (shape by shape -- see catchUp in useBenchDoc).
+locks.whenLost(() => bench.catchUp())
 
 const { data: layout, loading, errorMsg, saving, bytes, open, layoutId, myView, saveView } = bench
 
@@ -133,8 +140,13 @@ watch(mode, async (value, oldValue) => {
   const was = objectIdOf(oldValue)
   if (!was) return
   await bench.flush(was)
+  // The flush is a round trip, and the planner may have gone straight back to this shape meanwhile
+  // (A -> B -> A): it is open again, so its lock is not let go of.
+  const open = objectIdOf(mode.value)
+  if (open === was) return
   locks.end(was)
-  presence.setHolding('')
+  // What this page is holding now, if anything -- not blank, which would hide a shape that is held.
+  presence.setHolding(locks.holds(open) ? open : '')
 })
 
 // What I have open, reported to everyone else. This is how my name gets onto a shape on another
@@ -163,13 +175,18 @@ function objectIdOf(value) {
 // one step it earned, and it is when what they changed is written. NOTHING IS WRITTEN WHILE A POINTER IS
 // DOWN (see useBenchDoc): a shape in motion is not a shape anybody should be sent, and "what the planner
 // meant" is not knowable until they let go.
+const GESTURE_LISTEN = { capture: true }
+
 function beginGesture() {
   bench.beginGesture()
 }
 
 function endGesture() {
   history.endRun()
-  bench.endGesture()
+  // One tick later, so the shape's own pointerup handlers (and the lock check each change awaits) have
+  // run first: a dot's drag reports its drop only on pointerup, and that drop belongs in this write
+  // rather than in a second one 700 ms later.
+  setTimeout(() => bench.endGesture(), 0)
 }
 
 // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y for the whole document, and Ctrl+C / Ctrl+V for the thing being worked
@@ -272,22 +289,61 @@ function pasteSelection() {
 //     and refuses one that would leave this planner's canvas in a state the database would not store --
 //     which matters, because that canvas is what the next write of that shape sends, and the database
 //     checks the merged shape before it stores it.
+//
+// AND IT IS NOT PERMANENT. A frame is a preview of a write that has not happened yet. Normally the write
+// follows when the planner lets go, and its row (useBenchDoc) replaces the preview. But the write may
+// never come -- the database refused it (dragged off Singapore, too big), or the planner's tab closed
+// mid-drag -- and then this screen would keep a shape that is stored nowhere. So the STORED version is
+// remembered when the first frame arrives, and put back if the frames stop for FRAME_LAPSE_MS without a
+// stored version arriving. A planner who holds still mid-drag for that long sees their shape snap back on
+// the other screens until they move again, which is the honest picture: nothing has been stored yet.
+const FRAME_LAPSE_MS = 3000
+const framed = new Map() // shape id -> { kind, stored: the shape before the frames, timer }
+
 function applyFrame({ kind, id, patch }) {
   // The database says this shape is mine, so somebody else's frames for it are not to be believed. Two
   // planners can be on one shape for the moment before the lock answers, and that is the moment this is
   // for: the one that loses is told, stops, and its geometry is never committed.
   if (locks.holds(id)) return
 
-  if (kind === 'plan') {
-    const plan = layout.value.floorPlans.find((p) => p.id === id)
-    const next = plan ? applyPlanFrame(plan, patch) : null
-    if (next) layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? next : p))
-    return
-  }
+  const list = kind === 'plan' ? layout.value.floorPlans : layout.value.polygons
+  const current = list.find((s) => s.id === id)
+  if (!current) return
+  const next = kind === 'plan' ? applyPlanFrame(current, patch) : applyAreaFrame(current, patch)
+  if (!next) return
 
-  const area = layout.value.polygons.find((a) => a.id === id)
-  const next = area ? applyAreaFrame(area, patch) : null
-  if (next) layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? next : a))
+  let entry = framed.get(id)
+  if (!entry) {
+    entry = { kind, stored: current, timer: null }
+    framed.set(id, entry)
+  }
+  clearTimeout(entry.timer)
+  entry.timer = setTimeout(() => lapseFrames(id), FRAME_LAPSE_MS)
+
+  if (kind === 'plan') layout.value.floorPlans = list.map((p) => (p.id === id ? next : p))
+  else layout.value.polygons = list.map((a) => (a.id === id ? next : a))
+}
+
+// A stored version arrived (or the shape was deleted): it replaces the preview, nothing to put back.
+function settleFrames(id) {
+  const entry = framed.get(id)
+  if (!entry) return
+  clearTimeout(entry.timer)
+  framed.delete(id)
+}
+
+// The frames stopped and no stored version followed: put back what is stored.
+function lapseFrames(id) {
+  const entry = framed.get(id)
+  framed.delete(id)
+  if (!entry || locks.holds(id)) return
+  if (entry.kind === 'plan') {
+    if (layout.value.floorPlans.some((p) => p.id === id)) {
+      layout.value.floorPlans = layout.value.floorPlans.map((p) => (p.id === id ? entry.stored : p))
+    }
+  } else if (layout.value.polygons.some((a) => a.id === id)) {
+    layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? entry.stored : a))
+  }
 }
 
 // ---------- What AreaBench reports ----------
@@ -350,6 +406,7 @@ async function deletePlan(id) {
   if (!(await mayWrite(id))) return
   history.record()
   madeHere.delete(id)
+  deletedHere.add(id)
   layout.value.floorPlans = layout.value.floorPlans.filter((p) => p.id !== id)
   // Deleting the picture that is open puts it down at once. See deleteArea.
   if (mode.value === 'floorplan:' + id) mode.value = null
@@ -379,6 +436,7 @@ async function deleteArea(id) {
   if (!(await mayWrite(id))) return
   history.record()
   madeHere.delete(id)
+  deletedHere.add(id)
   layout.value.polygons = layout.value.polygons.filter((a) => a.id !== id)
   // Deleting the shape that is open puts it down at once: `mode` would otherwise point at a shape that
   // no longer exists. Nothing is saved by doing it any more -- the deletion is written by the call below
@@ -404,48 +462,69 @@ function setView(view) {
 // it; a step is now a set of WRITES -- a shape put back is a shape written, and a shape Undo takes away
 // is a shape deleted -- so this is the one place on the page that touches more than one shape at once.
 //
-// Shapes this planner does not hold are left exactly as they are, which is what stops Ctrl+Z from
-// reaching into somebody else's work. And a shape the step does not have, which THIS PLANNER made, is
-// one Undo made -- so Undo takes it away. That last rule is the one that was wrong before: the old merge
-// kept every shape its snapshot did not mention, on the reasoning that another planner might have made
-// it since, and the effect was that drawing an area and pressing Ctrl+Z left the area on the bench.
-const madeHere = new Set()
+// WHAT UNDO MAY TOUCH: a shape whose latest stored version is THIS PAGE's work (bench.isMine) -- not
+// "a shape this tab holds the lock on right now", which was the old rule: it skipped every shape the
+// planner had already put down (so Undo silently did nothing) and brought back shapes another planner
+// had deleted. A shape somebody else has changed or deleted since is left exactly as it is, and the
+// planner is told. Taking a shape back means taking its lock first; if that is refused, what is on
+// screen goes back to what is stored, so the screen never shows an undo that did not happen.
+const madeHere = new Set() // shapes this page created (Undo of the creation deletes them)
+const deletedHere = new Set() // shapes this page deleted (Undo of the deletion brings them back)
+
+// Same shape? Compared by content, because a stored version that arrived again is a new object.
+function sameShape(a, b) {
+  if (a === b) return true
+  if (!a || !b) return false
+  return JSON.stringify(withoutImage(a)) === JSON.stringify(withoutImage(b)) && a.image === b.image
+}
 
 // One list of shapes, put back to the state the step was taken in.
 //
-//   - a shape the step has: the step's version if it is mine to say, and otherwise the one on screen;
-//   - a shape the step does not have, which I made: taken away;
-//   - a shape the step does not have, which I did not make: left exactly where it is.
-//
-// Everything that has to be written is named, because a restore has to SAY what it changed rather than
-// rely on a later save to notice -- there is no later save any more.
-function restoreList(step, current, wasHeld) {
+//   - in the step and on screen, different: the step's version if the stored one is mine;
+//   - in the step, gone from the screen: back only if I deleted it;
+//   - on screen, not in the step: taken away only if I made it and nobody has changed it since;
+//   - anything else: left exactly where it is (and counted, so the planner can be told).
+function restoreList(step, current) {
   const list = []
-  const write = []
-  const drop = []
+  const write = [] // { shape, prev } -- prev is what is on screen now (null: not there)
+  const drop = [] // { id, prev }
   const seen = new Set()
+  let skipped = 0
 
   for (const shape of step) {
     const here = current.find((c) => c.id === shape.id)
     seen.add(shape.id)
-    if (!here || wasHeld(shape.id)) {
+    if (!here) {
+      if (deletedHere.has(shape.id)) {
+        list.push(shape)
+        write.push({ shape, prev: null })
+      } else {
+        skipped++ // somebody else deleted it: it stays deleted
+      }
+      continue
+    }
+    if (sameShape(here, shape)) {
+      list.push(here)
+    } else if (bench.isMine(shape.id)) {
       list.push(shape)
-      if (here !== shape) write.push(shape)
+      write.push({ shape, prev: here })
     } else {
       list.push(here)
+      skipped++ // somebody else has changed it since
     }
   }
 
   for (const shape of current) {
     if (seen.has(shape.id)) continue
-    if (madeHere.has(shape.id)) {
-      drop.push(shape.id)
+    if (madeHere.has(shape.id) && bench.isMine(shape.id)) {
+      drop.push({ id: shape.id, prev: shape })
       continue
     }
+    if (madeHere.has(shape.id)) skipped++
     list.push(shape)
   }
 
-  return { list, write, drop }
+  return { list, write, drop, skipped }
 }
 
 function restore(snapshot) {
@@ -457,30 +536,57 @@ function restore(snapshot) {
   if (mode.value !== null) mode.value = null
 
   const before = layout.value
-  const floorPlans = restoreList(snapshot.floorPlans, before.floorPlans, locks.holds)
-  const polygons = restoreList(snapshot.polygons, before.polygons, locks.holds)
+  const floorPlans = restoreList(snapshot.floorPlans, before.floorPlans)
+  const polygons = restoreList(snapshot.polygons, before.polygons)
 
   // The view is not the document's any more, so Undo leaves the camera where the planner has it.
   layout.value = { view: before.view, floorPlans: floorPlans.list, polygons: polygons.list }
-  history.settle(snapshot)
+  // What the canvas now IS (shapes left alone included), so the next undo / redo starts from the truth.
+  history.settle(layout.value)
 
-  for (const shape of floorPlans.write) putBack('plan', shape)
-  for (const shape of polygons.write) putBack('area', shape)
-  for (const id of floorPlans.drop) takeAway('plan', id)
-  for (const id of polygons.drop) takeAway('area', id)
+  // Said on the bench's strip (8 s), not the page alert: the writes below clear that one when they land.
+  const skipped = floorPlans.skipped + polygons.skipped
+  if (skipped) {
+    locks.say(
+      '',
+      'Undo left ' + skipped + (skipped === 1 ? ' shape' : ' shapes') +
+        ' alone: another planner has changed or deleted ' + (skipped === 1 ? 'it' : 'them') + ' since.',
+    )
+  }
+
+  for (const item of floorPlans.write) putBack('plan', item.shape, item.prev)
+  for (const item of polygons.write) putBack('area', item.shape, item.prev)
+  for (const item of floorPlans.drop) takeAway('plan', item.id, item.prev)
+  for (const item of polygons.drop) takeAway('area', item.id, item.prev)
 }
 
-async function putBack(kind, shape) {
-  if (!(await mayWrite(shape.id))) return
+// Put one shape on screen as `shape`, or take it off (null).
+function showShape(kind, id, shape) {
+  const key = kind === 'plan' ? 'floorPlans' : 'polygons'
+  const list = layout.value[key]
+  const rest = list.filter((s) => s.id !== id)
+  layout.value[key] = shape ? (list.some((s) => s.id === id) ? list.map((s) => (s.id === id ? shape : s)) : [...rest, shape]) : rest
+}
+
+async function putBack(kind, shape, prev) {
+  if (!(await mayWrite(shape.id))) {
+    showShape(kind, shape.id, prev) // refused: the screen shows what is stored, not an undo that did not happen
+    return
+  }
   // A shape the bench does not have is one this page is CREATING (again), and Undo has to know it made
-  // it -- or the next Undo would leave it behind. See `madeHere` below.
+  // it -- or the next Undo would leave it behind.
   if (!bench.known(shape.id)) madeHere.add(shape.id)
+  deletedHere.delete(shape.id)
   bench.replace(kind, shape.id, shape)
 }
 
-async function takeAway(kind, id) {
-  if (!(await mayWrite(id))) return
+async function takeAway(kind, id, prev) {
+  if (!(await mayWrite(id))) {
+    showShape(kind, id, prev) // refused: it is still on the bench, so it stays on screen
+    return
+  }
   madeHere.delete(id)
+  deletedHere.add(id)
   await bench.remove(kind, id)
 }
 
@@ -573,16 +679,21 @@ onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   // A gesture begins when a pointer goes down anywhere and ends when it comes up, wherever it is: that
   // is when a run of changes becomes the one step it earned, and when what it changed is written.
-  window.addEventListener('pointerdown', beginGesture)
-  window.addEventListener('pointerup', endGesture)
-  window.addEventListener('pointercancel', endGesture)
+  // CAPTURE phase, so the page hears every press before anything can stop it: a floor plan's drag
+  // handles call stopPropagation() on pointerdown (AreaBench startDrag), and in the bubble phase that
+  // hid the press from this listener -- the page never knew a drag had begun and saved mid-drag.
+  window.addEventListener('pointerdown', beginGesture, GESTURE_LISTEN)
+  window.addEventListener('pointerup', endGesture, GESTURE_LISTEN)
+  window.addEventListener('pointercancel', endGesture, GESTURE_LISTEN)
 })
 
 onUnmounted(() => {
+  for (const entry of framed.values()) clearTimeout(entry.timer)
+  framed.clear()
   window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('pointerdown', beginGesture)
-  window.removeEventListener('pointerup', endGesture)
-  window.removeEventListener('pointercancel', endGesture)
+  window.removeEventListener('pointerdown', beginGesture, GESTURE_LISTEN)
+  window.removeEventListener('pointerup', endGesture, GESTURE_LISTEN)
+  window.removeEventListener('pointercancel', endGesture, GESTURE_LISTEN)
 })
 </script>
 
