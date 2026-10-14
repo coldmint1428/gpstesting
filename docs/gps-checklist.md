@@ -599,6 +599,23 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 - [ ] Test: start the event, set the end 2–3 min ahead, share from the phone → at the end time sharing stops by itself and the card shows Not live
 - [x] Website: in-app confirm dialogs + toast messages instead of browser pop-ups; Share / My GPS details moved into the status card
 
+## 4d. Merger Stage 1 – per-event zones (built 14 Oct)
+
+- [x] Migration `020_event_zones.sql` (PostGIS; `layouts.event_id`; `zones`; area codes; role checks on every bench function; `zone_contains`, `zone_distance_m`, `event_zones`; `groups` + code / category / sector / headcount) – applied, rolled-back SQL test 19/19
+- [x] Existing bench kept as the demo bench at `/polygon` (no event, anyone signed in, unchanged)
+- [x] Event page **Zones** tab (root / planners): the bench for this event; areas get a **Code** (from the name, editable, unique); deletes use the in-app dialog
+- [x] Live map **Zones** layer: outlines by kind, No-Go dashed red, "Name · CODE" labels from zoom 16, "Zones (n)" switch, redraws live when a planner changes a zone
+- [ ] Phone check (Stages 0 + 1 together): share from the phone on the merged build, watch the laptop map; Stop from the notification
+- [ ] Real-Chrome check: draw a zone on a real event, see it on the live map; a non-planner member sees the zones on the map but has no Zones tab
+
+## 4e. Merger Stage 2 – zone presence, No-Go alerts, group positions (built 14 Oct)
+
+- [x] Migration `021_zone_presence.sql`: `zone_presence`, `group_positions`, `zone_alerts`, trigger on `locations` (never blocks an upload), `ack_zone_alert` – rolled-back SQL test 13/13
+- [x] Live map: IC tooltip "Inside <zone> since HH:MM:SS"; zone labels with "n ICs (n groups)"; group tooltip "Moving x m/s"; a No-Go zone with someone inside drawn bold red
+- [x] No-Go entry: toast for root / planners / marshals and the IC; the IC also gets a red banner until they leave (2 readings outside)
+- [ ] Phone walk test (Stages 0–2 together): draw a zone around where you stand + a No-Go nearby, share from the phone, walk in and out; laptop shows "Inside … since", the No-Go toast and banner
+- [ ] Later (Stage 8): push notification to the IC for a No-Go entry when the app is closed
+
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)

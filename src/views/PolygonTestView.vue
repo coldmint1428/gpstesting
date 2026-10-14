@@ -1,5 +1,7 @@
 <script setup>
-// The planner drawing bench at /polygon.
+// The planner drawing bench: at /polygon (the DEMO bench, no event), and since merger Stage 1 also inside
+// an event as its Zones tab (eventId set, `embedded`), where every area becomes one of the event's zones
+// (020_event_zones.sql) and only the event's root and planners may change it.
 //
 // A standalone showcase: it is NOT tied to an event, and it touches none of the tables the event pages
 // use. There is ONE bench, shared by everyone who signs in, and everybody may work on it at once -- one
@@ -29,6 +31,11 @@ import BenchAlert from '../components/BenchAlert.vue'
 
 // Who may change which shape (see composables/useBenchLocks.js). Created first, because the data layer
 // below reports a refusal through it: one strip of text, one source, whichever way the refusal arrived.
+const props = defineProps({
+  eventId: { type: String, default: '' }, // set: this event's bench (Zones tab); empty: the demo bench
+  embedded: { type: Boolean, default: false }, // inside the event page: no page heading of its own
+})
+
 const locks = useBenchLocks()
 
 // The canvas. The database keeps one row per shape (017_object_rows.sql) and this is what turns them
@@ -40,6 +47,7 @@ const bench = useBenchDoc({
   refuse: (id, row) => locks.refuse(id, row),
   say: (id, sentence) => locks.say(id, sentence),
   lost: (id) => locks.end(id),
+  eventId: props.eventId,
   reclaim: (id) => locks.keep(id),
   applied: (id) => settleFrames(id),
 })
@@ -53,7 +61,7 @@ locks.watchBusy(bench.busy)
 // was its own were ignored, so fetch them (shape by shape -- see catchUp in useBenchDoc).
 locks.whenLost(() => bench.catchUp())
 
-const { data: layout, loading, errorMsg, saving, bytes, open, layoutId, myView, saveView } = bench
+const { data: layout, loading, errorMsg, saving, bytes, open, layoutId, myView, saveView, canEdit } = bench
 
 // null | 'floorplan:<id>' | 'polygons' | 'area:<id>' -- what is being worked on, or nothing. It has
 // nothing to say about the view: the map pans and zooms in every one of these states, except while an
@@ -107,6 +115,8 @@ const startView = computed(() => myView.value || layout.value.view)
 // rule 015 set and this is the second thing to obey it (see composables/useBenchFrames.js).
 watch(layoutId, (id) => {
   if (!id) return
+  // Locks are asked on THIS bench (an event's, or the demo one).
+  locks.setLayout(id)
   presence.join(id)
   frames.start(id, presence.myPresenceId.value, applyFrame)
 })
@@ -698,10 +708,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="container py-3">
+  <component :is="embedded ? 'div' : 'main'" :class="embedded ? 'bench-embedded' : 'container py-3'">
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
       <div>
-        <h1 class="h4 mb-1">Polygon bench</h1>
+        <h1 v-if="!embedded" class="h4 mb-1">Polygon bench</h1>
+        <p v-else class="small text-muted mb-1" data-testid="zones-intro">
+          Every area drawn here is one of this event's zones, with a code the run sheet uses.
+          <template v-if="!canEdit"> Only the event's root and planners can change them.</template>
+        </p>
         <!-- Who else is on the bench. A planner working alone sees nothing here at all, which is
              the point: collaboration chrome on an empty bench is noise. A planner's own other
              window is listed too, labelled, because that is the case that used to be invisible. -->
@@ -731,7 +745,7 @@ onUnmounted(() => {
              Arrows rather than the words: at this size the words are the wider half of the
              control and the meaning is in the direction. Both carry a title and an aria-label, so
              the word is still there for anyone who needs it, and Ctrl+Z / Ctrl+Shift+Z work too. -->
-        <div class="btn-group btn-group-sm" role="group" aria-label="Undo and redo the whole bench">
+        <div v-if="canEdit" class="btn-group btn-group-sm" role="group" aria-label="Undo and redo the whole bench">
           <button
             type="button"
             class="btn btn-outline-secondary"
@@ -765,6 +779,7 @@ onUnmounted(() => {
         <!-- How far back the stack goes. A browser-side stack is invisible, and "nothing to undo"
              is otherwise indistinguishable from "Undo is broken". -->
         <span
+          v-if="canEdit"
           class="badge text-bg-light"
           data-testid="history-steps"
           :title="'Changes that can be undone, one step per thing you did'"
@@ -785,6 +800,7 @@ onUnmounted(() => {
     <AreaBench
       v-else
       v-model:mode="mode"
+      :can-edit="canEdit"
       :plans="plans"
       :areas="areas"
       :view="startView"
@@ -809,7 +825,8 @@ onUnmounted(() => {
     >
       <AreaList
         :areas="areas"
-        :editable="true"
+        :editable="canEdit"
+        :show-code="Boolean(eventId)"
         :locks="locks"
         :selected="selectedAreaId"
         :clipboard="clipboard"
@@ -821,7 +838,7 @@ onUnmounted(() => {
         @area-edit="selectArea"
       />
     </AreaBench>
-  </main>
+  </component>
 </template>
 
 <style scoped>

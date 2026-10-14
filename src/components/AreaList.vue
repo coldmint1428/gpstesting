@@ -21,6 +21,7 @@
 import { computed } from 'vue'
 import { AREA_KINDS, AREA_NAME_MAX, areaColour, areaKind, isValidAreaName } from '../utils/areaKinds'
 import { outlinePoints } from '../utils/areaOutline'
+import { askConfirm } from '../composables/useNotify'
 
 const props = defineProps({
   areas: { type: Array, default: () => [] },
@@ -33,6 +34,8 @@ const props = defineProps({
   // the same colours as the chip on the shape, so the list and the map are recognisably telling
   // the planner the same thing. This component only draws it and decides nothing.
   presence: { type: Object, default: null },
+  // An event's bench (020): every area is a zone with a CODE the run sheet refers to (FORMATION_1).
+  showCode: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-copied', 'area-pasted'])
@@ -108,9 +111,21 @@ function retype(area, value) {
   emit('area-updated', { id: area.id, patch: { kind: value } })
 }
 
-function remove(area) {
-  if (!confirm('Delete the area "' + area.name + '"?')) return
-  emit('area-deleted', area.id)
+async function remove(area) {
+  const ok = await askConfirm({
+    title: 'Delete "' + area.name + '"?',
+    message: props.showCode ? 'Its zone goes with it.' : '',
+    confirmText: 'Delete',
+    danger: true,
+  })
+  if (ok) emit('area-deleted', area.id)
+}
+
+// A zone code: capitals, digits and _ (the database checks the same and that it is not taken).
+function recode(area, value) {
+  const code = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_]+/g, '_').slice(0, 40)
+  if (!code || code === area.code) return
+  emit('area-updated', { id: area.id, patch: { code } })
 }
 
 function copy(row) {
@@ -229,6 +244,22 @@ function paste() {
                   @change="rename(row.area, $event.target.value)"
                 />
                 <span v-else class="flex-grow-1 text-truncate">{{ row.area.name }}</span>
+
+                <!-- The zone code (event benches). Filled in by the database from the name when the
+                     area is first saved, and kept through renames; a planner may change it. -->
+                <input
+                  v-if="showCode && editable"
+                  class="form-control form-control-sm area-code-input"
+                  :value="row.area.code || ''"
+                  :disabled="Boolean(blocked(row.area.id))"
+                  maxlength="40"
+                  placeholder="CODE"
+                  :aria-label="'Zone code of ' + row.area.name"
+                  :data-testid="'area-code-' + row.area.name"
+                  @click.stop
+                  @change="recode(row.area, $event.target.value)"
+                />
+                <code v-else-if="showCode && row.area.code" class="small">{{ row.area.code }}</code>
 
                 <select
                   v-if="editable"
@@ -354,5 +385,10 @@ function paste() {
   border-right: 0.45rem solid transparent;
   border-bottom: 0.8rem solid;
   flex-shrink: 0;
+}
+.area-code-input {
+  max-width: 9.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
 }
 </style>

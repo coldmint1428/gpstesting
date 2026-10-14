@@ -181,6 +181,8 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 - Browser: draw Formation 1 on the test event → appears on the live map Zones layer.
 **Done when** zones are per event, stable codes, shown on the live map.
 
+**Status 14 Oct 2026: BUILT** (Komin's phone check for Stages 0 + 1 together still to do). Migration `020_event_zones.sql` applied to gpstest. Decisions: the existing global bench stays as the **demo bench** at `/polygon` (event_id null, editable by any signed-in user as before); each event gets its own bench, made the first time its Zones tab opens. Zone sync is two triggers on `layout_objects` (BEFORE: give every area on an event bench a code; AFTER: upsert / delete its `zones` row). Rolled-back SQL test: 19/19 (codes, rename keeps the zone row and code, duplicate / bad code refused, `FORMATION_1_2` for a second "Formation 1", inside / outside / buffer / distance, delete removes the zone, demo bench makes no zones, member read-only, outsider sees nothing and cannot save). Browser: Zones tab → draw "Formation 1" → code FORMATION_1 → zone row; code edited to FORM_A / FORM_B → zone and live-map label follow live; live map Zones layer + toggle, labels from zoom 16; delete via in-app dialog removes the zone; `/polygon` demo bench unchanged. `npm run test:db` (bench suite, 001–019) still 196/196 – PGlite has no PostGIS, so 020 is covered by the SQL test above instead.
+
 ### Stage 2 – Zones in the live map: presence, no-go, group positions (1 day)
 **Goal** The server knows which IC is inside which zone, live, and each group has one position row.
 **Build**
@@ -192,6 +194,8 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 - SQL: insert readings outside → inside → inside (presence opens with `entered_at` of the first inside reading) → outside ×2 (closes); no-go entry creates one alert (not one per reading).
 - Phone: walk into a circle/polygon on the test event → "Inside … since" appears on the laptop within ~10–20 s.
 **Done when** presence, group positions and no-go alerts work with a real phone.
+
+**Status 14 Oct 2026: BUILT** (phone walk test with Stages 0–1 still to do). Migration `021_zone_presence.sql` applied. Decisions: the IC who enters a No-Go zone is warned too (red in-app banner + toast now; a push when the app is closed comes with Stage 8's push work); edge buffer = min(accuracy, 15 m). Trigger `locations_zone_update` never blocks an upload (catches its own errors) and ignores late (older) readings. Live map keeps its smooth client-side group marker; the server's `group_positions` feeds the group tooltip ("Moving 1.2 m/s") and later the engines. Rolled-back SQL test 13/13 (enter at first inside reading, one blip does not close, two outside close at the first, 15 m edge buffer vs 5 m, late reading ignored, one alert per No-Go entry, group midpoint / speed / ICs sharing, Stop closes stays, a reading outside any session does not error, RLS root vs outsider, outsider cannot acknowledge). Browser: IC tooltip "Inside Test formation since 10:59:06 am", zone labels "1 IC (1 group)", No-Go entry → toast + IC banner + zone drawn bold red, leaving needs 2 readings then everything clears; no console errors.
 
 ### Stage 3 – Simulator (1½ days)
 **Goal** Test and demo 100+ groups without 100 phones. Simulated data is clearly labelled and only in simulation events.

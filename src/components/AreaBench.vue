@@ -38,6 +38,7 @@
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles (c) Singapore Land Authority - https://www.onemap.gov.sg
+import { askConfirm } from '../composables/useNotify'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -2150,8 +2151,14 @@ function togglePlanVisible(plan) {
   emit('plan-updated', { id: plan.id, patch: { visible: !hiding } })
 }
 
-function deletePlan(plan) {
-  if (!confirm('Delete this floor plan? The areas you have drawn stay.')) return
+async function deletePlan(plan) {
+  const ok = await askConfirm({
+    title: 'Delete this floor plan?',
+    message: 'The areas you have drawn stay.',
+    confirmText: 'Delete',
+    danger: true,
+  })
+  if (!ok) return
   if (mode.value === 'floorplan:' + plan.id) mode.value = null
   emit('plan-deleted', plan.id)
 }
@@ -2588,7 +2595,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
             <div class="card-body">
               <h2 class="h6 card-title">Looking, not editing</h2>
               <p class="small text-muted mb-0">
-                Press <strong>Start editing</strong> to change anything.
+                Only this event's root and planners can change its zones.
               </p>
             </div>
           </div>

@@ -26,6 +26,7 @@ import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
+import { areaStyle } from '../utils/areaKinds'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -39,6 +40,11 @@ const props = defineProps({
   groups: { type: Array, required: true },
   myUserId: { type: String, default: null },
   active: { type: Boolean, default: true }, // false while another tab is shown
+  // From the server (useZoneActivity, merger Stage 2)
+  zoneStays: { type: Object, default: () => ({}) }, // userId -> [{ zone, enteredAt }]
+  zoneCounts: { type: Object, default: () => ({}) }, // zoneId -> { ics, groups }
+  noGoOccupied: { type: Array, default: () => [] }, // No-Go zone ids somebody is inside
+  groupPositions: { type: Object, default: () => ({}) }, // groupId -> { speedMps, icsSharing, lastSeen }
 })
 
 const positions = computed(() => props.positions)
@@ -117,6 +123,10 @@ function tooltipHtml(person) {
     (person.state === 'stopped'
       ? '<br><strong>Stopped sharing</strong> at ' + formatTime(person.time)
       : '<br>Last seen ' + timeAgo(person.time, now.value)) +
+    (props.zoneStays[person.userId] || [])
+      .map((s) => '<br>' + (s.zone.kind === 'no_go' ? '<strong class="text-danger">In No-Go</strong> ' : 'Inside ') +
+        escapeHtml(s.zone.name) + ' since ' + formatTimeSeconds(s.enteredAt))
+      .join('') +
     (selectedId.value === person.userId && props.liveSince ? '<br><span class="text-muted">Trail shown · tap the map to hide</span>' : '')
   )
 }
@@ -213,7 +223,9 @@ function render() {
       continue
     }
     groupIcs[group.id] = readings
-    const text = escapeHtml(group.name) + ' position<br>from ' + mid.used + ' ICs'
+    const server = props.groupPositions[group.id]
+    const text = escapeHtml(group.name) + ' position<br>from ' + mid.used + ' ICs' +
+      (server && server.speedMps != null ? '<br>Moving ' + Number(server.speedMps).toFixed(1) + ' m/s' : '')
     if (!marker) {
       marker = L.marker([mid.lat, mid.lng], {
         icon: L.divIcon({
@@ -243,6 +255,8 @@ function render() {
 
 // Redraw when positions, the clock, members or groups change
 watch([people, () => props.groups], render, { deep: true })
+// ...and when someone enters or leaves a zone, or a group's server position changes (tooltips)
+watch(() => [props.zoneStays, props.groupPositions], render)
 
 // ---------- Animation loop: move every marker to where its playhead is ----------
 let frameId = null
@@ -551,11 +565,97 @@ function stopFollowing() {
   followedId.value = null
 }
 
+// ---------- Zones layer (merger Stage 1) ----------
+// The event's zones, drawn under the people: outlines in their kind's colour (the same colours as the
+// Zones tab), No-Go dashed red, with "Name · CODE" labels once zoomed in. Not clickable, so tapping a
+// person or a trail inside a zone works as before. Redrawn when a planner changes a zone.
+const showZones = ref(true)
+const zoneCount = ref(0)
+let zoneLayer = null
+let zoneLabels = []
+let zoneShapes = {} // zone id -> { shape, kind }
+let zoneChannel = null
+let zoneTimer = null
+const LABEL_ZOOM = 16
+
+async function loadZones() {
+  if (!map || !supabase) return
+  const { data, error } = await supabase.rpc('event_zones', { p_event: props.eventId })
+  if (error || !map) return
+  zoneLayer.clearLayers()
+  for (const label of zoneLabels) label.remove() // labels sit on the map itself, not in zoneLayer
+  zoneLabels = []
+  zoneShapes = {}
+  for (const z of data || []) {
+    const shape = L.geoJSON(z.geojson, { style: areaStyle(z.kind), interactive: false })
+    shape.addTo(zoneLayer)
+    const label = L.tooltip({ permanent: true, direction: 'center', className: 'zone-label', interactive: false })
+      .setLatLng(shape.getBounds().getCenter())
+    label.zone = z
+    zoneLabels.push(label)
+    zoneShapes[z.id] = { shape, kind: z.kind }
+  }
+  zoneCount.value = (data || []).length
+  refreshZoneState()
+  placeZoneLabels()
+}
+
+// "Formation 1 · FORM_A · 2 ICs (1 group)", and a No-Go zone with somebody inside drawn bold red.
+function refreshZoneState() {
+  for (const label of zoneLabels) {
+    const z = label.zone
+    const c = props.zoneCounts[z.id]
+    label.setContent(
+      escapeHtml(z.name) + ' · <b>' + escapeHtml(z.code) + '</b>' +
+        (c ? ' · ' + c.ics + (c.ics === 1 ? ' IC' : ' ICs') + ' (' + c.groups + (c.groups === 1 ? ' group' : ' groups') + ')' : ''),
+    )
+  }
+  const occupied = new Set(props.noGoOccupied)
+  for (const [id, entry] of Object.entries(zoneShapes)) {
+    const alarm = occupied.has(id)
+    entry.shape.setStyle(alarm ? { ...areaStyle(entry.kind), weight: 4, fillOpacity: 0.45, dashArray: null } : areaStyle(entry.kind))
+  }
+}
+
+watch(() => [props.zoneCounts, props.noGoOccupied], refreshZoneState, { deep: true })
+
+function placeZoneLabels() {
+  if (!map) return
+  const show = showZones.value && map.getZoom() >= LABEL_ZOOM
+  for (const label of zoneLabels) {
+    if (show && !map.hasLayer(label)) label.addTo(map)
+    else if (!show && map.hasLayer(label)) label.remove()
+  }
+}
+
+watch(showZones, (on) => {
+  if (!map || !zoneLayer) return
+  if (on) zoneLayer.addTo(map)
+  else zoneLayer.remove()
+  placeZoneLabels()
+})
+
+function watchZones() {
+  if (!supabase) return
+  zoneChannel = supabase
+    .channel('event-zones-' + props.eventId + '-' + Math.random().toString(36).slice(2))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'zones', filter: 'event_id=eq.' + props.eventId }, () => {
+      clearTimeout(zoneTimer)
+      zoneTimer = setTimeout(loadZones, 300) // one redraw for a burst of changes
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') loadZones()
+    })
+}
+
 let unsubscribe = null
 onMounted(() => {
   // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
   map = createSingaporeMap(mapEl.value)
+  zoneLayer = L.layerGroup().addTo(map) // under the trail and the markers
   trailLayer = L.layerGroup().addTo(map)
+  map.on('zoomend', placeZoneLabels)
+  watchZones()
   // Dragging the map yourself means "let me look around": stop following
   map.on('dragstart', stopFollowing)
   // Tap empty map: hide the trail (the first tap only closes an open trail popup)
@@ -570,6 +670,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
+  clearTimeout(zoneTimer)
+  if (zoneChannel && supabase) supabase.removeChannel(zoneChannel)
   document.removeEventListener('visibilitychange', onVisibility)
   if (frameId) cancelAnimationFrame(frameId)
   clearTimeout(infoTimer)
@@ -601,6 +703,10 @@ onUnmounted(() => {
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
       <span v-if="liveSince">Tap a marker to see their trail · tap the trail for times</span>
+      <label v-if="zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
+        <input v-model="showZones" class="form-check-input" type="checkbox" />
+        <span class="form-check-label">Zones ({{ zoneCount }})</span>
+      </label>
     </div>
 
     <h2 class="h6 mb-0">People on the map</h2>
@@ -685,5 +791,16 @@ onUnmounted(() => {
 }
 :global(.trail-hover) {
   cursor: pointer;
+}
+:global(.zone-label) {
+  background: rgba(255, 255, 255, 0.85);
+  border: 0;
+  box-shadow: none;
+  padding: 0 4px;
+  font-size: 11px;
+  color: #212529;
+}
+:global(.zone-label::before) {
+  display: none;
 }
 </style>

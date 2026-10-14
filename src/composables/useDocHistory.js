@@ -73,7 +73,7 @@ function signatureOf(snapshot) {
     const n = points.length || 1
     // Every point, not only the centre: moving two dots in opposite directions keeps the centre.
     const ring = points.map((point) => Number(point[0]).toFixed(7) + ',' + Number(point[1]).toFixed(7)).join(';')
-    return [a.id, a.name, a.kind, points.length, (lat / n).toFixed(6), (lng / n).toFixed(6), ring].join('\u0001')
+    return [a.id, a.name, a.kind, a.code || '', points.length, (lat / n).toFixed(6), (lng / n).toFixed(6), ring].join('\u0001')
   })
   return [plans.join('\u0002'), areas.join('\u0002')].join('\u0003')
 }

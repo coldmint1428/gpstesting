@@ -16,8 +16,9 @@ import {
   allowExactReminders,
 } from '../composables/useStartReminders'
 import { clearPushReminders } from '../composables/usePushNotifications'
-import { askConfirm } from '../composables/useNotify'
-import { formatDayTime } from '../utils/time'
+import { askConfirm, toast } from '../composables/useNotify'
+import { useZoneActivity } from '../composables/useZoneActivity'
+import { formatDayTime, formatTimeSeconds } from '../utils/time'
 import SharingWarnings from '../components/SharingWarnings.vue'
 import EventStatus from '../components/EventStatus.vue'
 import LiveMap from '../components/LiveMap.vue'
@@ -25,6 +26,7 @@ import MembersPanel from '../components/MembersPanel.vue'
 import InvitePanel from '../components/InvitePanel.vue'
 import BenchAlert from '../components/BenchAlert.vue'
 import PlaybackPanel from '../components/PlaybackPanel.vue'
+import PolygonTestView from './PolygonTestView.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -38,10 +40,29 @@ const { event, groups, members, loading, errorMsg, load, me, myRoles, isRoot, ca
 const sessions = useEventSessions(props.id)
 const { isLive, liveSession, scheduledStart } = sessions
 
+// Zones during the live session (merger Stage 2): who is inside which zone, group positions, No-Go alerts.
+// A No-Go entry is told to the event's root / planners / marshals (toast) and to the IC who entered it.
+const zoneActivity = useZoneActivity(props.id, computed(() => (liveSession.value ? liveSession.value.id : null)), {
+  onAlert(alert) {
+    const mine = auth.user && alert.userId === auth.user.id
+    if (!seesWholeEvent.value && !mine) return
+    const member = members.value.find((m) => m.id === alert.userId)
+    const who = mine ? 'You' : member ? member.display_name : 'Someone'
+    const zoneName = alert.zone ? alert.zone.name + ' (' + alert.zone.code + ')' : 'a No-Go area'
+    toast('No-Go: ' + who + ' entered ' + zoneName + ' at ' + formatTimeSeconds(alert.at) + '.', 'danger', 12000)
+  },
+})
+
+// The No-Go areas I am inside right now (shown to me as a warning until I leave).
+const myNoGo = computed(() => {
+  const mine = auth.user ? zoneActivity.staysByUser.value[auth.user.id] || [] : []
+  return mine.filter((s) => s.zone.kind === 'no_go').map((s) => s.zone)
+})
+
 // Latest positions (one connection for the map and the "Not sharing yet" badges)
 const live = useLiveLocations(props.id)
 
-const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback'
+const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback' | 'zones'
 
 // ---------- One-tap sharing (same tracker as the Share page and navbar) ----------
 const tracker = useLocationTracker()
@@ -180,6 +201,11 @@ async function leaveEvent() {
         <button class="btn btn-sm btn-outline-primary ms-1" @click="allowExact">Allow alarms</button>
       </div>
 
+      <!-- I (an IC) am inside a No-Go area right now -->
+      <div v-if="myNoGo.length" class="alert alert-danger py-2" role="alert" data-testid="my-no-go">
+        <strong>You are inside a No-Go area:</strong> {{ myNoGo.map((z) => z.name).join(', ') }}. Please leave it now.
+      </div>
+
       <SharingWarnings v-if="sharingHere" />
       <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
       <p class="small text-muted mb-3" data-testid="view-scope">{{ viewText }}</p>
@@ -203,6 +229,12 @@ async function leaveEvent() {
             Playback
           </button>
         </li>
+        <!-- The event's zones (merger Stage 1): the polygon bench, for this event only -->
+        <li v-if="canManage" class="nav-item">
+          <button class="nav-link" :class="{ active: tab === 'zones' }" data-testid="tab-zones" @click="tab = 'zones'">
+            Zones
+          </button>
+        </li>
       </ul>
 
       <!-- v-show keeps the map alive (and its live connection) when switching tabs -->
@@ -219,6 +251,10 @@ async function leaveEvent() {
         :members="members"
         :groups="groups"
         :my-user-id="auth.user ? auth.user.id : null"
+        :zone-stays="zoneActivity.staysByUser.value"
+        :zone-counts="zoneActivity.countsByZone.value"
+        :no-go-occupied="zoneActivity.noGoOccupied.value"
+        :group-positions="zoneActivity.groupPositions.value"
       />
 
       <MembersPanel
@@ -245,6 +281,9 @@ async function leaveEvent() {
         :members="members"
         @go-live="goLive"
       />
+
+      <!-- v-if: the bench holds locks and a presence row only while it is open -->
+      <PolygonTestView v-if="canManage && tab === 'zones'" :event-id="id" embedded />
 
       <button v-if="me && !isRoot" class="btn btn-link text-danger px-0 mt-4" @click="leaveEvent">Leave event</button>
     </template>

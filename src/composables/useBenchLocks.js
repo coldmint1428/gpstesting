@@ -73,6 +73,7 @@ export function useBenchLocks() {
   let timer = null
   let refusalTimer = null
   let isBusy = () => false
+  let layoutId = '' // which bench a lock is asked on (020: one bench per event)
   let onLost = () => {} // the page's "catch up": a shape I stopped holding may have changed meanwhile
 
   // Is this shape held by this tab? `held` carries when the lock lapses, and a claim that has lapsed is
@@ -161,7 +162,7 @@ export function useBenchLocks() {
   async function ask(objectId, fn, retry = true) {
     if (!supabase || !objectId) return false
 
-    const { data, error } = await supabase.rpc(fn, { p_object: objectId, p_session: benchSession() })
+    const { data, error } = await supabase.rpc(fn, { p_object: objectId, p_session: benchSession(), p_layout: layoutId || null })
     const row = firstRow(data)
 
     if (error || !row) {
@@ -236,7 +237,11 @@ export function useBenchLocks() {
   async function keep(objectId) {
     if (!objectId || !supabase) return false
     if (holds(objectId)) return true
-    const { data, error } = await supabase.rpc('lock_object', { p_object: objectId, p_session: benchSession() })
+    const { data, error } = await supabase.rpc('lock_object', {
+      p_object: objectId,
+      p_session: benchSession(),
+      p_layout: layoutId || null,
+    })
     const row = firstRow(data)
     if (error || !row) return false
     if (!row.granted) {
@@ -327,6 +332,11 @@ export function useBenchLocks() {
     if (document.visibilityState === 'hidden') releaseAll()
   }
 
+  // The bench this page has open (set once it is known, see PolygonTestView).
+  function setLayout(id) {
+    layoutId = id || ''
+  }
+
   function start() {
     if (!supabase || timer) return
     benchSession()
@@ -372,6 +382,7 @@ export function useBenchLocks() {
     say,
     watchBusy,
     whenLost,
+    setLayout,
     start,
   }
 }

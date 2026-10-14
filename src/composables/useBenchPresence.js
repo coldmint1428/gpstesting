@@ -148,7 +148,8 @@ export function useBenchPresence() {
 
   function applyPayload(payload) {
     if (payload.eventType === 'DELETE') drop(payload.old && payload.old.presence_id)
-    else readRows([payload.new]).forEach(put)
+    // Unfiltered channel (see join): since 020 each event has its own bench, so only rows of THIS one.
+    else if (payload.new && payload.new.layout_id === layoutId) readRows([payload.new]).forEach(put)
   }
 
   // Read the whole table. Run on joining and again whenever Realtime (re)connects, so nothing

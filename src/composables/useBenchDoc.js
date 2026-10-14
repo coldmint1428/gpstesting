@@ -59,6 +59,8 @@ function emptyCanvas() {
 function explain(error) {
   if (!error) return ''
   if (error.code === 'PT409') return error.message || 'This page cannot save anything. Reload it.'
+  // 020: an event's bench is for its members to see and its root / planners to change.
+  if (error.code === 'PT403') return error.message || 'You do not have access to this bench.'
   if (error.code === 'PT410' || /upgraded/i.test(error.message || '')) {
     return 'The bench has been upgraded: reload the page to keep working.'
   }
@@ -77,6 +79,8 @@ export function useBenchDoc(options = {}) {
   const applied = options.applied || (() => {})
   // Before a failed write is tried again: make sure this tab still has the shape's lock (useBenchLocks.keep).
   const reclaim = options.reclaim || (() => Promise.resolve(true))
+  // Which bench (020): an event's (its Zones tab) or, with none, the demo bench at /polygon.
+  const eventId = options.eventId || ''
 
   const data = ref(emptyCanvas())
   const loading = ref(true)
@@ -92,6 +96,8 @@ export function useBenchDoc(options = {}) {
 
   const layoutId = ref('')
   const myView = ref(null)
+  // May this planner change this bench? An event's members may look; its root and planners may change it.
+  const canEdit = ref(false)
 
   // Pictures by id, and the picture each shape points at. Neither is reactive: what the bench draws is
   // `data`, and these are the parts of it that arrived with it.
@@ -198,7 +204,7 @@ export function useBenchDoc(options = {}) {
 
   // ---------- Opening, and catching up ----------
   async function read() {
-    const { data: rows, error } = await supabase.rpc('open_bench')
+    const { data: rows, error } = await supabase.rpc('open_bench', eventId ? { p_event: eventId } : {})
     if (error) return { error }
     const row = firstRow(rows)
     if (!row) return { error: { message: 'The bench could not be opened.' } }
@@ -235,6 +241,7 @@ export function useBenchDoc(options = {}) {
     rememberImages(row.images)
     adopt(row.shapes, row.home)
     layoutId.value = row.id || ''
+    canEdit.value = row.can_edit !== false
     rev.value = Number(row.rev) || 0
     bytes.value = Number(row.bytes) || 0
     myView.value = await loadMyView()
@@ -292,7 +299,7 @@ export function useBenchDoc(options = {}) {
     if (!supabase || !layoutId.value) return false
     await flushAll()
 
-    const { data: rows, error } = await supabase.rpc('bench_head')
+    const { data: rows, error } = await supabase.rpc('bench_head', { p_layout: layoutId.value })
     const head = firstRow(rows)
     if (error || !head) return false
     const benchRev = Number(head.rev) || 0
@@ -409,6 +416,7 @@ export function useBenchDoc(options = {}) {
       p_kind: item.kind,
       p_patch: patch,
       p_session: benchSession(),
+      p_layout: layoutId.value,
     })
     flying.delete(shapeId)
     saving.value = flying.size > 0
@@ -585,6 +593,7 @@ export function useBenchDoc(options = {}) {
       const { data: rows, error } = await supabase.rpc('delete_object', {
         p_object: shapeId,
         p_session: benchSession(),
+        p_layout: layoutId.value,
       })
       flying.delete(shapeId)
       saving.value = flying.size > 0
@@ -737,8 +746,12 @@ export function useBenchDoc(options = {}) {
   // ---------- Where I left the map ----------
   async function loadMyView() {
     if (!supabase) return null
-    // No filter: RLS shows a planner their own row and nobody else's, and there is one bench.
-    const { data: row, error } = await supabase.from('layout_views').select('lat, lng, zoom').maybeSingle()
+    // RLS shows a planner their own rows only; one per bench (each event has its own bench since 020).
+    const { data: row, error } = await supabase
+      .from('layout_views')
+      .select('lat, lng, zoom')
+      .eq('layout_id', layoutId.value)
+      .maybeSingle()
     if (error || !row) return null
     return { lat: row.lat, lng: row.lng, zoom: row.zoom }
   }
@@ -796,6 +809,7 @@ export function useBenchDoc(options = {}) {
     bytes,
     rev,
     layoutId,
+    canEdit,
     myView,
     // Reading
     open,

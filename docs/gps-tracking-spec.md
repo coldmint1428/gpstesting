@@ -402,6 +402,21 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveM
 - `composables/useLiveLocations.js`: on page shown again / back online / every minute: rebuild a dead Realtime channel, fetch readings missed (last 3 min, else just the latest positions). Network errors show "Reconnecting…" on the map and retry (2 s → 30 s), never a red error.
 - Trail: tap a marker (or a person in the list) → their readings **since the live session started** (`locations` via RLS, pages of 1000) + new ones from Realtime (`useLiveLocations().onReading`). Solid line, dashed over gaps > 2 min or after a Stop, dot every 2 min, green start dot; the last piece follows the gliding marker. Hover / tap the trail → nearest reading's time + place name (OneMap, cached). Tap the empty map or the marker again → hidden. New session / event ended → cleared.
 
+### 12.2 Zones layer (merger Stage 1, 14 Oct)
+
+- Data: `zones` (one row per area on an event's bench: `code` unique per event, `name`, `kind` zone / stage / entrance / no_go / obstacle, `shape geography(Polygon,4326)` with a GiST index, `source_area_id` = the bench area). Written only by triggers on `layout_objects` (migration 020); read by event members (RLS).
+- Codes: an area on an event bench always carries `data.code`. Typed by a planner (A–Z 0–9 _, max 40, unique on the bench – `save_object` refuses a duplicate with a sentence) or made once from the name (`Formation 1` → `FORMATION_1`, then `_2`, `_3` …) and kept through renames.
+- Benches: `layouts.event_id` – one bench per event (made on first open of the Zones tab), plus the demo bench (event_id null) at `/polygon`. All bench functions take `p_layout` (null = demo). Event bench: members read, root / planners edit (`bench_can_read` / `bench_can_edit`).
+- Live map: `event_zones(event)` returns GeoJSON; drawn under markers and trails, not clickable; labels from zoom 16; Realtime on `zones` (filter `event_id`) triggers a redraw.
+- Helpers for Stage 2+: `zone_contains(zone, lat, lng, buffer_m)` (PostGIS `ST_DWithin`), `zone_distance_m(zone, lat, lng)` (0 inside).
+
+### 12.3 Zone presence, No-Go alerts, group positions (merger Stage 2, 14 Oct)
+
+- Trigger `locations_zone_update` (after insert on `locations`): finds the session the reading belongs to (by `recorded_at`); skips a late reading if a newer one of that person exists; `stop` closes every open stay; else finds the zones within min(accuracy, 15 m) of the point (PostGIS `ST_DWithin`), opens a stay at the first inside reading (and a `zone_alerts` row if the zone is `no_go`, one per entry), resets a blip, and closes a stay after 2 readings in a row outside (exited_at = the first of them); then refreshes `group_positions`. Errors are caught and logged as warnings – the reading is always stored.
+- `group_positions` (one row per group per session): accuracy-weighted midpoint of the ICs' newest readings (≤ 2 min old, ≤ 100 m), average speed from each IC's reading 30–90 s earlier, ICs sharing, last seen.
+- RLS: presence and group positions like `locations` (root / planner / marshal everything, others their group); alerts to ops roles and the IC concerned. All three published to Realtime (presence changes only on enter / blip / exit).
+- Client: `composables/useZoneActivity.js` (event page) loads + subscribes; `LiveMap` gets `zoneStays`, `zoneCounts`, `noGoOccupied`, `groupPositions`.
+
 ## 13. App structure
 
 | Route | View | Notes |
