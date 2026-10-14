@@ -7,7 +7,9 @@ This file is the step-by-step build order. It is meant to be given to Claude one
 
 > "Do **Stage N** of `docs/merger-build-plan.md`. Follow the ground rules in section 2. Stop after the stage's tests and report."
 
-Do not start a stage until the previous stage's **Done when** list is ticked and you (Komin) have confirmed. The companion Word document `docs/Event-Ops-Merger-Reference.docx` explains *why* each design choice was made; this file says *what to build and how to test it*.
+Do not start a stage until the previous stage's **Done when** list is ticked and you (Komin) have confirmed.
+
+> **Updated 14 Oct 2026 (Stage 0 done).** The teammate's polygon bench was rewritten before the merge: the canvas is now one database row per shape, saved per shape with a lock, so `save_bench` / `useBenchClaim` / `layout_claims` no longer exist. His migrations were renumbered to **014–018** and the catch-up fix added **019**, so this plan's own migrations now start at **020** (stage numbers below are updated). Work happens on branch `merge_gps-dev`. The companion Word document `docs/Event-Ops-Merger-Reference.docx` explains *why* each design choice was made; this file says *what to build and how to test it*.
 
 Mock-ups: <https://claude.ai/artifact/CVEyTkTX56yFJY9q5s1tfe> (share it from its Share menu before sending to teammates).
 Import template: `docs/templates/run-sheet-template.xlsx`.
@@ -46,7 +48,7 @@ Import template: `docs/templates/run-sheet-template.xlsx`.
 - Status is never colour alone: always a word or number too (accessibility, colour-blind planners).
 
 **Database**
-- New migrations continue from `014_…` in `supabase/migrations/`, one file per stage, applied to `gpstest` with the Supabase connection and committed as a file.
+- New migrations continue from `020_…` in `supabase/migrations/` (001–013 event app, 014–019 polygon bench), one file per stage, applied to `gpstest` with the Supabase connection and committed as a file.
 - Functions: `security definer`, `set search_path = ''`, role checks inside (`has_event_role(...)`), **explicit grants per function** – never "grant on all functions" (that broke uploads once).
 - RLS on every new table; writes only through functions unless a policy says otherwise.
 - Every migration gets a **rolled-back SQL test** (a `do $$ … raise exception 'RESULTS: …' $$` block, as used for 007–013) covering the allowed and the refused cases.
@@ -87,7 +89,7 @@ Import template: `docs/templates/run-sheet-template.xlsx`.
 
 ## 4. Data model (target)
 
-Existing: `events, event_roles, groups, group_members, profiles, locations, tracking_passes, event_sessions (+ scheduled_end), push_tokens, push_reminders, layouts, layout_claims`.
+Existing: `events, event_roles, groups, group_members, profiles, locations, tracking_passes, event_sessions (+ scheduled_end), push_tokens, push_reminders` and the polygon bench: `layouts` (one global bench: `id, rev, home`), `layout_objects` (one row per area / floor plan: `object_id, kind area|plan, data jsonb, image_id, rev`), `layout_images` (floor-plan pictures, keyed by md5), `layout_locks` (one lock per shape, per tab session), `layout_presence`, `layout_views`. Writes go through `save_object`, `delete_object`, `lock_object`, `unlock_object`, `open_bench`, `bench_head`.
 
 New / changed (built across the stages below):
 
@@ -95,7 +97,7 @@ New / changed (built across the stages below):
 |---|---|---|
 | `groups` (+columns) | `code` (unique per event), `category`, `sector`, `headcount` | 1 |
 | `zones` | `id, event_id, code (unique per event), name, kind (zone, stage, entrance, no_go, obstacle), shape geography(Polygon), capacity, source_area_id, is_circle, radius_m` | 1 |
-| `layouts` (+column) | `event_id` – one bench per event (teammate's editor, made event-scoped) | 1 |
+| `layouts` (+column) | `event_id` – one bench per event (teammate's editor, made event-scoped); `layout_objects`, locks and presence follow via `layout_id` | 1 |
 | `zone_presence` | `session_id, user_id, zone_id, entered_at, last_inside_at, exited_at` | 2 |
 | `group_positions` | `session_id, group_id, lat, lng, accuracy, speed_mps, activity, last_seen, ics_sharing` | 2 |
 | `zone_alerts` | `session_id, zone_id, user_id, kind (no_go_entered, over_capacity), at, ack_by` | 2 |
@@ -163,23 +165,26 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 - Vercel deploy is green (pnpm frozen lockfile).
 **Done when** baseline works and the area JSON shape is recorded.
 
+**Status 14 Oct 2026: DONE** (except the phone check, Komin). Merge on `merge_gps-dev` (komintestbr merged into the teammate's branch); migrations renumbered 014–018; lockfiles regenerated (Vercel frozen-lockfile build green on `4a1ca49`); full review of the bench (18 issues: 17 fixed and tested in the browser, the role check left for Stage 1); `npm run test:db` 196 assertions pass; `/polygon` draw → save → reload → delete works; event page Start → readings → End → Playback works. Shape format recorded in section 9.
+
 ### Stage 1 – Per-event zones from polygons (1½ days)
 **Goal** Polygons drawn in the bench belong to an event and become `zones` rows the server can test positions against.
 **Build**
-- Migration 014: `create extension if not exists postgis;` `layouts.event_id` (one bench per event; existing bench row → assign to "NDP rehearsal 1" or keep as template); `zones` table (section 4) with GiST index on `shape`; `groups` + `code, category, sector, headcount`.
-- Area → zone sync: when the bench is saved (`save_bench`), upsert `zones` from the JSON areas (id → `source_area_id`; `code` = area code field if the editor has one, else generated from the name: `Formation 1` → `FORMATION_1`, unique per event); delete zones whose area was deleted. Points `[lat, lng]` → PostGIS polygon (`ST_MakePolygon`, lng/lat order!).
-- Editor: add a **Code** field per area (prefilled, editable, unique check) and the **kind** list; open the bench from an event (**Zones** tab for root/planners) instead of the global `/polygon` page (keep `/polygon` working as a redirect or test page).
+- Migration 020: `create extension if not exists postgis;` `layouts.event_id` (one bench per event; existing bench row → assign to "NDP rehearsal 1" or keep as template); `zones` table (section 4) with GiST index on `shape`; `groups` + `code, category, sector, headcount`.
+- Area → zone sync: the bench saves **one shape at a time** (`save_object` / `delete_object` on `layout_objects`), so a trigger on `layout_objects` (insert / update / delete of `kind = 'area'`) upserts or deletes the matching `zones` row (object_id → `source_area_id`; `code` = the area's code field, else generated from the name: `Formation 1` → `FORMATION_1`, unique per event). Points `[lat, lng]` → PostGIS polygon (`ST_MakePolygon`, lng/lat order!). Floor plans (`kind = 'plan'`) are not zones.
+- Role check (review issue 16): today any signed-in account can edit the bench. With `layouts.event_id`, `open_bench`, `lock_object`, `save_object`, `delete_object` and the table policies must require root/planner of that event (read: event members); `/polygon` keeps a demo bench or redirects.
+- Editor: add a **Code** field per area (prefilled, editable, unique check) – the **kind** list already exists (zone, no_go, obstacle, stage, entrance); replace the bench's native `confirm()` boxes with the app's in-app dialog (`askConfirm`); open the bench from an event (**Zones** tab for root/planners) instead of the global `/polygon` page (keep `/polygon` working as a redirect or test page).
 - Live map: a **Zones** layer (toggle) drawing zones per kind (zone/stage outline, entrance dot, no-go red hatch), with name + code labels at higher zoom.
 - Helper SQL functions: `zone_contains(zone_id, lat, lng, buffer_m)` and `zone_distance_m(zone_id, lat, lng)` (0 inside).
 **Tests**
-- SQL: save a bench with 3 areas → 3 zones with correct codes; rename → same zone row; delete area → zone gone; `zone_contains` true inside / false outside / true within buffer; other event's planner cannot read or save.
+- SQL: save 3 areas (`save_object`) → 3 zones with correct codes; rename → same zone row; delete area → zone gone; `zone_contains` true inside / false outside / true within buffer; other event's planner cannot read or save.
 - Browser: draw Formation 1 on the test event → appears on the live map Zones layer.
 **Done when** zones are per event, stable codes, shown on the live map.
 
 ### Stage 2 – Zones in the live map: presence, no-go, group positions (1 day)
 **Goal** The server knows which IC is inside which zone, live, and each group has one position row.
 **Build**
-- Migration 015: `zone_presence`, `group_positions`, `zone_alerts`.
+- Migration 021: `zone_presence`, `group_positions`, `zone_alerts`.
 - Trigger `after insert on locations` (cheap, indexed): for the reading's event + live session, find zones containing the point (accuracy buffer = min(accuracy, 15 m)); open / extend / close presence rows (exit after 2 consecutive outside readings); upsert `group_positions` (weighted midpoint, speed from last 60 s, ICs sharing).
 - No-go: entering a `no_go` zone → `zone_alerts` row → Realtime → red toast + map highlight for ops users.
 - Live map: group rings use `group_positions`; zone tooltip "3 groups inside · 2 ICs"; IC marker tooltip shows "Inside Formation 1 since 18:03:41".
@@ -191,7 +196,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 ### Stage 3 – Simulator (1½ days)
 **Goal** Test and demo 100+ groups without 100 phones. Simulated data is clearly labelled and only in simulation events.
 **Build**
-- Migration 016: `events.is_simulation`; `sim_groups (event_id, group_id, route geography, pace_mps, start_at, script)`; `sim_scripts` presets: on time / 2 min late / stops halfway / loses signal / wrong zone (no-go).
+- Migration 022: `events.is_simulation`; `sim_groups (event_id, group_id, route geography, pace_mps, start_at, script)`; `sim_scripts` presets: on time / 2 min late / stops halfway / loses signal / wrong zone (no-go).
 - Edge Function `simulate` (service role, root of a simulation event only): creates N simulated accounts + groups + ICs (marked `profiles.is_simulated`), and a pg_cron job (every 10 s, only while the sim event is live) that inserts readings for each simulated IC along its route at its pace with GPS noise (±5–15 m).
 - UI: "SIMULATION" badge on every page of a sim event; a Simulator panel (root only): number of groups, preset mix, start / pause / reset.
 **Tests**
@@ -204,7 +209,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 ### Stage 4 – Run sheet builder, manual entry (1½ days)
 **Goal** Planners build a versioned run sheet in the app.
 **Build**
-- Migration 017: `run_sheets`, `cues`, `movements` (section 4), RLS: event members read published; root/planners edit drafts; functions `create_run_sheet_version`, `publish_run_sheet` (one published per event), `save_cue`, `save_movement`, `delete_*`, validation function `check_run_sheet(id)` returning row errors.
+- Migration 023: `run_sheets`, `cues`, `movements` (section 4), RLS: event members read published; root/planners edit drafts; functions `create_run_sheet_version`, `publish_run_sheet` (one published per event), `save_cue`, `save_movement`, `delete_*`, validation function `check_run_sheet(id)` returning row errors.
 - New event tab **Run sheet** (root/planners edit, marshals read): sections, table (start `HH:MM:SS`, length, cue, type, start mode, movements chips), inline edit, add/move/delete cue, **movement editor panel** exactly as mock-up screen 2 (How they get there · Deadline · Arrived rule · Colours · one-sentence summary).
 - Category rules: a movement row can target a **category** ("All Bands") → expands to one movement per group, with per-group overrides.
 - Groups: category, sector, headcount, code editable in the Members tab.
@@ -226,7 +231,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 ### Stage 6 – Live show engine + run sheet beside the map (2 days)
 **Goal** The run sheet runs live during a session, beside the live map.
 **Build**
-- Migration 018: `cue_state`, `show_actions`; functions `server_now()`, `show_go(session, cue)`, `show_hold`, `show_resume`, `show_add_time(seconds)`, `show_skip` (root/planners; one action per cue enforced with row locks; actions logged); engine `ops_tick()` via pg_cron every 2–5 s: auto-start Auto cues at projected start, Auto-when-ready cues start if their movements arrived else hold + alert, finish cues at their length, recompute delay/projected times with Flexible absorption and anchor checks.
+- Migration 024: `cue_state`, `show_actions`; functions `server_now()`, `show_go(session, cue)`, `show_hold`, `show_resume`, `show_add_time(seconds)`, `show_skip` (root/planners; one action per cue enforced with row locks; actions logged); engine `ops_tick()` via pg_cron every 2–5 s: auto-start Auto cues at projected start, Auto-when-ready cues start if their movements arrived else hold + alert, finish cues at their length, recompute delay/projected times with Flexible absorption and anchor checks.
 - A session uses the event's **published** run sheet version (stored on `event_sessions.run_sheet_id` at start).
 - Ops layout on the event page for root/planners/marshals: map left, **run sheet panel** right (NOW with progress + GO / Hold / +30 s, UP NEXT planned → projected, anchors) and a **top bar** (server-synced clock, ON TIME / RUNNING BEHIND / CRITICAL with ±mm:ss, next anchor countdown) – as mock-up screen 1. Marshals see the panel without buttons.
 **Tests**
@@ -237,7 +242,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 ### Stage 7 – Movements engine + ops view at scale (2½ days)
 **Goal** Map, run sheet and zones decide together whether each group is on time.
 **Build**
-- Migration 019: `movement_status`, `movement_routes`; engine inside `ops_tick()` + location trigger: deadlines, arrival (dwell, required ICs, no-signal exclusion), ETA (route remaining / straight line, speed blend), status with 2-reading hysteresis, leave-by.
+- Migration 025: `movement_status`, `movement_routes`; engine inside `ops_tick()` + location trigger: deadlines, arrival (dwell, required ICs, no-signal exclusion), ETA (route remaining / straight line, speed blend), status with 2-reading hysteresis, leave-by.
 - Edge Function `route-eta`: OneMap routing (`walk` / `drive`) to the arrival point, cached in `movement_routes`, refreshed on > 50 m deviation or every 2 min; OneMap token stays server-side (same secrets as reverse-geocode).
 - Ops view at scale (mock-up screen 5): **summary bar** (groups on track / at risk / late / no signal – clickable filters), **problem queue** sorted by urgency with **I'll handle it / Acknowledge / Snooze**, map **clusters** per zone/sector showing the worst status, routes + ETA lines only for problem/selected groups, search + filters (category, sector, zone, status, "My groups"), run sheet chips "Bands → Formation 1: 2 ✓ · 1 late" expandable. Marshals: filtered to their sector.
 - Decision banner for Auto-when-ready holds and anchor risks (GO anyway / Keep holding / Message group admin).
@@ -259,7 +264,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 **Test days 2–3 (Sun 1 – Mon 2 Nov)**: full simulated rehearsal of the NDP sample (120 groups, 30–40 cues) for 30 min + a live walk test with 2–3 phones in the same session; run the demo script (section 8). **MVP done.**
 
 ### Stage 9 – Fixed routes / mobile column (1½ days, stretch)
-**Build** Migration 020: `routes`, `checkpoints`, `checkpoint_passes`; route editor (mock-up: draw or pick KML path, drop checkpoints that snap to the route, planned speed → suggested offsets, validation: increasing offsets, within radius, anchor warning, unrealistic speed); "Use as route" from a Playback session; phone upload adds `speed, heading, activity`; engine: passes, delta, next ETA by GPS speed, later checkpoints planned + delta, anchor check; mobile column view (mock-up screen 4).
+**Build** Migration 026: `routes`, `checkpoints`, `checkpoint_passes`; route editor (mock-up: draw or pick KML path, drop checkpoints that snap to the route, planned speed → suggested offsets, validation: increasing offsets, within radius, anchor warning, unrealistic speed); "Use as route" from a Playback session; phone upload adds `speed, heading, activity`; engine: passes, delta, next ETA by GPS speed, later checkpoints planned + delta, anchor check; mobile column view (mock-up screen 4).
 **Tests** Simulated column on the sample route with a +25 s delay at C2 → later checkpoints +25 s, anchor amber; a real car or bus test with one phone.
 
 ### Stage 10 – Scale tools (2 days, stretch)
@@ -287,7 +292,10 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 
 ## 9. Notes filled in during the build
 
-- Stage 0: area JSON shape after the teammate's final changes: _(to fill in)_
+- Stage 0 (14 Oct): shapes are rows in `layout_objects` (`object_id`, `kind` = `area` | `plan`, `data` jsonb, `image_id`, `rev`). `data` is exactly what the canvas holds:
+  - **Area:** `{ id, name, kind, points }` – `name` 1–50 chars; `kind` ∈ `zone, no_go, obstacle, stage, entrance`; `points` = `[[lat, lng], …]`, 3–200 points, every point inside Singapore (lat 1.1–1.5, lng 103.5–104.2), ring not closed (first point not repeated). Checked by `shape_problem()` / `area_ok()` in 017.
+  - **Floor plan:** `{ id, name, centre: [lat, lng], widthM, heightM, angleDeg, opacity (0–1), visible }` – size 0–20 km, whole plan inside Singapore (`floor_plan_in_sg`, 014). The picture is not in `data`: it is a row in `layout_images` (`image_id` = md5 of the data URL), shared by plans that use the same file.
+  - Changes since `005_layouts.sql`: one-row JSON canvas → rows (017), whole-canvas claim → lock per shape per tab (016), presence + own map view (015), plan must fit Singapore (014), frozen canvas dropped (018), `bench_head()` for catch-up (019). Bench capped at 4 MB (`layout_bytes`).
 - Realtime messages per minute at 120 simulated groups: _(to fill in)_
 - Battery per hour on phones at 10 s: _(to fill in)_
 
