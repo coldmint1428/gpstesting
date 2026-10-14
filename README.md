@@ -216,6 +216,7 @@ Editor, in one transaction that rolls back.
 | Email | Password | Username | Role in "Test Event" |
 |---|---|---|---|
 | _(fill in after creating them)_ | | | Root |
+| claude.playback.test@example.com | Pb-Test-48217q! | claude_test | Root of "Playback test (Claude)" - throwaway account used to test Start/End + playback |
 
 ## Testing with several users
 

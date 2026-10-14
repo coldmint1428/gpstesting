@@ -8,9 +8,9 @@ Owner: Komin · Pages: `/login`, `/events`, `/events/:id`, `/events/:id/share` (
 3. - [x] Test accounts created: `komin` (Root) and `komin2` (Participant, Test group 1) in "NDP rehearsal 1"
 4. - [x] Register a free OneMap account: <https://www.onemap.gov.sg/apidocs/register>
 5. - [x] Supabase → Edge Functions → Secrets → add `ONEMAP_EMAIL` and `ONEMAP_PASSWORD` → tell Claude to test place names
-6. - [ ] Tell teammate: shared files changed (`App.vue`, `main.js`, `router/index.js`, `package.json` – added pinia, qrcode)
+6. - [ ] Tell teammate: shared files changed (`App.vue`, `main.js`, `router/index.js`, `package.json` – added pinia, qrcode, Capacitor, Transistorsoft) – point them to `docs/gps-tracking-spec.md`
 7. - [ ] Run `npm install` after pulling (new packages), restart `npm run dev` (Vite only reads `.env` at start)
-8. - [ ] Commit + push (check `.env` is NOT in `git status`)
+8. - [x] Commit + push (check `.env` is NOT in `git status`) – done regularly; `android/.idea/` now untracked + ignored
 9. - [x] Laptop real-location test: normal window = `komin`, incognito = `komin2`; make one IC → Start sharing → allow location → other window's Live map shows the marker
 10. - [x] Phone real-GPS test: Android app installed, sharing as `testuser1` → marker on the laptop's Live map
 
@@ -125,7 +125,9 @@ Tests passed on the phone:
 
 - [x] Fixed (code): map went blank at the last zoom step (`detectRetina` lowered the tile layer's max zoom) → shared `src/utils/onemap.js`, no detectRetina, `maxNativeZoom: 19` (zoom 20 enlarges zoom-19 tiles)
 - [ ] Check the zoom fix on the website (after push/deploy) and in the phone app (next install)
-- [x] Smooth live map (`src/utils/markerMotion.js`): markers **glide** (1 s) instead of jumping; big jumps (> 500 m or after > 90 s gap) still jump; **GPS wobble ignored** (moves smaller than the reading's accuracy, 5–25 m)
+- [x] Smooth live map (`src/utils/markerMotion.js`, replaced 14 Oct): markers **glide** (1 s) instead of jumping; big jumps (> 500 m or after > 90 s gap) still jump; **GPS wobble ignored** (moves smaller than the reading's accuracy, 5–25 m)
+- [x] Live map rewrite (14 Oct, `src/utils/liveMotion.js`): playhead ~12 s behind, slides along real readings; late/batched readings fast-forward instead of jumping; trail only up to the marker; tap trail/dot = time + place popup; group diamond only for 2+ ICs; "Reconnecting…" + auto catch-up after background/offline (no more "TypeError: Failed to fetch")
+- [ ] Phone test: watch an IC walk / bus / MRT with the viewer tab switched away and back; check no box, no dashed lines without a real 2 min gap, trail ends at the marker
 - [x] Replayed the 7.7 h outing (574 readings): still → marker stays put 94% of the time (no twitching); walking → 63 glides; vehicle → 62 glides + 25 jumps; tunnel gaps → 18 jumps; marker never more than 22 m from the real reading
 - [x] Follow mode: tap a person in the list → map zooms in and keeps them centred as they move (pans with the glide); "Following X · Stop" bar on the map; dragging the map stops following
 - [ ] Check the smooth map + follow mode on the website (after push/deploy) and in the phone app (next install)
@@ -153,7 +155,7 @@ Done:
 - [x] One app-wide tracker (singleton): sharing keeps running across pages
 - [x] Android: native reading + upload **every 30 s**, moving or standing (`distanceFilter: 0`, `locationUpdateInterval: 30000`, `disableStopDetection: true`)
 - [x] iOS (configured, not yet tested): every ~10 m when moving + 60 s heartbeat, never "stationary", `preventSuspend`
-- [x] Uploads use a **tracking pass** (`start_tracking_pass` / `report_location` / `revoke_my_tracking_passes`) – no expiring login token; pass cancelled on Stop / logout, expires after 24 h
+- [x] Uploads use a **tracking pass** (`start_tracking_pass` / `report_location` / `revoke_my_tracking_passes`) – no expiring login token; pass cancelled on Stop / logout; **self-renewing** (expires 24 h after the last upload, max 7 days) – migration 006
 - [x] Queued offline, uploaded when the connection returns
 - [x] Battery saver / restricted battery warnings in the app (+ "Allow unrestricted" button)
 - [x] Android: plugin versions in `android/variables.gradle`, licence note in `AndroidManifest.xml`
@@ -168,6 +170,14 @@ To do:
 - [ ] Rebuild the app (`npm run cap:sync`) after every `.env` change – keys are baked in at build time
 - [ ] Optional: "phone setup check" screen that opens the maker's battery settings (`showPowerManager()`) for Xiaomi / Oppo / Huawei
 - [ ] Tidy-up: duplicate rows saved at the moment sharing starts
+- [x] Fixed (code): sharing stopped right after Share – stale queued readings from an expired pass got 403 → queue now cleared before every new share
+- [x] Android sharing notification: always shown while sharing (`sticky`), custom layout `res/layout/notification_sharing.xml` with a **Stop** button (`onNotificationAction` → normal Stop); iOS shows the blue location indicator instead
+- [ ] Test on phone: notification stays the whole time; Stop button works with the app open, in background, and **swiped away** (if not, tapping the notification opens the app)
+- [x] Fixed (database): sharing auto-stopped right after Share – teammate's `005_layouts.sql` revoked `report_location` + `username_available` from anon → `006_self_renewing_pass.sql` grants them back
+- [x] Members tab: **Stop sharing** button for ICs (root / planner, or their group admin) → `stop_member_sharing`; map shows "Stopped sharing"
+- [ ] Test: planner stops an IC from the laptop → phone shows "Sharing stopped" on next upload (if the app was swiped away, the tracker only fully stops when the app is opened again)
+- [ ] Tell teammate: avoid blanket `grant/revoke ... on all functions` in migrations – grant per function
+- [ ] Commit `docs/gps-tracking-spec.md` with the next push
 - [ ] Underground / weak signal: keep coarse readings (accuracy limit 100 → ~500 m) with a "low accuracy" marker style; group midpoint still ignores > 100 m
 - [ ] Consider batch upload of queued readings (`batchSync` + bulk `report_location`) for crowd network congestion at NDP
 - [ ] Map: two people with the same initials ("TE" + "TE") look identical – show 3 letters or a number when initials clash
@@ -540,6 +550,55 @@ Still to do:
 - [ ] Drawn areas are not yet usable anywhere else — a no-go warning on the live map was
       discussed and shelved
 
+## 4c. Start/End event, playback, start reminders (built 12 Oct)
+Built (Claude) – database on gpstest, website + app code:
+- [x] `007_event_sessions.sql`: sessions (Start → End, many per event, scheduled start), ICs can only share while **live** (tracking pass, phone uploads → 403, website inserts → RLS); End event stops everyone + "Stopped sharing" markers; session with no uploads for 24 h closes itself (pg_cron every 15 min)
+- [x] `008_playback.sql`: `playback_list`, `location_history` (root / planners only), cleanup at 00:05 SGT deletes a session 7 days after the day it ended (until 23:59), days without a session the same way
+- [x] Event status card: Not live / Scheduled / ● Live, Start now, Schedule start (date + time picker), Change / Cancel, End event, "x of y ICs sharing"
+- [x] Share button locked until live ("Sharing opens at …") and unlocks by itself at the scheduled time; ICs get "Not sharing yet" / "● Sharing" badges (Members tab)
+- [x] Playback tab (root / planners): session list with "available until", amber "Download to keep" in the last 2 days, Rewind for the live session (+ ● Live button)
+- [x] Player: timeline (drag) with start/stop marks, Play/Pause, 1× 2× 5× 10× 30× 60× 120×, ±1 / ±10 min, replay length, gaps = "no update" / "lost contact", Stopped markers, tap a person = info card + place name + Follow + their whole trail (dashed over gaps, others fade), "Show trails" switch (last 10 min), group filter
+- [x] CSV download per session (`Event_2026-08-09_1700-2130.csv`, times as text `+08:00`) and **Replay from CSV** (read in the browser, never uploaded; accepts Excel re-saved dates; skips broken rows)
+- [x] Phone app: "Event started – tap to share" reminder at the scheduled start (`@capacitor/local-notifications`), stays until sharing starts, tap = opens the event and starts sharing; "Allow alarms" button for on-time reminders
+- [x] Tested on localhost (test account `claude_test`, event "Playback test (Claude)"): schedule → live by itself, badges, End event, playback states, CSV round trip, file replay, live Rewind
+
+To test (you):
+- [ ] Laptop: Start / Schedule / End on "NDP rehearsal 1"; Share locked before start; badges
+- [ ] Laptop: Playback → ▶ Play (does the marker move?), speeds, skip buttons, tap person (trail + card), Show trails, Download CSV, Replay from CSV
+- [ ] Phone: Share locked before start; after End the phone stops by itself (≤ 30 s)
+- [ ] Phone: schedule a start 3 min ahead, open the app once, close it → reminder appears at the time; tap it → sharing starts; reminder disappears
+- [ ] 14 Oct 00:05: the cleanup job deletes the oldest test readings (6 Oct) – expected, their 7 days ended (download a CSV first if you want them)
+
+Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
+- [x] `009_push_reminders.sql`: `push_tokens`, `push_reminders`, `claim_push_reminders` (ICs who haven't shared in the live session: at the start, then every 10 min, max 6), pg_cron job every minute while live → Edge Function (secret in Vault)
+- [x] Edge Function `send-reminders` deployed (FCM HTTP v1); only pg_cron (secret) or a root / planner may call it
+- [x] App: registers the phone after login, "Event start reminders" channel, tap = open event + start sharing; logout removes the phone; phone alarms (above) only when push isn't set up
+- [x] "Remind ICs" button on the status card while live and someone isn't sharing
+- [x] Firebase console → **Add project** (Analytics off) → **Add app → Android**, package name `sg.edu.smu.is216.g11` → download **google-services.json** → put it in `android/app/` (git-ignored; skip the SDK steps)
+- [x] Firebase → Project settings → **Service accounts** → **Generate new private key** → keep the JSON file private (not in the repo, not in chat)
+- [x] Supabase → Edge Functions → **Secrets** → add `FCM_SERVICE_ACCOUNT` = the whole contents of that JSON file
+- [x] Android Studio → Sync → Run; allow notifications when asked
+- [ ] Test: log in as an IC on the phone, close the app; laptop: Start event → push within ~1 min; tap → sharing starts; "Remind ICs" → push again
+- [ ] iPhone push later: needs a paid Apple Developer account + APNs key uploaded to Firebase
+- [x] Fixed: phone never registered – plugins were returned from async functions ("…then() is not implemented"); now the module is returned
+- [x] Reminder drawn by the app itself (`android/.../ReminderMessagingService.java`, data push from `send-reminders`) with a **Start sharing** button – works with the app closed or open (+ in-app toast); scheduled reminders have the same button
+- [x] Tested on phone (13 Oct): push arrives, **Start sharing** opens the event and starts sharing
+- [x] Sharing notification button renamed "Stop sharing" (stays the whole time sharing is on)
+- [x] Fixed (code): "Stop sharing" in the notification did nothing with the app swiped away (JavaScript not running) → `BackgroundGeolocationHeadlessTask.java` stops the tracker + `010_stop_with_pass.sql` (`stop_sharing_with_pass`) shows "Stopped sharing"; it also stops the tracker when uploads are refused (event ended / planner stopped) while the app is closed
+- [x] Tested on phone (13 Oct): share, swipe the app away, Stop sharing in the notification → sharing stops
+- [ ] Test: share, swipe the app away, End event on the laptop → phone notification goes within ~30 s
+- [x] **Schedule end** (`011_scheduled_end.sql`): end time on a scheduled or live event ("ends at …" in the status card, Change / Cancel end); at that time the event stops being live at once and a job (every minute) closes it like End event
+- [x] Status card flow: Not live → **Start event now** / **Schedule…** (start + optional end in one form, +30 min / +1 h / +2 h / +3 h); Scheduled → **Start now** / **Edit schedule** / **Cancel schedule**; Live → **Remind ICs** / **Set·Change end time** / **Remove end time** / **End event now**, with "ends 9:00 pm (in 2 h 58 min)" or "no end time"; tested on localhost (13 Oct)
+- [x] Live map smoother (13 Oct): phone reading every **10 s** (was 30 s), markers glide steadily between readings (no stop-start / jumps), gentler noise filter + bad-fix skip, follow mode tracks the glide
+- [x] Tap a marker → **trail** of the current live session only (dashed over gaps, dot every 2 min, start dot); hover / tap the trail → time + place name; clears when the event ends; tested on localhost
+- [ ] Test on phone + laptop during a walk: marker glides smoothly, trail grows, hover shows times; battery use with 10 s (expect ~4 %/h)
+- [ ] Note for a big event: 10 s = 3× more uploads + Realtime messages than 30 s (free plan: 2 M Realtime messages / month) – for NDP-scale use the Pro plan or go back to 15–30 s
+- [x] Playback **Delete** button (`013_delete_recording.sql`, root / planners): deletes a finished recording's readings + session for everyone (a live event can't be deleted; confirm dialog suggests downloading the CSV first)
+- [ ] Test: delete an empty recording, then one with readings → it disappears from the list and toast shows how many readings
+- [x] `012_close_expired_first.sql`: Start / Schedule / Change end / End first close an event whose end time has passed (no "already live" or reviving an ended event in the minute before the job runs)
+- [ ] Test: start the event, set the end 2–3 min ahead, share from the phone → at the end time sharing stops by itself and the card shows Not live
+- [x] Website: in-app confirm dialogs + toast messages instead of browser pop-ups; Share / My GPS details moved into the status card
+
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)
@@ -549,8 +608,9 @@ Still to do:
       hourglass — same trap `014` had to audit for)
 
 ## 6. Moving to the teammate's new Supabase project
+- [x] Full technical spec written: `docs/gps-tracking-spec.md` (schema with exact data types, RLS, functions, tracker config, flows, migration steps, test results) – checked against the live gpstest database; migrations 001–009 reproduce it 1:1
 - [ ] Teammate adds you to their Supabase organisation
-- [ ] Run every file in `supabase/migrations/` in order (001 → 018)
+- [ ] Follow `docs/gps-tracking-spec.md` §14 (migration checklist): run every file in `supabase/migrations/` in order (001 → 018; 005 and 014–018 = the polygon bench; 006 must come after 005; after 009 add the Vault secret `project_url`)
 - [ ] Repeat dashboard settings: Confirm email off, anonymous sign-ins off (URL Configuration only needed for password reset / email confirmation / social login)
 - [ ] Deploy `reverse-geocode` Edge Function + add OneMap secrets there
 - [ ] New URL + public key in `.env` (and Vercel later); rebuild the phone app

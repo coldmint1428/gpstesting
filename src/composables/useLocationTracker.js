@@ -22,7 +22,9 @@ import { Capacitor } from '@capacitor/core'
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
 
 const MAX_READINGS = 20 // rows kept for the table
-const ANDROID_INTERVAL_MS = 30000 // Android app: record + upload a position every 30 s, even when standing still
+// Android app: record + upload a position every 10 s, moving or standing still. 10 s keeps the live
+// map smooth (markers glide between readings); tested 30 s used ~2.7 %/h battery, 10 s ~4 %/h expected.
+const ANDROID_INTERVAL_MS = 10000
 const SAVE_EVERY_MS = 5000 // web only: at most one insert every 5 s
 
 // Load the Transistorsoft plugin only inside the app, so the web bundle never needs it
@@ -237,7 +239,7 @@ function createTracker() {
       }
       sharingEventId.value = ids.eventId
       isTracking.value = true
-      if (!state.isMoving) await bg.changePace(true) // keep the 30 s timer running (see startNative)
+      if (!state.isMoving) await bg.changePace(true) // keep the 10 s timer running (see startNative)
       await checkPhoneSettings()
       dbStatus.value = 'Tracking in background'
     }
@@ -311,8 +313,8 @@ function createTracker() {
     if (!error) {
       markSaved()
     } else if (error.code === '42501') {
-      // RLS said no: this user is not (or no longer) the group's IC
-      errorMsg.value = 'You are not allowed to share for this group any more (IC removed?). Sharing stopped.'
+      // RLS said no: the event isn't live, or this user is not (or no longer) the group's IC
+      errorMsg.value = 'Sharing stopped: the event is not live (ended or not started), or you are no longer this group\'s IC.'
       stop(false)
     } else {
       dbStatus.value = 'Save failed: ' + error.message
@@ -362,11 +364,15 @@ function createTracker() {
       pass = data
     }
 
+    // Throw away readings still queued from an earlier share (they carry an old, maybe expired
+    // tracking pass). Otherwise they upload first, get 403 and stop this new share right away.
+    await bg.destroyLocations()
+
     // reset() = drop every old setting (e.g. old login tokens) and use exactly this config
     await bg.reset(buildNativeConfig(pass))
     await bg.start()
     // start() begins in "stationary" mode (GPS mostly off) until the phone moves. Switch to
-    // "moving" right away so the 30 s timer runs even if the IC is standing still. Stop
+    // "moving" right away so the 10 s timer runs even if the IC is standing still. Stop
     // detection is disabled, so it then stays in moving mode until Stop is pressed.
     await bg.changePace(true)
     await checkPhoneSettings()
@@ -432,7 +438,7 @@ function createTracker() {
         // The database said no (pass stopped/expired or not IC any more). The plugin would retry this forever,
         // so stop tracking and clear the queue.
         errorMsg.value =
-          'Sharing stopped: your tracking pass is no longer valid (stopped, expired after 24 h, or no longer the IC).'
+          'Sharing stopped: the event ended, a planner stopped your sharing, there was no upload for 24 h, or you are no longer the IC.'
         isTracking.value = false
         sharingEventId.value = null
         forgetSharing()
@@ -455,12 +461,18 @@ function createTracker() {
     // so every 60 s we record one position anyway. This lets the dashboard tell
     // "standing still" apart from "phone died".
     bg.onHeartbeat(() => {
-      // Android records every 30 s natively (see buildNativeConfig), so only iOS needs this
+      // Android records every 10 s natively (see buildNativeConfig), so only iOS needs this
       if (Capacitor.getPlatform() === 'android') return
       console.log('[tracker] heartbeat: taking a position')
       bg.getCurrentPosition({ samples: 1, persist: true, timeout: 30 })
         .then((loc) => console.log('[tracker] heartbeat position saved, accuracy', loc.coords.accuracy))
         .catch((err) => console.error('[tracker] heartbeat position failed:', JSON.stringify(err)))
+    })
+
+    // "Stop sharing" button in the Android sharing notification = the same as pressing Stop sharing
+    // (app open; when the app is closed, BackgroundGeolocationHeadlessTask.java does it)
+    bg.onNotificationAction((buttonId) => {
+      if (buttonId === 'notificationButtonStop' && isTracking.value) stop()
     })
 
     // Battery saver switched on/off while sharing: update the warning on the page
@@ -485,9 +497,10 @@ function createTracker() {
         // Standing still gives the same coordinates every time; keep them anyway,
         // otherwise they are dropped as "identical" and no row is saved while standing.
         allowIdenticalLocations: true,
+        showsBackgroundLocationIndicator: true, // iOS: blue location pill while sharing (iOS has no sticky notifications)
         ...(isAndroid
           ? {
-              // ANDROID: record on a timer, not by distance: one position every 30 s, moving or
+              // ANDROID: record on a timer, not by distance: one position every 10 s, moving or
               // not. All native (no app code needed), so it keeps working when locked or swiped away.
               distanceFilter: 0,
               locationUpdateInterval: ANDROID_INTERVAL_MS,
@@ -499,19 +512,27 @@ function createTracker() {
             }),
       },
       activity: {
-        // Never switch to "stationary" (GPS off) while sharing. Android: keeps the 30 s timer
+        // Never switch to "stationary" (GPS off) while sharing. Android: keeps the 10 s timer
         // running. iOS: iOS only keeps a background app alive while it is using location.
         disableStopDetection: true,
       },
       app: {
         stopOnTerminate: false, // keep tracking if the app is swiped away
+        // App swiped away: BackgroundGeolocationHeadlessTask.java handles the notification's
+        // Stop sharing button and refused uploads (403), since this JavaScript isn't running then
+        enableHeadless: true,
         startOnBoot: true, // resume tracking after the phone restarts
         heartbeatInterval: 60, // seconds - iOS only (see onHeartbeat above)
         preventSuspend: true, // iOS: needed for heartbeats while locked (uses more battery)
         notification: {
-          // Android must show a notification while tracking in the background
-          title: 'Event Tracker',
-          text: 'Sharing your location with event planners',
+          // ANDROID: shown the WHOLE time sharing is on (sticky), with a Stop button.
+          // Layout file: android/app/src/main/res/layout/notification_sharing.xml
+          title: 'Sharing your location',
+          text: 'Event planners can see you. Tap to open.',
+          sticky: true,
+          layout: 'notification_sharing',
+          actions: ['notificationButtonStop'],
+          priority: bg.NotificationPriority.Default,
         },
       },
       persistence: {

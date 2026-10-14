@@ -9,6 +9,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { initials } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
+import { askConfirm, toast } from '../composables/useNotify'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -17,6 +18,7 @@ const props = defineProps({
   me: { type: Object, default: null },
   isRoot: { type: Boolean, default: false },
   canManage: { type: Boolean, default: false },
+  sharingStatus: { type: Object, default: () => ({}) }, // live only: { userId: true (sharing) | false }
 })
 const emit = defineEmits(['changed'])
 
@@ -92,13 +94,38 @@ function setEventRole(member, role, enabled) {
   return run('set_event_role', { p_event_id: props.eventId, p_user_id: member.id, p_role: role, p_enabled: enabled })
 }
 
-function removeMember(member) {
-  if (!confirm('Remove ' + member.display_name + ' from this event?')) return
+// Stop an IC's phone sharing remotely (e.g. they forgot after a rehearsal).
+// Cancels their tracking pass: the phone's next upload is refused and the map shows "Stopped sharing".
+async function stopSharing(member) {
+  const ok = await askConfirm({
+    title: 'Stop ' + member.display_name + "'s location sharing?",
+    message: 'Their phone stops uploading and the map shows "Stopped sharing".',
+    confirmText: 'Stop sharing',
+    danger: true,
+  })
+  if (!ok) return
+  errorMsg.value = ''
+  busy.value = true
+  const { data: wasSharing, error } = await supabase.rpc('stop_member_sharing', {
+    p_event_id: props.eventId,
+    p_user_id: member.id,
+  })
+  busy.value = false
+  if (error) errorMsg.value = error.message
+  else if (wasSharing) toast('Stopped ' + member.display_name + "'s location sharing.")
+  else toast(member.display_name + ' was not sharing from the phone app.', 'warning')
+}
+
+async function removeMember(member) {
+  const ok = await askConfirm({ title: 'Remove ' + member.display_name + ' from this event?', confirmText: 'Remove', danger: true })
+  if (!ok) return
   return run('remove_member', { p_event_id: props.eventId, p_user_id: member.id })
 }
 
 // ---------- Per-member permission checks (decide which controls to show) ----------
 const canSetIC = (m) => m.groupId && (props.canManage || m.groupId === myAdminGroupId.value)
+// Same people who may change IC may stop an IC's sharing (not yourself: use your own Stop button)
+const canStopSharing = (m) => m.isIC && canSetIC(m) && (!props.me || m.id !== props.me.id)
 const adminCanAdd = (m) => !props.canManage && myAdminGroupId.value && !m.groupId
 const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.groupId === myAdminGroupId.value
 const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props.me || m.id !== props.me.id)
@@ -191,6 +218,12 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
               <span v-for="r in m.roles" :key="r" class="badge text-bg-secondary me-1 text-capitalize">{{ r }}</span>
               <span v-if="m.isAdmin" class="badge text-bg-info me-1">Group admin</span>
               <span v-if="m.isIC" class="badge text-bg-success me-1">IC</span>
+              <span v-if="sharingStatus[m.id] === true" class="badge text-bg-light border border-success text-success me-1" data-testid="badge-sharing">
+                ● Sharing
+              </span>
+              <span v-else-if="sharingStatus[m.id] === false" class="badge text-bg-warning me-1" :data-testid="'badge-not-sharing-' + m.username">
+                Not sharing yet
+              </span>
             </div>
 
             <!-- Group (root / planner) -->
@@ -253,6 +286,15 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
               </template>
             </div>
 
+            <button
+              v-if="canStopSharing(m)"
+              class="btn btn-sm btn-outline-danger mt-2 me-2"
+              :disabled="busy"
+              :data-testid="'stop-sharing-' + m.username"
+              @click="stopSharing(m)"
+            >
+              Stop sharing
+            </button>
             <button v-if="canRemove(m)" class="btn btn-sm btn-link text-danger px-0 mt-1" :disabled="busy" @click="removeMember(m)">
               Remove from event
             </button>

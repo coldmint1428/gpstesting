@@ -1,36 +1,56 @@
 <script setup>
 // Live map of one event: a round marker with initials for every person I may see,
-// in their group's colour (faded when stale, grey when offline), plus a diamond for
-// each group's combined position. Hover (or tap) a marker for name, place name,
-// coordinates, accuracy and "last seen".
+// in their group's colour (faded when stale, grey when offline), plus a diamond for each
+// group with 2+ ICs at the group's combined position.
+//
+// Motion (utils/liveMotion.js): everyone is drawn ~12 s in the past, sliding between two real
+// readings, so markers move steadily along the real path instead of jumping to each new
+// reading. Readings that arrive late (tunnel, battery saver, paused tab) slot into place;
+// one animation loop moves all markers while the map is on screen.
+//
+// Tap a person's marker: their info card + their TRAIL for the current live session, drawn
+// only up to where the marker is (solid; dashed only over a real gap of 2+ minutes without
+// readings, or after Stop; a dot every 2 minutes). Tap the trail or a dot: when they were
+// there + the place name. The trail only covers the session that is live now.
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles + reverse geocoding (c) Singapore Land Authority
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { supabase } from '../lib/supabase'
 import { createSingaporeMap } from '../utils/onemap'
-import { moveMarker } from '../utils/markerMotion'
-import { useLiveLocations } from '../composables/useLiveLocations'
+import { newTrack, addReading, noteDelay, prune, advance, positionAt, trailUpTo } from '../utils/liveMotion'
 import { placeName } from '../composables/useReverseGeocode'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
+import { formatTime, formatTimeSeconds } from '../utils/time'
 
 const props = defineProps({
   eventId: { type: String, required: true },
+  positions: { type: Object, required: true }, // from useLiveLocations (EventView)
+  now: { type: Number, required: true }, // ticking clock from useLiveLocations
+  liveError: { type: String, default: '' },
+  reconnecting: { type: Boolean, default: false }, // connection lost, retrying
+  liveSince: { type: Number, default: null }, // start of the live session (ms), null = not live
+  onReading: { type: Function, default: null }, // useLiveLocations: subscribe to new readings
   members: { type: Array, required: true }, // from useEventData
   groups: { type: Array, required: true },
   myUserId: { type: String, default: null },
   active: { type: Boolean, default: true }, // false while another tab is shown
 })
 
-const { positions, errorMsg, now } = useLiveLocations(props.eventId)
+const positions = computed(() => props.positions)
+const now = computed(() => props.now)
+const errorMsg = computed(() => props.liveError)
+const dismissedError = ref('') // the error the viewer closed (a new one shows again)
 
 const mapEl = ref(null) // the <div> Leaflet draws into
 let map = null
 const personMarkers = {} // userId -> Leaflet marker
-const groupMarkers = {} // groupId -> Leaflet marker
+const groupMarkers = {} // groupId -> Leaflet marker (groups with 2+ ICs on the map)
+const tracks = {} // userId -> recent readings + playhead (liveMotion.js)
 const places = {} // userId -> place name text (filled when a tooltip opens)
 let fittedOnce = false
 
@@ -66,6 +86,24 @@ const people = computed(() =>
     .sort((a, b) => b.time - a.time),
 )
 
+// ---------- Readings -> tracks ----------
+function trackOf(userId) {
+  if (!tracks[userId]) tracks[userId] = newTrack()
+  return tracks[userId]
+}
+
+function toReading(row) {
+  return { t: new Date(row.recorded_at).getTime(), lat: row.lat, lng: row.lng, accuracy: row.accuracy, source: row.source }
+}
+
+// Every reading from useLiveLocations (live = arrived on time through Realtime)
+function onNewReading(row, live) {
+  const track = trackOf(row.user_id)
+  const reading = toReading(row)
+  if (live) noteDelay(track, Date.now() - reading.t)
+  if (addReading(track, reading) && row.user_id === selectedId.value) trailDirty = true
+}
+
 // ---------- Tooltip text ----------
 function tooltipHtml(person) {
   const place = places[person.userId]
@@ -77,14 +115,18 @@ function tooltipHtml(person) {
     '<br>' + person.lat.toFixed(6) + ', ' + person.lng.toFixed(6) +
     ' (±' + Math.round(person.accuracy || 0) + ' m)' +
     (person.state === 'stopped'
-      ? '<br><strong>Stopped sharing</strong> at ' + person.time.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' })
-      : '<br>Last seen ' + timeAgo(person.time, now.value))
+      ? '<br><strong>Stopped sharing</strong> at ' + formatTime(person.time)
+      : '<br>Last seen ' + timeAgo(person.time, now.value)) +
+    (selectedId.value === person.userId && props.liveSince ? '<br><span class="text-muted">Trail shown · tap the map to hide</span>' : '')
   )
 }
 
 async function lookUpPlace(userId) {
   const p = positions.value[userId]
   if (!p) return
+  const key = p.lat + ',' + p.lng
+  if (places[userId + '@'] === key) return // already looked up for this reading
+  places[userId + '@'] = key
   places[userId] = await placeName(p.lat, p.lng)
   refreshTooltip(userId)
 }
@@ -98,10 +140,11 @@ function refreshTooltip(userId) {
 // ---------- Draw / update markers ----------
 function personIcon(person) {
   const me = person.userId === props.myUserId ? ' pm-me' : ''
+  const selected = person.userId === selectedId.value ? ' pm-selected' : ''
   return L.divIcon({
     className: '', // no default white square
     html:
-      '<div class="pm pm-' + person.state + me + '" style="background:' + person.colour + '">' +
+      '<div class="pm pm-' + person.state + me + selected + '" style="background:' + person.colour + '">' +
       escapeHtml(initials(person.name)) + '</div>',
     iconSize: [34, 34],
     iconAnchor: [17, 17],
@@ -109,6 +152,11 @@ function personIcon(person) {
   })
 }
 
+// Groups whose combined position is shown: ICs that count (not stopped, fresh, accurate enough)
+let groupIcs = {} // groupId -> [person] (2+ only)
+
+// Markers, icons and texts (runs when readings, the clock, members or groups change).
+// Where markers are drawn is decided by the animation loop (frame) below.
 function render() {
   if (!map) return
 
@@ -117,31 +165,27 @@ function render() {
   for (const person of people.value) {
     seen.add(person.userId)
     let marker = personMarkers[person.userId]
-    const iconKey = person.state + person.colour + person.name
+    const iconKey = person.state + person.colour + person.name + (person.userId === selectedId.value)
+    // The newest reading is also in the track (covers readings loaded before the map existed)
+    const track = trackOf(person.userId)
+    addReading(track, { t: person.time.getTime(), lat: person.lat, lng: person.lng, accuracy: person.accuracy, source: person.source })
 
     if (!marker) {
-      marker = L.marker([person.lat, person.lng], { icon: personIcon(person) }).addTo(map)
+      const start = positionAt(track, advance(track, Date.now(), 0)) || person
+      marker = L.marker([start.lat, start.lng], { icon: personIcon(person) }).addTo(map)
       marker.bindTooltip('', { direction: 'top' })
       // Look up the place name only when someone actually opens the tooltip
       marker.on('tooltipopen', () => lookUpPlace(person.userId))
-      marker.on('click', () => marker.toggleTooltip()) // phones have no hover
+      marker.on('click', () => select(person.userId)) // tap = card + trail
       marker.iconKey = iconKey
-      marker.readingTime = person.time
       personMarkers[person.userId] = marker
-    } else {
-      // Glide to the new reading, or ignore it if it is only GPS wobble (utils/markerMotion.js)
-      const gapMs = marker.readingTime ? person.time - marker.readingTime : 0
-      marker.readingTime = person.time
-      const moved = moveMarker(marker, L.latLng(person.lat, person.lng), { accuracy: person.accuracy, gapMs })
-      if (marker.iconKey !== iconKey) {
-        marker.setIcon(personIcon(person))
-        marker.iconKey = iconKey
-      }
-      if (moved) {
-        delete places[person.userId] // new position = new place name
-        if (marker.isTooltipOpen()) lookUpPlace(person.userId)
-      }
     }
+    if (marker.iconKey !== iconKey) {
+      marker.setIcon(personIcon(person))
+      marker.iconKey = iconKey
+    }
+    marker.setZIndexOffset(person.userId === selectedId.value ? 1000 : 0)
+    if (marker.isTooltipOpen()) lookUpPlace(person.userId)
     marker.setTooltipContent(tooltipHtml(person))
   }
   // Remove people who are no longer visible (e.g. moved to another group)
@@ -149,23 +193,27 @@ function render() {
     if (!seen.has(userId)) {
       personMarkers[userId].remove()
       delete personMarkers[userId]
+      delete tracks[userId]
+      if (selectedId.value === userId) deselect()
     }
   }
 
-  // Groups: weighted midpoint of each group's ICs
+  // Groups: a diamond only for groups with 2+ ICs (with one IC it would sit on their marker)
+  groupIcs = {}
   for (const group of props.groups) {
     // People who pressed Stop don't count towards the group position
     const readings = people.value.filter((p) => p.groupId === group.id && p.state !== 'stopped')
     const mid = weightedMidpoint(readings, now.value)
     let marker = groupMarkers[group.id]
-    if (!mid) {
+    if (!mid || mid.used < 2) {
       if (marker) {
         marker.remove()
         delete groupMarkers[group.id]
       }
       continue
     }
-    const text = escapeHtml(group.name) + ' position<br>from ' + mid.used + ' IC' + (mid.used > 1 ? 's' : '')
+    groupIcs[group.id] = readings
+    const text = escapeHtml(group.name) + ' position<br>from ' + mid.used + ' ICs'
     if (!marker) {
       marker = L.marker([mid.lat, mid.lng], {
         icon: L.divIcon({
@@ -179,74 +227,366 @@ function render() {
       marker.bindTooltip(text, { direction: 'top' })
       groupMarkers[group.id] = marker
     } else {
-      moveMarker(marker, L.latLng(mid.lat, mid.lng)) // glide; tiny changes ignored (min 5 m)
       marker.setTooltipContent(text)
     }
   }
 
-  // Follow mode: pan to where the followed marker is going (glides with it)
-  if (followedId.value) {
-    const marker = personMarkers[followedId.value]
-    if (marker) map.panTo(marker.shownLatLng || marker.getLatLng(), { animate: true, duration: 1 })
-    else stopFollowing() // they're no longer on the map
-  }
+  if (followedId.value && !personMarkers[followedId.value]) stopFollowing() // they're no longer on the map
 
   // Zoom to everyone the first time we have data
   if (!fittedOnce && people.value.length > 0) {
     map.fitBounds(L.latLngBounds(people.value.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: 17 })
     fittedOnce = true
   }
+  startLoop()
 }
 
 // Redraw when positions, the clock, members or groups change
 watch([people, () => props.groups], render, { deep: true })
+
+// ---------- Animation loop: move every marker to where its playhead is ----------
+let frameId = null
+let lastFrame = 0
+let lastPrune = 0
+
+function frame(ts) {
+  frameId = null
+  if (!map || !props.active || document.hidden) return // stops; restarted when shown again
+  const elapsed = lastFrame ? Math.min(ts - lastFrame, 60000) : 0
+  lastFrame = ts
+  const nowMs = Date.now()
+  const shown = {} // userId -> drawn { lat, lng }
+
+  for (const userId of Object.keys(personMarkers)) {
+    const track = tracks[userId]
+    if (!track) continue
+    const pos = positionAt(track, advance(track, nowMs, elapsed))
+    if (!pos) continue
+    shown[userId] = pos
+    const marker = personMarkers[userId]
+    const old = marker.getLatLng()
+    if (Math.abs(old.lat - pos.lat) > 1e-7 || Math.abs(old.lng - pos.lng) > 1e-7) {
+      marker.setLatLng([pos.lat, pos.lng])
+      if (followedId.value === userId) map.panTo([pos.lat, pos.lng], { animate: false })
+    }
+    if (userId === selectedId.value) drawTrailTo(track, pos)
+  }
+
+  // Group diamonds follow their ICs' drawn positions (same accuracy weighting)
+  for (const [groupId, readings] of Object.entries(groupIcs)) {
+    const marker = groupMarkers[groupId]
+    if (!marker) continue
+    const mid = weightedMidpoint(readings.map((r) => ({ ...r, ...(shown[r.userId] || {}) })), nowMs)
+    if (mid) marker.setLatLng([mid.lat, mid.lng])
+  }
+
+  if (nowMs - lastPrune > 5000) {
+    lastPrune = nowMs
+    for (const track of Object.values(tracks)) prune(track, nowMs)
+  }
+  frameId = requestAnimationFrame(frame)
+}
+
+function startLoop() {
+  if (frameId || !map || !props.active || document.hidden) return
+  lastFrame = 0
+  frameId = requestAnimationFrame(frame)
+}
 
 // Leaflet measures its box when shown; re-measure after the tab becomes visible again
 watch(
   () => props.active,
   (active) => {
     if (active && map) nextTick(() => map.invalidateSize())
+    if (active) startLoop()
   },
 )
 
+// ---------- Trail of the selected person (current live session only) ----------
+const selectedId = ref(null)
+let trailLayer = null // solid + dashed lines, dots and the invisible tap line (up to the last reading passed)
+let trailTip = null // last piece: last reading passed -> the marker (updated every frame)
+let trailIndex = -1 // reading the trail is drawn up to
+let trailDirty = false // readings changed: redraw the trail
+let trailPoints = [] // readings drawn in the trail (for taps)
+let loadToken = 0
+
+async function select(userId) {
+  if (selectedId.value === userId) return deselect() // tap again = hide
+  if (selectedId.value && tracks[selectedId.value]) tracks[selectedId.value].keepAll = false
+  selectedId.value = userId
+  clearTrail()
+  render()
+  const marker = personMarkers[userId]
+  if (marker) marker.openTooltip()
+  await loadTrail(userId)
+}
+
+function deselect() {
+  if (selectedId.value && tracks[selectedId.value]) tracks[selectedId.value].keepAll = false
+  selectedId.value = null
+  clearTrail()
+  render()
+}
+
+function clearTrail() {
+  if (trailLayer) trailLayer.clearLayers()
+  if (trailTip) trailTip.remove()
+  trailTip = null
+  trailIndex = -1
+  trailPoints = []
+  closePointInfo()
+}
+
+// The person's readings since the live session started (RLS: only people I may see),
+// in pages of 1000 (the API's limit per request). Merged into their track.
+async function loadTrail(userId) {
+  if (!props.liveSince) return
+  const token = ++loadToken
+  const since = new Date(props.liveSince).toISOString()
+  const rows = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('locations')
+      .select('lat, lng, accuracy, source, recorded_at')
+      .eq('event_id', props.eventId)
+      .eq('user_id', userId)
+      .gte('recorded_at', since)
+      .order('recorded_at')
+      .range(from, from + 999)
+    if (error || token !== loadToken) return // (a network error: the next resume tries again)
+    rows.push(...data)
+    if (data.length < 1000) break
+  }
+  if (selectedId.value !== userId) return
+  const track = trackOf(userId)
+  track.keepAll = true
+  for (const row of rows) addReading(track, toReading(row))
+  trailDirty = true
+}
+
+function selectedColour() {
+  const p = positions.value[selectedId.value]
+  const g = p ? groupOf(p.groupId) : null
+  return g ? g.colour : '#0d6efd'
+}
+
+// Called every frame for the selected person: the trail ends exactly at the marker
+function drawTrailTo(track, pos) {
+  if (!props.liveSince || !map) return
+  if (trailDirty || pos.index !== trailIndex) {
+    trailDirty = false
+    trailIndex = pos.index
+    drawTrailBody(track)
+  }
+  const last = trailPoints[trailPoints.length - 1]
+  const tip = last ? [[last.lat, last.lng], [pos.lat, pos.lng]] : []
+  if (!trailTip) {
+    trailTip = L.polyline(tip, { color: selectedColour(), weight: 4, opacity: 0.85, interactive: false }).addTo(map)
+  } else {
+    trailTip.setLatLngs(tip)
+  }
+}
+
+function drawTrailBody(track) {
+  trailLayer.clearLayers()
+  const from = props.liveSince
+  trailPoints = track.points.slice(0, trailIndex + 1).filter((p) => p.t >= from)
+  if (!trailPoints.length) return
+  const colour = selectedColour()
+  const { solid, dashed } = trailUpTo(track, from, trailIndex)
+
+  L.polyline(dashed, { color: colour, weight: 3, opacity: 0.7, dashArray: '6 8', interactive: false }).addTo(trailLayer)
+  L.polyline(solid, { color: colour, weight: 4, opacity: 0.85, interactive: false }).addTo(trailLayer)
+
+  // Wide invisible line on top: hover (mouse) or tap (touch) anywhere along the trail
+  const tapLine = L.polyline(trailPoints.map((p) => [p.lat, p.lng]), {
+    color: '#000',
+    weight: 24,
+    opacity: 0,
+    className: 'trail-hover',
+    bubblingMouseEvents: false, // a tap here is not a tap on the empty map
+  }).addTo(trailLayer)
+  tapLine.on('click', (e) => showPointInfo(nearestPoint(e.latlng), true))
+  tapLine.on('mousemove', (e) => showPointInfo(nearestPoint(e.latlng), false))
+  tapLine.on('mouseout', hoverOut)
+
+  // Dots: the start (green), then one every 2 minutes. Tap a dot: when + where.
+  let lastDot = -Infinity
+  trailPoints.forEach((p, i) => {
+    const isStart = i === 0
+    if (!isStart && p.t - lastDot < 2 * 60 * 1000) return
+    lastDot = p.t
+    const dot = L.circleMarker([p.lat, p.lng], {
+      radius: isStart ? 6 : 4,
+      color: isStart ? '#198754' : colour,
+      weight: 2,
+      fillColor: '#fff',
+      fillOpacity: 1,
+      className: 'trail-hover',
+      bubblingMouseEvents: false,
+    }).addTo(trailLayer)
+    dot.on('click', () => showPointInfo(p, true))
+  })
+}
+
+// Nearest reading to where the pointer / finger is
+function nearestPoint(latlng) {
+  let best = null
+  let bestDistance = Infinity
+  for (const p of trailPoints) {
+    const d = map.distance(latlng, [p.lat, p.lng])
+    if (d < bestDistance) {
+      bestDistance = d
+      best = p
+    }
+  }
+  return best
+}
+
+// ---------- Info for one trail point: time + place ----------
+// Mouse hover: a ring with a small label. Tap / click: a popup that stays until closed.
+let infoRing = null
+let infoPopup = null
+let infoPoint = null
+let infoPinned = false
+let infoTimer = null
+let popupClosedAt = 0
+
+function pointHead(p) {
+  const member = memberOf(selectedId.value)
+  return '<strong>' + formatTimeSeconds(p.t) + '</strong>' + (member ? ' · ' + escapeHtml(member.display_name) : '')
+}
+
+function showPointInfo(p, pin) {
+  if (!p || (infoPinned && !pin)) return // a pinned popup wins over hovering
+  if (!infoRing) {
+    infoRing = L.circleMarker([p.lat, p.lng], { radius: 7, color: '#212529', weight: 2, fillColor: selectedColour(), fillOpacity: 1, interactive: false }).addTo(map)
+  }
+  infoRing.setLatLng([p.lat, p.lng])
+  if (infoPoint === p && infoPinned === pin) return
+  infoPoint = p
+  infoPinned = pin
+  const head = pointHead(p)
+  const html = (place) => head + '<br>' + place
+  if (pin) {
+    infoRing.unbindTooltip()
+    if (!infoPopup) {
+      infoPopup = L.popup({ offset: [0, -4], autoPanPadding: [20, 20] })
+      infoPopup.on('remove', () => {
+        popupClosedAt = Date.now()
+        closePointInfo()
+      })
+    }
+    infoPopup.setLatLng([p.lat, p.lng]).setContent(html('<em>Finding place name...</em>')).openOn(map)
+  } else {
+    if (!infoRing.getTooltip()) infoRing.bindTooltip('', { direction: 'top', offset: [0, -6] })
+    infoRing.setTooltipContent(html('<em>Finding place name...</em>')).openTooltip()
+  }
+  // Place names cost an API call: only for the point the pointer rests on (cached by position)
+  clearTimeout(infoTimer)
+  infoTimer = setTimeout(async () => {
+    const place = escapeHtml((await placeName(p.lat, p.lng)) || 'Place name unavailable')
+    if (infoPoint !== p) return
+    if (infoPinned && infoPopup) infoPopup.setContent(html(place))
+    else if (infoRing && infoRing.getTooltip()) infoRing.setTooltipContent(html(place))
+  }, pin ? 0 : 250)
+}
+
+function hoverOut() {
+  if (!infoPinned) closePointInfo()
+}
+
+function closePointInfo() {
+  clearTimeout(infoTimer)
+  infoPoint = null
+  const wasPinned = infoPinned
+  infoPinned = false
+  if (infoRing) {
+    infoRing.remove()
+    infoRing = null
+  }
+  if (wasPinned && infoPopup && map && map.hasLayer(infoPopup)) map.closePopup(infoPopup)
+}
+
+// A new live session (or the event ended): the old trail doesn't belong to it
+watch(
+  () => props.liveSince,
+  () => {
+    clearTrail()
+    if (selectedId.value) loadTrail(selectedId.value)
+  },
+)
+
+// Back on the page after a while: refetch the selected trail (readings sent meanwhile)
+let hiddenAt = 0
+function onVisibility() {
+  if (document.hidden) {
+    hiddenAt = Date.now()
+    return
+  }
+  if (selectedId.value && Date.now() - hiddenAt > 30000) loadTrail(selectedId.value)
+  startLoop()
+}
+
+// ---------- List under the map ----------
 // Text on the right of the people list
 function statusText(p) {
   if (p.state === 'live') return 'Live'
-  if (p.state === 'stopped') return 'Stopped ' + p.time.toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit' })
+  if (p.state === 'stopped') return 'Stopped ' + formatTime(p.time)
   if (p.state === 'offline') return 'Lost contact · ' + timeAgo(p.time, now.value)
   return timeAgo(p.time, now.value)
 }
 
-// Tap a person in the list: zoom to them and follow them as they move
+// Tap a person in the list: zoom to them, follow them as they move, and show their trail
 function focus(person) {
   followedId.value = person.userId
   const marker = personMarkers[person.userId]
-  map.setView(marker ? marker.shownLatLng || marker.getLatLng() : [person.lat, person.lng], 18)
-  if (marker) marker.openTooltip()
+  map.setView(marker ? marker.getLatLng() : [person.lat, person.lng], 18)
+  if (selectedId.value !== person.userId) select(person.userId)
+  else if (marker) marker.openTooltip()
 }
 
 function stopFollowing() {
   followedId.value = null
 }
 
+let unsubscribe = null
 onMounted(() => {
   // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
   map = createSingaporeMap(mapEl.value)
+  trailLayer = L.layerGroup().addTo(map)
   // Dragging the map yourself means "let me look around": stop following
   map.on('dragstart', stopFollowing)
+  // Tap empty map: hide the trail (the first tap only closes an open trail popup)
+  map.on('click', () => {
+    if (Date.now() - popupClosedAt < 400) return
+    if (selectedId.value) deselect()
+  })
+  if (props.onReading) unsubscribe = props.onReading(onNewReading)
+  document.addEventListener('visibilitychange', onVisibility)
   render()
 })
 
 onUnmounted(() => {
+  if (unsubscribe) unsubscribe()
+  document.removeEventListener('visibilitychange', onVisibility)
+  if (frameId) cancelAnimationFrame(frameId)
+  clearTimeout(infoTimer)
   if (map) map.remove()
+  map = null
 })
 </script>
 
 <template>
   <div>
-    <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
+    <BenchAlert v-if="errorMsg && errorMsg !== dismissedError" @dismiss="dismissedError = errorMsg">{{ errorMsg }}</BenchAlert>
     <div class="position-relative mb-3">
       <div ref="mapEl" class="live-map rounded border" data-testid="live-map"></div>
+      <!-- Connection dropped (tab was in the background, network changed): retrying by itself -->
+      <div v-if="reconnecting" class="reconnect-pill shadow-sm" role="status" data-testid="reconnecting">
+        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Reconnecting…
+      </div>
       <!-- Shown while following someone (on top of the map) -->
       <div v-if="followedId" class="follow-bar shadow-sm" data-testid="follow-bar">
         <span class="text-truncate">Following <strong>{{ followedName }}</strong></span>
@@ -260,10 +600,11 @@ onUnmounted(() => {
       <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0d6efd"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
+      <span v-if="liveSince">Tap a marker to see their trail · tap the trail for times</span>
     </div>
 
     <h2 class="h6 mb-0">People on the map</h2>
-    <p class="small text-muted mb-2">Tap a person to follow them on the map.</p>
+    <p class="small text-muted mb-2">Tap a person to follow them and see their trail.</p>
     <p v-if="people.length === 0" class="text-muted small" data-testid="no-positions">
       No one is sharing yet. Only ICs share their location.
     </p>
@@ -307,6 +648,21 @@ onUnmounted(() => {
   border-radius: 999px;
   font-size: 0.875rem;
 }
+.reconnect-pill {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
+  background: #fff3cd;
+  color: #664d03;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+}
 .live-map {
   height: 60vh;
   min-height: 320px;
@@ -327,41 +683,7 @@ onUnmounted(() => {
   background-color: transparent !important;
   border: 2px dashed #6c757d;
 }
-
-/* Marker styles are global because Leaflet creates the marker HTML outside Vue */
-:global(.pm) {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  color: #fff;
-  font: 600 12px/30px system-ui, sans-serif;
-  text-align: center;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
-}
-:global(.pm-me) {
-  border-color: #212529;
-}
-:global(.pm-stale) {
-  opacity: 0.55;
-}
-:global(.pm-offline) {
-  background: #adb5bd !important;
-  opacity: 0.8;
-}
-:global(.pm-stopped) {
-  /* Pressed Stop: white with a dashed outline (different from grey "lost contact") */
-  background: #fff !important;
-  color: #495057;
-  text-shadow: none;
-  border: 2px dashed #6c757d;
-}
-:global(.gm) {
-  width: 18px;
-  height: 18px;
-  transform: rotate(45deg);
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+:global(.trail-hover) {
+  cursor: pointer;
 }
 </style>

@@ -1,8 +1,11 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useLocationTracker } from './composables/useLocationTracker'
+import { syncStartReminders, listenForReminderTaps } from './composables/useStartReminders'
+import { enablePush } from './composables/usePushNotifications'
+import NotifyHost from './components/NotifyHost.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -12,7 +15,18 @@ onMounted(async () => {
   await auth.init()
   // Phone app: start Transistorsoft (must happen on every launch) and show tracking
   // that is still running from before. Does nothing in a normal browser.
-  tracker.resume(auth.isLoggedIn)
+  await tracker.resume(auth.isLoggedIn)
+  // Phone app: "Event started - tap to share" reminders (taps open the event and start sharing)
+  listenForReminderTaps(router)
+  watch(
+    () => auth.isLoggedIn,
+    async (loggedIn) => {
+      if (!loggedIn) return
+      await enablePush(router) // server pushes, reach a closed app (Firebase)
+      syncStartReminders(auth.user.id, tracker.sharingEventId.value) // phone alarms (used when push isn't set up)
+    },
+    { immediate: true },
+  )
 })
 
 async function logout() {
@@ -64,4 +78,5 @@ async function logout() {
   </nav>
 
   <RouterView />
+  <NotifyHost />
 </template>
