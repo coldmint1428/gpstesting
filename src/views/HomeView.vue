@@ -11,6 +11,16 @@ const isDev = import.meta.env.DEV // the demo bench is only reachable on local d
       <div class="col-12 col-md-6">
         <div class="card h-100">
           <div class="card-body">
+            <h2 class="h5 card-title">Events</h2>
+            <p class="card-text">Set up an event: details, people, groups and roles.</p>
+            <RouterLink :to="{ name: 'event-new' }" class="btn btn-success me-2" data-testid="home-create-event">Create an event</RouterLink>
+            <RouterLink :to="{ name: 'events' }" class="btn btn-outline-primary">My events</RouterLink>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="card h-100">
+          <div class="card-body">
             <h2 class="h5 card-title">GPS tracking</h2>
             <p class="card-text">Share this device's live location and see it on the map.</p>
             <RouterLink to="/gps" class="btn btn-primary">Open GPS test</RouterLink>

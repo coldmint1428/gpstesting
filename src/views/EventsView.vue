@@ -2,8 +2,8 @@
 // My events + create an event + join one with a code
 import { ref, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
+import { getMyEvents, createQuickEvent, joinEventByCode } from '../services/eventService'
 import BenchAlert from '../components/BenchAlert.vue'
 import { eventRoleLabel } from '../utils/people'
 
@@ -12,52 +12,39 @@ const router = useRouter()
 
 const events = ref([]) // [{ id, name, roles: ['root', ...] }]
 const loading = ref(true)
-const newName = ref('')
-const asSimulation = ref(false) // merger Stage 3: a test event for virtual groups
+const simName = ref('') // merger Stage 3: a name-only test event for virtual groups
 const joinCode = ref('')
 const errorMsg = ref('')
 
 async function loadEvents() {
   loading.value = true
-  // My role rows, each with its event (RLS only returns events I belong to)
-  const { data, error } = await supabase
-    .from('event_roles')
-    .select('role, events (id, name, created_at, is_simulation)')
-    .eq('user_id', auth.user.id)
-  loading.value = false
-  if (error) {
+  try {
+    events.value = await getMyEvents(auth.user.id)
+  } catch (error) {
     errorMsg.value = error.message
-    return
+  } finally {
+    loading.value = false
   }
-
-  // One entry per event, with all my roles in it
-  const byId = {}
-  for (const row of data) {
-    const ev = row.events
-    if (!byId[ev.id]) byId[ev.id] = { id: ev.id, name: ev.name, created_at: ev.created_at, isSimulation: ev.is_simulation, roles: [] }
-    byId[ev.id].roles.push(row.role)
-  }
-  events.value = Object.values(byId).sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
-async function createEvent() {
+async function createSimulation() {
   errorMsg.value = ''
-  const { data: id, error } = await supabase.rpc(asSimulation.value ? 'create_simulation_event' : 'create_event', { p_name: newName.value })
-  if (error) {
+  try {
+    const id = await createQuickEvent(simName.value, true)
+    router.push({ name: 'event', params: { id } })
+  } catch (error) {
     errorMsg.value = error.message
-    return
   }
-  router.push({ name: 'event', params: { id } })
 }
 
 async function joinEvent() {
   errorMsg.value = ''
-  const { data: id, error } = await supabase.rpc('join_event', { p_code: joinCode.value })
-  if (error) {
+  try {
+    const id = await joinEventByCode(joinCode.value)
+    router.push({ name: 'event', params: { id } })
+  } catch (error) {
     errorMsg.value = error.message
-    return
   }
-  router.push({ name: 'event', params: { id } })
 }
 
 onMounted(loadEvents)
@@ -91,30 +78,29 @@ onMounted(loadEvents)
         </form>
       </div>
       <div class="col-12 col-md-6">
-        <form class="card h-100" @submit.prevent="createEvent">
+        <div class="card h-100">
           <div class="card-body">
             <h2 class="h6">Create an event</h2>
-            <div class="input-group">
-              <input
-                v-model="newName"
-                class="form-control"
-                placeholder="e.g. NDP Rehearsal 1"
-                maxlength="80"
-                required
-                aria-label="Event name"
-                data-testid="new-event-name"
-              />
-              <button class="btn btn-success" type="submit" data-testid="create-event-btn">Create</button>
-            </div>
-            <div class="form-text">You become the event's Root.</div>
-            <div class="form-check mt-2">
-              <input id="as-simulation" v-model="asSimulation" class="form-check-input" type="checkbox" data-testid="as-simulation" />
-              <label class="form-check-label small" for="as-simulation">
-                Simulation event (virtual groups for testing, clearly labelled)
-              </label>
-            </div>
+            <p class="small text-muted mb-2">Details, people, groups and roles, step by step. You become the event's Root.</p>
+            <RouterLink :to="{ name: 'event-new' }" class="btn btn-success" data-testid="create-event-btn">Create an event</RouterLink>
+
+            <form class="mt-3" @submit.prevent="createSimulation">
+              <label for="sim-name" class="form-label small mb-1">Or a simulation event (virtual groups for testing, clearly labelled)</label>
+              <div class="input-group input-group-sm">
+                <input
+                  id="sim-name"
+                  v-model="simName"
+                  class="form-control"
+                  placeholder="Simulation name"
+                  maxlength="80"
+                  required
+                  data-testid="sim-event-name"
+                />
+                <button class="btn btn-outline-secondary" type="submit" data-testid="create-sim-btn">Create</button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </div>
     </div>
 

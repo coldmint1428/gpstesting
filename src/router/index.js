@@ -4,6 +4,7 @@ import PolygonTestView from '../views/PolygonTestView.vue'
 import LoginView from '../views/LoginView.vue'
 import EventsView from '../views/EventsView.vue'
 import EventView from '../views/EventView.vue'
+import CreateEventView from '../views/CreateEventView.vue'
 import JoinView from '../views/JoinView.vue'
 import GpsTestView from '../views/GpsTestView.vue'
 import { useAuthStore } from '../stores/auth'
@@ -27,6 +28,8 @@ const router = createRouter({
 
     // Pages below need a logged-in user (meta.requiresAuth)
     { path: '/events', name: 'events', component: EventsView, meta: { requiresAuth: true } },
+    // The 4-step "Create an event" wizard
+    { path: '/events/new', name: 'event-new', component: CreateEventView, meta: { requiresAuth: true } },
     { path: '/events/:id', name: 'event', component: EventView, props: true, meta: { requiresAuth: true } },
     {
       path: '/events/:id/share',

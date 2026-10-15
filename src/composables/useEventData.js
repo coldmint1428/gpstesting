@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/auth'
 export function useEventData(eventId) {
   const auth = useAuthStore()
 
-  const event = ref(null) // { id, name, join_code }
+  const event = ref(null) // { id, name, join_code, is_simulation, description, venue, starts_at, ends_at }
   const groups = ref([]) // [{ id, name, colour }]
   const members = ref([]) // [{ id, username, display_name, roles, groupId, isAdmin, isIC }]
   const loading = ref(true)
@@ -18,7 +18,8 @@ export function useEventData(eventId) {
     errorMsg.value = ''
     // Run the 4 queries at the same time
     const [ev, gr, roles, gm] = await Promise.all([
-      supabase.from('events').select('id, name, join_code, is_simulation').eq('id', eventId).maybeSingle(),
+      // '*' so the page still opens on a database without 023's columns (description, venue, starts_at, ends_at)
+      supabase.from('events').select('*').eq('id', eventId).maybeSingle(),
       supabase.from('groups').select('id, name, colour').eq('event_id', eventId).order('created_at'),
       supabase.from('event_roles').select('user_id, role, profiles (username, display_name)').eq('event_id', eventId),
       supabase.from('group_members').select('group_id, user_id, is_admin, is_ic').eq('event_id', eventId),
