@@ -88,6 +88,8 @@ export function useEventSessions(eventId) {
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') load() // (re)connected: nothing missed
     })
+  // Load straight away too: the Live panel waits for this, and the live connection takes a moment to open
+  load()
 
   // Coming back to a phone/tab that was asleep: timers may not have fired
   function onVisible() {

@@ -20,7 +20,7 @@ import { useDocHistory } from '../composables/useDocHistory'
 import { useBenchPresence } from '../composables/useBenchPresence'
 import { useBenchLocks } from '../composables/useBenchLocks'
 import { useBenchFrames } from '../composables/useBenchFrames'
-import { PASTE_OFFSET_M, copyName, offsetLatLng, useBenchClipboard } from '../composables/useBenchClipboard'
+import { PASTE_OFFSET_M, copyCode, copyName, offsetLatLng, useBenchClipboard } from '../composables/useBenchClipboard'
 import { MAX_LAYOUT_BYTES, LAYOUT_TOO_LARGE_MESSAGE, addedBytes } from '../utils/layoutLimits'
 import { applyAreaFrame, applyPlanFrame } from '../utils/benchFrame'
 import { withoutImage } from '../utils/layoutLimits'
@@ -191,7 +191,23 @@ function beginGesture() {
   bench.beginGesture()
 }
 
+// A press whose release never reaches this window (let go outside it, or the window lost focus
+// mid-press) would otherwise hold every save -- and its lock -- until the next click anywhere. Leaving the
+// window, hiding the tab, or a move with no button down all mean the press is over.
+let pressed = false
+function onPointerDownAny() {
+  pressed = true
+  beginGesture()
+}
+function onPointerMoveAny(event) {
+  if (pressed && event.buttons === 0) endGesture()
+}
+function onWindowBlur() {
+  if (pressed) endGesture()
+}
+
 function endGesture() {
+  pressed = false
   history.endRun()
   // One tick later, so the shape's own pointerup handlers (and the lock check each change awaits) have
   // run first: a dot's drag reports its drop only on pointerup, and that drop belongs in this write
@@ -433,14 +449,33 @@ async function addArea(area) {
 }
 
 async function updateArea({ id, patch }) {
-  if (!(await mayWrite(id))) return
+  if (!(await mayWrite(id))) {
+    // Refused (somebody else has it): the list's fields still show what this planner typed, and the
+    // shape's props have not changed, so nothing would redraw them. A new key does, back to the saved values.
+    listKey.value++
+    return
+  }
   history.record()
   layout.value.polygons = layout.value.polygons.map((a) => (a.id === id ? { ...a, ...patch } : a))
   // And tell the others. An outline dragged across the map reports on every move, so this is what the
   // other planners watch it with: twenty frames a second, and one write when it is let go of.
   frames.send('area', id, patch)
   bench.change('area', id, patch)
+  letGoIfNotOpen(id)
 }
+
+// A change made from the list (a name, a type, a code) to an area that is not open: nothing will ever
+// "put it down", so its lock used to sit there until the 45 s idle release, refusing every other planner.
+// end() keeps it until this change is written, then lets go (see useBenchLocks).
+function letGoIfNotOpen(id) {
+  const open = objectIdOf(mode.value)
+  if (open === id) return
+  locks.end(id)
+  presence.setHolding(locks.holds(open) ? open : '')
+}
+
+// Bumped to redraw the list from the saved areas (see updateArea).
+const listKey = ref(0)
 
 async function deleteArea(id) {
   if (!(await mayWrite(id))) return
@@ -587,7 +622,9 @@ async function putBack(kind, shape, prev) {
   // it -- or the next Undo would leave it behind.
   if (!bench.known(shape.id)) madeHere.add(shape.id)
   deletedHere.delete(shape.id)
-  bench.replace(kind, shape.id, shape)
+  // Undo puts everything down first (see restore), so nothing would ever let go of this lock either. Let go
+  // once the write has landed: replace() starts the write at once, and a lock released before it is a refusal.
+  bench.replace(kind, shape.id, shape).then(() => letGoIfNotOpen(shape.id), () => {})
 }
 
 async function takeAway(kind, id, prev) {
@@ -635,8 +672,11 @@ function pasteArea() {
     ...from,
     id: newId(),
     name: copyName(from.name, taken),
+    // Its own zone code: the original's is taken, and the database refuses a code twice
+    code: copyCode(from.code, areas.value.map((a) => a.code)),
     points: from.points.map((point) => offsetLatLng(point, PASTE_OFFSET_M)),
   }
+  if (!area.code) delete area.code // demo bench: no codes
   // addArea records the step, like every other write (see the section above).
   addArea(area)
   // Selected, so the copy is the thing on screen: its name is in the list, and its dots can be dragged
@@ -692,7 +732,10 @@ onMounted(() => {
   // CAPTURE phase, so the page hears every press before anything can stop it: a floor plan's drag
   // handles call stopPropagation() on pointerdown (AreaBench startDrag), and in the bubble phase that
   // hid the press from this listener -- the page never knew a drag had begun and saved mid-drag.
-  window.addEventListener('pointerdown', beginGesture, GESTURE_LISTEN)
+  window.addEventListener('pointerdown', onPointerDownAny, GESTURE_LISTEN)
+  window.addEventListener('pointermove', onPointerMoveAny, GESTURE_LISTEN)
+  window.addEventListener('blur', onWindowBlur)
+  document.addEventListener('visibilitychange', onWindowBlur)
   window.addEventListener('pointerup', endGesture, GESTURE_LISTEN)
   window.addEventListener('pointercancel', endGesture, GESTURE_LISTEN)
 })
@@ -701,7 +744,10 @@ onUnmounted(() => {
   for (const entry of framed.values()) clearTimeout(entry.timer)
   framed.clear()
   window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('pointerdown', beginGesture, GESTURE_LISTEN)
+  window.removeEventListener('pointerdown', onPointerDownAny, GESTURE_LISTEN)
+  window.removeEventListener('pointermove', onPointerMoveAny, GESTURE_LISTEN)
+  window.removeEventListener('blur', onWindowBlur)
+  document.removeEventListener('visibilitychange', onWindowBlur)
   window.removeEventListener('pointerup', endGesture, GESTURE_LISTEN)
   window.removeEventListener('pointercancel', endGesture, GESTURE_LISTEN)
 })
@@ -818,12 +864,14 @@ onUnmounted(() => {
       @plan-pasted="pastePlan"
       @area-added="addArea"
       @area-updated="updateArea"
+      @area-deleted="deleteArea"
       @area-frame="streamArea"
       @area-copied="copyArea"
       @area-pasted="pasteArea"
       @view-changed="setView"
     >
       <AreaList
+        :key="listKey"
         :areas="areas"
         :editable="canEdit"
         :show-code="Boolean(eventId)"

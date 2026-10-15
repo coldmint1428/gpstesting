@@ -48,12 +48,51 @@ const zoneActivity = useZoneActivity(props.id, computed(() => (liveSession.value
   onAlert(alert) {
     const mine = auth.user && alert.userId === auth.user.id
     if (!seesWholeEvent.value && !mine) return
-    const member = members.value.find((m) => m.id === alert.userId)
-    const who = mine ? 'You' : member ? member.display_name : 'Someone'
     const zoneName = alert.zone ? alert.zone.name + ' (' + alert.zone.code + ')' : 'a No-Go area'
-    toast('No-Go: ' + who + ' entered ' + zoneName + ' at ' + formatTimeSeconds(alert.at) + '.', 'danger', 12000)
+    if (mine) {
+      toast('No-Go: You entered ' + zoneName + ' at ' + formatTimeSeconds(alert.at) + '.', 'danger', 12000)
+      return
+    }
+    queueNoGoToast(alert, zoneName)
   },
 })
+
+// Alerts arrive one per IC, so a group walking in together, or a restart with many people already inside,
+// used to stack one red toast per person (15 at once in the simulator run) over the planner's screen.
+// Entries within 1.5 s are said together: per group, and as one line when several groups arrive at once.
+// A single IC still reads exactly as before.
+const noGoBurst = []
+let noGoTimer = null
+function queueNoGoToast(alert, zoneName) {
+  noGoBurst.push({ alert, zoneName })
+  if (!noGoTimer) noGoTimer = setTimeout(flushNoGoToasts, 1500)
+}
+function flushNoGoToasts() {
+  noGoTimer = null
+  const items = noGoBurst.splice(0)
+  const byZone = new Map()
+  for (const item of items) {
+    const key = item.alert.zone ? item.alert.zone.id : item.zoneName
+    if (!byZone.has(key)) byZone.set(key, { zoneName: item.zoneName, items: [] })
+    byZone.get(key).items.push(item)
+  }
+  for (const { zoneName, items: entries } of byZone.values()) {
+    const at = formatTimeSeconds(entries[0].alert.at)
+    if (entries.length === 1) {
+      const member = members.value.find((m) => m.id === entries[0].alert.userId)
+      toast('No-Go: ' + (member ? member.display_name : 'Someone') + ' entered ' + zoneName + ' at ' + at + '.', 'danger', 12000)
+      continue
+    }
+    const groupIds = [...new Set(entries.map((e) => e.alert.groupId))]
+    const names = groupIds.map((id) => (groups.value.find((g) => g.id === id) || {}).name || 'a group')
+    const ics = entries.length + ' ICs'
+    const text =
+      groupIds.length === 1
+        ? names[0] + ' (' + ics + ') entered ' + zoneName
+        : groupIds.length + ' groups (' + ics + ') entered ' + zoneName + ': ' + names.slice(0, 5).join(', ') + (names.length > 5 ? ', …' : '')
+    toast('No-Go: ' + text + ' at ' + at + '.', 'danger', 12000)
+  }
+}
 
 // The No-Go areas I am inside right now (shown to me as a warning until I leave).
 const myNoGo = computed(() => {

@@ -578,6 +578,7 @@ function createTracker() {
     start,
     stop,
     resume,
+    prepare: () => (isNative ? ensureReady() : Promise.resolve()),
     clearNative,
   }
 }

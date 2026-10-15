@@ -108,9 +108,10 @@ export async function clearPushReminders() {
   }
 }
 
-// Planner button: push a reminder now to every IC of the event who isn't sharing yet
-export async function remindIcsNow(eventId) {
-  const { data, error } = await supabase.functions.invoke('send-reminders', { body: { eventId } })
+// Planner button: push a reminder now to every IC of the event who isn't sharing yet.
+// start = true right after Start event now: the normal "Event started" push, sent at once.
+export async function remindIcsNow(eventId, start = false) {
+  const { data, error } = await supabase.functions.invoke('send-reminders', { body: { eventId, start } })
   if (error) {
     let message = error.message
     try {

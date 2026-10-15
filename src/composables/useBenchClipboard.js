@@ -40,6 +40,18 @@ export function copyName(name, taken) {
   return stem + ' copy ' + n
 }
 
+// The zone code for a copy: the original's code with the next free number (ABC -> ABC_2, ABC_2 ->
+// ABC_3). The database refuses a code that is taken, so a copy must never carry its original's.
+export function copyCode(code, taken) {
+  if (!code) return undefined
+  const stem = String(code).replace(/_\d+$/, '')
+  const used = new Set((taken || []).map((one) => String(one || '').toUpperCase()))
+  let n = 2
+  while (used.has(stem + '_' + n)) n += 1
+  const suffix = '_' + n
+  return stem.slice(0, 40 - suffix.length) + suffix
+}
+
 export function useBenchClipboard() {
   const plan = computed(() => (clip.value && clip.value.kind === 'plan' ? clip.value.item : null))
   const area = computed(() => (clip.value && clip.value.kind === 'area' ? clip.value.item : null))

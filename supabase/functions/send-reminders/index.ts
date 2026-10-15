@@ -6,6 +6,8 @@
 //   - pg_cron every minute while a session is live, with header x-cron-secret (random secret in
 //     Supabase Vault, see 009_push_reminders.sql) -> reminds every live event
 //   - a root / planner pressing "Remind ICs" (their login token + { eventId }) -> that event only
+//   - the same, right after "Start event now" ({ eventId, start: true }): the normal "Event started"
+//     push goes out at once instead of at the next cron minute
 // Which ICs, and how often, is decided by the database function claim_push_reminders().
 //
 // Secret: FCM_SERVICE_ACCOUNT = the JSON key of the Firebase project's service account
@@ -115,7 +117,9 @@ Deno.serve(async (req) => {
   } else {
     const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     const { data: userData } = await admin.auth.getUser(jwt)
-    if (!userData || !userData.user) return json({ error: 'Not signed in' }, 401)
+    // A token can still look valid after its login was ended (e.g. logged out everywhere): the
+    // database accepts it until it expires, but the Auth server no longer knows the session.
+    if (!userData || !userData.user) return json({ error: 'Your login has ended. Log out and sign in again.' }, 401)
     const body = await req.json().catch(() => ({}))
     eventId = typeof body.eventId === 'string' ? body.eventId : null
     if (!eventId) return json({ error: 'eventId missing' }, 400)
@@ -126,7 +130,7 @@ Deno.serve(async (req) => {
       .eq('user_id', userData.user.id)
       .in('role', ['root', 'planner'])
     if (!roles || roles.length === 0) return json({ error: 'Only the root or a planner can send reminders' }, 403)
-    forced = true
+    forced = body.start !== true // Start event now: the normal first reminder, not "a planner asked you"
   }
 
   const raw = Deno.env.get('FCM_SERVICE_ACCOUNT')
@@ -141,7 +145,7 @@ Deno.serve(async (req) => {
   const accessToken = await getGoogleToken(sa)
   let sent = 0
   let failed = 0
-  for (const r of due as Reminder[]) {
+  async function sendOne(r: Reminder) {
     const res = await fetch('https://fcm.googleapis.com/v1/projects/' + sa.project_id + '/messages:send', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
@@ -159,5 +163,8 @@ Deno.serve(async (req) => {
       }
     }
   }
+  // 20 at a time: one by one, an NDP-sized event (hundreds of ICs) took over half a minute to reach the last phone
+  const list = due as Reminder[]
+  for (let i = 0; i < list.length; i += 20) await Promise.all(list.slice(i, i + 20).map(sendOne))
   return json({ sent, failed })
 })

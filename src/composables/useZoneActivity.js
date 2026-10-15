@@ -14,7 +14,6 @@ export function useZoneActivity(eventId, sessionId, { onAlert } = {}) {
   const stays = ref([]) // open stays: { id, zoneId, userId, groupId, enteredAt: Date }
   const groupPositions = ref({}) // group id -> { lat, lng, speedMps, icsSharing, lastSeen: Date }
   let channel = null
-  let reloadTimer = null
 
   async function loadZones() {
     if (!supabase) return
@@ -70,9 +69,36 @@ export function useZoneActivity(eventId, sessionId, { onAlert } = {}) {
     }
   }
 
+  // One reload per burst, per KIND of reload. It used to be one timer for both, each change cancelling the
+  // other's pending reload: a zone edit followed within 300 ms by a presence change (constant during a
+  // simulator run) was never shown. And it starts at the FIRST change of a burst rather than restarting at
+  // every one, so a steady stream of changes cannot put the reload off forever.
+  const reloadTimers = new Map()
   function reloadSoon(fn) {
-    clearTimeout(reloadTimer)
-    reloadTimer = setTimeout(fn, 300) // one reload for a burst of changes
+    if (reloadTimers.has(fn)) return
+    reloadTimers.set(
+      fn,
+      setTimeout(() => {
+        reloadTimers.delete(fn)
+        fn()
+      }, 300),
+    )
+  }
+
+  // Every group's position changes on every tick (120 groups -> 120 messages at once). Copying the whole
+  // set per message re-ran everything built on it 120 times; they are applied together instead.
+  const queuedPositions = new Map()
+  let positionsTimer = null
+  function queueGroupPosition(row) {
+    queuedPositions.set(row.group_id, toPosition(row))
+    if (positionsTimer) return
+    positionsTimer = setTimeout(() => {
+      positionsTimer = null
+      const next = { ...groupPositions.value }
+      for (const [groupId, position] of queuedPositions) next[groupId] = position
+      queuedPositions.clear()
+      groupPositions.value = next
+    }, 400)
   }
 
   function subscribe() {
@@ -85,7 +111,7 @@ export function useZoneActivity(eventId, sessionId, { onAlert } = {}) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'group_positions', filter }, (payload) => {
         const row = payload.new
         if (!row || row.session_id !== sessionId.value) return
-        groupPositions.value = { ...groupPositions.value, [row.group_id]: toPosition(row) }
+        queueGroupPosition(row)
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'zone_alerts', filter }, (payload) => {
         const row = payload.new
@@ -112,7 +138,9 @@ export function useZoneActivity(eventId, sessionId, { onAlert } = {}) {
   subscribe()
 
   onUnmounted(() => {
-    clearTimeout(reloadTimer)
+    clearTimeout(positionsTimer)
+    for (const timer of reloadTimers.values()) clearTimeout(timer)
+    reloadTimers.clear()
     if (channel && supabase) supabase.removeChannel(channel)
     channel = null
   })

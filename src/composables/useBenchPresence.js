@@ -117,7 +117,9 @@ export function useBenchPresence() {
           mine,
           colour: plannerColour(row.userId),
           objectId: row.objectId,
-          active: Boolean(row.activeObjectId),
+          activeObjectId: row.activeObjectId,
+          // Holding the shape they have open (holding a different one does not block this one)
+          active: Boolean(row.activeObjectId) && row.activeObjectId === row.objectId,
         }
       })
       .sort((a, b) => a.label.localeCompare(b.label)),
@@ -128,10 +130,15 @@ export function useBenchPresence() {
   // area, and only one of them will be able to move it.
   const byObject = computed(() => {
     const map = {}
+    const add = (id, who) => {
+      if (!map[id]) map[id] = []
+      map[id].push(who)
+    }
     for (const who of others.value) {
-      if (!who.objectId) continue
-      if (!map[who.objectId]) map[who.objectId] = []
-      map[who.objectId].push(who)
+      if (who.objectId) add(who.objectId, who)
+      // Held without being open (a change made from the list): that shape is theirs just the same, so
+      // it carries their name and is locked on this screen too. Before, it showed nothing at all.
+      if (who.activeObjectId && who.activeObjectId !== who.objectId) add(who.activeObjectId, { ...who, active: true })
     }
     return map
   })

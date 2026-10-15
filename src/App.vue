@@ -12,6 +12,8 @@ const router = useRouter()
 const tracker = useLocationTracker() // shared by every page
 
 onMounted(async () => {
+  // Phone app: start Transistorsoft while the login is checked, not after (both take a moment)
+  tracker.prepare()
   await auth.init()
   // Phone app: start Transistorsoft (must happen on every launch) and show tracking
   // that is still running from before. Does nothing in a normal browser.
@@ -21,7 +23,13 @@ onMounted(async () => {
   watch(
     () => auth.isLoggedIn,
     async (loggedIn) => {
-      if (!loggedIn) return
+      if (!loggedIn) {
+        // Signed out in another tab (the login is shared by the browser): don't leave this tab
+        // showing a page that needs a login, with data it can no longer load.
+        const here = router.currentRoute.value
+        if (here.meta.requiresAuth) router.replace({ name: 'login', query: { redirect: here.fullPath } })
+        return
+      }
       await enablePush(router) // server pushes, reach a closed app (Firebase)
       syncStartReminders(auth.user.id, tracker.sharingEventId.value) // phone alarms (used when push isn't set up)
     },

@@ -56,8 +56,23 @@ export function useLiveLocations(eventId) {
     }
   }
 
+  // Readings arrive one Realtime message at a time, and every change to `positions` re-runs everything
+  // built on it (the people list, the markers, who is sharing) over every person. At event scale (300
+  // ICs, a reading each per 10 s) that was 300 full rebuilds per tick and the map fell to ~8 fps, phone
+  // and laptop alike. So they are applied together, at most every 400 ms -- invisible on a map that runs
+  // about 12 s behind real time. The listeners (the tracks the markers glide along) still get each one.
+  const queued = new Map() // user id -> newest queued row
+  let flushTimer = null
+  function flushQueued() {
+    flushTimer = null
+    const rows = [...queued.values()]
+    queued.clear()
+    for (const row of rows) apply(row)
+  }
   function receive(row, live) {
-    apply(row)
+    const waiting = queued.get(row.user_id)
+    if (!waiting || new Date(row.recorded_at) >= new Date(waiting.recorded_at)) queued.set(row.user_id, row)
+    if (!flushTimer) flushTimer = setTimeout(flushQueued, 400)
     for (const fn of listeners) fn(row, live)
   }
 
@@ -174,6 +189,7 @@ export function useLiveLocations(eventId) {
 
   onUnmounted(() => {
     stopped = true
+    clearTimeout(flushTimer)
     clearInterval(timer)
     clearInterval(checkTimer)
     clearTimeout(retryTimer)

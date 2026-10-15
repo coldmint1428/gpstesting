@@ -18,6 +18,27 @@ export const useAuthStore = defineStore('auth', () => {
 
   let initPromise = null
 
+  // The profile is kept on this device as well, so a page can open straight away instead of waiting
+  // one round trip for it (the server is in Seoul). It is only names for the screen: the database
+  // still checks every request against the real login. loadProfile refreshes it in the background.
+  const PROFILE_KEY = 'gps-profile'
+  function cachedProfile(userId) {
+    try {
+      const p = JSON.parse(localStorage.getItem(PROFILE_KEY))
+      return p && p.id === userId ? p : null
+    } catch {
+      return null
+    }
+  }
+  function cacheProfile(p) {
+    try {
+      if (p) localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
+      else localStorage.removeItem(PROFILE_KEY)
+    } catch {
+      // storage blocked (private mode): the profile is simply loaded every time
+    }
+  }
+
   // Called once (by the router guard): restore the login saved in this browser
   function init() {
     if (!initPromise) {
@@ -28,13 +49,20 @@ export const useAuthStore = defineStore('auth', () => {
         }
         const { data } = await supabase.auth.getSession()
         session.value = data.session
-        await loadProfile()
+        const saved = data.session ? cachedProfile(data.session.user.id) : null
+        if (saved) {
+          profile.value = saved
+          loadProfile() // not awaited: the page opens now, the names update if they changed
+        } else {
+          await loadProfile()
+        }
 
         // Keep the store in sync when the login changes (sign in/out, token refresh)
         supabase.auth.onAuthStateChange((event, newSession) => {
           session.value = newSession
           if (!newSession) {
             profile.value = null
+            cacheProfile(null)
           } else if (!profile.value || profile.value.id !== newSession.user.id) {
             // Don't call Supabase directly inside this callback (supabase-js can deadlock)
             setTimeout(loadProfile, 0)
@@ -57,6 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
       .eq('id', user.value.id)
       .maybeSingle()
     profile.value = data
+    cacheProfile(data)
   }
 
   // Returns an error message, or '' on success
@@ -101,9 +130,12 @@ export const useAuthStore = defineStore('auth', () => {
     await stopBackgroundTracking()
     await clearAllStartReminders()
     await disablePush()
-    await supabase.auth.signOut()
+    // 'local': log out THIS device only. The default ('global') also ended the same account's login
+    // in every other browser and phone, which then failed with "Not signed in" on the next reminder.
+    await supabase.auth.signOut({ scope: 'local' })
     session.value = null
     profile.value = null
+    cacheProfile(null)
   }
 
   return { session, profile, ready, user, isLoggedIn, init, signUp, signIn, signOut, loadProfile }

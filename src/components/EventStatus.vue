@@ -175,7 +175,11 @@ async function startNow() {
       (scheduledEnd.value ? ' It still ends at ' + formatDayTime(scheduledEnd.value) + '.' : ''),
     confirmText: 'Start event',
   })
-  if (ok) run(props.sessions.startEvent, 'Event started. ICs can share now.')
+  if (!ok) return
+  await run(props.sessions.startEvent, 'Event started. ICs can share now.')
+  // The "Event started" push now, rather than at the next minute's server check (that check still
+  // covers anyone this misses, and scheduled starts). A failure here changes nothing for the planner.
+  if (props.sessions.isLive.value) remindIcsNow(props.eventId, true).catch(() => {})
 }
 
 async function endNow() {

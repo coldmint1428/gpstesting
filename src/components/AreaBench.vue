@@ -114,6 +114,7 @@ const emit = defineEmits([
   'plan-deleted',
   'area-added',
   'area-updated',
+  'area-deleted', // the Delete key on a selected area (the list's Delete button sends the same)
   // A shape being dragged, before the drop: the ring as it is at this moment, reported so the page
   // can publish it to the other planners (see useBenchFrames). NOT `area-updated`: nothing has been
   // decided yet, and a dot's drag is deliberately kept out of the document until it is let go.
@@ -323,6 +324,7 @@ const CROSS_DRAW_MESSAGE = 'That line would cross one you have already drawn.'
 const CROSS_CLOSE_MESSAGE = 'The closing line would cross the shape. Add another point.'
 const CROSS_VERTEX_MESSAGE = 'That would cross the outline, so the dot went back.'
 const CROSS_REMOVE_MESSAGE = 'Removing that point would cross the outline.'
+const CROSS_ADD_MESSAGE = 'A point there would cross the outline.'
 
 const editingPlan = computed(() => {
   if (typeof mode.value !== 'string' || !mode.value.startsWith('floorplan:')) return null
@@ -346,7 +348,7 @@ const shapesClickable = computed(() => props.canEdit && mode.value !== 'polygons
 // thing the planner cannot guess -- what a dot does. A floor plan says nothing: its handles and its
 // knob are already the only things on it that can be pressed.
 const editHint = computed(() =>
-  editingArea.value ? 'Drag a dot to move it, click a dot to remove it.' : '',
+  editingArea.value ? 'Drag a dot to move it, click a dot to remove it, click an edge to add one.' : '',
 )
 
 // Is anything at all wanted along the top of the map? While drawing, yes -- there is always
@@ -1199,12 +1201,23 @@ function onHoverMove(event) {
   // pointer crossed the hint along the top would make reading it impossible. Same rule, and the same
   // elements, as the two clicks on the map.
   const target = event.target
-  if (target && target.closest && target.closest('.bench-hint, .bench-draft')) {
+  // A control is somewhere the planner is reaching for, not somewhere they are steering the view to.
+  if (target && target.closest && target.closest('.bench-hint, .bench-draft, button, input, select, textarea, a, label')) {
     if (autoPanHover) stopAutoPan()
     return
   }
+  // After a click elsewhere on the page the ring is kept (see onDocumentPointerDown), but the view
+  // must not run off after a pointer that is busy outside the map: it waits until the pointer is back.
+  if (hoverPaused) {
+    if (!map.getContainer().contains(target)) {
+      if (autoPanHover) stopAutoPan()
+      return
+    }
+    hoverPaused = false
+  }
   beginAutoPan(event, followCursor, true)
 }
+let hoverPaused = false
 
 // What the hover's follow does once the view has moved: ask where the pointer is NOW, and let the
 // drawing code put the loose end of the rubber band there. Nothing is latched and nothing is held, so
@@ -1243,6 +1256,12 @@ function wantsPan(event) {
 // moment after a middle pan is an ordinary click, and leaving the answer from the previous press
 // standing would throw its point away.
 function onMapPointerDown(event) {
+  if (event.benchHandled) return
+  // Just outside the outline (the stroke is thin) still counts as its edge: see addPointOnEdge.
+  if (addPointOnEdge(event)) {
+    if (event.preventDefault) event.preventDefault()
+    return
+  }
   // A second finger on a touch screen is a pinch, and the pinch is Leaflet's (touchZoom). The pan the
   // first finger started has to stop, or it moves the view at the same time as the zoom and the two
   // fight. endPan is called without the event because it ignores any pointer but the pan's own.
@@ -1729,6 +1748,64 @@ function cancelVertexDrag() {
   applyAreaPoints(areaLayers[drag.id], area.points)
 }
 
+// ---------- Adding a point where the planner clicks an edge ----------
+// While an area is being edited, hovering one of its edges turns the cursor into a "+" and a press
+// there adds a point at that spot, between the two dots the edge joins. A point ON an edge cannot
+// make the ring cross itself (the two new edges lie along the old one), but it is checked anyway,
+// like every other change. Near a dot the dot wins, so its own click (remove) and drag (move) still
+// work. (Linus's test notes: Add point put the new point somewhere unexpected.)
+const EDGE_HIT_PX = 8
+const DOT_CLEAR_PX = 12
+
+function edgeUnder(event) {
+  const area = editingArea.value
+  if (!area || !map || !props.canEdit || vertexDrag || areaDrag) return null
+  const p = map.mouseEventToContainerPoint(event)
+  const dots = area.points.map((q) => map.latLngToContainerPoint(L.latLng(q[0], q[1])))
+  if (dots.some((q) => q.distanceTo(p) < DOT_CLEAR_PX)) return null
+  let best = null
+  for (let i = 0; i < dots.length; i++) {
+    const a = dots[i]
+    const b = dots[(i + 1) % dots.length]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len2 = dx * dx + dy * dy
+    const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0
+    const near = L.point(a.x + t * dx, a.y + t * dy)
+    const d = near.distanceTo(p)
+    if (d <= EDGE_HIT_PX && (!best || d < best.d)) best = { d, index: i + 1, at: map.containerPointToLatLng(near) }
+  }
+  return best
+}
+
+// True when the press was on an edge and has been dealt with (point added, or refused with a reason).
+function addPointOnEdge(event) {
+  if (event.button !== undefined && event.button !== 0) return false
+  const edge = edgeUnder(event)
+  if (!edge) return false
+  const area = editingArea.value
+  if (refusePress(area.id)) return true
+  if (area.points.length >= AREA_MAX_POINTS) {
+    errorMsg.value = 'An area can have at most ' + AREA_MAX_POINTS + ' points.'
+    return true
+  }
+  const next = currentAreaPoints()
+  next.splice(edge.index, 0, [edge.at.lat, edge.at.lng])
+  if (ringCrossing(next)) {
+    errorMsg.value = CROSS_ADD_MESSAGE
+    return true
+  }
+  errorMsg.value = ''
+  emit('area-updated', { id: area.id, patch: { points: next } })
+  return true
+}
+
+// The "+" cursor: a class on the map, so it also beats the outline's own "move" cursor.
+function onEdgeHover(event) {
+  if (!map) return
+  map.getContainer().classList.toggle('bench-edge-hover', Boolean(edgeUnder(event)))
+}
+
 // A new point has to go somewhere legal, and then the planner drags it into place.
 //
 // Where "somewhere legal" is turns out to be the whole difficulty, which is why the search lives
@@ -1770,6 +1847,13 @@ function onAreaPointerDown(id, event) {
   // to grab it. See wantsMapPan.
   if (wantsMapPan(event)) {
     if (event.preventDefault) event.preventDefault() // no middle-click autoscroll cursor
+    return
+  }
+
+  // On the edge of the area being edited, a press adds a point there instead of moving the outline.
+  if (addPointOnEdge(event)) {
+    event.benchHandled = true // the map's own listener sees this press next and must leave it alone
+    if (event.preventDefault) event.preventDefault()
     return
   }
 
@@ -2158,6 +2242,20 @@ function togglePlanVisible(plan) {
   emit('plan-updated', { id: plan.id, patch: { visible: !hiding } })
 }
 
+// The Delete key on a selected area: the same question as the list's Delete button.
+async function deleteAreaAsk(area) {
+  if (refusePress(area.id)) return
+  const ok = await askConfirm({
+    title: 'Delete "' + area.name + '"?',
+    message: area.code ? 'Its zone goes with it.' : '',
+    confirmText: 'Delete',
+    danger: true,
+  })
+  // NOT putting the shape down first: putting down saves it, and that save would land after the
+  // delete and bring the area back. The page takes it out of the document, then puts it down.
+  if (ok) emit('area-deleted', area.id)
+}
+
 async function deletePlan(plan) {
   const ok = await askConfirm({
     title: 'Delete this floor plan?',
@@ -2229,11 +2327,25 @@ function onKeyDown(event) {
     const key = String(event.key || '').toLowerCase()
     const undo = key === 'z' && !event.shiftKey
     const redo = (key === 'z' && event.shiftKey) || key === 'y'
-    if ((undo || redo) && !inField && mode.value === 'polygons') {
+    // Closing a ring puts the cursor in its Name box, so an EMPTY name box does not count as a field
+    // here: there is no typing to take back, and Ctrl+Z means "un-close the shape" (Linus's notes).
+    const emptyNameBox = inField && el.id === 'draft-name' && !el.value
+    if ((undo || redo) && (!inField || emptyNameBox) && mode.value === 'polygons') {
       if (undo) undoDraft()
       else redoDraft()
       event.preventDefault()
       event.stopImmediatePropagation()
+    }
+    return
+  }
+
+  if ((event.key === 'Delete' || event.key === 'Backspace') && !inField && !event.altKey) {
+    if (editingArea.value) {
+      event.preventDefault()
+      deleteAreaAsk(editingArea.value)
+    } else if (editingPlan.value) {
+      event.preventDefault()
+      deletePlan(editingPlan.value)
     }
     return
   }
@@ -2296,6 +2408,14 @@ function onDocumentPointerDown(event) {
   // point while drawing.
   if (isScrollbarGrab(target)) return
   if (target.closest(KEEPS_EDITING)) return
+  // A ring being drawn is not saved by clicking away -- it is not a shape until it is closed and
+  // named -- so clicking away could only throw it away (Linus's test notes). It stays; Escape or
+  // Clear ends it.
+  if (mode.value === 'polygons' && (draftPoints.value.length > 0 || draftClosed.value)) {
+    hoverPaused = true
+    if (autoPanHover) stopAutoPan()
+    return
+  }
   // A press anywhere else on the page puts down whatever is being worked on, which saves it.
   mode.value = null
 }
@@ -2321,6 +2441,7 @@ onMounted(() => {
   // On the container rather than on the map, because Leaflet drops every press that has already
   // been stopped -- and a press on a shape has been. A pan has to be able to start there.
   map.getContainer().addEventListener('pointerdown', onMapPointerDown)
+  map.getContainer().addEventListener('pointermove', onEdgeHover)
 
   map.on('click', onMapClick)
   map.on('mousemove', onMapMove)
@@ -2349,6 +2470,7 @@ onUnmounted(() => {
   if (map) {
     map.getContainer().removeEventListener('wheel', onMapWheel, WHEEL_OPTIONS)
     map.getContainer().removeEventListener('pointerdown', onMapPointerDown)
+    map.getContainer().removeEventListener('pointermove', onEdgeHover)
   }
   // All of these stop the auto-pan as well, so the frame loop can never outlive the map it pans.
   endDrag()
@@ -3016,7 +3138,15 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   background: #fff;
   border: 2px solid #fd7e14;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  cursor: move;
+  /* A bin: clicking a dot removes it (dragging still moves it) */
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11' fill='white' stroke='black' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 10 10, pointer;
+}
+
+/* On an edge of the area being edited: a press adds a point there (see addPointOnEdge).
+   !important because Leaflet puts the outline's own cursor inline. */
+:global(.bench-edge-hover),
+:global(.bench-edge-hover .leaflet-interactive) {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M10 3v14M3 10h14' stroke='white' stroke-width='5'/%3E%3Cpath d='M10 3v14M3 10h14' stroke='black' stroke-width='2'/%3E%3C/svg%3E") 10 10, copy !important;
 }
 
 /* How full the canvas is, and how full it is allowed to get. `currentColor` means the SVG picks up

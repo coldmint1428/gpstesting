@@ -67,16 +67,24 @@ const followedName = computed(() => {
   return p ? p.name : ''
 })
 
+// Looked up for every person on every update, so by id rather than by searching the lists (300+
+// members made each lookup a scan of 300+, for each of 300+ people).
+const memberById = computed(() => new Map(props.members.map((m) => [m.id, m])))
+const groupById = computed(() => new Map(props.groups.map((g) => [g.id, g])))
 function memberOf(userId) {
-  return props.members.find((m) => m.id === userId) || null
+  return memberById.value.get(userId) || null
 }
 function groupOf(groupId) {
-  return props.groups.find((g) => g.id === groupId) || null
+  return groupById.value.get(groupId) || null
 }
 
 // People list under the map (newest first)
+// Only people who are still in the event: a removed member, or a simulator Reset (303 virtual ICs gone at
+// once), used to leave their markers on the map for good, because positions are only ever added to. While
+// the member list has not loaded yet there is nothing to check against, so nobody is hidden.
 const people = computed(() =>
   Object.values(positions.value)
+    .filter((p) => !props.members.length || memberById.value.has(p.userId))
     .map((p) => {
       const member = memberOf(p.userId)
       const group = groupOf(p.groupId)
