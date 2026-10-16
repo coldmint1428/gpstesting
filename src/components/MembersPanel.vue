@@ -5,7 +5,7 @@
 //   Group admin   : add/remove people in their own group, promote ICs
 //   Everyone else : read-only list
 // The database checks every action again (see 002_users_events_groups.sql).
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { supabase } from '../lib/supabase'
 import { initials, eventRoleLabel } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
@@ -55,6 +55,67 @@ async function run(fnName, params) {
   }
   emit('changed')
   return true
+}
+
+// ---------- Group details for the run sheet (merger Stage 4): code, category, sector, headcount ----------
+// A movement can be for a whole category ("every Contingent group"), so groups need one.
+const showDetails = ref(false)
+const details = ref({}) // groupId -> { code, category, sector, headcount }
+const detailSaved = ref('') // groupId just saved
+const justSaved = new Set() // rows to refresh from the next reload
+function detailsOf(g) {
+  return { code: g.code || '', category: g.category || '', sector: g.sector || '', headcount: g.headcount == null ? '' : String(g.headcount) }
+}
+function openDetails() {
+  showDetails.value = !showDetails.value
+  details.value = Object.fromEntries(props.groups.map((g) => [g.id, detailsOf(g)]))
+}
+// Groups reloaded (a save, or someone else): refresh rows that are not being edited, add new groups
+watch(
+  () => props.groups,
+  (list, old) => {
+    if (!showDetails.value) return
+    const before = Object.fromEntries((old || []).map((g) => [g.id, g]))
+    for (const g of list) {
+      const d = details.value[g.id]
+      const prev = before[g.id]
+      const untouched = d && prev && JSON.stringify(d) === JSON.stringify(detailsOf(prev))
+      // just saved: show what the database stored (codes are stored in capitals, spaces as _)
+      if (!d || untouched || justSaved.has(g.id)) details.value[g.id] = detailsOf(g)
+      justSaved.delete(g.id)
+    }
+  },
+)
+const groupCategories = computed(() => [...new Set(props.groups.map((g) => g.category).filter(Boolean))].sort())
+function detailsChanged(g) {
+  const d = details.value[g.id]
+  if (!d) return false
+  return (
+    d.code !== (g.code || '') ||
+    d.category !== (g.category || '') ||
+    d.sector !== (g.sector || '') ||
+    d.headcount !== (g.headcount == null ? '' : String(g.headcount))
+  )
+}
+async function saveDetails(g) {
+  const d = details.value[g.id]
+  const head = String(d.headcount).trim()
+  if (head !== '' && !/^\d+$/.test(head)) {
+    errorMsg.value = 'Headcount for ' + g.name + ' must be a whole number.'
+    return
+  }
+  const ok = await run('update_group_details', {
+    p_group: g.id,
+    p_code: d.code,
+    p_category: d.category,
+    p_sector: d.sector,
+    p_headcount: head === '' ? null : Number(head),
+  })
+  if (ok) {
+    justSaved.add(g.id)
+    detailSaved.value = g.id
+    setTimeout(() => (detailSaved.value === g.id ? (detailSaved.value = '') : null), 2500)
+  }
 }
 
 async function createGroup() {
@@ -192,10 +253,51 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
     </form>
 
     <!-- Groups summary -->
-    <div v-if="groups.length" class="d-flex flex-wrap gap-2 mb-3">
+    <div v-if="groups.length" class="d-flex flex-wrap gap-2 mb-3 align-items-center">
       <span v-for="g in groups" :key="g.id" class="badge rounded-pill" :style="{ backgroundColor: g.colour }">
         {{ g.name }} · {{ members.filter((m) => m.groupId === g.id).length }}
       </span>
+      <button v-if="canManage" class="btn btn-sm btn-link" data-testid="group-details-btn" @click="openDetails">
+        {{ showDetails ? 'Hide group details' : 'Group details (category, code…)' }}
+      </button>
+    </div>
+
+    <!-- Group details (root / planner): used by the run sheet's category movements -->
+    <div v-if="canManage && showDetails && groups.length" class="card mb-3" data-testid="group-details">
+      <div class="card-body">
+        <p class="small text-muted mb-2">
+          A run sheet movement can be for a whole <strong>category</strong> (for example every "Contingent" group).
+          Code, sector and headcount are for reference.
+        </p>
+        <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th scope="col">Group</th>
+                <th scope="col">Category</th>
+                <th scope="col">Code</th>
+                <th scope="col">Sector</th>
+                <th scope="col">Headcount</th>
+                <th scope="col"><span class="visually-hidden">Save</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="g in groups.filter((x) => details[x.id])" :key="g.id" :data-testid="'group-details-' + g.name">
+                <td class="text-nowrap"><span class="dot-sm" :style="{ backgroundColor: g.colour }"></span>{{ g.name }}</td>
+                <td><input v-model="details[g.id].category" class="form-control form-control-sm" list="group-categories" maxlength="50" :aria-label="'Category of ' + g.name" data-testid="gd-category" /></td>
+                <td><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
+                <td><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
+                <td style="max-width: 6rem"><input v-model="details[g.id].headcount" class="form-control form-control-sm" inputmode="numeric" :aria-label="'Headcount of ' + g.name" data-testid="gd-headcount" /></td>
+                <td class="text-nowrap">
+                  <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
+                  <button v-else class="btn btn-sm btn-outline-primary" :disabled="busy || !detailsChanged(g)" data-testid="gd-save" @click="saveDetails(g)">Save</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- One card per member (cards stack nicely on phones) -->
@@ -306,6 +408,13 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
 </template>
 
 <style scoped>
+.dot-sm {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+}
 .avatar {
   width: 2rem;
   height: 2rem;

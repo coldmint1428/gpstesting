@@ -30,6 +30,8 @@ import BenchAlert from '../components/BenchAlert.vue'
 import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
 import SimulatorPanel from '../components/SimulatorPanel.vue'
+import RunSheetPanel from '../components/RunSheetPanel.vue'
+import { useRunSheetList } from '../composables/useRunSheets'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -42,6 +44,18 @@ const { event, groups, members, loading, errorMsg, load, me, myRoles, isRoot, ca
 // Is the event live? (ICs can only share while it is)
 const sessions = useEventSessions(props.id)
 const { isLive, liveSession, scheduledStart } = sessions
+
+// Run sheet versions (merger Stage 4): root / planners edit, marshals read; ICs and members don't see them.
+// One list for the Run sheet tab, the Start / Schedule picker and Playback.
+const runSheets = useRunSheetList(props.id, seesWholeEvent)
+// Start / schedule / cancel / end / switch change which version is Used, scheduled or live. Realtime doesn't
+// announce a cancelled schedule (a deleted row), so reload whenever the session state changes.
+watch(
+  () => sessions.sessions.value.map((x) => x.id + (x.endedAt ? 'e' : '') + (x.runSheetId || '') + x.startsAt.getTime()).join(),
+  () => {
+    if (seesWholeEvent.value) runSheets.load()
+  },
+)
 
 // Zones during the live session (merger Stage 2): who is inside which zone, group positions, No-Go alerts.
 // A No-Go entry is told to the event's root / planners / marshals (toast) and to the IC who entered it.
@@ -104,7 +118,7 @@ const myNoGo = computed(() => {
 // Latest positions (one connection for the map and the "Not sharing yet" badges)
 const live = useLiveLocations(props.id)
 
-const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback' | 'zones' | 'simulator'
+const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback' | 'zones' | 'runsheet' | 'simulator'
 
 // ---------- One-tap sharing (same tracker as the Share page and navbar) ----------
 const tracker = useLocationTracker()
@@ -227,7 +241,8 @@ async function leaveEvent() {
         to test zones and alerts at scale. Nothing here is a real person.
       </div>
 
-      <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount">
+      <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount"
+        :run-sheets="seesWholeEvent ? runSheets : null">
         <!-- Only the group's IC shares, and only while the event is live. One tap starts sharing. -->
         <template v-if="isIC" #sharing>
           <div class="d-flex flex-wrap align-items-center gap-2">
@@ -295,6 +310,12 @@ async function leaveEvent() {
             Zones
           </button>
         </li>
+        <!-- The show's running order (merger Stage 4): root / planners edit, marshals read -->
+        <li v-if="seesWholeEvent" class="nav-item">
+          <button class="nav-link" :class="{ active: tab === 'runsheet' }" data-testid="tab-runsheet" @click="tab = 'runsheet'">
+            Run sheet
+          </button>
+        </li>
         <!-- Simulation events only (merger Stage 3): the root runs the virtual groups from here -->
         <li v-if="event.is_simulation && isRoot" class="nav-item">
           <button class="nav-link" :class="{ active: tab === 'simulator' }" data-testid="tab-simulator" @click="tab = 'simulator'">
@@ -350,6 +371,15 @@ async function leaveEvent() {
 
       <!-- v-if: the bench holds locks and a presence row only while it is open -->
       <PolygonTestView v-if="canManage && tab === 'zones'" :event-id="id" embedded />
+
+      <RunSheetPanel
+        v-if="seesWholeEvent && tab === 'runsheet'"
+        :event-id="id"
+        :can-edit="canManage"
+        :list="runSheets"
+        :groups="groups"
+        :live-session="liveSession"
+      />
 
       <SimulatorPanel v-if="event.is_simulation && isRoot && tab === 'simulator'" :event-id="id" @changed="load" />
 

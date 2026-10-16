@@ -215,16 +215,29 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 **Test day 1 (Tue 20 Oct)**: 2–3 real phones + simulator together on one sim event; check zones, presence, no-go, map performance; note battery and Realtime usage.
 
 ### Stage 4 – Run sheet builder, manual entry (1½ days)
-**Goal** Planners build a versioned run sheet in the app.
+**Goal** Planners build named run sheet versions in the app and choose which one each start of the event runs.
+**Design agreed 17 Oct**
+- A run sheet **version** has a **name** (required, unique in the event, e.g. "Rehearsal 2"; Duplicate suggests the next number) and an optional **date it is for** (Sat 19 Jul). Shown everywhere as *Name · date · status*.
+- Status in plain words: **Draft** (being edited) · **Ready** (passed the check, can run; editing it turns it back to Draft) · **Used** (a session ran with it: locked, Duplicate to change). Used is worked out from the sessions, never set by hand.
+- Cue times are **time of day** (+1 day for cues after midnight), applied to the date of whichever session runs the version, so one version can run on any date.
+- **Start event / Schedule** pick the version (Ready or Used only; preselected: the one dated today, else the latest Ready; or "No run sheet – tracking only"). The session remembers it (`event_sessions.run_sheet_id`); the status line says "Running: Rehearsal 2"; Playback says "Ran with: …". During a live show **Switch live show to this version** asks first.
+- Who: root and planners edit; marshals read; ICs and members do not see it yet (Stage 8).
+- Category movements: one row for the category ("All Bands"), expanded to every group in it when read; per-group exceptions (skip, or a different zone).
+- Movement editor stores every field now; Vehicle and Fixed route are "planned only" until Stages 7 and 9.
 **Build**
-- Migration 024 (023 went to the simulator route fix, 16 Oct): `run_sheets`, `cues`, `movements` (section 4), RLS: event members read published; root/planners edit drafts; functions `create_run_sheet_version`, `publish_run_sheet` (one published per event), `save_cue`, `save_movement`, `delete_*`, validation function `check_run_sheet(id)` returning row errors.
-- New event tab **Run sheet** (root/planners edit, marshals read): sections, table (start `HH:MM:SS`, length, cue, type, start mode, movements chips), inline edit, add/move/delete cue, **movement editor panel** exactly as mock-up screen 2 (How they get there · Deadline · Arrived rule · Colours · one-sentence summary).
-- Category rules: a movement row can target a **category** ("All Bands") → expands to one movement per group, with per-group overrides.
-- Groups: category, sector, headcount, code editable in the Members tab.
-**Tests**
-- SQL: draft edits by planner OK, participant refused; publish makes previous version archived; `check_run_sheet` catches: cue overlap warnings, anchor inside another cue, movement without zone, unknown cue, impossible pace (> 3 m/s on foot).
-- Browser: build 5 cues + 4 movements for the test event from the mock-up example.
-**Done when** a run sheet can be built, validated and published by hand.
+- Migration 024 (023 went to the simulator route fix, 16 Oct): `run_sheets (event_id, name, for_date, status draft|ready)`, `cues`, `movements` (+ `parent_id` for a category exception), `event_sessions.run_sheet_id`; RLS read for root/planners/marshals, writes only through functions: `run_sheet_list`, `create_run_sheet` (blank or copy), `update_run_sheet`, `delete_run_sheet`, `save_cue`, `delete_cue`, `move_cue`, `save_movement`, `delete_movement`, `check_run_sheet` (errors and warnings per row), `mark_run_sheet_ready`, `switch_live_run_sheet`, `run_sheet_moves` (category expansion), `update_group_details`; `start_event` / `schedule_event_start` take the version.
+- New event tab **Run sheet**: version picker and actions, problems list, cue table by section with an inline cue editor, movements list and a **movement editor panel** (who, where, deadline, arrived rule, how they get there, one-sentence summary, category exceptions).
+- Groups: code, category, sector, headcount editable in the Members tab.
+**Tests** see the test plan page (R1–R…): every function's refusals, Draft/Ready/Used rules, copy, checker rules, concurrency, the Start/Schedule picker, and the UI flows on laptop and phone.
+**Done when** a run sheet can be built, checked, marked ready and picked when starting the event, by hand.
+**Built and tested 17 Oct** – SQL suite `supabase/tests/run_sheets_test.sql` 101/101 (rolled back); browser (laptop + 375 px) and the phone app (S25, planner account): versions, cues, movements, exceptions, check, Start/Schedule picker, live switch, Playback "Ran with", group details, two planners editing at once, live sync phone ⇄ web. Timing at NDP size (150 cues, 200 groups, 400 expanded movements): check 53 ms, duplicate 115 ms, insert at top 13 ms. Bugs found and fixed while testing:
+- "Someone else changed this" used SQLSTATE 40001, which PostgREST retries forever: the save hung. Now `PT409` (HTTP 409), and the editor keeps your text so a second Save replaces theirs.
+- Cue/movement codes past 99 looped forever (`lpad` cut C100 to "C10"). Movement list sorted naturally (M99 before M100).
+- Switching the live show to another version un-locked the one that had run (it lost its only link to a session). Switches are now recorded in `run_sheet_switches`; Used counts them; Playback shows "Ran with: A, then B from 8:14 pm" (`session_run_sheets`). Switching to the version already running is refused.
+- Check messages showed after-midnight times without "next day"; now `rs_clock` adds it, and a cue just after midnight without +1 day gets a hint.
+- UI: the cue editor opens under the cue clicked (not below 150 rows); ↑/↓ disabled at the ends; editors close when another version is picked; the version list reloads after a schedule is cancelled (Realtime doesn't announce deleted rows); a draft is never preselected; a scheduled version edited back to Draft is flagged in red in the tab and the status card; group codes show as stored (capitals); category spelling follows the groups; problems list shows errors first, 8 at a time.
+- Known, by design: a scheduled start that reaches its time with a version edited back to Draft still runs it (warned in red); the live show engine (Stage 6) will refuse to run cues from a draft.
+- Applied as `024_run_sheets` + `024b`–`024e` on the project; the repo file `024_run_sheets.sql` holds the final state.
 
 ### Stage 5 – Excel template, import and export (1 day)
 **Goal** Upload the team's show matrix as the template and get the same run sheet; export back.
@@ -239,7 +252,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 ### Stage 6 – Live show engine + run sheet beside the map (2 days)
 **Goal** The run sheet runs live during a session, beside the live map.
 **Build**
-- Migration 024: `cue_state`, `show_actions`; functions `server_now()`, `show_go(session, cue)`, `show_hold`, `show_resume`, `show_add_time(seconds)`, `show_skip` (root/planners; one action per cue enforced with row locks; actions logged); engine `ops_tick()` via pg_cron every 2–5 s: auto-start Auto cues at projected start, Auto-when-ready cues start if their movements arrived else hold + alert, finish cues at their length, recompute delay/projected times with Flexible absorption and anchor checks.
+- Migration 025 (after the run sheet's 024): `cue_state`, `show_actions`; functions `server_now()`, `show_go(session, cue)`, `show_hold`, `show_resume`, `show_add_time(seconds)`, `show_skip` (root/planners; one action per cue enforced with row locks; actions logged); engine `ops_tick()` via pg_cron every 2–5 s: auto-start Auto cues at projected start, Auto-when-ready cues start if their movements arrived else hold + alert, finish cues at their length, recompute delay/projected times with Flexible absorption and anchor checks.
 - A session uses the event's **published** run sheet version (stored on `event_sessions.run_sheet_id` at start).
 - Ops layout on the event page for root/planners/marshals: map left, **run sheet panel** right (NOW with progress + GO / Hold / +30 s, UP NEXT planned → projected, anchors) and a **top bar** (server-synced clock, ON TIME / RUNNING BEHIND / CRITICAL with ±mm:ss, next anchor countdown) – as mock-up screen 1. Marshals see the panel without buttons.
 **Tests**
@@ -250,7 +263,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 ### Stage 7 – Movements engine + ops view at scale (2½ days)
 **Goal** Map, run sheet and zones decide together whether each group is on time.
 **Build**
-- Migration 025: `movement_status`, `movement_routes`; engine inside `ops_tick()` + location trigger: deadlines, arrival (dwell, required ICs, no-signal exclusion), ETA (route remaining / straight line, speed blend), status with 2-reading hysteresis, leave-by.
+- Migration 026: `movement_status`, `movement_routes`; engine inside `ops_tick()` + location trigger: deadlines, arrival (dwell, required ICs, no-signal exclusion), ETA (route remaining / straight line, speed blend), status with 2-reading hysteresis, leave-by.
 - Edge Function `route-eta`: OneMap routing (`walk` / `drive`) to the arrival point, cached in `movement_routes`, refreshed on > 50 m deviation or every 2 min; OneMap token stays server-side (same secrets as reverse-geocode).
 - Ops view at scale (mock-up screen 5): **summary bar** (groups on track / at risk / late / no signal – clickable filters), **problem queue** sorted by urgency with **I'll handle it / Acknowledge / Snooze**, map **clusters** per zone/sector showing the worst status, routes + ETA lines only for problem/selected groups, search + filters (category, sector, zone, status, "My groups"), run sheet chips "Bands → Formation 1: 2 ✓ · 1 late" expandable. Marshals: filtered to their sector.
 - Decision banner for Auto-when-ready holds and anchor risks (GO anyway / Keep holding / Message group admin).
@@ -272,7 +285,7 @@ If time runs short, drop in this order: 11 → 10 (keep marshal sector filter) �
 **Test days 2–3 (Sun 1 – Mon 2 Nov)**: full simulated rehearsal of the NDP sample (120 groups, 30–40 cues) for 30 min + a live walk test with 2–3 phones in the same session; run the demo script (section 8). **MVP done.**
 
 ### Stage 9 – Fixed routes / mobile column (1½ days, stretch)
-**Build** Migration 026: `routes`, `checkpoints`, `checkpoint_passes`; route editor (mock-up: draw or pick KML path, drop checkpoints that snap to the route, planned speed → suggested offsets, validation: increasing offsets, within radius, anchor warning, unrealistic speed); "Use as route" from a Playback session; phone upload adds `speed, heading, activity`; engine: passes, delta, next ETA by GPS speed, later checkpoints planned + delta, anchor check; mobile column view (mock-up screen 4).
+**Build** Migration 027: `routes`, `checkpoints`, `checkpoint_passes`; route editor (mock-up: draw or pick KML path, drop checkpoints that snap to the route, planned speed → suggested offsets, validation: increasing offsets, within radius, anchor warning, unrealistic speed); "Use as route" from a Playback session; phone upload adds `speed, heading, activity`; engine: passes, delta, next ETA by GPS speed, later checkpoints planned + delta, anchor check; mobile column view (mock-up screen 4).
 **Tests** Simulated column on the sample route with a +25 s delay at C2 → later checkpoints +25 s, anchor amber; a real car or bus test with one phone.
 
 ### Stage 10 – Scale tools (2 days, stretch)

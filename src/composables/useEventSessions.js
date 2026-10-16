@@ -8,7 +8,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 
 export function useEventSessions(eventId) {
-  const sessions = ref([]) // newest first: { id, startsAt: Date, endedAt: Date|null, endReason }
+  const sessions = ref([]) // newest first: { id, startsAt: Date, endedAt: Date|null, endReason, scheduledEnd, runSheetId }
   const loaded = ref(false)
   const errorMsg = ref('')
   const now = ref(Date.now())
@@ -16,7 +16,7 @@ export function useEventSessions(eventId) {
   async function load() {
     const { data, error } = await supabase
       .from('event_sessions')
-      .select('id, starts_at, ended_at, end_reason, scheduled_end')
+      .select('id, starts_at, ended_at, end_reason, scheduled_end, run_sheet_id')
       .eq('event_id', eventId)
       .order('starts_at', { ascending: false })
     if (error) {
@@ -31,6 +31,7 @@ export function useEventSessions(eventId) {
       endedAt: s.ended_at ? new Date(s.ended_at) : null,
       endReason: s.end_reason,
       scheduledEnd: s.scheduled_end ? new Date(s.scheduled_end) : null,
+      runSheetId: s.run_sheet_id, // the run sheet version it runs with (null = tracking only)
     }))
     loaded.value = true
     timeStartTimer()
@@ -69,8 +70,10 @@ export function useEventSessions(eventId) {
     if (error) throw new Error(error.message)
     return data
   }
-  const startEvent = () => call('start_event')
-  const scheduleStart = (date) => call('schedule_event_start', { p_starts_at: new Date(date).toISOString() })
+  // runSheetId: the version to run with, or null for tracking only (merger Stage 4)
+  const startEvent = (runSheetId = null) => call('start_event', { p_run_sheet: runSheetId || null })
+  const scheduleStart = (date, runSheetId = null) =>
+    call('schedule_event_start', { p_starts_at: new Date(date).toISOString(), p_run_sheet: runSheetId || null })
   const cancelSchedule = () => call('cancel_scheduled_start')
   const endEvent = () => call('end_event') // returns how many people were stopped
   const scheduleEnd = (date) => call('schedule_event_end', { p_ends_at: new Date(date).toISOString() })

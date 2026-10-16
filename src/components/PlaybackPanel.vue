@@ -36,8 +36,14 @@ const player = ref(null) // { recording, version, title, live, fileName, item }
 // ---------- List ----------
 async function loadList() {
   loadingList.value = true
-  const { data, error } = await supabase.rpc('playback_list', { p_event_id: props.eventId })
+  const [{ data, error }, ran] = await Promise.all([
+    supabase.rpc('playback_list', { p_event_id: props.eventId }),
+    supabase.rpc('session_run_sheets', { p_event: props.eventId }),
+  ])
   loadingList.value = false
+  // "Ran with: Rehearsal 2, then Rehearsal 2b from 8:14 pm" (run sheet versions, merger Stage 4)
+  const ranWith = {}
+  for (const r of (ran && ran.data) || []) (ranWith[r.session_id] = ranWith[r.session_id] || []).push(r)
   if (error) {
     errorMsg.value = error.message
     return
@@ -61,8 +67,16 @@ async function loadList() {
       expired: availableUntil !== null && now >= availableUntil.getTime(),
       expiresSoon: availableUntil !== null && availableUntil.getTime() - now <= 2 * DAY_MS,
       title: itemTitle(row.kind, startsAt, endedAt),
+      ranWith: row.session_id ? ranWithText(ranWith[row.session_id]) : '',
     }
   })
+}
+
+function ranWithText(steps) {
+  if (!steps || !steps.length || (steps.length === 1 && !steps[0].run_sheet_id)) return ''
+  return steps
+    .map((s, i) => (s.run_sheet_id ? s.name || 'a deleted version' : 'no run sheet') + (i ? ' from ' + formatTime(new Date(s.from_at)) : ''))
+    .join(', then ')
 }
 
 function itemTitle(kind, startsAt, endedAt) {
@@ -245,6 +259,7 @@ onUnmounted(() => clearInterval(liveTimer))
             <div class="flex-grow-1">
               <span v-if="item.live" class="badge text-bg-danger me-1">● Live</span>
               <strong>{{ item.title }}</strong>
+              <div v-if="item.ranWith" class="small" data-testid="ran-with">Ran with: {{ item.ranWith }}</div>
               <div class="small text-muted">
                 <template v-if="item.expired">Deleted after {{ untilText(item) }}. Replay it from your CSV file.</template>
                 <template v-else>

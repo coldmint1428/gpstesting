@@ -9,6 +9,10 @@
 // Root and planners get the buttons; everyone else only sees the status.
 // ICs can only share while the event is live (the database checks this too).
 // Slot "sharing": a second row for the IC's own Share / My GPS details buttons.
+//
+// Run sheet (merger Stage 4): when the event has run sheet versions, Start and Schedule ask which one to run
+// (Ready or Used ones; drafts are shown but cannot be picked; or "No run sheet" for tracking only), and the
+// status says "Running: Rehearsal 2".
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { formatTime, formatDay, formatDayTime, formatDuration, toDateTimeLocal } from '../utils/time'
 import { remindIcsNow } from '../composables/usePushNotifications'
@@ -20,7 +24,34 @@ const props = defineProps({
   canManage: { type: Boolean, default: false },
   icCount: { type: Number, default: 0 }, // ICs in the event
   sharingCount: { type: Number, default: 0 }, // ICs sharing right now (live only)
+  runSheets: { type: Object, default: null }, // useRunSheetList (root / planner / marshal), else null
 })
+
+// ---------- Run sheet version to run with ----------
+const sheetList = computed(() => (props.runSheets ? props.runSheets.sheets.value : []))
+const hasSheets = computed(() => sheetList.value.length > 0)
+const sheetChoice = ref('') // '' = no run sheet (tracking only)
+function sheetName(id) {
+  const s = id && sheetList.value.find((x) => x.id === id)
+  return s ? s.name : ''
+}
+const openSheetDraft = computed(() => {
+  const id = props.sessions.openSession.value && props.sessions.openSession.value.runSheetId
+  const s = id && sheetList.value.find((x) => x.id === id)
+  return !!(s && s.status === 'draft')
+})
+const openSheetName = computed(() => sheetName(props.sessions.openSession.value && props.sessions.openSession.value.runSheetId))
+function sheetOption(s) {
+  const status = s.status === 'used' ? 'Used' : s.status === 'ready' ? 'Ready' : 'Draft: not checked yet'
+  return s.name + (s.forDate ? ' · ' + formatDay(new Date(s.forDate + 'T00:00')) : '') + ' · ' + status
+}
+// What to preselect: the open session's version, else the suggested one (dated today / latest Ready), else none
+function preselectSheet() {
+  const open = props.sessions.openSession.value
+  const current = open && open.runSheetId && sheetList.value.find((s) => s.id === open.runSheetId && s.status !== 'draft')
+  const suggested = props.runSheets ? props.runSheets.suggested.value : null
+  sheetChoice.value = current ? current.id : suggested ? suggested.id : ''
+}
 
 const live = computed(() => props.sessions.liveSession.value)
 const scheduledStart = computed(() => props.sessions.scheduledStart.value)
@@ -132,6 +163,7 @@ function openSchedule() {
   endTime.value = scheduledEnd.value ? timeOf(scheduledEnd.value) : ''
   endMode.value = modeFor(scheduledEnd.value, start)
   formError.value = ''
+  preselectSheet()
   form.value = 'schedule'
 }
 
@@ -157,16 +189,24 @@ async function saveForm() {
 
   if (form.value === 'schedule') {
     await run(async () => {
-      await props.sessions.scheduleStart(start)
+      await props.sessions.scheduleStart(start, hasSheets.value ? sheetChoice.value : null)
       if (end) await props.sessions.scheduleEnd(end)
       else if (scheduledEnd.value) await props.sessions.cancelScheduledEnd()
-    }, 'Schedule saved. The event goes live at ' + formatDayTime(start) + (end ? ' and ends at ' + endText(end, start) : '') + '.')
+    }, 'Schedule saved. The event goes live at ' + formatDayTime(start) + (end ? ' and ends at ' + endText(end, start) : '') +
+      (hasSheets.value && sheetChoice.value ? ', running "' + sheetName(sheetChoice.value) + '"' : '') + '.')
   } else {
     await run(() => props.sessions.scheduleEnd(end), "End time saved. Everyone's sharing stops at " + endText(end, start) + '.')
   }
 }
 
 // ---------- Buttons ----------
+// With run sheet versions, "Start" first opens a panel to pick which one runs; without, it asks straight away.
+function openStart() {
+  if (!hasSheets.value) return startNow()
+  preselectSheet()
+  formError.value = ''
+  form.value = 'start'
+}
 async function startNow() {
   const ok = await askConfirm({
     title: 'Start the event now?',
@@ -176,7 +216,11 @@ async function startNow() {
     confirmText: 'Start event',
   })
   if (!ok) return
-  await run(props.sessions.startEvent, 'Event started. ICs can share now.')
+  const sheet = hasSheets.value ? sheetChoice.value : null
+  await run(
+    () => props.sessions.startEvent(sheet),
+    'Event started' + (sheet ? ' with "' + sheetName(sheet) + '"' : '') + '. ICs can share now.',
+  )
   // The "Event started" push now, rather than at the next minute's server check (that check still
   // covers anyone this misses, and scheduled starts). A failure here changes nothing for the planner.
   if (props.sessions.isLive.value) remindIcsNow(props.eventId, true).catch(() => {})
@@ -249,11 +293,15 @@ function remind() {
             </template>
             <span v-else class="text-muted">no end time</span>
             <span v-if="canManage && icCount" class="text-muted"> · {{ sharingCount }} of {{ icCount }} ICs sharing</span>
+            <span v-if="openSheetName" data-testid="status-run-sheet"> · Running: <strong>{{ openSheetName }}</strong></span>
+            <span v-else-if="hasSheets" class="text-muted" data-testid="status-run-sheet"> · no run sheet (tracking only)</span>
           </template>
           <template v-else-if="scheduledStart">
             Starts <strong>{{ formatDayTime(scheduledStart) }}</strong> ·
             <template v-if="scheduledEnd">ends <strong>{{ endText(scheduledEnd, scheduledStart) }}</strong></template>
             <span v-else class="text-muted">no end time</span>
+            <span v-if="openSheetName" data-testid="status-run-sheet"> · will run <strong>{{ openSheetName }}</strong></span>
+            <span v-if="openSheetDraft" class="text-danger" data-testid="status-run-sheet-draft"> (changed since checked: check it again in the Run sheet tab)</span>
           </template>
           <template v-else>ICs can't share their location until {{ canManage ? 'you start' : 'a planner starts' }} the event.</template>
         </span>
@@ -273,21 +321,39 @@ function remind() {
             <button class="btn btn-sm btn-danger" :disabled="busy" data-testid="end-event-btn" @click="endNow">End event now</button>
           </template>
           <template v-else-if="scheduledStart">
-            <button class="btn btn-sm btn-success" :disabled="busy" data-testid="start-event-btn" @click="startNow">Start now</button>
+            <button class="btn btn-sm btn-success" :disabled="busy" data-testid="start-event-btn" @click="openStart">Start now</button>
             <button class="btn btn-sm btn-outline-primary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Edit schedule</button>
             <button class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="cancel-schedule-btn" @click="cancelSchedule">
               Cancel schedule
             </button>
           </template>
           <template v-else>
-            <button class="btn btn-sm btn-success" :disabled="busy" data-testid="start-event-btn" @click="startNow">Start event now</button>
+            <button class="btn btn-sm btn-success" :disabled="busy" data-testid="start-event-btn" @click="openStart">Start event now</button>
             <button class="btn btn-sm btn-outline-primary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Schedule…</button>
           </template>
         </template>
       </div>
 
+      <!-- Start now: which run sheet version runs -->
+      <form v-if="form === 'start'" class="time-panel mt-2" data-testid="start-form" @submit.prevent="startNow">
+        <div class="d-flex align-items-start justify-content-between mb-2">
+          <h3 class="h6 mb-0">Start the event now</h3>
+          <button type="button" class="btn-close" aria-label="Close" @click="form = ''"></button>
+        </div>
+        <label class="time-label d-block" for="start-sheet">Run sheet</label>
+        <select id="start-sheet" v-model="sheetChoice" class="form-select" data-testid="start-sheet">
+          <option value="">No run sheet: tracking only</option>
+          <option v-for="s in sheetList" :key="s.id" :value="s.id" :disabled="s.status === 'draft'">{{ sheetOption(s) }}</option>
+        </select>
+        <div class="small text-muted mt-1">Only Ready (or already used) versions can run. Check a draft in the Run sheet tab first.</div>
+        <div class="d-flex justify-content-end gap-2 mt-2">
+          <button class="btn btn-sm btn-outline-secondary" type="button" @click="form = ''">Cancel</button>
+          <button class="btn btn-sm btn-success px-3" type="submit" :disabled="busy" data-testid="start-confirm-btn">Start event…</button>
+        </div>
+      </form>
+
       <!-- Schedule (start + optional end) / end-time panel -->
-      <form v-if="form" class="time-panel mt-2" data-testid="time-form" @submit.prevent="saveForm">
+      <form v-if="form === 'schedule' || form === 'end'" class="time-panel mt-2" data-testid="time-form" @submit.prevent="saveForm">
         <div class="d-flex align-items-start justify-content-between mb-2">
           <div>
             <h3 class="h6 mb-0">{{ form === 'schedule' ? (scheduledStart ? 'Edit the schedule' : 'Schedule the event') : 'When should the event end?' }}</h3>
@@ -354,6 +420,15 @@ function remind() {
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Which run sheet version the scheduled start runs -->
+        <div v-if="form === 'schedule' && hasSheets" class="time-card mt-2">
+          <label class="time-label d-block" for="schedule-sheet">Run sheet</label>
+          <select id="schedule-sheet" v-model="sheetChoice" class="form-select" data-testid="schedule-sheet">
+            <option value="">No run sheet: tracking only</option>
+            <option v-for="s in sheetList" :key="s.id" :value="s.id" :disabled="s.status === 'draft'">{{ sheetOption(s) }}</option>
+          </select>
         </div>
 
         <!-- Summary + save -->
