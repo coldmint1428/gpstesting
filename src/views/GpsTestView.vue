@@ -9,12 +9,13 @@
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles (c) Singapore Land Authority - https://www.onemap.gov.sg
 import { computed, watch, onMounted, onUnmounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
 import { useLocationTracker } from '../composables/useLocationTracker'
 import SharingWarnings from '../components/SharingWarnings.vue'
+import { usePhoneReadiness } from '../composables/usePhoneReadiness'
 import BenchAlert from '../components/BenchAlert.vue'
 import { useEventData } from '../composables/useEventData'
 
@@ -64,7 +65,17 @@ function formatTime(date) {
   return date ? date.toLocaleTimeString('en-SG') : '-'
 }
 
-function startSharing() {
+const router = useRouter()
+const readiness = usePhoneReadiness()
+// Phone app: missing settings open "Set up sharing" first (see EventView)
+async function startSharing() {
+  if (readiness.isNative) {
+    const ready = await readiness.check()
+    if (!ready.allOk) {
+      router.push({ name: 'phone-check', query: { event: props.id, group: myGroup.value.id, share: '1' } })
+      return
+    }
+  }
   start(props.id, myGroup.value.id)
 }
 

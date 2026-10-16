@@ -19,6 +19,7 @@
 //            (free in DEBUG builds; release builds need a paid licence key)
 import { ref } from 'vue'
 import { Capacitor } from '@capacitor/core'
+import { PhoneSettings } from '../lib/phoneSettings'
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
 
 const MAX_READINGS = 20 // rows kept for the table
@@ -390,15 +391,24 @@ function createTracker() {
     }
   }
 
-  // Opens Android's battery settings for this app so the user can choose "Unrestricted"
+  // Asks Android to take this app off battery optimisation ("Unrestricted" on Samsung): the system's one-tap
+  // "Let app always run in background?" dialog, through the app's own plugin (BatteryPlugin.java). It used
+  // to open Transistorsoft's screen, Android's list of all apps, which Samsung shows filtered to apps that
+  // are already unrestricted -- so the app could not be found in it.
   async function openBatterySettings() {
     try {
-      const request = await bg.deviceSettings.showIgnoreBatteryOptimizations()
-      await bg.deviceSettings.show(request)
+      await PhoneSettings.requestUnrestricted()
     } catch (err) {
       console.error('[tracker] could not open battery settings:', err)
     }
-    setTimeout(checkPhoneSettings, 3000) // re-check after the user comes back
+    // Re-check once the IC is back in the app (the dialog or settings page covers it until then)
+    const back = () => {
+      if (document.visibilityState !== 'visible') return
+      document.removeEventListener('visibilitychange', back)
+      checkPhoneSettings()
+    }
+    document.addEventListener('visibilitychange', back)
+    setTimeout(checkPhoneSettings, 3000)
   }
 
   // Logout: stop, delete the queue, and remove the upload address + tokens
@@ -579,6 +589,13 @@ function createTracker() {
     stop,
     resume,
     prepare: () => (isNative ? ensureReady() : Promise.resolve()),
+    // The location plugin, ready (phone app only) -- for the "Set up sharing" steps (usePhoneReadiness)
+    plugin: async () => {
+      if (!isNative) return null
+      await ensureReady()
+      return bg
+    },
+    checkPhoneSettings,
     clearNative,
   }
 }

@@ -38,6 +38,23 @@ async function saveToken(token) {
 
 // Call after login (and on every app start while logged in): asks for permission once,
 // registers with Firebase and saves the token for this user.
+// Notification permission, for the "Set up sharing" steps: 'granted' | 'prompt' | 'denied' (phone app only).
+export async function notificationPermission() {
+  if (!isNative) return 'granted'
+  const PN = (await loadPush()).PushNotifications
+  const p = await PN.checkPermissions()
+  return p.receive === 'granted' ? 'granted' : p.receive === 'denied' ? 'denied' : 'prompt'
+}
+
+// Ask for it (the system prompt); when granted, register this phone for reminders straight away.
+export async function askNotificationPermission() {
+  if (!isNative) return 'granted'
+  const PN = (await loadPush()).PushNotifications
+  const p = await PN.requestPermissions()
+  if (p.receive === 'granted') await PN.register()
+  return p.receive
+}
+
 export async function enablePush(router) {
   if (!isNative) return
   try {

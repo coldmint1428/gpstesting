@@ -6,6 +6,7 @@ import EventsView from '../views/EventsView.vue'
 import EventView from '../views/EventView.vue'
 import JoinView from '../views/JoinView.vue'
 import GpsTestView from '../views/GpsTestView.vue'
+import PhoneCheckView from '../views/PhoneCheckView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const router = createRouter({
@@ -35,6 +36,8 @@ const router = createRouter({
       props: true,
       meta: { requiresAuth: true },
     },
+    // "Set up sharing": the phone settings sharing needs (?event=&group=&share=1)
+    { path: '/check-phone', name: 'phone-check', component: PhoneCheckView, meta: { requiresAuth: true } },
     // Invite link / QR code target: joins the event, then opens it
     { path: '/join/:code', name: 'join', component: JoinView, props: true, meta: { requiresAuth: true } },
 

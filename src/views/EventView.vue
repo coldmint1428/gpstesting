@@ -18,6 +18,7 @@ import {
 import { clearPushReminders } from '../composables/usePushNotifications'
 import { askConfirm, toast } from '../composables/useNotify'
 import { useZoneActivity } from '../composables/useZoneActivity'
+import { usePhoneReadiness } from '../composables/usePhoneReadiness'
 import { formatDayTime, formatTimeSeconds } from '../utils/time'
 import { eventRoleLabel, groupRoleLabel } from '../utils/people'
 import SharingWarnings from '../components/SharingWarnings.vue'
@@ -111,7 +112,17 @@ const { isTracking, sharingEventId, errorMsg: shareError } = tracker
 const sharingHere = computed(() => isTracking.value && sharingEventId.value === props.id)
 const isIC = computed(() => !!(me.value && me.value.isIC && myGroup.value))
 
+// Phone app: anything missing (location "all the time", battery, notifications...) opens "Set up sharing"
+// first, one step at a time, which starts sharing by itself at the end. Nothing missing: straight on.
+const readiness = usePhoneReadiness()
 async function startSharing() {
+  if (tracker.isNative) {
+    const ready = await readiness.check()
+    if (!ready.allOk) {
+      router.push({ name: 'phone-check', query: { event: props.id, group: myGroup.value.id, share: '1' } })
+      return
+    }
+  }
   await tracker.start(props.id, myGroup.value.id) // asks for location permission the first time
   if (tracker.isTracking.value) {
     clearStartReminder(props.id) // the "tap to share" reminders can go

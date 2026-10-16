@@ -62,4 +62,7 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the app show Android's "Let app always run in background?" dialog (PhoneSettingsPlugin.java), so an IC
+         can turn off battery optimisation in one tap. Background location is this app's core job. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

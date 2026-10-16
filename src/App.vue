@@ -84,6 +84,11 @@ async function logout() {
     </div>
   </nav>
 
-  <RouterView />
+  <!-- One page per event: going straight from one event to another (a "Start sharing" push for event B tapped
+       while event A is open) used to reuse A's page -- the address said B, the page showed and acted on A. Keyed
+       by the route and its id, so only a different event rebuilds the page, not a query change like ?share=1. -->
+  <RouterView v-slot="{ Component, route }">
+    <component :is="Component" :key="String(route.name) + ':' + (route.params.id || '')" />
+  </RouterView>
   <NotifyHost />
 </template>
