@@ -146,7 +146,11 @@ async function remove(item) {
 async function download(item) {
   const recording = player.value && player.value.item === item ? player.value.recording : await fetchRecording(item)
   if (!recording) return
-  downloadText(recordingToCsv(recording, props.eventName), csvFileName(props.eventName, recording.from, recording.to))
+  try {
+    await downloadText(recordingToCsv(recording, props.eventName), csvFileName(props.eventName, recording.from, recording.to))
+  } catch (e) {
+    toast('The CSV file could not be saved: ' + (e && e.message ? e.message : e), 'danger', 8000)
+  }
 }
 
 // ---------- Live rewind: keep adding new readings ----------

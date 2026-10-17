@@ -177,6 +177,9 @@ export function useRunSheet(sheetIdRef) {
   return { cues, movements, problems, problemsFor, errorCount, warningCount, loading, errorMsg, load }
 }
 
+// ---------- Excel (Stage 5): ExcelJS is large, so it is loaded only when a file is read or made ----------
+export const loadExcel = () => import('exceljs').then((m) => m.default || m)
+
 // ---------- Calls (each returns { data } or { error: message }) ----------
 export async function rsCall(fn, args) {
   const { data, error } = await supabase.rpc(fn, args)

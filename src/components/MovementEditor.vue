@@ -5,6 +5,7 @@
 //   BY WHEN a cue's start or end, or a fixed time; optionally some minutes early
 //   ARRIVED at least N ICs inside for N seconds; amber when the spare time is under N seconds
 //   HOW     on foot (pace), vehicle or fixed route (planned only: the live check treats them like on foot for now)
+//   PLANNED must have left by, the door they enter by, the fixed route's name (from the Excel template; used later)
 // The database checks it all again (save_movement in 024_run_sheets.sql).
 import { ref, computed, watch } from 'vue'
 import { askConfirm, toast } from '../composables/useNotify'
@@ -42,6 +43,9 @@ function blank() {
     travel_mode: 'on_foot',
     pace_mps: '1.2',
     notes: '',
+    leave_by: '',
+    arrival_point: '',
+    route: '',
   }
 }
 function fromMovement(m) {
@@ -64,6 +68,9 @@ function fromMovement(m) {
     travel_mode: m.travel_mode,
     pace_mps: String(m.pace_mps),
     notes: m.notes || '',
+    leave_by: m.leave_by || '',
+    arrival_point: m.arrival_point || '',
+    route: m.route || '',
   }
 }
 const form = ref(props.movement ? fromMovement(props.movement) : blank())
@@ -125,6 +132,9 @@ function payload() {
     travel_mode: f.travel_mode,
     pace_mps: f.pace_mps,
     notes: f.notes,
+    leave_by: f.leave_by,
+    arrival_point: f.arrival_point,
+    route: f.route,
   }
 }
 
@@ -200,6 +210,9 @@ async function addException() {
       amber_s: m.amber_s,
       travel_mode: m.travel_mode,
       pace_mps: m.pace_mps,
+      leave_by: m.leave_by,
+      arrival_point: m.arrival_point,
+      route: m.route,
     },
   })
   if (r.error) return (exError.value = r.error)
@@ -323,6 +336,26 @@ async function removeException(x) {
             Saved with the plan. The live arrival estimate uses the pace for now; road and route timing come in a later stage.
           </div>
         </div>
+
+        <!-- Planned only (from the Excel template; used from Stages 7 and 9) -->
+        <details class="small" :open="!!(form.leave_by || form.arrival_point || form.route)">
+          <summary class="fw-semibold">Planned details <span class="fw-normal text-muted">· kept with the plan, not used live yet</span></summary>
+          <div class="row g-2 mt-1">
+            <div class="col-sm-4">
+              <label class="form-label small mb-1" for="mv-leave">Must leave by</label>
+              <input id="mv-leave" v-model="form.leave_by" class="form-control form-control-sm" maxlength="30" placeholder="C034 end or 18:20:00" data-testid="move-leave" />
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label small mb-1" for="mv-arrival">Arrival point (door)</label>
+              <input id="mv-arrival" v-model="form.arrival_point" class="form-control form-control-sm" maxlength="40" list="mv-zone-codes" placeholder="Zone code, e.g. D4" data-testid="move-arrival" />
+              <datalist id="mv-zone-codes"><option v-for="z in zones" :key="z.id" :value="z.code" /></datalist>
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label small mb-1" for="mv-route">Route</label>
+              <input id="mv-route" v-model="form.route" class="form-control form-control-sm" maxlength="60" placeholder="MC_ROUTE" data-testid="move-route" />
+            </div>
+          </div>
+        </details>
 
         <div class="row g-2">
           <div class="col-4">

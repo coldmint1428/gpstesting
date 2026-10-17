@@ -4,6 +4,7 @@
 //   - a CSV file the planner downloaded earlier (read in the browser, never uploaded)
 import { STALE_AFTER_MS, OFFLINE_AFTER_MS, freshness } from './people'
 import { sgtIso } from './time'
+import { saveFile } from '../lib/saveFile'
 
 // Two readings further apart than this are a GAP (tunnel, battery saver, phone off):
 // the marker does not slide between them, and trails draw that part dashed
@@ -378,13 +379,7 @@ export function csvFileName(eventName, from, to) {
 }
 
 // Save text as a file in the browser
+// A browser download, or in the phone app Android's "Save to..." screen (a download link does nothing there)
 export function downloadText(text, fileName, type = 'text/csv;charset=utf-8') {
-  const url = URL.createObjectURL(new Blob([text], { type }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return saveFile(new TextEncoder().encode(text), fileName, type)
 }

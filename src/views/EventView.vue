@@ -379,6 +379,9 @@ async function leaveEvent() {
         :list="runSheets"
         :groups="groups"
         :live-session="liveSession"
+        :event-name="event.name"
+        :members="members"
+        @changed="load"
       />
 
       <SimulatorPanel v-if="event.is_simulation && isRoot && tab === 'simulator'" :event-id="id" @changed="load" />

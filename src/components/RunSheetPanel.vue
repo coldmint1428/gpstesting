@@ -7,7 +7,7 @@
 // an inline editor, and the movements (who must be where by when) with their editor.
 //
 // Root and planners edit; marshals only read. The database checks all of it again (024_run_sheets.sql).
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { supabase } from '../lib/supabase'
 import { askConfirm, toast } from '../composables/useNotify'
 import { formatDayTime } from '../utils/time'
@@ -20,8 +20,12 @@ import {
   addSeconds,
   nextName,
   isoDate,
+  loadExcel,
 } from '../composables/useRunSheets'
 import MovementEditor from './MovementEditor.vue'
+import RunSheetImport from './RunSheetImport.vue'
+import { buildWorkbook, TEMPLATE_EXAMPLE } from '../utils/runSheetFile'
+import { saveFile, XLSX_TYPE } from '../lib/saveFile'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -29,7 +33,11 @@ const props = defineProps({
   list: { type: Object, required: true }, // useRunSheetList(eventId), shared with the event status card
   groups: { type: Array, default: () => [] },
   liveSession: { type: Object, default: null }, // { id, runSheetId } while live
+  eventName: { type: String, default: '' },
+  members: { type: Array, default: () => [] }, // for the IC usernames in an export
 })
+// An import can create groups and change their details: the event page reloads them
+const emit = defineEmits(['changed'])
 
 const sheets = computed(() => props.list.sheets.value)
 
@@ -76,7 +84,11 @@ function versionLabel(s) {
 // ---------- Zones (for the movement editor and labels) ----------
 const zones = ref([])
 async function loadZones() {
-  const { data } = await supabase.from('zones').select('id, code, name, kind').eq('event_id', props.eventId).order('code')
+  const { data } = await supabase
+    .from('zones')
+    .select('id, code, name, kind, capacity, is_circle, radius_m')
+    .eq('event_id', props.eventId)
+    .order('code')
   zones.value = data || []
 }
 loadZones()
@@ -342,6 +354,87 @@ async function onMovementSaved() {
   await Promise.all([load(), props.list.load()])
 }
 
+// ---------- Excel (Stage 5): import a workbook as a new draft, export a version, the empty template ----------
+const showImport = ref(false)
+// On a phone the import panel opens far below the button: bring it into view
+watch(showImport, async (on) => {
+  if (!on) return
+  await nextTick()
+  const el = document.querySelector('[data-testid="rs-import-panel"]')
+  if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 8, behavior: 'smooth' })
+})
+const excelBusy = ref('') // 'export' or 'template' while a file is made
+
+async function onImported(res) {
+  showImport.value = false
+  emit('changed')
+  await Promise.all([props.list.load(), loadZones()])
+  selectedId.value = res.sheet_id
+  const plural = (n, one) => n + ' ' + one + (n === 1 ? '' : 's')
+  const extra = [
+    res.exceptions ? plural(res.exceptions, 'change') + ' for one group' : '',
+    res.groups_created ? plural(res.groups_created, 'new group') : '',
+    res.zones_created ? plural(res.zones_created, 'circle zone') + ' drawn' : '',
+  ].filter(Boolean)
+  toast(
+    'Imported as a new draft: ' + plural(res.cues, 'cue') + ', ' + plural(res.movements, 'movement') +
+      (extra.length ? ', ' + extra.join(', ') : '') + '. Check it, then mark it ready.',
+    'success',
+    9000,
+  )
+}
+
+// A circle zone's centre: the middle of its outline (the bench stores it as 32 points)
+async function zonesForExport() {
+  const { data } = await supabase.rpc('event_zones', { p_event: props.eventId })
+  const shapes = Object.fromEntries((data || []).map((z) => [z.id, z.geojson]))
+  return zones.value.map((z) => {
+    let centre = null
+    const ring = shapes[z.id] && shapes[z.id].coordinates && shapes[z.id].coordinates[0]
+    if (z.is_circle && ring && ring.length > 1) {
+      const pts = ring.slice(0, -1)
+      centre = [pts.reduce((a, p) => a + p[1], 0) / pts.length, pts.reduce((a, p) => a + p[0], 0) / pts.length]
+    }
+    return { id: z.id, code: z.code, name: z.name, kind: z.kind, capacity: z.capacity, isCircle: z.is_circle, radius: Number(z.radius_m), centre }
+  })
+}
+
+async function exportVersion() {
+  const s = sheet.value
+  excelBusy.value = 'export'
+  try {
+    const ExcelJS = await loadExcel()
+    const wb = buildWorkbook(ExcelJS, {
+      event: { name: props.eventName },
+      sheet: { name: s.name, forDate: s.forDate },
+      cues: cues.value,
+      movements: movements.value,
+      groups: props.groups,
+      zones: await zonesForExport(),
+      members: props.members,
+    })
+    const saved = await saveFile(await wb.xlsx.writeBuffer(), 'Run sheet - ' + props.eventName + ' - ' + s.name + '.xlsx', XLSX_TYPE)
+    if (saved) toast('"' + s.name + '" saved as an Excel file.', 'success')
+  } catch (e) {
+    toast('The Excel file could not be made: ' + (e && e.message ? e.message : e), 'danger', 8000)
+  } finally {
+    excelBusy.value = ''
+  }
+}
+
+async function downloadTemplate() {
+  excelBusy.value = 'template'
+  try {
+    const ExcelJS = await loadExcel()
+    const wb = buildWorkbook(ExcelJS, TEMPLATE_EXAMPLE)
+    await saveFile(await wb.xlsx.writeBuffer(), 'Run sheet template.xlsx', XLSX_TYPE)
+  } catch (e) {
+    toast('The template could not be made: ' + (e && e.message ? e.message : e), 'danger', 8000)
+  } finally {
+    excelBusy.value = ''
+  }
+}
+
 // Problems: errors first; a big run sheet can have hundreds of warnings, so show 8 until asked
 const PROBLEMS_SHOWN = 8
 const showAllProblems = ref(false)
@@ -376,8 +469,14 @@ const todayIso = isoDate(new Date())
           <div class="text-center py-3" data-testid="rs-empty">
             <p class="mb-2"><strong>No run sheet yet.</strong></p>
             <p class="small text-muted mb-3">A run sheet is the show's running order: cues with their times, and where each group must be by when.</p>
-            <button v-if="canEdit" class="btn btn-primary" data-testid="rs-create-first" @click="openNew(false)">Create run sheet</button>
+            <div v-if="canEdit" class="d-flex flex-wrap gap-2 justify-content-center">
+              <button class="btn btn-primary" data-testid="rs-create-first" @click="openNew(false)">Create run sheet</button>
+              <button class="btn btn-outline-primary" data-testid="rs-import-first" @click="showImport = true">Import from Excel</button>
+            </div>
             <p v-else class="small text-muted mb-0">The root or a planner creates it.</p>
+            <button class="btn btn-link btn-sm mt-2" :disabled="!!excelBusy" data-testid="rs-template-first" @click="downloadTemplate">
+              {{ excelBusy === 'template' ? 'Making the template…' : 'Download the Excel template' }}
+            </button>
           </div>
         </template>
 
@@ -398,6 +497,18 @@ const todayIso = isoDate(new Date())
                 @click="deleteVersion"
               >Delete</button>
             </template>
+          </div>
+
+          <!-- Excel -->
+          <div class="d-flex flex-wrap gap-2 align-items-center small" data-testid="rs-excel">
+            <span class="text-muted">Excel:</span>
+            <button v-if="canEdit" class="btn btn-sm btn-outline-secondary" :disabled="showImport" data-testid="rs-import" @click="showImport = true">Import</button>
+            <button class="btn btn-sm btn-outline-secondary" :disabled="!sheet || !!excelBusy" data-testid="rs-export" @click="exportVersion">
+              {{ excelBusy === 'export' ? 'Making the file…' : 'Export this version' }}
+            </button>
+            <button class="btn btn-sm btn-link px-1" :disabled="!!excelBusy" data-testid="rs-template" @click="downloadTemplate">
+              {{ excelBusy === 'template' ? 'Making the template…' : 'Template' }}
+            </button>
           </div>
 
           <div v-if="sheet" class="small text-muted" data-testid="rs-summary">
@@ -468,6 +579,17 @@ const todayIso = isoDate(new Date())
         </form>
       </div>
     </div>
+
+    <RunSheetImport
+      v-if="showImport && canEdit"
+      :event-id="eventId"
+      :event-name="eventName"
+      :groups="groups"
+      :zones="zones"
+      :version-names="sheets.map((s) => s.name)"
+      @imported="onImported"
+      @close="showImport = false"
+    />
 
     <template v-if="sheet">
       <div v-if="errorMsg" class="alert alert-danger small" role="alert">{{ errorMsg }}</div>
