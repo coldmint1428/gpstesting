@@ -35,6 +35,11 @@ import ShowBar from '../components/ShowBar.vue'
 import ShowPanel from '../components/ShowPanel.vue'
 import { useShow } from '../composables/useShow'
 import { useRunSheetList } from '../composables/useRunSheets'
+import OpsSummary from '../components/OpsSummary.vue'
+import OpsQueue from '../components/OpsQueue.vue'
+import OpsDecision from '../components/OpsDecision.vue'
+import { useOps } from '../composables/useOps'
+import { useGroupMessages } from '../composables/useGroupMessages'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -69,6 +74,8 @@ const SHOW_TOAST = {
   end_now: ['info', 5000],
   add_time: ['info', 5000],
   switch: ['info', 6000],
+  keep_holding: ['warning', 6000],
+  // 'message' (to a group) is not toasted: the sender is told, and a message to 20 waiting groups would be 20 toasts
 }
 const show = useShow(showSession, {
   onLog(entry) {
@@ -137,6 +144,28 @@ function flushNoGoToasts() {
     toast('No-Go: ' + text + ' at ' + at + '.', 'danger', 12000)
   }
 }
+
+// The groups' movements during the show (merger Stage 7): statuses, the problem queue and the map's clusters. Read
+// by root / planners / marshals only (the same people who see the show).
+const ops = useOps(showSession, { groups, zones: zoneActivity.zones, myUserId: computed(() => (auth.user ? auth.user.id : null)) })
+const hasOps = computed(() => !!show.board.value && ops.rows.value.length > 0)
+const liveMap = ref(null)
+function focusGroup(groupId) {
+  if (liveMap.value) liveMap.value.focusGroup(groupId)
+}
+
+// A message from the ops view to my group ("Please head to FORMATION_1 now"): a toast when it arrives, and the newest
+// one stays on the page while the event is live (until closed).
+const groupMessages = useGroupMessages(
+  computed(() => (myGroup.value ? myGroup.value.id : null)),
+  computed(() => (liveSession.value ? liveSession.value.id : null)),
+  {
+    onMessage(m) {
+      toast('Message from ' + m.from + ': ' + m.body, 'warning', 15000)
+    },
+  },
+)
+const closedMessage = ref(null)
 
 // The No-Go areas I am inside right now (shown to me as a warning until I leave).
 const myNoGo = computed(() => {
@@ -310,6 +339,21 @@ async function leaveEvent() {
         <strong>You are inside a No-Go area:</strong> {{ myNoGo.map((z) => z.name).join(', ') }}. Please leave it now.
       </div>
 
+      <!-- A message from the planners to my group (merger Stage 7) -->
+      <div
+        v-if="groupMessages.latest.value && closedMessage !== groupMessages.latest.value.id"
+        class="alert alert-warning py-2 d-flex align-items-start gap-2"
+        role="alert"
+        data-testid="group-message"
+      >
+        <span class="flex-grow-1">
+          <strong>Message from {{ groupMessages.latest.value.from }}</strong>
+          <span class="text-muted small"> · {{ formatTimeSeconds(groupMessages.latest.value.at) }}</span><br />
+          {{ groupMessages.latest.value.body }}
+        </span>
+        <button type="button" class="btn-close" aria-label="Close" @click="closedMessage = groupMessages.latest.value.id"></button>
+      </div>
+
       <SharingWarnings v-if="sharingHere" />
       <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
       <p class="small text-muted mb-3" data-testid="view-scope">{{ viewText }}</p>
@@ -357,9 +401,12 @@ async function leaveEvent() {
            bar sits on top and its panel beside the map (above it on a phone). -->
       <div v-show="tab === 'map'">
       <ShowBar v-if="show.board.value" :show="show" />
+      <OpsSummary v-if="hasOps" :ops="ops" />
+      <OpsDecision v-if="show.board.value" :show="show" :ops="ops" :groups="groups" :can-run="canManage" />
       <div class="row g-3">
       <div :class="show.board.value ? 'col-lg-8' : 'col-12'">
       <LiveMap
+        ref="liveMap"
         :active="tab === 'map'"
         :event-id="id"
         :positions="live.positions.value"
@@ -375,10 +422,13 @@ async function leaveEvent() {
         :zone-counts="zoneActivity.countsByZone.value"
         :no-go-occupied="zoneActivity.noGoOccupied.value"
         :group-positions="zoneActivity.groupPositions.value"
+        :ops-active="hasOps ? ops.active.value : {}"
+        :ops-visible="hasOps ? ops.visibleGroupIds.value : null"
       />
       </div>
       <div v-if="show.board.value" class="col-lg-4 order-first order-lg-last">
-        <ShowPanel :show="show" :can-run="canManage" />
+        <ShowPanel :show="show" :can-run="canManage" :ops="hasOps ? ops : null" />
+        <OpsQueue v-if="hasOps" class="mt-3" :ops="ops" :now="show.now.value" @select="focusGroup" />
       </div>
       </div>
       </div>

@@ -151,6 +151,15 @@ function setFlags(member, isAdmin, isIC) {
   })
 }
 
+// A marshal's sector (merger Stage 7): the ops view opens filtered to it
+const sectorChoices = computed(() => [...new Set(props.groups.map((g) => g.sector).filter(Boolean))].sort())
+async function setSector(member, value) {
+  if ((value || '') === (member.sector || '')) return
+  if (await run('set_marshal_sector', { p_event: props.eventId, p_user: member.id, p_sector: value })) {
+    toast(member.display_name + (value.trim() ? ' marshals sector ' + value.trim() + '.' : ' marshals every sector.'), 'success', 3000)
+  }
+}
+
 function setEventRole(member, role, enabled) {
   return run('set_event_role', { p_event_id: props.eventId, p_user_id: member.id, p_role: role, p_enabled: enabled })
 }
@@ -300,6 +309,10 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
       </div>
     </div>
 
+    <datalist :id="'sectors-' + eventId">
+      <option v-for="s in sectorChoices" :key="s" :value="s"></option>
+    </datalist>
+
     <!-- One card per member (cards stack nicely on phones) -->
     <div class="row g-2" data-testid="member-list">
       <div v-for="m in members" :key="m.id" class="col-12 col-md-6">
@@ -387,6 +400,23 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
                 </div>
               </template>
             </div>
+
+            <!-- A marshal's sector (root / planners): the ops view opens filtered to it -->
+            <div v-if="canManage && m.roles.includes('marshal')" class="input-group input-group-sm mt-2" style="max-width: 18rem">
+              <span class="input-group-text">Marshals sector</span>
+              <input
+                class="form-control"
+                :value="m.sector || ''"
+                :list="'sectors-' + eventId"
+                maxlength="50"
+                placeholder="All sectors"
+                :disabled="busy"
+                :aria-label="'Sector ' + m.display_name + ' marshals'"
+                :data-testid="'sector-' + m.username"
+                @change="setSector(m, $event.target.value)"
+              />
+            </div>
+            <div v-else-if="m.roles.includes('marshal') && m.sector" class="small text-muted mt-1">Marshals sector {{ m.sector }}</div>
 
             <button
               v-if="canStopSharing(m)"

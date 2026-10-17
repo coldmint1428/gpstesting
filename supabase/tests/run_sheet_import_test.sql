@@ -50,6 +50,12 @@ begin
   on conflict do nothing;
   delete from public.run_sheets where event_id = ev;
   update public.groups set code = null where event_id = ev and code in ('TKSS_BAND', 'WSSS_BAND', 'YHSS_BAND', 'GROUP_A');
+  -- the template's groups and circles as left by earlier imports in the browser / on the phone: gone for this test, so
+  -- the import makes them as on a fresh event (rolled back with everything else)
+  delete from public.groups where event_id = ev and lower(name) in ('tkss band', 'wsss band', 'yhss band');
+  delete from public.layout_objects where object_id in (select z.source_area_id from public.zones z
+                                                        where z.event_id = ev and z.code in ('HOLD_D4', 'D4'));
+  delete from public.zones where event_id = ev and code in ('HOLD_D4', 'D4');
 
   -- What the page sends for the template (codes, not ids)
   base := jsonb_build_object(

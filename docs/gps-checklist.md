@@ -624,6 +624,17 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 - [ ] First live run (Komin): simulation event → Zones tab: 2–3 zones + 1 No-Go → Simulator: 120 groups → Start → watch 15 min (map smooth, presence counts, No-Go alerts) → Reset
 - [ ] Note Realtime messages per minute and database CPU during the run (Supabase dashboard) for the Pro-plan decision
 
+## 4g. Merger Stage 7 – movements engine and ops view (built 18 Oct)
+
+Stages 4–6 (run sheet builder, Excel import / export, live show) are recorded in `docs/merger-build-plan.md`.
+
+- [x] Migration `027_movements.sql` (+ 027b–e on the project): `movement_status`, `movement_routes`, `group_messages`, `event_roles.sector`; engine `move_step` / `move_tick` (pg_cron `gps-move-tick`, 5 s); OneMap routes `route_wanted` / `route_due` / `route_claim` / `route_save` (pg_cron `gps-route-eta`, 30 s, push cron secret); ops functions `ops_board`, `ops_handle`, `ops_ack`, `ops_snooze`, `message_group`, `show_keep_holding`, `set_marshal_sector`, `sim_plan_movements`; simulator legs `sim_follow_plan` – rolled-back SQL test 53/53
+- [x] Edge Function `route-eta` deployed (verify_jwt off, checks the cron secret; OneMap secrets as reverse-geocode)
+- [x] Live map tab (root / planners / marshals during a show): summary bar + filters, decision banner, problem queue, run sheet chips, clusters, rings + route lines; Members: marshal sector; Simulator: Plan their movements
+- [ ] 120-group simulator rehearsal (Komin presses Add groups: virtual ICs are accounts Claude does not create): Simulator → Add 120 → Plan their movements into a Draft with cues ~10 min ahead → Ready → Start event with it → watch on-time green, "2 min late" red, lost signal grey, the queue and the clusters
+- [ ] Phone walk: a movement for your group to a zone ~300 m away → walk it with the S25 → ETA and status on the laptop within ±30 s; arrival 20 s after entering
+- [ ] Second planner on another device: I'll handle it on one shows "Handled by …" on the other
+
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)

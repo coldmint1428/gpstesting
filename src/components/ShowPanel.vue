@@ -2,13 +2,16 @@
 // ShowPanel - the run sheet beside the live map (merger Stage 6): NOW (progress, time left) with GO / Hold / +30 s,
 // UP NEXT (planned -> projected, anchors), and what has run. Root and planners press; marshals only see.
 // The server runs the show (026_live_show.sql); every button answers with what happened or why not.
+// Under each cue, its groups' movements as chips (merger Stage 7): "Bands → FORMATION_1: 2 ✓ · 1 late".
 import { ref, computed } from 'vue'
 import { askConfirm, toast } from '../composables/useNotify'
 import { mmss, sgClock } from '../composables/useShow'
+import CueChips from './CueChips.vue'
 
 const props = defineProps({
   show: { type: Object, required: true }, // useShow()
   canRun: { type: Boolean, default: false }, // root / planner
+  ops: { type: Object, default: null }, // useOps() (movements), when the show has any
 })
 
 const b = computed(() => props.show.board.value)
@@ -128,6 +131,7 @@ async function pressSkip(c) {
           <span v-if="running.absorbed_s">Shortened {{ mmss(running.absorbed_s) }} to catch up. </span>
           <span v-if="running.added_s">{{ running.added_s > 0 ? '+' : '' }}{{ mmss(running.added_s) }} added.</span>
         </div>
+        <CueChips v-if="ops" :ops="ops" :cue-id="running.cue_id" />
       </template>
       <div v-else-if="b.state === 'finished'" class="text-muted" data-testid="show-now">The run sheet has finished.</div>
       <div v-else class="text-muted small" data-testid="show-now">Nothing is running.</div>
@@ -186,6 +190,7 @@ async function pressSkip(c) {
                 <span v-if="c.type === 'anchor' && c.risk_s > 0" class="badge text-bg-danger">At risk by {{ mmss(c.risk_s) }}</span>
                 <span v-if="c.absorbed_s" class="badge text-bg-light border">absorbs {{ mmss(c.absorbed_s) }}</span>
               </div>
+              <CueChips v-if="ops" :ops="ops" :cue-id="c.cue_id" />
             </div>
             <button v-if="canRun" class="btn btn-link btn-sm p-0 text-muted" :disabled="!!busy" :data-testid="'show-skip-' + c.code" @click="pressSkip(c)">Skip</button>
           </div>

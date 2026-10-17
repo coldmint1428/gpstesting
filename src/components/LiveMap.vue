@@ -13,6 +13,11 @@
 // readings, or after Stop; a dot every 2 minutes). Tap the trail or a dot: when they were
 // there + the place name. The trail only covers the session that is live now.
 //
+// Ops view (merger Stage 7, root / planners / marshals during a show): zoomed out, groups gather into one bubble per
+// zone they are inside (else per sector) showing how many and the worst status; zoomed in, groups in trouble (and
+// the one picked in the queue) get a status ring and a dashed line along their route to the zone with "+0:28".
+// The summary bar's filters hide the other groups' markers.
+//
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles + reverse geocoding (c) Singapore Land Authority
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
@@ -27,6 +32,8 @@ import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
 import { areaStyle } from '../utils/areaKinds'
+import { statusOf, PROBLEMS } from '../utils/opsStatus'
+import { mmss } from '../composables/useShow'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -45,6 +52,9 @@ const props = defineProps({
   zoneCounts: { type: Object, default: () => ({}) }, // zoneId -> { ics, groups }
   noGoOccupied: { type: Array, default: () => [] }, // No-Go zone ids somebody is inside
   groupPositions: { type: Object, default: () => ({}) }, // groupId -> { speedMps, icsSharing, lastSeen }
+  // From the movements engine (useOps, merger Stage 7): empty when no show runs or for members
+  opsActive: { type: Object, default: () => ({}) }, // groupId -> the group's active movement row
+  opsVisible: { type: Object, default: null }, // Set of group ids that pass the ops filters, or null (all)
 })
 
 const positions = computed(() => props.positions)
@@ -212,6 +222,7 @@ function render() {
       personMarkers[userId].remove()
       delete personMarkers[userId]
       delete tracks[userId]
+      hiddenPeople.delete(userId)
       if (selectedId.value === userId) deselect()
     }
   }
@@ -252,6 +263,7 @@ function render() {
   }
 
   if (followedId.value && !personMarkers[followedId.value]) stopFollowing() // they're no longer on the map
+  applyVisibility()
 
   // Zoom to everyone the first time we have data
   if (!fittedOnce && people.value.length > 0) {
@@ -281,7 +293,7 @@ function frame(ts) {
 
   for (const userId of Object.keys(personMarkers)) {
     const track = tracks[userId]
-    if (!track) continue
+    if (!track || hiddenPeople.has(userId)) continue
     const pos = positionAt(track, advance(track, nowMs, elapsed))
     if (!pos) continue
     shown[userId] = pos
@@ -573,6 +585,182 @@ function stopFollowing() {
   followedId.value = null
 }
 
+// ---------- Ops view: filters, clusters, problem lines (merger Stage 7) ----------
+const CLUSTER_ZOOM = 16 // below this, groups are drawn as clusters (when the show has movements)
+const clustersOn = ref(true)
+const zoom = ref(0)
+const hasOps = computed(() => Object.keys(props.opsActive).length > 0)
+const clustering = computed(() => clustersOn.value && hasOps.value && zoom.value < CLUSTER_ZOOM)
+const hiddenPeople = new Set() // markers taken off the map (filtered out, or clustered)
+let clusterLayer = null
+let opsLayer = null
+const selectedGroup = ref(null) // picked in the queue: its line is drawn whatever its status
+
+function groupVisible(groupId) {
+  return !props.opsVisible || props.opsVisible.has(groupId)
+}
+
+// Markers on or off the map: filtered-out groups and, zoomed out, everyone (the clusters stand in for them)
+function applyVisibility() {
+  if (!map) return
+  const clustered = clustering.value
+  for (const [userId, marker] of Object.entries(personMarkers)) {
+    const p = positions.value[userId]
+    const show = !clustered && (!p || groupVisible(p.groupId))
+    if (show && hiddenPeople.has(userId)) {
+      hiddenPeople.delete(userId)
+      marker.addTo(map)
+    } else if (!show && !hiddenPeople.has(userId)) {
+      hiddenPeople.add(userId)
+      marker.remove()
+    }
+  }
+  for (const [groupId, marker] of Object.entries(groupMarkers)) {
+    const show = !clustered && groupVisible(groupId)
+    if (show && !map.hasLayer(marker)) marker.addTo(map)
+    else if (!show && map.hasLayer(marker)) marker.remove()
+  }
+}
+
+// Where a group is: the server's group position, else the midpoint of its ICs on the map
+function groupLatLng(groupId) {
+  const gp = props.groupPositions[groupId]
+  if (gp && gp.lat != null) return [gp.lat, gp.lng]
+  const ps = people.value.filter((p) => p.groupId === groupId && p.state !== 'stopped')
+  if (!ps.length) return null
+  return [ps.reduce((a, p) => a + p.lat, 0) / ps.length, ps.reduce((a, p) => a + p.lng, 0) / ps.length]
+}
+
+// The zone a group is inside (any of its ICs), from Stage 2 presence
+function groupZone(groupId) {
+  for (const p of people.value) {
+    if (p.groupId !== groupId) continue
+    const stay = (props.zoneStays[p.userId] || []).find((s) => s.zone.kind !== 'no_go')
+    if (stay) return stay.zone
+  }
+  return null
+}
+
+const SHORT = { late: 'late', at_risk: 'at risk', no_signal: 'no sig.' }
+
+function drawClusters() {
+  if (!map || !clusterLayer) return
+  clusterLayer.clearLayers()
+  if (!clustering.value) return
+  const clusters = new Map() // key -> { label, rows, points, zoneId }
+  for (const [groupId, row] of Object.entries(props.opsActive)) {
+    if (!groupVisible(groupId)) continue
+    const at = groupLatLng(groupId)
+    if (!at) continue
+    const zone = groupZone(groupId)
+    const g = groupOf(groupId)
+    const key = zone ? 'z:' + zone.id : 's:' + ((g && g.sector) || '')
+    if (!clusters.has(key)) clusters.set(key, { label: zone ? zone.code : (g && g.sector) || 'No sector', rows: [], points: [], zoneId: zone ? zone.id : null })
+    const c = clusters.get(key)
+    c.rows.push(row)
+    c.points.push(at)
+  }
+  for (const c of clusters.values()) {
+    const worst = c.rows.reduce((w, r) => (statusOf(r.status).rank > statusOf(w.status).rank ? r : w), c.rows[0])
+    const ws = statusOf(worst.status)
+    const n = c.rows.filter((r) => r.status === worst.status).length
+    const sub = PROBLEMS.includes(worst.status) ? n + ' ' + SHORT[worst.status] : c.label
+    const zoneEntry = c.zoneId && zoneShapes[c.zoneId]
+    const centre = zoneEntry
+      ? zoneEntry.shape.getBounds().getCenter()
+      : L.latLng(c.points.reduce((a, p) => a + p[0], 0) / c.points.length, c.points.reduce((a, p) => a + p[1], 0) / c.points.length)
+    const marker = L.marker(centre, {
+      icon: L.divIcon({
+        className: '',
+        html:
+          '<div class="ops-cluster ' + ws.cls + '" style="border-color:' + ws.colour + '">' + c.rows.length +
+          '<small class="' + ws.cls + '">' + escapeHtml(sub) + '</small></div>',
+        iconSize: [52, 52],
+        iconAnchor: [26, 26],
+      }),
+      zIndexOffset: 500,
+      title: c.label + ': ' + c.rows.length + ' groups, worst ' + ws.label.toLowerCase(),
+    }).addTo(clusterLayer)
+    marker.bindTooltip(
+      '<strong>' + escapeHtml(c.label) + '</strong> · ' + c.rows.length + (c.rows.length === 1 ? ' group' : ' groups') +
+        ['late', 'no_signal', 'at_risk', 'on_track']
+          .map((s) => {
+            const k = c.rows.filter((r) => r.status === s).length
+            return k ? '<br>' + statusOf(s).symbol + ' ' + k + ' ' + statusOf(s).label.toLowerCase() : ''
+          })
+          .join('') +
+        '<br><span class="text-muted">Tap to zoom in</span>',
+      { direction: 'top', offset: [0, -24] },
+    )
+    marker.on('click', () => {
+      const bounds = zoneEntry ? zoneEntry.shape.getBounds() : L.latLngBounds(c.points)
+      map.fitBounds(bounds.pad(0.4), { maxZoom: 18 })
+    })
+  }
+}
+
+// Zoomed in: groups in trouble (and the picked one) get a ring and a dashed line to their zone with "+0:28"
+function drawOpsLines() {
+  if (!map || !opsLayer) return
+  opsLayer.clearLayers()
+  if (clustering.value) return
+  for (const [groupId, row] of Object.entries(props.opsActive)) {
+    const picked = selectedGroup.value === groupId
+    if (!groupVisible(groupId) || row.state !== 'active' || !(PROBLEMS.includes(row.status) || picked)) continue
+    const at = groupLatLng(groupId)
+    if (!at) continue
+    const s = statusOf(row.status)
+    L.marker(at, {
+      icon: L.divIcon({ className: '', html: '<div class="ops-ring ' + s.cls + '"></div>', iconSize: [30, 30], iconAnchor: [15, 15] }),
+      interactive: false,
+      zIndexOffset: -50,
+    }).addTo(opsLayer)
+    let line = null
+    if (row.route && row.route.coordinates) {
+      // from the point of the route nearest the group, onwards
+      const pts = row.route.coordinates.map((c) => L.latLng(c[1], c[0]))
+      let best = 0
+      pts.forEach((p, i) => {
+        if (map.distance(p, at) < map.distance(pts[best], at)) best = i
+      })
+      line = [L.latLng(at), ...pts.slice(best)]
+    } else if (zoneShapes[row.zone_id]) {
+      line = [L.latLng(at), zoneShapes[row.zone_id].shape.getBounds().getCenter()]
+    }
+    if (line) L.polyline(line, { color: s.colour, weight: 3, dashArray: '4 7', opacity: 0.9, interactive: false }).addTo(opsLayer)
+    const g = groupOf(groupId)
+    const text =
+      (g ? g.name : '') + ' · ' + (row.status === 'late' ? '+' + mmss(row.late_s || 0) : row.status === 'at_risk' ? row.spare_s + ' s spare' : s.label)
+    L.tooltip({ permanent: true, direction: 'right', offset: [14, 0], className: 'ops-eta-label ' + s.cls, interactive: false })
+      .setLatLng(at)
+      .setContent(escapeHtml(text))
+      .addTo(opsLayer)
+  }
+}
+
+// One redraw for a burst of changes (group positions arrive every 400 ms during a simulation)
+let opsTimer = null
+function opsSoon() {
+  if (opsTimer) return
+  opsTimer = setTimeout(() => {
+    opsTimer = null
+    applyVisibility()
+    drawClusters()
+    drawOpsLines()
+  }, 300)
+}
+watch(() => [props.opsActive, props.opsVisible, props.zoneStays, props.groupPositions, clustersOn.value, selectedGroup.value], opsSoon)
+watch(clustering, opsSoon)
+
+// The queue picked a group: zoom to it (its line is drawn even when it is on time)
+function focusGroup(groupId) {
+  selectedGroup.value = groupId
+  const at = groupLatLng(groupId)
+  if (at && map) map.setView(at, Math.max(map.getZoom(), 17))
+  opsSoon()
+}
+defineExpose({ focusGroup })
+
 // ---------- Zones layer (merger Stage 1) ----------
 // The event's zones, drawn under the people: outlines in their kind's colour (the same colours as the
 // Zones tab), No-Go dashed red, with "Name · CODE" labels once zoomed in. Not clickable, so tapping a
@@ -606,6 +794,7 @@ async function loadZones() {
   zoneCount.value = (data || []).length
   refreshZoneState()
   placeZoneLabels()
+  opsSoon()
 }
 
 // "Formation 1 · FORM_A · 2 ICs (1 group)", and a No-Go zone with somebody inside drawn bold red.
@@ -663,7 +852,11 @@ onMounted(() => {
   map = createSingaporeMap(mapEl.value)
   zoneLayer = L.layerGroup().addTo(map) // under the trail and the markers
   trailLayer = L.layerGroup().addTo(map)
+  opsLayer = L.layerGroup().addTo(map)
+  clusterLayer = L.layerGroup().addTo(map)
+  zoom.value = map.getZoom()
   map.on('zoomend', placeZoneLabels)
+  map.on('zoomend', () => (zoom.value = map.getZoom()))
   watchZones()
   // Dragging the map yourself means "let me look around": stop following
   map.on('dragstart', stopFollowing)
@@ -686,6 +879,7 @@ onUnmounted(() => {
   if (unsubscribe) unsubscribe()
   if (resizeObserver) resizeObserver.disconnect()
   clearTimeout(zoneTimer)
+  clearTimeout(opsTimer)
   if (zoneChannel && supabase) supabase.removeChannel(zoneChannel)
   document.removeEventListener('visibilitychange', onVisibility)
   if (frameId) cancelAnimationFrame(frameId)
@@ -705,6 +899,9 @@ onUnmounted(() => {
         <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Reconnecting…
       </div>
       <!-- Shown while following someone (on top of the map) -->
+      <div v-if="clustering" class="cluster-pill shadow-sm small" data-testid="cluster-hint">
+        Zoomed out: number = groups · ring = worst status · tap a bubble to zoom in
+      </div>
       <div v-if="followedId" class="follow-bar shadow-sm" data-testid="follow-bar">
         <span class="text-truncate">Following <strong>{{ followedName }}</strong></span>
         <button class="btn btn-sm btn-outline-secondary py-0" data-testid="stop-follow-btn" @click="stopFollowing">Stop</button>
@@ -718,7 +915,11 @@ onUnmounted(() => {
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
       <span v-if="liveSince">Tap a marker to see their trail · tap the trail for times</span>
-      <label v-if="zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
+      <label v-if="hasOps" class="form-check form-check-inline mb-0 ms-auto" title="Zoomed out, groups gather into one bubble per zone or sector" data-testid="clusters-toggle">
+        <input v-model="clustersOn" class="form-check-input" type="checkbox" />
+        <span class="form-check-label">Group clusters</span>
+      </label>
+      <label v-if="zoneCount" class="form-check form-check-inline mb-0" :class="{ 'ms-auto': !hasOps }" data-testid="zones-toggle">
         <input v-model="showZones" class="form-check-input" type="checkbox" />
         <span class="form-check-label">Zones ({{ zoneCount }})</span>
       </label>
@@ -768,6 +969,16 @@ onUnmounted(() => {
   background: #fff;
   border-radius: 999px;
   font-size: 0.875rem;
+}
+.cluster-pill {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  max-width: 60%;
+  padding: 0.25rem 0.6rem;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 8px;
 }
 .reconnect-pill {
   position: absolute;

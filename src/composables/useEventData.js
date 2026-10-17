@@ -20,7 +20,7 @@ export function useEventData(eventId) {
     const [ev, gr, roles, gm] = await Promise.all([
       supabase.from('events').select('id, name, join_code, is_simulation').eq('id', eventId).maybeSingle(),
       supabase.from('groups').select('id, name, colour, code, category, sector, headcount').eq('event_id', eventId).order('created_at'),
-      supabase.from('event_roles').select('user_id, role, profiles (username, display_name)').eq('event_id', eventId),
+      supabase.from('event_roles').select('user_id, role, sector, profiles (username, display_name)').eq('event_id', eventId),
       supabase.from('group_members').select('group_id, user_id, is_admin, is_ic').eq('event_id', eventId),
     ])
     loading.value = false
@@ -50,9 +50,11 @@ export function useEventData(eventId) {
           groupId: null,
           isAdmin: false,
           isIC: false,
+          sector: null, // a marshal's sector (merger Stage 7)
         }
       }
       byId[row.user_id].roles.push(row.role)
+      if (row.role === 'marshal') byId[row.user_id].sector = row.sector
     }
     for (const row of gm.data) {
       const m = byId[row.user_id]
