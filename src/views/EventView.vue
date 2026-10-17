@@ -31,6 +31,9 @@ import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
 import SimulatorPanel from '../components/SimulatorPanel.vue'
 import RunSheetPanel from '../components/RunSheetPanel.vue'
+import ShowBar from '../components/ShowBar.vue'
+import ShowPanel from '../components/ShowPanel.vue'
+import { useShow } from '../composables/useShow'
 import { useRunSheetList } from '../composables/useRunSheets'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -48,6 +51,32 @@ const { isLive, liveSession, scheduledStart } = sessions
 // Run sheet versions (merger Stage 4): root / planners edit, marshals read; ICs and members don't see them.
 // One list for the Run sheet tab, the Start / Schedule picker and Playback.
 const runSheets = useRunSheetList(props.id, seesWholeEvent)
+// The live show (merger Stage 6): while the live session runs a run sheet, root / planners / marshals see it
+// beside the map (planners press GO / Hold / +30 s). What happens arrives here once, as a toast, whatever tab is open.
+const showSession = computed(() =>
+  seesWholeEvent.value && liveSession.value && liveSession.value.runSheetId ? liveSession.value.id : null,
+)
+const SHOW_TOAST = {
+  waiting_go: ['warning', 10000],
+  waiting_groups: ['warning', 12000],
+  anchor_risk: ['danger', 12000],
+  anchor_cut: ['danger', 12000],
+  finished: ['info', 6000],
+  go: ['info', 5000],
+  hold: ['warning', 6000],
+  resume: ['info', 5000],
+  skip: ['info', 5000],
+  end_now: ['info', 5000],
+  add_time: ['info', 5000],
+  switch: ['info', 6000],
+}
+const show = useShow(showSession, {
+  onLog(entry) {
+    const how = SHOW_TOAST[entry.kind]
+    if (how) toast(entry.message, how[0], how[1])
+  },
+})
+
 // Start / schedule / cancel / end / switch change which version is Used, scheduled or live. Realtime doesn't
 // announce a cancelled schedule (a deleted row), so reload whenever the session state changes.
 watch(
@@ -324,9 +353,13 @@ async function leaveEvent() {
         </li>
       </ul>
 
-      <!-- v-show keeps the map alive (and its live connection) when switching tabs -->
+      <!-- v-show keeps the map alive (and its live connection) when switching tabs. With a live run sheet the show's
+           bar sits on top and its panel beside the map (above it on a phone). -->
+      <div v-show="tab === 'map'">
+      <ShowBar v-if="show.board.value" :show="show" />
+      <div class="row g-3">
+      <div :class="show.board.value ? 'col-lg-8' : 'col-12'">
       <LiveMap
-        v-show="tab === 'map'"
         :active="tab === 'map'"
         :event-id="id"
         :positions="live.positions.value"
@@ -343,6 +376,12 @@ async function leaveEvent() {
         :no-go-occupied="zoneActivity.noGoOccupied.value"
         :group-positions="zoneActivity.groupPositions.value"
       />
+      </div>
+      <div v-if="show.board.value" class="col-lg-4 order-first order-lg-last">
+        <ShowPanel :show="show" :can-run="canManage" />
+      </div>
+      </div>
+      </div>
 
       <MembersPanel
         v-if="tab === 'members'"

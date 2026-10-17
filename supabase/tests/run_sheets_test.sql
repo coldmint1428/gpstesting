@@ -191,7 +191,8 @@ begin
   res := public.zz_err(format('select public.save_movement(%L, %L)', s1, jsonb_build_object('parent_id', m_cat, 'group_id', g_b3)), 'already has an exception');
   if res = 'ok' then passed := passed + 1; else failures := failures || E'\nR4f second exception ' || res; end if;
   select string_agg(g.name || '>' || (select code from public.zones where id = e.zone_id) || (case when e.is_exception then '*' else '' end), ',' order by g.name)
-  into t from public.run_sheet_moves(s1) e join public.groups g on g.id = e.group_id;
+  into t from public.run_sheet_moves(s1) e join public.groups g on g.id = e.group_id
+  where g.id in (g_a, g_b1, g_b2, g_b3); -- only this test's groups (the event may hold other "Bands")
   if t = 'Band 1>STAGE_LEFT,Band 3>FORMATION_1*,Group A>FORMATION_1' then passed := passed + 1; else failures := failures || E'\nR4g expansion ' || t; end if;
   res := public.zz_err(format('select public.save_movement(%L, %L)', s1, jsonb_build_object('id', x_skip, 'group_id', g_b2)), 'cannot be turned into an exception');
   if res = 'ok' then passed := passed + 1; else failures := failures || E'\nR4h exception to plain ' || res; end if;

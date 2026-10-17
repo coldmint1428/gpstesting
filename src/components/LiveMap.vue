@@ -657,6 +657,7 @@ function watchZones() {
 }
 
 let unsubscribe = null
+let resizeObserver = null
 onMounted(() => {
   // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
   map = createSingaporeMap(mapEl.value)
@@ -673,11 +674,17 @@ onMounted(() => {
   })
   if (props.onReading) unsubscribe = props.onReading(onNewReading)
   document.addEventListener('visibilitychange', onVisibility)
+  // The map's box changes size when the run sheet panel opens beside it (Stage 6): Leaflet must be told
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => map && map.invalidateSize())
+    resizeObserver.observe(mapEl.value)
+  }
   render()
 })
 
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
+  if (resizeObserver) resizeObserver.disconnect()
   clearTimeout(zoneTimer)
   if (zoneChannel && supabase) supabase.removeChannel(zoneChannel)
   document.removeEventListener('visibilitychange', onVisibility)
