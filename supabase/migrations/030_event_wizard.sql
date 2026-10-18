@@ -1,5 +1,7 @@
--- Step 23: the 4-step "Create an event" wizard (/events/new).
--- Run AFTER 022_simulator.sql.
+-- Step 30: the 4-step "Create an event" wizard (/events/new).
+-- Written as 023 on the event_creation_ern branch (after 022_simulator.sql) and already run on the project there;
+-- renumbered 030 in the merge because 023-029 were taken (023_sim_routes ... 029_field_hardening). Every statement
+-- is safe to run again (add column if not exists, create or replace), so applying it after 029 changes nothing else.
 --
 -- The wizard keeps everything in the browser until Confirm, then saves it with ONE call:
 -- create_event_with_setup(). It runs in a single transaction, so a broken rule saves nothing

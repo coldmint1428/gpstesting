@@ -4,6 +4,16 @@ import { useEventWizardStore } from '../../stores/eventWizard'
 
 defineProps({ errors: { type: Object, default: () => ({}) } })
 const wizard = useEventWizardStore()
+
+// A tap anywhere on a date field opens the date-and-time picker (on a phone a tap only selected "dd" before;
+// the picker was behind the small calendar icon)
+function openPicker(e) {
+  try {
+    e.target.showPicker()
+  } catch {
+    // older browsers: they open their own picker
+  }
+}
 </script>
 
 <template>
@@ -62,6 +72,7 @@ const wizard = useEventWizardStore()
           class="form-control"
           :class="{ 'is-invalid': errors.startsAt }"
           data-testid="wiz-start"
+          @click="openPicker"
         />
         <div v-if="errors.startsAt" class="invalid-feedback">{{ errors.startsAt }}</div>
       </div>
@@ -75,6 +86,7 @@ const wizard = useEventWizardStore()
           :class="{ 'is-invalid': errors.endsAt }"
           :min="wizard.details.startsAt || undefined"
           data-testid="wiz-end"
+          @click="openPicker"
         />
         <div v-if="errors.endsAt" class="invalid-feedback">{{ errors.endsAt }}</div>
       </div>

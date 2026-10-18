@@ -136,6 +136,12 @@ export const useAuthStore = defineStore('auth', () => {
     session.value = null
     profile.value = null
     cacheProfile(null)
+    // An unfinished Create-an-event draft holds other people's names: not for the next person on this device
+    try {
+      localStorage.removeItem('eventWizardDraft')
+    } catch {
+      // no storage
+    }
   }
 
   return { session, profile, ready, user, isLoggedIn, init, signUp, signIn, signOut, loadProfile }

@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { getMyEvents, createQuickEvent, joinEventByCode } from '../services/eventService'
 import BenchAlert from '../components/BenchAlert.vue'
 import { eventRoleLabel } from '../utils/people'
+import { formatDayTime } from '../utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -115,7 +116,12 @@ onMounted(loadEvents)
         :to="{ name: 'event', params: { id: ev.id } }"
         class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
       >
-        <span>{{ ev.name }}</span>
+        <span>
+          {{ ev.name }}
+          <span v-if="ev.startsAt || ev.venue" class="d-block small text-muted" data-testid="event-list-when">
+            <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
+          </span>
+        </span>
         <span>
           <span v-if="ev.isSimulation" class="badge text-bg-warning ms-1">SIMULATION</span>
           <span class="badge text-bg-secondary ms-1">{{ eventRoleLabel(ev.roles) }}</span>

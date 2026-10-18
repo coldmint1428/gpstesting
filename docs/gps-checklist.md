@@ -645,6 +645,13 @@ Stages 4–6 (run sheet builder, Excel import / export, live show) are recorded 
 - [ ] 3-movement follow test: a Draft with 3 movements for your group ~3–5 min apart → follow it from the notifications alone with the app closed
 - [ ] Mobile layout from the team's Figma (the card is plain Bootstrap for now)
 
+## 4j. Event creation wizard merged (18 Oct)
+
+- [x] `event_creation_ern` merged; migration renumbered `030_event_wizard.sql` and recorded on the project
+- [x] Browser + phone app: wizard end to end, the other account sees the event, Schedule / run sheet use the planned times, Members search, Start / End
+- [ ] Ern: check the joined-up flow (planned times feed Schedule and the run sheet date; Members search) is what the team wants
+- [ ] Old test events made by this check: "NDP Rehearsal 3 (wizard test)", "Phone wizard test", "QA merge sim check" (no delete-event button yet)
+
 ## 4i. NDP scenario testing, field hardening, radio (18 Oct)
 
 - [x] Migration `029_field_hardening.sql` (029 + 029b + 029c on the project) – `supabase/tests/ndp_scenarios_test.sql` 28/28; Stages 6–8 suites still pass

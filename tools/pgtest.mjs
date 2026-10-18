@@ -437,9 +437,9 @@ await phase('legacy', {
   },
 })
 
-// ---------- phase 6: the "Create an event" wizard (023) ----------
-// 020-022 need PostGIS, which PGlite doesn't have, so this applies 001-002, the two columns of 022 that
-// 023 reads, and then 023 itself.
+// ---------- phase 6: the "Create an event" wizard (030; 023 on its branch) ----------
+// 020-029 need PostGIS / pg_cron, which PGlite doesn't have, so this applies 001-002, the two columns of 022 that
+// 030 reads, and then 030 itself.
 await phase('wizard', {
   migrations: [
     named('001_locations.sql'),
@@ -449,13 +449,13 @@ await phase('wizard', {
       sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
             alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
     },
-    { name: '023_event_wizard.sql', sql: read('supabase/migrations/023_event_wizard.sql') },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
   ],
   body: async (db) => {
     await runSql(db, read('supabase/tests/event_wizard.sql'), 'event_wizard.sql')
-    // 023 must be safe to paste into the SQL Editor a second time
-    await runSql(db, read('supabase/migrations/023_event_wizard.sql'), '023_event_wizard.sql a second time')
-    return ['supabase/tests/event_wizard.sql passed, and 023 re-applies cleanly']
+    // 030 must be safe to paste into the SQL Editor a second time
+    await runSql(db, read('supabase/migrations/030_event_wizard.sql'), '030_event_wizard.sql a second time')
+    return ['supabase/tests/event_wizard.sql passed, and 030 re-applies cleanly']
   },
 })
 

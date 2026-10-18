@@ -25,6 +25,8 @@ const props = defineProps({
   icCount: { type: Number, default: 0 }, // ICs in the event
   sharingCount: { type: Number, default: 0 }, // ICs sharing right now (live only)
   runSheets: { type: Object, default: null }, // useRunSheetList (root / planner / marshal), else null
+  plannedStart: { type: String, default: null }, // the event's planned times (Create-an-event wizard), ISO or null
+  plannedEnd: { type: String, default: null },
 })
 
 // ---------- Run sheet version to run with ----------
@@ -156,12 +158,17 @@ function modeFor(end, base) {
 function openSchedule() {
   const nextHour = new Date()
   nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0)
-  const start = scheduledStart.value || nextHour
+  // Nothing scheduled yet: the event's planned times (from the Create-an-event wizard) if they are still ahead
+  const plannedStart = props.plannedStart ? new Date(props.plannedStart) : null
+  const plannedEnd = props.plannedEnd ? new Date(props.plannedEnd) : null
+  const usePlanned = !scheduledStart.value && plannedStart && plannedStart > new Date()
+  const start = scheduledStart.value || (usePlanned ? plannedStart : nextHour)
+  const end = scheduledEnd.value || (usePlanned ? plannedEnd : null)
   startDate.value = dateOf(start)
   startTime.value = timeOf(start)
-  endDate.value = scheduledEnd.value ? dateOf(scheduledEnd.value) : ''
-  endTime.value = scheduledEnd.value ? timeOf(scheduledEnd.value) : ''
-  endMode.value = modeFor(scheduledEnd.value, start)
+  endDate.value = end ? dateOf(end) : ''
+  endTime.value = end ? timeOf(end) : ''
+  endMode.value = modeFor(end, start)
   formError.value = ''
   preselectSheet()
   form.value = 'schedule'

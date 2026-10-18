@@ -8,6 +8,15 @@ function db() {
   return supabase
 }
 
+// A readable message for a failed call: no signal (common at a crowded venue) says so instead of "Failed to fetch"
+function fail(error) {
+  const msg = (error && error.message) || String(error)
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+    return new Error('No connection to the server. Check your internet and try again.')
+  }
+  return new Error(msg)
+}
+
 // Characters that would break the search, and the "@" people type in front of usernames
 function cleanSearchTerm(term) {
   return String(term || '')
@@ -22,11 +31,11 @@ export async function searchPeople(term) {
   const clean = cleanSearchTerm(term)
   if (clean.length < 2) return []
   const { data, error } = await db().rpc('search_people', { p_term: clean })
-  if (error) throw new Error(error.message)
+  if (error) throw fail(error)
   return data
 }
 
-// Step 4 of the wizard: save everything in ONE transaction (023_event_wizard.sql). Returns the event id.
+// Step 4 of the wizard: save everything in ONE transaction (030_event_wizard.sql). Returns the event id.
 // event   : { name, description, venue, starts_at, ends_at }   (ISO times)
 // members : [{ user_id, role }]                                 (participant | planner | marshal)
 // groups  : [{ name, colour, members: [{ user_id, is_admin, is_ic }] }]
@@ -36,7 +45,7 @@ export async function createEventWithSetup({ event, members, groups }) {
     p_members: members,
     p_groups: groups,
   })
-  if (error) throw new Error(error.message)
+  if (error) throw fail(error)
   return data
 }
 
@@ -45,24 +54,26 @@ export async function createQuickEvent(name, isSimulation = false) {
   const { data, error } = await db().rpc(isSimulation ? 'create_simulation_event' : 'create_event', {
     p_name: name,
   })
-  if (error) throw new Error(error.message)
+  if (error) throw fail(error)
   return data
 }
 
-// The events I am in, newest first: [{ id, name, created_at, isSimulation, roles: ['root', ...] }]
+// The events I am in, newest first: [{ id, name, created_at, isSimulation, startsAt, venue, roles: ['root', ...] }]
 export async function getMyEvents(userId) {
   // My role rows, each with its event (RLS only returns events I belong to)
   const { data, error } = await db()
     .from('event_roles')
-    .select('role, events (id, name, created_at, is_simulation)')
+    .select('role, events (id, name, created_at, is_simulation, starts_at, venue)')
     .eq('user_id', userId)
-  if (error) throw new Error(error.message)
+  if (error) throw fail(error)
 
   // One entry per event, with all my roles in it
   const byId = {}
   for (const row of data) {
     const ev = row.events
-    if (!byId[ev.id]) byId[ev.id] = { id: ev.id, name: ev.name, created_at: ev.created_at, isSimulation: ev.is_simulation, roles: [] }
+    if (!byId[ev.id]) {
+      byId[ev.id] = { id: ev.id, name: ev.name, created_at: ev.created_at, isSimulation: ev.is_simulation, startsAt: ev.starts_at, venue: ev.venue, roles: [] }
+    }
     byId[ev.id].roles.push(row.role)
   }
   return Object.values(byId).sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -71,6 +82,6 @@ export async function getMyEvents(userId) {
 // Join with a 6-character code (as a participant). Returns the event id.
 export async function joinEventByCode(code) {
   const { data, error } = await db().rpc('join_event', { p_code: code })
-  if (error) throw new Error(error.message)
+  if (error) throw fail(error)
   return data
 }

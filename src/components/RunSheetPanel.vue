@@ -35,6 +35,7 @@ const props = defineProps({
   liveSession: { type: Object, default: null }, // { id, runSheetId } while live
   eventName: { type: String, default: '' },
   members: { type: Array, default: () => [] }, // for the IC usernames in an export
+  plannedDay: { type: String, default: '' }, // YYYY-MM-DD: the event's planned day (Create-an-event wizard), if any
 })
 // An import can create groups and change their details: the event page reloads them
 const emit = defineEmits(['changed'])
@@ -106,7 +107,7 @@ function openNew(copy) {
   versionForm.value = {
     mode: 'new',
     name: sheets.value.length || copy ? nextName(base, sheets.value.map((s) => s.name)) : 'Rehearsal 1',
-    forDate: '',
+    forDate: props.plannedDay || '',
     copyFrom: copy && sheet.value ? sheet.value.id : '',
   }
   versionError.value = ''

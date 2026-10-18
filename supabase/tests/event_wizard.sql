@@ -1,5 +1,5 @@
 -- ============================================================
--- Tests for the "Create an event" wizard: 023_event_wizard.sql
+-- Tests for the "Create an event" wizard: 030_event_wizard.sql (023 on its branch)
 --
 -- Run in the Supabase SQL Editor AFTER 023 is applied, or locally with `node tools/pgtest.mjs wizard`.
 -- Everything happens inside ONE transaction that ends in ROLLBACK, so nothing is left behind.

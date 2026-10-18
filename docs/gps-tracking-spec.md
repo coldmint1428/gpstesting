@@ -455,7 +455,8 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveM
 | Route | View | Notes |
 |---|---|---|
 | `/login` | LoginView | sign in / create account |
-| `/events` | EventsView | my events, create, join with code |
+| `/events` | EventsView | my events (with date / venue), Create an event (→ wizard), simulation event by name, join with code |
+| `/events/new` | CreateEventView | 4-step wizard: details, people (`search_people`), groups with IC / Admin, preview; one call `create_event_with_setup` (030); draft kept on the device |
 | `/events/:id` | EventView | status card (Start / Schedule / End), tabs Live map · Members · Invite · Playback (root/planner); one-tap Share/Stop (locked until live) |
 | `/events/:id/share` | GpsTestView | "My GPS details" (raw readings, save status) |
 | `/join/:code` | JoinView | invite link / QR target |

@@ -19,7 +19,7 @@ import { clearPushReminders } from '../composables/usePushNotifications'
 import { askConfirm, toast } from '../composables/useNotify'
 import { useZoneActivity } from '../composables/useZoneActivity'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
-import { formatDayTime, formatTimeSeconds } from '../utils/time'
+import { formatDayTime, formatTimeSeconds, sgtIso } from '../utils/time'
 import { eventRoleLabel, groupRoleLabel } from '../utils/people'
 import SharingWarnings from '../components/SharingWarnings.vue'
 import EventStatus from '../components/EventStatus.vue'
@@ -335,7 +335,7 @@ async function leaveEvent() {
       </div>
 
       <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount"
-        :run-sheets="seesWholeEvent ? runSheets : null">
+        :run-sheets="seesWholeEvent ? runSheets : null" :planned-start="event.starts_at" :planned-end="event.ends_at">
         <!-- Only the group's IC shares, and only while the event is live. One tap starts sharing. -->
         <template v-if="isIC" #sharing>
           <div class="d-flex flex-wrap align-items-center gap-2">
@@ -514,6 +514,7 @@ async function leaveEvent() {
         :groups="groups"
         :live-session="liveSession"
         :event-name="event.name"
+        :planned-day="event.starts_at ? sgtIso(new Date(event.starts_at)).slice(0, 10) : ''"
         :members="members"
         @changed="load"
       />

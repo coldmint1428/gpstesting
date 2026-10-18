@@ -5,11 +5,12 @@
 //   Group admin   : add/remove people in their own group, promote ICs
 //   Everyone else : read-only list
 // The database checks every action again (see 002_users_events_groups.sql).
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { initials, eventRoleLabel } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { askConfirm, toast } from '../composables/useNotify'
+import { searchPeople } from '../services/eventService'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -28,6 +29,32 @@ const busy = ref(false)
 const newGroupName = ref('')
 const newGroupColour = ref('#0d6efd')
 const addUsername = ref('')
+// Find people as you type (username, name or a whole email: search_people from the Create-an-event wizard)
+const found = ref([])
+let searchTimer = null
+let searchSeq = 0
+watch(addUsername, (value) => {
+  clearTimeout(searchTimer)
+  if (value.trim().replace(/^@/, '').length < 2) {
+    found.value = []
+    return
+  }
+  searchTimer = setTimeout(async () => {
+    const mine = ++searchSeq
+    try {
+      const rows = await searchPeople(value)
+      if (mine === searchSeq) found.value = rows.filter((p) => !props.members.some((m) => m.id === p.id) && p.username !== value.trim())
+    } catch {
+      if (mine === searchSeq) found.value = []
+    }
+  }, 300)
+})
+onUnmounted(() => clearTimeout(searchTimer))
+function pickFound(p) {
+  addUsername.value = p.username
+  found.value = []
+  addMember()
+}
 const addGroupId = ref('') // '' = no group
 
 // Group I am admin of (null if none)
@@ -243,18 +270,25 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
     <!-- Add an existing account by username -->
     <form v-if="canAddPeople" class="card mb-3" @submit.prevent="addMember">
       <div class="card-body">
-        <h2 class="h6">Add a person by username</h2>
+        <h2 class="h6">Add a person</h2>
         <div class="row g-2">
           <div class="col-12 col-sm">
             <input
               v-model="addUsername"
               class="form-control"
-              placeholder="username"
+              placeholder="username, name or full email"
               autocapitalize="none"
+              autocomplete="off"
               required
-              aria-label="Username"
+              aria-label="Username, name or email"
               data-testid="add-username"
             />
+            <ul v-if="found.length" class="list-group mt-1" data-testid="add-found">
+              <li v-for="p in found" :key="p.id" class="list-group-item list-group-item-action py-1 d-flex align-items-center gap-2">
+                <span class="me-auto text-truncate small">{{ p.display_name }} <span class="text-muted">@{{ p.username }}</span></span>
+                <button type="button" class="btn btn-sm btn-primary" :disabled="busy" @click="pickFound(p)">Add</button>
+              </li>
+            </ul>
           </div>
           <div v-if="canManage" class="col-12 col-sm">
             <select v-model="addGroupId" class="form-select" aria-label="Group" data-testid="add-group">

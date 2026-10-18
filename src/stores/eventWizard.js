@@ -1,10 +1,12 @@
 // The "Create an event" wizard's answers (Pinia store). Kept in the browser until Confirm, so going
 // Back / Next (or to another page and back) never loses anything. Nothing is saved before Confirm.
+// The draft is also kept on this device (localStorage), so a reload - or Android closing the app in the
+// background - does not lose it either; Confirm and Start over clear it.
 //
 // Roles follow the database (002): everyone added is a participant ("Member"), optionally also a
 // planner or marshal. Inside a group a person can be Admin and/or IC. The creator is root.
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 export const ROLE_OPTIONS = [
   { value: 'participant', label: 'Member' },
@@ -34,6 +36,35 @@ export const useEventWizardStore = defineStore('eventWizard', () => {
     people.value = []
     groups.value = []
   }
+
+  // ---------- The draft on this device ----------
+  const DRAFT_KEY = 'eventWizardDraft'
+  try {
+    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null')
+    if (saved && saved.ownerId) {
+      ownerId.value = saved.ownerId
+      step.value = Math.min(Math.max(Number(saved.step) || 1, 1), 4)
+      details.value = { ...emptyDetails(), ...(saved.details || {}) }
+      people.value = Array.isArray(saved.people) ? saved.people : []
+      groups.value = Array.isArray(saved.groups) ? saved.groups : []
+      nextKey = groups.value.reduce((k, g) => Math.max(k, (g.key || 0) + 1), 1)
+    }
+  } catch {
+    // no storage (private window) or a broken draft: start empty
+  }
+  watch(
+    [ownerId, step, details, people, groups],
+    () => {
+      try {
+        const empty = !details.value.name && !people.value.length && !groups.value.length && step.value === 1
+        if (!ownerId.value || empty) localStorage.removeItem(DRAFT_KEY)
+        else localStorage.setItem(DRAFT_KEY, JSON.stringify({ ownerId: ownerId.value, step: step.value, details: details.value, people: people.value, groups: groups.value }))
+      } catch {
+        // storage full or blocked: the draft just isn't kept
+      }
+    },
+    { deep: true },
+  )
 
   // ---------- Step 2: people ----------
   function addPerson(profile) {
