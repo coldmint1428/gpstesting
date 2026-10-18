@@ -283,7 +283,7 @@ async function removeException(x) {
           <div v-if="form.deadline_kind !== 'fixed'" class="col-sm-7">
             <select v-model="form.cue_id" class="form-select" aria-label="Cue" data-testid="move-cue">
               <option value="" disabled>Pick a cue…</option>
-              <option v-for="c in cues" :key="c.id" :value="c.id">{{ c.start_time.slice(0, 5) }}{{ c.day_offset ? ' (+1)' : '' }} · {{ c.code }} {{ c.title }}</option>
+              <option v-for="c in cues" :key="c.id" :value="c.id">{{ c.start_time.slice(0, 8) }}{{ c.day_offset ? ' (+1)' : '' }} · {{ c.code }} {{ c.title }}</option>
             </select>
           </div>
           <div v-else class="col-sm-7 d-flex gap-2 align-items-center">

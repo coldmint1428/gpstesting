@@ -330,6 +330,14 @@ const topMovements = computed(() => movements.value.filter((m) => !m.parent_id))
 const exceptionsOf = (m) => movements.value.filter((x) => x.parent_id === m.id)
 const movementEdit = ref(null) // the movement open in the editor, or { } for a new one
 
+// A chip in the cue table: bring the movement into view below and flash it
+function showMove(m) {
+  const el = document.getElementById('rs-' + m.id)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('rs-flash')
+  setTimeout(() => el.classList.remove('rs-flash'), 1600)
+}
 function whoText(m) {
   if (m.category) return 'All "' + m.category + '"'
   const g = groupById.value[m.group_id]
@@ -556,7 +564,8 @@ const todayIso = isoDate(new Date())
           <div class="row g-2">
             <div class="col-sm-7">
               <label class="form-label small mb-1" for="rs-name">Name</label>
-              <input id="rs-name" v-model="versionForm.name" class="form-control" maxlength="60" placeholder="e.g. Rehearsal 2" data-testid="rs-name" />
+              <!-- The suggested name is selected on the first tap, so typing replaces it instead of adding to it -->
+              <input id="rs-name" v-model="versionForm.name" class="form-control" maxlength="60" placeholder="e.g. Rehearsal 2" data-testid="rs-name" @focus="$event.target.select()" />
             </div>
             <div class="col-sm-5">
               <label class="form-label small mb-1" for="rs-date">For date (optional)</label>
@@ -643,15 +652,14 @@ const todayIso = isoDate(new Date())
                 <th scope="col">Start</th>
                 <th scope="col">Length</th>
                 <th scope="col">Cue</th>
-                <th scope="col" class="d-none d-md-table-cell">Type</th>
-                <th scope="col" class="d-none d-md-table-cell">Starts</th>
-                <th scope="col">Moves</th>
+                <th scope="col" class="d-none d-md-table-cell">Type · starts</th>
+                <th scope="col">Groups must be in…</th>
               </tr>
             </thead>
             <tbody>
               <template v-for="row in rows" :key="row.key">
                 <tr v-if="row.heading" class="rs-section">
-                  <th colspan="6" scope="rowgroup">{{ row.heading }}</th>
+                  <th colspan="5" scope="rowgroup">{{ row.heading }}</th>
                 </tr>
                 <template v-else>
                   <tr
@@ -668,16 +676,35 @@ const todayIso = isoDate(new Date())
                       <span v-if="row.cue.type === 'anchor'" class="badge text-bg-dark ms-1 d-md-none">⚓</span>
                     </td>
                     <td class="d-none d-md-table-cell small">
-                      {{ row.cue.type === 'anchor' ? '⚓ Anchor' : row.cue.type === 'flexible' ? 'Flexible (−' + formatLength(row.cue.can_shorten_s) + ')' : 'Normal' }}
+                      <span v-if="row.cue.type === 'anchor'" class="rs-pill rs-pill-anchor">⚓ Anchor · fixed</span>
+                      <template v-else>
+                        <span v-if="row.cue.type === 'flexible'" class="rs-pill rs-pill-flex">Flexible · −{{ formatLength(row.cue.can_shorten_s) }}</span>
+                        <span v-else>Normal</span>
+                        <span class="text-muted"> · </span>
+                        <strong v-if="row.cue.start_mode === 'auto_ready'">When ready</strong>
+                        <span v-else>{{ row.cue.start_mode === 'auto' ? 'Auto' : 'GO' }}</span>
+                      </template>
                     </td>
-                    <td class="d-none d-md-table-cell small">
-                      {{ row.cue.start_mode === 'auto' ? 'Auto' : row.cue.start_mode === 'auto_ready' ? 'When ready' : 'Manual (GO)' }}
+                    <td class="small">
+                      <!-- Who must be where for this cue: a chip per movement (tap to see it below) -->
+                      <span class="d-flex flex-wrap gap-1">
+                        <button
+                          v-for="m in movesByCue[row.cue.id] || []"
+                          :key="m.id"
+                          type="button"
+                          class="rs-pill rs-pill-move"
+                          :title="whoText(m) + ' must be inside ' + (zoneById[m.zone_id] ? zoneById[m.zone_id].code : 'its zone') + ' ' + whenText(m)"
+                          @click.stop="showMove(m)"
+                        >
+                          {{ whoText(m) }} → {{ zoneById[m.zone_id] ? zoneById[m.zone_id].code : '?' }}
+                        </button>
+                        <span v-if="!(movesByCue[row.cue.id] || []).length" class="text-muted">—</span>
+                      </span>
                     </td>
-                    <td class="small">{{ (movesByCue[row.cue.id] || []).length || '' }}</td>
                   </tr>
                   <!-- The cue editor opens right under the cue being edited (or the cue a new one goes after) -->
                   <tr v-if="editorAnchor === row.cue.id" class="rs-editor-row">
-                    <td colspan="6" class="p-2"><div id="rs-cue-slot"></div></td>
+                    <td colspan="5" class="p-2"><div id="rs-cue-slot"></div></td>
                   </tr>
                 </template>
               </template>
@@ -846,5 +873,46 @@ const todayIso = isoDate(new Date())
 }
 .rs-editor-row > td {
   background: var(--bs-tertiary-bg);
+}
+.rs-pill {
+  display: inline-block;
+  border: 0;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.rs-pill-anchor {
+  background: #0f1b2d;
+  color: #fff;
+}
+.rs-pill-flex {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+.rs-pill-move {
+  background: #ccfbf1;
+  color: #115e59;
+  cursor: pointer;
+}
+.rs-pill-move:hover,
+.rs-pill-move:focus-visible {
+  background: #99f6e4;
+}
+.rs-flash {
+  animation: rs-flash 1.6s ease-out;
+}
+@keyframes rs-flash {
+  0%,
+  40% {
+    background: #fef3c7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-flash {
+    animation: none;
+  }
 }
 </style>

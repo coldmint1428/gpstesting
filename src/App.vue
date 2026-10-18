@@ -44,9 +44,9 @@ async function logout() {
 </script>
 
 <template>
-  <nav class="navbar navbar-expand-sm navbar-dark bg-dark">
-    <div class="container">
-      <RouterLink class="navbar-brand" to="/">GPS Testing</RouterLink>
+  <nav class="navbar navbar-expand-sm navbar-dark app-nav">
+    <div class="container-fluid app-nav-inner">
+      <RouterLink class="navbar-brand fw-semibold" to="/">Event Tracker</RouterLink>
       <button
         class="navbar-toggler"
         type="button"
