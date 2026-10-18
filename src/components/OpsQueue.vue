@@ -1,7 +1,11 @@
 <script setup>
 // OpsQueue - the groups that need attention during the live show (merger Stage 7): late, no signal, at risk, the most
 // urgent first. "I'll handle it" tells the other planners who has it; Acknowledge hides it until it gets worse;
-// Snooze hides it for 2 minutes; Message sends the group's admins and ICs a line on their event page.
+// Snooze hides it for 2 minutes; Message sends the group's admins and ICs a line on their event page (and a push).
+// A group that pressed "Tell planner: delayed" on its phone (Stage 8) is listed too, with what it said.
+// Radio (029): each group shows its channel / call sign; what is heard on the radio goes in straight away: "In
+// position" counts the arrival at once (GPS needs the IC inside for the stay time; undo within 5 min), "Held up"
+// passes a delay on to every planner.
 import { ref, computed } from 'vue'
 import { toast } from '../composables/useNotify'
 import { mmss, sgClock } from '../composables/useShow'
@@ -68,6 +72,33 @@ function openMessage(r) {
   writing.value = writing.value === r.group_id ? null : r.group_id
   text.value = 'Please head to ' + zoneCode(r) + ' now: due ' + sgClock(r.deadline) + '.'
 }
+// ---------- Radio ----------
+const lastRadio = ref(null) // { r, at }: the last "in position" from here, for Undo (5 min)
+async function inPosition(r) {
+  const res = await props.ops.inPosition(r)
+  if (res.error) return toast(res.error, 'danger', 8000)
+  lastRadio.value = { r, at: Date.now() }
+  toast(groupName(r) + ' in position at ' + zoneCode(r) + ' (radio).', 'success', 4000)
+}
+async function undoRadio() {
+  const res = await props.ops.inPosition(lastRadio.value.r, true)
+  if (res.error) return toast(res.error, 'danger', 8000)
+  toast(groupName(lastRadio.value.r) + ' is not in position after all: back in the queue.', 'warning', 4000)
+  lastRadio.value = null
+}
+const canUndo = computed(() => lastRadio.value && props.now - lastRadio.value.at < 300000)
+const heldFor = ref(null) // group id: the "held up" form is open
+const heldNote = ref('')
+function openHeld(r) {
+  heldFor.value = heldFor.value === r.group_id ? null : r.group_id
+  heldNote.value = ''
+}
+async function sendHeld(r) {
+  const res = await props.ops.radioDelay(r, heldNote.value)
+  if (res.error) return toast(res.error, 'danger', 8000)
+  heldFor.value = null
+}
+
 async function send(r) {
   const res = await props.ops.message(r.group_id, text.value)
   if (res.error) return toast(res.error, 'danger', 8000)
@@ -80,6 +111,9 @@ async function send(r) {
   <div class="card ops-queue mb-3" data-testid="ops-queue">
     <div class="card-body py-2 d-flex align-items-baseline">
       <span class="small text-muted text-uppercase fw-semibold flex-grow-1">Needs attention · {{ queue.length }}</span>
+      <button v-if="canUndo" type="button" class="btn btn-link btn-sm p-0 me-2" data-testid="ops-radio-undo" @click="undoRadio">
+        Undo: {{ groupName(lastRadio.r) }} in position
+      </button>
       <span class="small text-muted">most urgent first</span>
     </div>
     <p v-if="!queue.length" class="small text-muted px-3 pb-2 mb-0" data-testid="ops-queue-empty">
@@ -103,6 +137,10 @@ async function send(r) {
           </span>
         </div>
         <div class="small">{{ detail(r) }}</div>
+        <div v-if="r.radio" class="small text-muted" data-testid="ops-radio">📻 {{ r.radio }}</div>
+        <div v-if="r.delay_at" class="small fw-semibold text-danger" data-testid="ops-delay">
+          ⚑ {{ r.delay_by || 'The group' }} reported a delay at {{ sgClock(r.delay_at) }}<template v-if="r.delay_note">: "{{ r.delay_note }}"</template>
+        </div>
         <div v-if="r.handled_by" class="small fw-semibold" data-testid="ops-handled">Handled by {{ r.handled_mine ? 'you' : r.handled_by }}</div>
         <div class="d-flex flex-wrap gap-1 mt-1">
           <button
@@ -118,7 +156,17 @@ async function send(r) {
           <button type="button" class="btn btn-sm btn-outline-dark" :disabled="!!busy" data-testid="ops-message" @click="openMessage(r)">Message admin</button>
           <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="!!busy" data-testid="ops-ack" @click="ack(r)">Acknowledge</button>
           <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="!!busy" data-testid="ops-snooze" @click="snooze(r)">Snooze 2 min</button>
+          <button type="button" class="btn btn-sm btn-outline-success" :disabled="!!busy" title="Heard on the radio: counts at once" data-testid="ops-in-position" @click="inPosition(r)">
+            ✓ In position (radio)
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-danger" :disabled="!!busy" title="Heard on the radio: every planner sees it" data-testid="ops-held" @click="openHeld(r)">
+            Held up (radio)
+          </button>
         </div>
+        <form v-if="heldFor === r.group_id" class="d-flex gap-1 mt-2" @submit.prevent="sendHeld(r)">
+          <input v-model="heldNote" class="form-control form-control-sm" maxlength="200" placeholder="What did they say? (optional)" aria-label="Why the group is held up" data-testid="ops-held-note" />
+          <button type="submit" class="btn btn-sm btn-danger" :disabled="!!busy" data-testid="ops-held-send">Tell planners</button>
+        </form>
         <form v-if="writing === r.group_id" class="d-flex gap-1 mt-2" @submit.prevent="send(r)">
           <input v-model="text" class="form-control form-control-sm" maxlength="300" aria-label="Message to the group" data-testid="ops-message-text" />
           <button type="submit" class="btn btn-sm btn-primary" :disabled="!!busy || !text.trim()" data-testid="ops-message-send">Send</button>

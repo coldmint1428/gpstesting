@@ -10,6 +10,7 @@
 //   ops.queue       problems, most urgent first (acknowledged and snoozed ones left out)
 //   ops.handle / ack / snooze / message / keepHolding
 //
+// A movement whose group pressed "Tell planner: delayed" (Stage 8) is in the queue whatever its status.
 // Movement rows change on every tick for groups on the move, so they are read every 4 s while the page is visible
 // (not through Realtime: one message per group per tick would use up the Realtime quota at 100+ groups).
 import { ref, computed, watch, onUnmounted } from 'vue'
@@ -164,13 +165,15 @@ export function useOps(sessionIdRef, { groups, zones, myUserId }) {
   const queue = computed(() => {
     const t = now.value
     return Object.values(active.value)
-      .filter((r) => r.state === 'active' && PROBLEMS.includes(r.status) && passes(r, true))
+      .filter((r) => r.state === 'active' && (PROBLEMS.includes(r.status) || r.delay_at) && passes(r, true))
       .filter((r) => !(r.acked_status && statusOf(r.acked_status).rank >= statusOf(r.status).rank))
       .filter((r) => !(r.snoozed_until && new Date(r.snoozed_until).getTime() > t))
       .sort(urgency)
   })
   const hidden = computed(
-    () => Object.values(active.value).filter((r) => r.state === 'active' && PROBLEMS.includes(r.status) && passes(r, true)).length - queue.value.length,
+    () =>
+      Object.values(active.value).filter((r) => r.state === 'active' && (PROBLEMS.includes(r.status) || r.delay_at) && passes(r, true)).length -
+      queue.value.length,
   )
 
   // Filter choices from the groups in the show
@@ -206,9 +209,13 @@ export function useOps(sessionIdRef, { groups, zones, myUserId }) {
   const snooze = (r, seconds = 120) => act('snooze', 'ops_snooze', { p_movement: r.movement_id, p_group: r.group_id, p_seconds: seconds })
   const message = (groupId, body) => act('message', 'message_group', { p_group: groupId, p_body: body })
   const keepHolding = (cueId) => act('hold', 'show_keep_holding', { p_cue: cueId })
+  // Heard on the radio (029): "in position" counts at once (undo within 5 min); a delay is passed on to everyone
+  const inPosition = (r, undo = false) =>
+    act('radio', 'mark_in_position', { p_movement: r.movement_id, p_group: r.group_id, p_undo: undo })
+  const radioDelay = (r, note) => act('radio', 'report_delay', { p_movement: r.movement_id, p_group: r.group_id, p_note: note || null })
 
   return {
     rows, active, counts, filters, filtering, visibleGroupIds, queue, hidden, choices, mySector, myCount, loaded, errorMsg, busy,
-    groupOf, zoneOf, load, handle, ack, snooze, message, keepHolding, myUserId,
+    groupOf, zoneOf, load, handle, ack, snooze, message, keepHolding, inPosition, radioDelay, myUserId,
   }
 }

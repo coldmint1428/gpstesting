@@ -10,6 +10,11 @@
 //     push goes out at once instead of at the next cron minute
 // Which ICs, and how often, is decided by the database function claim_push_reminders().
 //
+// Since merger Stage 8 (028_ic_moves.sql) it also sends the queued pushes: pg_cron / the movements tick call it
+// with the cron secret and { queue: true }; claim_push_queue() hands out "Get ready", "Leave now", "Running
+// late", planners' messages and No-Go warnings (already worded, one per person and movement). These are normal
+// notifications (Android draws them, also when the app is closed); a tap opens the event at the group's next move.
+//
 // Secret: FCM_SERVICE_ACCOUNT = the JSON key of the Firebase project's service account
 // (Firebase console -> Project settings -> Service accounts -> Generate new private key).
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2'
@@ -99,6 +104,29 @@ function messageFor(r: Reminder) {
   }
 }
 
+// ---------- A queued push (Stage 8) ----------
+type Queued = { id: number; token: string; kind: string; title: string; body: string; data: Record<string, unknown> }
+
+function queuedMessage(q: Queued) {
+  // FCM data values must be strings
+  const data: Record<string, string> = { title: q.title, body: q.body }
+  for (const [k, v] of Object.entries(q.data || {})) if (v !== null && v !== undefined) data[k] = String(v)
+  return {
+    message: {
+      token: q.token,
+      notification: { title: q.title, body: q.body },
+      data,
+      android: {
+        priority: 'HIGH',
+        ttl: '600s', // a "Leave now" more than 10 min late is no help
+        // same tag = replaces the group's previous push (Get ready -> Leave now -> Running late)
+        notification: { channel_id: 'moves', tag: data.tag || q.kind, default_sound: true, notification_priority: 'PRIORITY_HIGH' },
+      },
+      apns: { headers: { 'apns-priority': '10' }, payload: { aps: { alert: { title: q.title, body: q.body }, sound: 'default' } } },
+    },
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405)
@@ -110,10 +138,13 @@ Deno.serve(async (req) => {
   // ---------- Who is calling? ----------
   let eventId: string | null = null
   let forced = false
+  let queue = false
   const cronSecret = req.headers.get('x-cron-secret')
   if (cronSecret) {
     const { data: ok } = await admin.rpc('check_push_cron_secret', { p_secret: cronSecret })
     if (!ok) return json({ error: 'Not allowed' }, 401)
+    const body = await req.json().catch(() => ({}))
+    queue = body.queue === true
   } else {
     const jwt = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
     const { data: userData } = await admin.auth.getUser(jwt)
@@ -137,6 +168,44 @@ Deno.serve(async (req) => {
   if (!raw) return json({ error: 'FCM_SERVICE_ACCOUNT secret is not set' }, 500)
   const sa = JSON.parse(raw) as ServiceAccount
 
+  async function forgetIfGone(token: string, status: number, text: string) {
+    // App uninstalled / token replaced: forget this phone
+    if (status === 404 || text.includes('UNREGISTERED') || text.includes('registration token is not a valid')) {
+      await admin.rpc('delete_push_token', { p_token: token })
+    }
+  }
+
+  // ---------- Queued pushes (Stage 8): already worded and de-duplicated by the database ----------
+  if (queue) {
+    const { data: rows, error: qError } = await admin.rpc('claim_push_queue', { p_limit: 200 })
+    if (qError) return json({ error: qError.message }, 500)
+    if (!rows || rows.length === 0) return json({ sent: 0, failed: 0 })
+    const accessToken = await getGoogleToken(sa)
+    let sent = 0
+    let failed = 0
+    const list = rows as Queued[]
+    for (let i = 0; i < list.length; i += 20) {
+      await Promise.all(
+        list.slice(i, i + 20).map(async (q) => {
+          const res = await fetch('https://fcm.googleapis.com/v1/projects/' + sa.project_id + '/messages:send', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify(queuedMessage(q)),
+          })
+          if (res.ok) {
+            sent++
+          } else {
+            failed++
+            const text = await res.text()
+            console.error('[send-reminders] queued', q.kind, res.status, text)
+            await forgetIfGone(q.token, res.status, text)
+          }
+        }),
+      )
+    }
+    return json({ sent, failed })
+  }
+
   // ---------- Who needs a reminder (the database also records it, so no double sends) ----------
   const { data: due, error } = await admin.rpc('claim_push_reminders', { p_event_id: eventId, p_force: forced })
   if (error) return json({ error: error.message }, 500)
@@ -157,10 +226,7 @@ Deno.serve(async (req) => {
       failed++
       const text = await res.text()
       console.error('[send-reminders] FCM', res.status, text)
-      // App uninstalled / token replaced: forget this phone
-      if (res.status === 404 || text.includes('UNREGISTERED') || text.includes('registration token is not a valid')) {
-        await admin.rpc('delete_push_token', { p_token: r.token })
-      }
+      await forgetIfGone(r.token, res.status, text)
     }
   }
   // 20 at a time: one by one, an NDP-sized event (hundreds of ICs) took over half a minute to reach the last phone

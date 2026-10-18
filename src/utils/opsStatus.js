@@ -32,9 +32,14 @@ export function statusText(row) {
   return s.symbol + ' ' + s.label
 }
 
-// Most urgent first: late (soonest deadline first), then no signal, then at risk (least spare first)
+// How bad, for sorting: a group that told the planners it is delayed counts as at least "no signal"
+function urgencyRank(r) {
+  return Math.max(statusOf(r.status).rank, r.delay_at ? 4 : 0)
+}
+
+// Most urgent first: late (soonest deadline first), then reported delays and no signal, then at risk (least spare first)
 export function urgency(a, b) {
-  const r = statusOf(b.status).rank - statusOf(a.status).rank
+  const r = urgencyRank(b) - urgencyRank(a)
   if (r) return r
   if (a.status === 'at_risk') return (a.spare_s ?? 0) - (b.spare_s ?? 0)
   return new Date(a.deadline || 0) - new Date(b.deadline || 0)

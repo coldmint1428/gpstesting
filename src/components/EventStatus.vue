@@ -208,9 +208,11 @@ function openStart() {
   form.value = 'start'
 }
 async function startNow() {
+  const chosen = hasSheets.value ? sheetChoice.value : null
   const ok = await askConfirm({
     title: 'Start the event now?',
     message:
+      (hasSheets.value ? (chosen ? 'Run sheet: "' + sheetName(chosen) + '". ' : 'No run sheet: tracking only (no cues, no moves). ') : '') +
       'ICs can share their location from now, and ICs who are not sharing get a reminder on their phone.' +
       (scheduledEnd.value ? ' It still ends at ' + formatDayTime(scheduledEnd.value) + '.' : ''),
     confirmText: 'Start event',
@@ -227,9 +229,11 @@ async function startNow() {
 }
 
 async function endNow() {
+  const running = openSheetName.value
   const ok = await askConfirm({
-    title: 'End the event now?',
+    title: running ? 'End the event and its show?' : 'End the event now?',
     message:
+      (running ? 'The show "' + running + '" is still running: ending stops its cues, every group\'s moves and their pushes. ' : '') +
       (scheduledEnd.value ? 'It ends now instead of at ' + formatTime(scheduledEnd.value) + '. ' : '') +
       "Everyone's location sharing stops. To continue later, press Start event again (a new recording). " +
       'This recording stays in Playback for 7 days.',

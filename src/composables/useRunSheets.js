@@ -53,14 +53,15 @@ export function useRunSheetList(eventId, enabledRef) {
   // A version can run when it is Ready, or Used (a record of an order that already ran)
   const runnable = computed(() => sheets.value.filter((s) => s.status !== 'draft'))
 
-  // The version to suggest when starting: dated today, else the most recently dated Ready one, else none.
+  // The version to suggest when starting: dated today, else a Ready one with no date or a date still to come, else none
+  // (a past rehearsal's version is never suggested: on show night that would start the wrong plan).
   const suggested = computed(() => {
     const today = isoDate(new Date())
     const list = runnable.value
     return (
       list.find((s) => s.forDate === today && s.status === 'ready') ||
       list.find((s) => s.forDate === today) ||
-      list.find((s) => s.status === 'ready') ||
+      list.find((s) => s.status === 'ready' && (!s.forDate || s.forDate >= today)) ||
       null
     )
   })

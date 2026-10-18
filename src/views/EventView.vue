@@ -40,6 +40,8 @@ import OpsQueue from '../components/OpsQueue.vue'
 import OpsDecision from '../components/OpsDecision.vue'
 import { useOps } from '../composables/useOps'
 import { useGroupMessages } from '../composables/useGroupMessages'
+import NextMoveCard from '../components/NextMoveCard.vue'
+import { useMyMoves } from '../composables/useMyMoves'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -75,6 +77,7 @@ const SHOW_TOAST = {
   add_time: ['info', 5000],
   switch: ['info', 6000],
   keep_holding: ['warning', 6000],
+  delay_report: ['warning', 12000],
   // 'message' (to a group) is not toasted: the sender is told, and a message to 20 waiting groups would be 20 toasts
 }
 const show = useShow(showSession, {
@@ -177,6 +180,31 @@ const myNoGo = computed(() => {
 const live = useLiveLocations(props.id)
 
 const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback' | 'zones' | 'runsheet' | 'simulator'
+
+// My group's next move (merger Stage 8): any member of a group sees where to be, by when, and when to leave. A push
+// ("Get ready", "Leave now", "Running late", a message) opens the page with ?next=1: the card is scrolled into view.
+const myMoves = useMyMoves(
+  computed(() => (liveSession.value ? liveSession.value.id : null)),
+  computed(() => !!myGroup.value),
+)
+const myPosition = computed(() => {
+  const p = auth.user ? live.positions.value[auth.user.id] : null
+  return p && p.source !== 'stop' ? { lat: p.lat, lng: p.lng } : null
+})
+const nextMoveEl = ref(null)
+watch(
+  [() => route.query.next, () => myMoves.loaded.value],
+  ([wanted, loaded]) => {
+    if (wanted !== '1' || !loaded) return
+    tab.value = 'map'
+    router.replace({ query: {} })
+    setTimeout(() => {
+      const el = nextMoveEl.value && (nextMoveEl.value.$el || nextMoveEl.value)
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+  },
+  { immediate: true },
+)
 
 // ---------- One-tap sharing (same tracker as the Share page and navbar) ----------
 const tracker = useLocationTracker()
@@ -353,6 +381,16 @@ async function leaveEvent() {
         </span>
         <button type="button" class="btn-close" aria-label="Close" @click="closedMessage = groupMessages.latest.value.id"></button>
       </div>
+
+      <NextMoveCard
+        v-if="liveSession && myGroup"
+        ref="nextMoveEl"
+        :moves="myMoves"
+        :my-position="myPosition"
+        :sharing="sharingHere"
+        @stop-sharing="tracker.stop()"
+        @share="startSharing"
+      />
 
       <SharingWarnings v-if="sharingHere" />
       <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>

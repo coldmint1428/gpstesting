@@ -635,6 +635,25 @@ Stages 4–6 (run sheet builder, Excel import / export, live show) are recorded 
 - [ ] Phone walk: a movement for your group to a zone ~300 m away → walk it with the S25 → ETA and status on the laptop within ±30 s; arrival 20 s after entering
 - [ ] Second planner on another device: I'll handle it on one shows "Handled by …" on the other
 
+## 4h. Merger Stage 8 – IC phone: next move + pushes (built 18 Oct)
+
+- [x] Migration `028_ic_moves.sql` (+ 028b–c on the project): `push_queue`, delay fields, `push_collect_moves` (in `move_tick`), `push_collect_nogo`, `push_kick`, `claim_push_queue`, pg_cron `gps-push-send` (5 s), `my_moves`, `report_delay`; `message_group` and `ops_board` updated – rolled-back SQL test 30/30
+- [x] `send-reminders` v5 deployed: `{queue:true}` from the cron sends the queued pushes (channel `moves`)
+- [x] Event page: "Your next move" card (plain layout until the Figma design); planners' queue shows "⚑ … reported a delay"
+- [x] S25 with the app in the background: Get ready, Leave now (moved by +30 s), message and No-Go pushes arrived within 1–7 s
+- [ ] Android Studio: build and install the new app (`npm run cap:sync` done) → first push creates the "moves" channel; tap a push → event page scrolls to the card
+- [ ] 3-movement follow test: a Draft with 3 movements for your group ~3–5 min apart → follow it from the notifications alone with the app closed
+- [ ] Mobile layout from the team's Figma (the card is plain Bootstrap for now)
+
+## 4i. NDP scenario testing, field hardening, radio (18 Oct)
+
+- [x] Migration `029_field_hardening.sql` (029 + 029b + 029c on the project) – `supabase/tests/ndp_scenarios_test.sql` 28/28; Stages 6–8 suites still pass
+- [x] Android: move pushes drawn while the app is open (`ReminderMessagingService.java`); new build installed on the S25
+- [x] Live phone + laptop: hold / resume / next / change of plan pushes, radio In position / Undo / Held up, We're in position, double +30 refused, End warning
+- [ ] More test accounts (Komin creates them, e.g. testuser4–10, or Simulator → Add groups) for a 5+ phone walk
+- [ ] Put each group's radio channel / call sign in Members → Group details before a rehearsal
+- [ ] Team: decide on the radio ideas not built yet (an "all stations" message, marshal check-in by sector, a radio log view)
+
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)
 - [ ] Fill progress tracker (do by / vet by per task)

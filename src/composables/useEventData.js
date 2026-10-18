@@ -19,7 +19,7 @@ export function useEventData(eventId) {
     // Run the 4 queries at the same time
     const [ev, gr, roles, gm] = await Promise.all([
       supabase.from('events').select('id, name, join_code, is_simulation').eq('id', eventId).maybeSingle(),
-      supabase.from('groups').select('id, name, colour, code, category, sector, headcount').eq('event_id', eventId).order('created_at'),
+      supabase.from('groups').select('id, name, colour, code, category, sector, headcount, radio').eq('event_id', eventId).order('created_at'),
       supabase.from('event_roles').select('user_id, role, sector, profiles (username, display_name)').eq('event_id', eventId),
       supabase.from('group_members').select('group_id, user_id, is_admin, is_ic').eq('event_id', eventId),
     ])

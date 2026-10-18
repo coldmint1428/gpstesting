@@ -28,14 +28,47 @@ import java.util.Map;
 public class ReminderMessagingService extends MessagingService {
 
     static final String CHANNEL_ID = "event-start"; // same id the app creates in usePushNotifications.js
+    static final String MOVES_CHANNEL_ID = "moves"; // Get ready / Leave now / Running late / messages / No-Go
 
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
         Map<String, String> data = message.getData();
         if ("event-start".equals(data.get("kind")) && data.get("eventId") != null) {
             showReminder(message, data);
+        } else if (message.getNotification() != null && isMoveKind(data.get("kind"))) {
+            // A notification message only reaches this code while the app is OPEN (closed: Android draws it). Draw it
+            // anyway: an IC looking at the app must still get a "Leave now" that pops up and sounds, not only a toast.
+            showMove(message, data);
         }
         super.onMessageReceived(message); // app open: JavaScript also gets it (shows a toast)
+    }
+
+    private static boolean isMoveKind(String kind) {
+        return "move".equals(kind) || "message".equals(kind) || "nogo".equals(kind) || "show".equals(kind);
+    }
+
+    private void showMove(RemoteMessage message, Map<String, String> data) {
+        RemoteMessage.Notification n = message.getNotification();
+        String title = n.getTitle() != null ? n.getTitle() : "Your group's move";
+        String body = n.getBody() != null ? n.getBody() : "";
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.getNotificationChannel(MOVES_CHANNEL_ID) == null) {
+            NotificationChannel channel = new NotificationChannel(MOVES_CHANNEL_ID, "Your group's moves", NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Get ready, Leave now, running late and messages from the planners");
+            manager.createNotificationChannel(channel);
+        }
+        // Same tag as the server's (one per movement and group): a newer push replaces the older one
+        String tag = data.containsKey("tag") ? data.get("tag") : data.get("kind") + "-" + data.get("eventId");
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, MOVES_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_location)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent(message, data, tag.hashCode(), "tap"));
+        manager.notify(tag, 0, builder.build());
     }
 
     private void showReminder(RemoteMessage message, Map<String, String> data) {

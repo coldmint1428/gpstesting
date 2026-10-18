@@ -6,6 +6,10 @@
 // planner presses "Remind ICs". Pushes arrive even when the app is closed. Tapping one opens
 // the event and starts sharing.
 //
+// Merger Stage 8: the group's ICs and admins also get "Get ready" / "Leave now" / "Running late", planners'
+// messages and No-Go warnings (kinds move / message / nogo, drawn by Android on the "moves" channel). Tapping one
+// opens the event at the group's next move (EventView handles ?next=1).
+//
 // Needs android/app/google-services.json from the Firebase console (see the checklist).
 // Without it the app still works, just without push reminders.
 //
@@ -16,6 +20,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from './useNotify'
 
 const isNative = Capacitor.isNativePlatform()
+const MOVE_KINDS = ['move', 'message', 'nogo', 'show'] // Stage 8 pushes (send-reminders, push_queue); 'show' = on hold / resumed (029)
 export const pushReady = ref(false) // this phone has a push token saved for the logged-in user
 
 let pluginModule = null
@@ -69,6 +74,8 @@ export async function enablePush(router) {
         const data = action.notification.data || {}
         if (data.kind === 'event-start' && data.eventId) {
           router.push({ name: 'event', params: { id: data.eventId }, query: { share: '1' } })
+        } else if (MOVE_KINDS.includes(data.kind) && data.eventId) {
+          router.push({ name: 'event', params: { id: data.eventId }, query: { next: '1' } })
         }
       })
       // Arrived while the app is OPEN: the phone notification is drawn by ReminderMessagingService.java
@@ -80,6 +87,13 @@ export async function enablePush(router) {
           id: 'event-start',
           name: 'Event start reminders',
           description: 'Reminds ICs to share their location when an event starts',
+          importance: 5,
+          visibility: 1,
+        })
+        await PN.createChannel({
+          id: 'moves',
+          name: 'Your group\'s moves',
+          description: 'Get ready, Leave now, running late and messages from the planners',
           importance: 5,
           visibility: 1,
         })
@@ -99,8 +113,15 @@ export async function enablePush(router) {
 
 function showWhileOpen(notification) {
   const data = notification.data || {}
-  if (data.kind !== 'event-start') return
-  toast((data.title || 'Event started') + '. ' + (data.body || 'Tap Start sharing.'), 'warning', 8000)
+  if (data.kind === 'event-start') {
+    toast((data.title || 'Event started') + '. ' + (data.body || 'Tap Start sharing.'), 'warning', 8000)
+  } else if (data.kind === 'move' || data.kind === 'show') {
+    // (a planner's message and a No-Go entry already show as toast + banner on the event page; the phone also draws the
+    // notification itself while the app is open: ReminderMessagingService.java)
+    const title = data.title || notification.title || ''
+    const body = data.body || notification.body || ''
+    toast(title + (body ? ': ' + body : ''), 'warning', 12000)
+  }
 }
 
 // Logout: this phone shouldn't get reminders for the old user any more

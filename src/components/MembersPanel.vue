@@ -64,7 +64,13 @@ const details = ref({}) // groupId -> { code, category, sector, headcount }
 const detailSaved = ref('') // groupId just saved
 const justSaved = new Set() // rows to refresh from the next reload
 function detailsOf(g) {
-  return { code: g.code || '', category: g.category || '', sector: g.sector || '', headcount: g.headcount == null ? '' : String(g.headcount) }
+  return {
+    code: g.code || '',
+    category: g.category || '',
+    sector: g.sector || '',
+    headcount: g.headcount == null ? '' : String(g.headcount),
+    radio: g.radio || '',
+  }
 }
 function openDetails() {
   showDetails.value = !showDetails.value
@@ -94,7 +100,8 @@ function detailsChanged(g) {
     d.code !== (g.code || '') ||
     d.category !== (g.category || '') ||
     d.sector !== (g.sector || '') ||
-    d.headcount !== (g.headcount == null ? '' : String(g.headcount))
+    d.headcount !== (g.headcount == null ? '' : String(g.headcount)) ||
+    d.radio !== (g.radio || '')
   )
 }
 async function saveDetails(g) {
@@ -111,7 +118,9 @@ async function saveDetails(g) {
     p_sector: d.sector,
     p_headcount: head === '' ? null : Number(head),
   })
-  if (ok) {
+  // the radio channel / call sign (029) has its own call
+  const okRadio = ok && d.radio !== (g.radio || '') ? await run('set_group_radio', { p_group: g.id, p_radio: d.radio }) : ok
+  if (ok && okRadio) {
     justSaved.add(g.id)
     detailSaved.value = g.id
     setTimeout(() => (detailSaved.value === g.id ? (detailSaved.value = '') : null), 2500)
@@ -288,6 +297,7 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
                 <th scope="col">Code</th>
                 <th scope="col">Sector</th>
                 <th scope="col">Headcount</th>
+                <th scope="col">Radio</th>
                 <th scope="col"><span class="visually-hidden">Save</span></th>
               </tr>
             </thead>
@@ -298,6 +308,7 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
                 <td><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
                 <td><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
                 <td style="max-width: 6rem"><input v-model="details[g.id].headcount" class="form-control form-control-sm" inputmode="numeric" :aria-label="'Headcount of ' + g.name" data-testid="gd-headcount" /></td>
+                <td><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
                 <td class="text-nowrap">
                   <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
                   <button v-else class="btn btn-sm btn-outline-primary" :disabled="busy || !detailsChanged(g)" data-testid="gd-save" @click="saveDetails(g)">Save</button>
