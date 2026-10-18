@@ -314,6 +314,13 @@ async function leaveEvent() {
     <template v-else>
       <div class="mb-3">
         <h1 class="h4 mb-1" data-testid="event-name">{{ event.name }}</h1>
+        <!-- Details from the Create-an-event wizard (older events have none) -->
+        <p v-if="event.starts_at || event.venue" class="small text-muted mb-1" data-testid="event-when">
+          <template v-if="event.starts_at">{{ formatDayTime(event.starts_at) }} – {{ formatDayTime(event.ends_at) }}</template>
+          <template v-if="event.starts_at && event.venue"> · </template>
+          <template v-if="event.venue">{{ event.venue }}</template>
+        </p>
+        <p v-if="event.description" class="small mb-1" style="white-space: pre-line">{{ event.description }}</p>
         <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
         <span v-if="event.is_simulation" class="badge text-bg-warning me-1" data-testid="sim-badge">SIMULATION</span>
         <span class="badge text-bg-secondary me-1" data-testid="event-role-badge">{{ eventRoleLabel(myRoles) }}</span>

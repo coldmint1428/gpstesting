@@ -3,7 +3,7 @@
 // If not logged in, the router guard sends the user to /login first and back here after.
 import { ref, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { supabase } from '../lib/supabase'
+import { joinEventByCode } from '../services/eventService'
 import BenchAlert from '../components/BenchAlert.vue'
 
 const props = defineProps({ code: { type: String, required: true } })
@@ -11,12 +11,12 @@ const router = useRouter()
 const errorMsg = ref('')
 
 onMounted(async () => {
-  const { data: id, error } = await supabase.rpc('join_event', { p_code: props.code })
-  if (error) {
+  try {
+    const id = await joinEventByCode(props.code)
+    router.replace({ name: 'event', params: { id } })
+  } catch (error) {
     errorMsg.value = error.message
-    return
   }
-  router.replace({ name: 'event', params: { id } })
 })
 </script>
 
