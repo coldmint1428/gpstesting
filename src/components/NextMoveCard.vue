@@ -19,6 +19,7 @@ const props = defineProps({
   moves: { type: Object, required: true }, // useMyMoves()
   myPosition: { type: Object, default: null }, // { lat, lng } of this person, if sharing
   sharing: { type: Boolean, default: false },
+  ring: { type: Boolean, default: false }, // phone app: show the countdown ring
 })
 const emit = defineEmits(['stop-sharing', 'share'])
 
@@ -30,6 +31,28 @@ const secsTo = (at) => (at ? Math.round((t(at) - now.value) / 1000) : null)
 
 // What to do now, in one line
 const held = computed(() => !!props.moves.heldSince.value)
+
+// The ring (phone app). Before the group has set off it counts down to the leave-by time ("Leave in"), once it is
+// moving to the deadline ("Time left"); it is full 10 minutes out and empties as the moment comes. Colour always
+// comes with a word: amber in the last minute, red once it has passed, teal when the group has arrived.
+const RING_LEN = 2 * Math.PI * 52
+const RING_WINDOW_S = 600
+const countdown = computed(() => {
+  const r = next.value
+  if (!r) return null
+  if (r.status === 'arrived') return { label: 'Arrived', value: '✓', share: 1, tone: 'ok' }
+  if (held.value) return { label: 'On hold', value: 'Wait', share: 1, tone: 'risk' }
+  const leaving = !r.moving && r.leave_by
+  const s = secsTo(leaving ? r.leave_by : r.deadline)
+  if (s == null) return null
+  if (s <= 0) return { label: leaving ? 'Leave' : 'Due', value: 'Now', share: 1, tone: 'late' }
+  return {
+    label: leaving ? 'Leave in' : 'Time left',
+    value: mmss(s),
+    share: Math.min(1, s / RING_WINDOW_S),
+    tone: s <= 60 ? 'risk' : 'go',
+  }
+})
 // "+00:45" when the show's delay moved this deadline from its plan, else ''
 const moved = computed(() => {
   const r = next.value
@@ -165,7 +188,29 @@ async function undoInPosition() {
       </div>
 
       <template v-if="next">
-        <div class="nm-where" data-testid="next-where">
+        <!-- Phone app: the countdown ring beside where to go (Figma screen 4). The ring empties as the moment nears. -->
+        <div v-if="ring && countdown" class="nm-hero" data-testid="next-ring">
+          <svg class="nm-ring" viewBox="0 0 120 120" role="img" :aria-label="countdown.label + ' ' + countdown.value">
+            <circle cx="60" cy="60" r="52" class="nm-ring-track" />
+            <circle
+              cx="60"
+              cy="60"
+              r="52"
+              class="nm-ring-arc"
+              :class="'nm-ring-' + countdown.tone"
+              :stroke-dasharray="RING_LEN"
+              :stroke-dashoffset="RING_LEN * (1 - countdown.share)"
+              transform="rotate(-90 60 60)"
+            />
+            <text x="60" y="52" text-anchor="middle" class="nm-ring-label">{{ countdown.label }}</text>
+            <text x="60" y="78" text-anchor="middle" class="nm-ring-value" :class="'nm-ring-' + countdown.tone">{{ countdown.value }}</text>
+          </svg>
+          <div class="nm-hero-text">
+            <div class="nm-where" data-testid="next-where">Be inside {{ next.zone_name }}</div>
+            <div class="small text-muted">{{ next.zone_code }}</div>
+          </div>
+        </div>
+        <div v-else class="nm-where" data-testid="next-where">
           Be inside {{ next.zone_name }} <span class="text-muted small fw-normal">({{ next.zone_code }})</span>
         </div>
         <div class="next-num small" data-testid="next-by">
@@ -257,6 +302,68 @@ async function undoInPosition() {
   font-size: 22px;
   font-weight: 700;
   line-height: 1.2;
+}
+.nm-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 6px;
+}
+.nm-ring {
+  flex: none;
+  width: 112px;
+  height: 112px;
+}
+.nm-ring-track {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 10;
+}
+.nm-ring-arc {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+circle.nm-ring-go {
+  stroke: #f97316;
+}
+circle.nm-ring-risk {
+  stroke: #d97706;
+}
+circle.nm-ring-late {
+  stroke: #dc2626;
+}
+circle.nm-ring-ok {
+  stroke: #0f766e;
+}
+.nm-ring-label {
+  font-size: 12px;
+  fill: #64748b;
+  font-weight: 500;
+}
+.nm-ring-value {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  fill: #c2410c;
+}
+text.nm-ring-risk {
+  fill: #b45309;
+}
+text.nm-ring-late {
+  fill: #dc2626;
+}
+text.nm-ring-ok {
+  fill: #0f766e;
+}
+.nm-hero-text {
+  min-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nm-ring-arc {
+    transition: none;
+  }
 }
 .nm-tiles {
   display: grid;

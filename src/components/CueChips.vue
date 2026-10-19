@@ -2,7 +2,7 @@
 // CueChips - the movements due at one cue (merger Stage 7), as chips under the cue in the run sheet panel:
 // "Bands → FORMATION_1: 2 ✓ · 1 late". The chip takes the colour of its worst status; tap it for every group.
 import { ref, computed } from 'vue'
-import { statusOf, statusText } from '../utils/opsStatus'
+import { statusOf, statusText, notSharingYet } from '../utils/opsStatus'
 
 const props = defineProps({
   ops: { type: Object, required: true }, // useOps()
@@ -11,8 +11,8 @@ const props = defineProps({
 
 const open = ref('') // the chip shown in full
 
-const ORDER = ['arrived', 'arrived_late', 'on_track', 'at_risk', 'late', 'no_signal', 'missed', 'pending']
-const SHORT = { arrived: '✓', arrived_late: '✓ late', on_track: 'on track', at_risk: 'at risk', late: 'late', no_signal: 'no signal', missed: 'missed', pending: 'waiting' }
+const ORDER = ['arrived', 'arrived_late', 'on_track', 'at_risk', 'late', 'no_signal', 'not_sharing', 'missed', 'pending']
+const SHORT = { arrived: '✓', arrived_late: '✓ late', on_track: 'on track', at_risk: 'at risk', late: 'late', no_signal: 'no signal', not_sharing: 'not sharing yet', missed: 'missed', pending: 'waiting' }
 
 const chips = computed(() => {
   const byLabel = new Map()
@@ -27,7 +27,8 @@ const chips = computed(() => {
   return [...byLabel.entries()].map(([label, rows]) => {
     const worst = rows.reduce((w, r) => (statusOf(r.status).rank > statusOf(w.status).rank ? r : w), rows[0])
     const counts = ORDER.map((s) => {
-      const n = rows.filter((r) => r.status === s).length
+      // a group that has not started sharing is counted apart from one that lost its signal
+      const n = rows.filter((r) => (notSharingYet(r) ? 'not_sharing' : r.status) === s).length
       return n ? (s === 'arrived' ? n + ' ✓' : n + ' ' + SHORT[s]) : ''
     }).filter(Boolean)
     return { label, rows, cls: statusOf(worst.status).cls, text: counts.join(' · ') }

@@ -4,6 +4,9 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import BenchAlert from '../components/BenchAlert.vue'
+import { isNativeApp } from '../lib/platform'
+
+const native = isNativeApp // phone app: brand header over the map, the form in a sheet (Figma screen 1)
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -35,11 +38,15 @@ async function submit() {
 </script>
 
 <template>
-  <main class="container py-4">
-    <div class="row justify-content-center">
-      <div class="col-12 col-sm-10 col-md-7 col-lg-5">
-        <div class="card">
-          <div class="card-body">
+  <main :class="native ? 'pv-login' : 'container py-4'">
+    <div v-if="native" class="pv-login-hero">
+      <div class="pv-logo">Planova</div>
+      <p>Every group in the right place, on time.</p>
+    </div>
+    <div :class="native ? 'pv-login-sheet' : 'row justify-content-center'">
+      <div :class="native ? '' : 'col-12 col-sm-10 col-md-7 col-lg-5'">
+        <div :class="native ? '' : 'card'">
+          <div :class="native ? '' : 'card-body'">
             <ul class="nav nav-pills nav-fill mb-3">
               <li class="nav-item">
                 <button
@@ -105,7 +112,7 @@ async function submit() {
 
               <BenchAlert v-if="errorMsg" data-testid="auth-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-              <button type="submit" class="btn btn-primary w-100" :disabled="busy" data-testid="auth-submit">
+              <button type="submit" class="btn btn-primary w-100" :class="{ 'btn-lg': native }" :disabled="busy" data-testid="auth-submit">
                 {{ busy ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Create account' }}
               </button>
             </form>

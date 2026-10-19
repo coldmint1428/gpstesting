@@ -245,10 +245,11 @@ begin
   if r.deadline = '2026-11-20 18:03:30+08' and r.planned_deadline = '2026-11-20 18:03:00+08' then passed := passed + 1;
   else failures := failures || E'\nM7b MA2 ' || r::text; end if;
 
-  -- M8 M3 both inside from 18:02:20: projected late at 18:02:30 (told on the 2nd look), arrived late at 18:02:40 (at once)
+  -- M8 M3 both inside from 18:02:20: projected late at 18:02:30, arrived late at 18:02:40 (at once). M3 was "no signal"
+  -- until then, and a signal that comes back is a fact: the new status shows at once, not on the 2nd look (031).
   perform public.zz_at(sess, '2026-11-20 18:02:30+08');
   t := public.zz_ms(sess, mc, g3);
-  if t = 'active no_signal (next late)' then passed := passed + 1; else failures := failures || E'\nM8a ' || t; end if;
+  if t = 'active late' then passed := passed + 1; else failures := failures || E'\nM8a ' || t; end if;
   perform public.zz_at(sess, '2026-11-20 18:02:45+08');
   select * into r from public.movement_status where session_id = sess and movement_id = mc and group_id = g3;
   if r.status = 'arrived_late' and r.late_s = 10 and r.arrived_at = '2026-11-20 18:02:40+08' and r.ics_inside = 2 then passed := passed + 1;

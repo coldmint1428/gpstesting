@@ -1,15 +1,29 @@
 <script setup>
-import { onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useLocationTracker } from './composables/useLocationTracker'
 import { syncStartReminders, listenForReminderTaps } from './composables/useStartReminders'
 import { enablePush } from './composables/usePushNotifications'
 import NotifyHost from './components/NotifyHost.vue'
+import PhoneTabBar from './components/PhoneTabBar.vue'
+import { isNativeApp } from './lib/platform'
 
 const auth = useAuthStore()
 const router = useRouter()
 const tracker = useLocationTracker() // shared by every page
+
+// Phone app: the screens outside an event share one set of bottom tabs (inside an event the event page draws its
+// own, which follow the role). The website keeps its top bar instead.
+const APP_TABS = [
+  { key: 'events', label: 'Events', icon: 'events', to: { name: 'events' } },
+  { key: 'phone-check', label: 'Phone', icon: 'phone', to: { name: 'phone-check' } },
+  { key: 'me', label: 'Me', icon: 'me', to: { name: 'me' } },
+]
+const appTab = computed(() => {
+  const name = String(router.currentRoute.value.name || '')
+  return APP_TABS.some((t) => t.key === name) ? name : ''
+})
 
 onMounted(async () => {
   // Phone app: start Transistorsoft while the login is checked, not after (both take a moment)
@@ -44,7 +58,7 @@ async function logout() {
 </script>
 
 <template>
-  <nav class="navbar navbar-expand-sm navbar-dark app-nav">
+  <nav v-if="!isNativeApp" class="navbar navbar-expand-sm navbar-dark app-nav">
     <div class="container-fluid app-nav-inner">
       <RouterLink class="navbar-brand fw-semibold" to="/">Event Tracker</RouterLink>
       <button
@@ -90,5 +104,6 @@ async function logout() {
   <RouterView v-slot="{ Component, route }">
     <component :is="Component" :key="String(route.name) + ':' + (route.params.id || '')" />
   </RouterView>
+  <PhoneTabBar v-if="isNativeApp && auth.isLoggedIn && appTab" :items="APP_TABS" :active="appTab" />
   <NotifyHost />
 </template>

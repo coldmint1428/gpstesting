@@ -9,7 +9,7 @@
 import { ref, computed } from 'vue'
 import { toast } from '../composables/useNotify'
 import { mmss, sgClock } from '../composables/useShow'
-import { statusOf, statusText } from '../utils/opsStatus'
+import { statusOf, statusText, notSharingYet } from '../utils/opsStatus'
 
 const props = defineProps({
   ops: { type: Object, required: true }, // useOps()
@@ -38,9 +38,11 @@ function detail(r) {
   const out = []
   const due = secsTo(r.deadline)
   out.push('Due ' + sgClock(r.deadline) + (due != null ? (due >= 0 ? ' (in ' + mmss(due) + ')' : ' (' + mmss(-due) + ' ago)') : ''))
-  if (r.status === 'no_signal') {
+  if (notSharingYet(r)) {
+    out.push('none of its ICs has started sharing yet' + (r.inside ? ' (' + r.inside + ' inside)' : ''))
+  } else if (r.status === 'no_signal') {
     out.push(
-      r.sharing === 0
+      !r.sharing
         ? 'no IC heard in the last 2 min' + (r.inside ? ' (' + r.inside + ' inside)' : '')
         : 'only ' + r.sharing + ' of the ' + r.required + ' ICs needed heard' + (r.inside ? ' · ' + r.inside + ' inside' : ''),
     )

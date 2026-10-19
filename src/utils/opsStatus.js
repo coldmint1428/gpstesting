@@ -22,6 +22,20 @@ export function statusOf(key) {
   return STATUS[key] || STATUS.pending
 }
 
+// "No signal" from the engine covers two different situations, and planners read them differently: a group whose ICs
+// have NOT STARTED sharing this session (nobody pressed Share yet) and one whose ICs WERE sharing and went quiet. The board
+// counts both kinds of IC per group (sharing = heard in the last 2 min, no_signal = shared before but quiet since), so a
+// group with neither has simply not started. Same urgency and colour; different words.
+export function notSharingYet(row) {
+  return !!row && row.status === 'no_signal' && !row.sharing && !row.no_signal
+}
+export function statusLabel(row) {
+  return notSharingYet(row) ? 'Not sharing yet' : statusOf(row.status).label
+}
+export function statusSymbol(row) {
+  return notSharingYet(row) ? '○' : statusOf(row.status).symbol
+}
+
 // "■ Late +0:28", "▲ At risk · 12 s spare", "◌ No signal", "✓ Arrived 18:03:12"
 export function statusText(row) {
   const s = statusOf(row.status)
@@ -29,7 +43,7 @@ export function statusText(row) {
     return s.symbol + ' ' + s.label + (row.late_s ? ' +' + mmss(row.late_s) : '')
   }
   if (row.status === 'at_risk' && row.spare_s != null) return s.symbol + ' ' + s.label + ' · ' + row.spare_s + ' s spare'
-  return s.symbol + ' ' + s.label
+  return statusSymbol(row) + ' ' + statusLabel(row)
 }
 
 // How bad, for sorting: a group that told the planners it is delayed counts as at least "no signal"

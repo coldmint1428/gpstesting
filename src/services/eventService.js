@@ -85,3 +85,17 @@ export async function joinEventByCode(code) {
   if (error) throw fail(error)
   return data
 }
+
+// Phone app, My events: which of these events are live right now (a session that has started and not ended).
+// Members may read their events' sessions (007_event_sessions.sql, "members see sessions").
+export async function getLiveEventIds(eventIds) {
+  if (!eventIds.length) return []
+  const { data, error } = await db()
+    .from('event_sessions')
+    .select('event_id')
+    .in('event_id', eventIds)
+    .is('ended_at', null)
+    .lte('starts_at', new Date().toISOString())
+  if (error) throw fail(error)
+  return data.map((r) => r.event_id)
+}

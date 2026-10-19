@@ -2955,17 +2955,17 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                    the thing that spends it, rather than off in the page header where it used to
                    sit with no clue about what it was counting. The number itself is the database's
                    (layout_bytes in 017), handed in by the page. -->
-              <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                 <h2 class="h6 card-title mb-0">Floor plans</h2>
                 <div
-                  class="d-flex align-items-center gap-2"
+                  class="d-flex align-items-center gap-2 ms-auto"
                   data-testid="canvas-size"
                   :title="
                     'Storage for this whole bench (every area and floor plan): ' + sizeText + '. ' +
                     'Floor plan pictures are what make it big; moving a shape only changes it by a few bytes.'
                   "
                 >
-                  <span class="small text-muted text-nowrap">Storage: {{ sizeText }}</span>
+                  <span class="small text-muted">Storage: {{ sizeText }}</span>
                   <svg
                     class="bench-ring"
                     :class="'text-' + ringVariant"
