@@ -7,13 +7,15 @@
 // radio call (undo within 5 min). While the show is on hold the card says so instead of "Leave now". An IC who is not
 // sharing is told: the planners only see the group through the ICs who share.
 // Plain layout for now: the phone design comes from the team's Figma.
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
 import { mmss, sgClock } from '../composables/useShow'
 import { statusOf } from '../utils/opsStatus'
 import { askConfirm, toast } from '../composables/useNotify'
+import { isNativeApp } from '../lib/platform'
+import BottomSheet from './BottomSheet.vue'
 
 const props = defineProps({
   moves: { type: Object, required: true }, // useMyMoves()
@@ -137,8 +139,22 @@ onUnmounted(() => {
 watch(() => [next.value, props.myPosition], draw, { deep: true })
 
 // ---------- Tell planner: delayed ----------
+// The button opens a short "why?" box with its own Tell button. On the website it opens just under the buttons; on
+// the phone that spot is often below the screen (behind the bottom tabs), so pressing the button seemed to do nothing.
+// The phone uses a bottom sheet with one-tap reasons instead, and the website box scrolls into view with the cursor in it.
 const writing = ref(false)
 const note = ref('')
+const noteEl = ref(null)
+const REASONS = ['Stuck at a gate', 'Crowd in the way', 'Waiting for our people', 'Route blocked']
+function openDelay() {
+  writing.value = !writing.value
+  if (writing.value && !isNativeApp)
+    nextTick(() => {
+      if (!noteEl.value) return
+      noteEl.value.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      noteEl.value.focus({ preventScroll: true })
+    })
+}
 async function sendDelay() {
   const err = await props.moves.reportDelay(note.value)
   if (err) return toast(err, 'danger', 8000)
@@ -250,7 +266,7 @@ async function undoInPosition() {
             class="btn btn-sm btn-outline-danger"
             :disabled="moves.busy.value || reportedRecently"
             data-testid="tell-delayed"
-            @click="writing = !writing"
+            @click="openDelay"
           >
             {{ reportedRecently ? 'Planners told ✓' : 'Tell planner: delayed' }}
           </button>
@@ -268,12 +284,36 @@ async function undoInPosition() {
             Stop sharing
           </button>
         </div>
-        <form v-if="writing" class="d-flex gap-1 mt-2" @submit.prevent="sendDelay">
-          <input v-model="note" class="form-control form-control-sm" maxlength="200" placeholder="Why? (optional, e.g. stuck at the gate)" aria-label="Why are you delayed" data-testid="delay-note" />
+        <form v-if="writing && !isNativeApp" class="d-flex gap-1 mt-2" @submit.prevent="sendDelay">
+          <input ref="noteEl" v-model="note" class="form-control form-control-sm" maxlength="200" placeholder="Why? (optional, e.g. stuck at the gate)" aria-label="Why are you delayed" data-testid="delay-note" />
           <button type="submit" class="btn btn-sm btn-danger" :disabled="moves.busy.value" data-testid="delay-send">Tell</button>
         </form>
       </template>
       <p v-else class="text-muted small mb-0">Nothing to do right now.</p>
+
+      <BottomSheet v-if="isNativeApp" :open="writing && !!next" title="Tell the planners you're delayed" @close="writing = false">
+        <p v-if="next" class="text-muted mb-2">
+          Due in {{ next.zone_name }} ({{ next.zone_code }}) by {{ sgClock(next.deadline) }}. They see it at once on their Ops page.
+        </p>
+        <div class="d-flex flex-wrap gap-2 mb-2" role="group" aria-label="Quick reasons">
+          <button
+            v-for="r in REASONS"
+            :key="r"
+            type="button"
+            class="btn btn-sm rounded-pill"
+            :class="note === r ? 'btn-dark' : 'btn-outline-secondary'"
+            @click="note = note === r ? '' : r"
+          >
+            {{ r }}
+          </button>
+        </div>
+        <form @submit.prevent="sendDelay">
+          <input v-model="note" class="form-control mb-3" maxlength="200" placeholder="Or say why (optional)" aria-label="Why are you delayed" data-testid="delay-note" />
+          <button type="submit" class="btn btn-danger w-100 py-2" :disabled="moves.busy.value" data-testid="delay-send">
+            {{ moves.busy.value ? 'Sending…' : 'Tell the planners' }}
+          </button>
+        </form>
+      </BottomSheet>
 
       <div v-if="after.length" class="mt-3">
         <div class="small text-muted text-uppercase fw-semibold mb-1">After that</div>
