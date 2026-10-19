@@ -129,7 +129,16 @@ watch(layoutId, (id) => {
 // a picture became a row of its own: the same picture used by two floor plans is stored ONCE, so a count
 // of what is on screen would report more than the bench costs. `addedBytes` below is what is left of the
 // arithmetic -- one shape, before it is added.
-const sizeText = computed(() => formatBytes(bytes.value) + ' of ' + formatBytes(MAX_LAYOUT_BYTES))
+// Shown coarsely on purpose. The count covers EVERY shape on the bench, areas included, and an area's
+// points are stored as text: moving one changes how many digits its coordinates take, so the exact byte
+// count wobbles by a few bytes on every drag. To the byte, that read as the floor plans' storage changing
+// whenever an outline was moved. What the planner needs is how close the bench is to the cap, so small
+// benches read "under 1 KB" and larger ones whole KB / one decimal of MB; the exact figure is in the
+// tooltip (see AreaBench).
+const sizeText = computed(() => {
+  const used = bytes.value < 1024 ? 'under 1 KB' : formatBytes(bytes.value)
+  return used + ' of ' + formatBytes(MAX_LAYOUT_BYTES)
+})
 const sizeRatio = computed(() => bytes.value / MAX_LAYOUT_BYTES)
 
 // Would this floor plan fit? A picture that cannot be stored should be refused before it joins the

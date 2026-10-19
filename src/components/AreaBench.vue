@@ -517,13 +517,21 @@ function makePlanLayer(plan) {
     sourceImage: plan.image,
     onMap: false,
 
-    place(animate) {
+    // `target` is the zoom animation's destination ({ zoom, center } from Leaflet's zoomanim). While
+    // the animation runs, Leaflet has NOT moved to the new zoom yet -- map.getZoom() and the layer
+    // points are still the old ones until zoomend -- so a picture placed from them during the animation
+    // stayed exactly where it was while the tiles grew or shrank under it, then jumped at the end: the
+    // floor plan seemed to come loose and blink. Measured frame by frame: 250 ms frozen, then one jump.
+    // Placing it at where the zoom WILL put it, in today's layer coordinates (the same helper Leaflet's
+    // own markers and image overlays animate with), lets the CSS transition carry it along with the map.
+    place(animate, target) {
       if (!layer.onMap || !map) return
       const p = layer.plan
       const mine = mode.value === 'floorplan:' + p.id
 
-      const point = map.latLngToLayerPoint(L.latLng(p.centre[0], p.centre[1]))
-      const { wPx, hPx } = pixelSize(p, p.centre[0], map.getZoom())
+      const at = L.latLng(p.centre[0], p.centre[1])
+      const point = target ? map._latLngToNewLayerPoint(at, target.zoom, target.center) : map.latLngToLayerPoint(at)
+      const { wPx, hPx } = pixelSize(p, p.centre[0], target ? target.zoom : map.getZoom())
 
       // Only a zoom animation gets a transition: a drag, a slider or a pan must land
       // exactly where it is put, with no easing in between.
@@ -958,7 +966,13 @@ function startDrag(kind, plan, event, index) {
   if (refusePress(plan.id)) return
   event.preventDefault()
   event.stopPropagation()
-  dragState = { kind, plan, index }
+  // `start` is the plan as it was picked up -- place, size and turn -- which Escape puts back.
+  dragState = {
+    kind,
+    plan,
+    index,
+    start: { centre: [plan.centre[0], plan.centre[1]], widthM: plan.widthM, heightM: plan.heightM, angleDeg: plan.angleDeg },
+  }
   if (kind === 'move') {
     // Recorded once, in geography: every move is then measured from here, so the picture
     // follows the pointer exactly instead of accumulating rounding at every step.
@@ -1502,6 +1516,16 @@ function currentAreaPoints() {
   return area ? area.points.map((p) => [p[0], p[1]]) : []
 }
 
+// The ring of one area by its id, whatever is open. A dragged dot belongs to the area it was pressed on,
+// and must never be measured against "the area being edited": that is empty the moment the shape is put
+// down (Escape, a click elsewhere), and a drag that carried on from an empty ring wrote back a ring of
+// just the dot -- the "needs between 3 and 200 points (this one has 2)" refusal, with the dots left
+// somewhere the outline is not.
+function areaPointsOf(id) {
+  const area = props.areas.find((a) => a.id === id)
+  return area ? area.points.map((p) => [p[0], p[1]]) : []
+}
+
 function clearAreaVertices() {
   for (const marker of areaVertexMarkers) marker.remove()
   areaVertexMarkers = []
@@ -1671,7 +1695,12 @@ function onVertexMove(event) {
   const dot = metresToLatLng(vertexDrag.point, moved.x, moved.y)
   vertexDrag.dot = dot
 
-  const next = currentAreaPoints()
+  const next = areaPointsOf(vertexDrag.id)
+  // The area went away under the drag (deleted by somebody, an undo): nothing is left to move.
+  if (!next[vertexDrag.index]) {
+    cancelVertexDrag()
+    return
+  }
   next[vertexDrag.index] = dot
   // The dot is moved here rather than by Leaflet: nothing has been reported to the page yet, so the
   // props still hold the ring as it was and nothing else would move it off its old spot.
@@ -1701,8 +1730,9 @@ function endVertexDrag() {
   stopVertexDrag()
   if (!drag || !vertexMoved || !drag.dot) return
 
-  const before = currentAreaPoints()
-  const next = currentAreaPoints()
+  const before = areaPointsOf(drag.id)
+  if (!before[drag.index]) return // the area is gone: nothing to write
+  const next = areaPointsOf(drag.id)
   next[drag.index] = drag.dot
 
   // NO CROSSING LINES, with no way round it. An earlier version let a shape that already crossed
@@ -1889,6 +1919,8 @@ function onAreaPointerDown(id, event) {
     // same reason: a pan changes where a pixel is, and a re-anchor has to be able to move this.
     from: map.containerPointToLatLng(map.mouseEventToContainerPoint(event)),
     points: area.points.map((p) => [p[0], p[1]]),
+    // Where it was picked up, untouched by reanchor: Escape puts it back here (see cancelDragOnEscape).
+    start: area.points.map((p) => [p[0], p[1]]),
   }
   window.addEventListener('pointermove', onAreaDragMove)
   window.addEventListener('pointerup', endAreaDrag)
@@ -2300,10 +2332,11 @@ function onZoomStart() {
 
 // Leaflet's own layers ease themselves across a zoom; the hand-built pictures have to be
 // told to.
-function onZoomAnim() {
+function onZoomAnim(event) {
   const animate = !zoomAnimating
   zoomAnimating = true
-  for (const id of Object.keys(planLayers)) planLayers[id].place(animate)
+  const target = event && event.center ? { zoom: event.zoom, center: event.center } : null
+  for (const id of Object.keys(planLayers)) planLayers[id].place(animate, target)
 }
 
 // Keyboard: Ctrl+Z / Ctrl+Shift+Z (and Ctrl+Y) for undo and redo, Escape to back out.
@@ -2314,7 +2347,69 @@ function onZoomAnim() {
 // including the presses that find nothing left to take back -- because the alternative is the
 // page stepping the whole document back and dropping the half-drawn ring on the floor. The event
 // is stopped so exactly one step is taken per press.
+// Is a shape being dragged right now (a dot, an outline, a floor plan's move / corner / knob)?
+function dragInFlight() {
+  return Boolean(vertexDrag || areaDrag || dragState)
+}
+
+// Escape while the button is still down: the drag is called off and the shape goes back to where it
+// was picked up, still selected -- the way Escape cancels a drag everywhere else. Before this, Escape
+// put the shape DOWN under a drag that carried on, so the drag kept writing to a shape that was no
+// longer open (and a dragged dot wrote back a ring of one point).
+//
+// The history run is not closed here on purpose: the way back is written inside the same run as the
+// drag, so the run ends where it began and leaves no step (useDocHistory.endRun) -- nothing to undo,
+// because nothing happened. Its quiet timer closes it.
+function cancelDragOnEscape() {
+  if (vertexDrag) {
+    const drag = vertexDrag
+    const moved = vertexMoved
+    cancelVertexDrag() // draws the ring and the dot from the document again; nothing was written
+    // The button is still down, and letting go fires a click on the dot -- which removes a point. The
+    // gesture was called off, so that click must be swallowed like the one at the end of a drag.
+    vertexMoved = true
+    // The others were watching the dot travel: tell them it went back.
+    if (moved) emit('area-frame', { id: drag.id, patch: { points: areaPointsOf(drag.id) } })
+    return
+  }
+  if (areaDrag) {
+    const drag = areaDrag
+    areaDrag = null
+    window.removeEventListener('pointermove', onAreaDragMove)
+    window.removeEventListener('pointerup', endAreaDrag)
+    window.removeEventListener('pointercancel', endAreaDrag)
+    stopAutoPan()
+    applyAreaPoints(areaLayers[drag.id], drag.start)
+    emit('area-updated', { id: drag.id, patch: { points: drag.start } })
+    return
+  }
+  if (dragState) {
+    const drag = dragState
+    dragState = null
+    window.removeEventListener('pointermove', onDragMove)
+    window.removeEventListener('pointerup', endDrag)
+    window.removeEventListener('pointercancel', endDrag)
+    stopAutoPan()
+    emit('plan-updated', { id: drag.plan.id, patch: drag.start })
+  }
+}
+
 function onKeyDown(event) {
+  // A drag owns the keyboard until it is let go of. Escape calls it off; Delete, Undo / Redo and
+  // Copy / Paste would each change the very shape under the pointer (or the document around it) in
+  // the middle of the gesture, so they wait. Stopped here, in the capture phase, so the page's own
+  // shortcuts never see them either.
+  if (dragInFlight()) {
+    const key = event.key
+    const shortcut = (event.ctrlKey || event.metaKey) && ['z', 'y', 'c', 'v', 'x'].includes(String(key || '').toLowerCase())
+    if (key === 'Escape' || key === 'Delete' || key === 'Backspace' || shortcut) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (key === 'Escape') cancelDragOnEscape()
+      return
+    }
+  }
+
   const el = event.target
   const tag = el && el.tagName
   // A field comes first. Inside one, Ctrl+Z belongs to the browser's own text undo -- the
@@ -2537,6 +2632,15 @@ function framePick(value) {
 // "may a picture or an outline be clicked", and entering or leaving drawing is the only thing that
 // changes it.
 watch(mode, (value, oldValue) => {
+  // A drag outlives its shape being put down only by mistake (a click elsewhere with a second pointer,
+  // a page-level change of mode): it ends here, where it is, instead of writing on to a shape that is no
+  // longer open. A drag of the shape that IS now open is left alone -- pressing an outline opens it and
+  // starts its drag in the same press.
+  const openId = typeof value === 'string' && value.includes(':') ? value.slice(value.indexOf(':') + 1) : ''
+  if (vertexDrag && vertexDrag.id !== openId) endVertexDrag()
+  if (areaDrag && areaDrag.id !== openId) endAreaDrag()
+  if (dragState && dragState.plan && dragState.plan.id !== openId) endDrag()
+
   const pickedOnMap = viewAlreadyRight
   viewAlreadyRight = false
   if (value === 'polygons' || oldValue === 'polygons') applyMapHandlers()
@@ -2857,11 +2961,11 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                   class="d-flex align-items-center gap-2"
                   data-testid="canvas-size"
                   :title="
-                    'The whole canvas is ' + sizeText + '. Floor plan images live inside it, so ' +
-                    'they are what makes it big.'
+                    'Storage for this whole bench (every area and floor plan): ' + sizeText + '. ' +
+                    'Floor plan pictures are what make it big; moving a shape only changes it by a few bytes.'
                   "
                 >
-                  <span class="small text-muted text-nowrap">{{ sizeText }}</span>
+                  <span class="small text-muted text-nowrap">Storage: {{ sizeText }}</span>
                   <svg
                     class="bench-ring"
                     :class="'text-' + ringVariant"
