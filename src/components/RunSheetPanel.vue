@@ -646,7 +646,7 @@ const todayIso = isoDate(new Date())
           No cues yet. <template v-if="!readOnly">Press <strong>Add cue</strong> to add the first one.</template>
         </div>
         <div v-else class="table-responsive">
-          <table class="table table-sm align-middle mb-0 rs-table">
+          <table class="table table-sm align-middle mb-0 rs-table pv-stack">
             <thead>
               <tr>
                 <th scope="col">Start</th>

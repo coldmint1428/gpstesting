@@ -41,6 +41,9 @@ import OpsQueue from '../components/OpsQueue.vue'
 import OpsDecision from '../components/OpsDecision.vue'
 import { useOps } from '../composables/useOps'
 import { useGroupMessages } from '../composables/useGroupMessages'
+import { useBroadcasts } from '../composables/useBroadcasts'
+import BroadcastBanner from '../components/BroadcastBanner.vue'
+import BroadcastPanel from '../components/BroadcastPanel.vue'
 import NextMoveCard from '../components/NextMoveCard.vue'
 import PhoneTabBar from '../components/PhoneTabBar.vue'
 import BottomSheet from '../components/BottomSheet.vue'
@@ -179,6 +182,19 @@ const groupMessages = useGroupMessages(
   },
 )
 const closedMessage = ref(null)
+
+// "Message everyone" (032): planners send one message to many groups at once; whoever it reaches sees a banner until
+// they press Got it (and a toast as it arrives).
+const broadcasts = useBroadcasts(
+  computed(() => props.id),
+  {
+    myUserIdRef: computed(() => (auth.user ? auth.user.id : null)),
+    staffRef: canManage,
+    onNew(b) {
+      toast((b.urgent ? 'URGENT · ' : '') + 'Message from ' + b.from + ': ' + b.body, b.urgent ? 'danger' : 'warning', 15000)
+    },
+  },
+)
 
 // The No-Go areas I am inside right now (shown to me as a warning until I leave).
 const myNoGo = computed(() => {
@@ -583,6 +599,9 @@ async function leaveEvent() {
           <strong>You are inside a No-Go area:</strong> {{ myNoGo.map((z) => z.name).join(', ') }}. Please leave it now.
         </div>
 
+        <!-- A message from the planners to many groups at once (032): stays until Got it -->
+        <BroadcastBanner :broadcasts="broadcasts" />
+
         <!-- A message from the planners to my group (merger Stage 7) -->
         <div
           v-if="groupMessages.latest.value && closedMessage !== groupMessages.latest.value.id"
@@ -623,6 +642,7 @@ async function leaveEvent() {
             @share="startSharing"
           />
           <ShowBar v-if="!native && show.board.value" :show="show" :event-name="event.name" />
+          <BroadcastPanel v-if="!native && canManage" :broadcasts="broadcasts" :groups="groups" :show="show" :can-run="canManage" />
           <OpsSummary v-if="!native && hasOps" class="mb-0" :ops="ops" />
           <OpsDecision v-if="!native && show.board.value" :show="show" :ops="ops" :groups="groups" :can-run="canManage" />
           <div :class="native ? 'ev-map-phone' : show.board.value ? 'ev-live' : 'ev-map-only'">
@@ -690,6 +710,7 @@ async function leaveEvent() {
         <!-- Ops: the live show, the groups at a glance and what needs attention -->
         <template v-if="native && tab === 'ops'">
           <ShowBar v-if="show.board.value" :show="show" :event-name="event.name" />
+          <BroadcastPanel v-if="canManage" native :broadcasts="broadcasts" :groups="groups" :show="show" :can-run="canManage" />
           <OpsDecision v-if="show.board.value" :show="show" :ops="ops" :groups="groups" :can-run="canManage" />
           <ShowPanel v-if="show.board.value" :show="show" :can-run="canManage" :ops="hasOps ? ops : null" />
           <OpsSummary v-if="hasOps" class="mb-0" :ops="ops" />

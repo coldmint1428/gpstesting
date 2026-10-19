@@ -51,6 +51,10 @@ const router = createRouter({
 
     // Old test page address now goes to the events list
     { path: '/gps', redirect: '/events' },
+
+    // Any other address (an old or mistyped link) used to show a blank white page - on the phone app with no address
+    // bar and no tabs, so there was no way back. Go to the home page instead (My events on the phone).
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 

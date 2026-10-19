@@ -323,7 +323,7 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
         </p>
         <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
         <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
+          <table class="table table-sm align-middle mb-0 pv-stack">
             <thead>
               <tr>
                 <th scope="col">Group</th>
@@ -338,11 +338,11 @@ const canRemove = (m) => props.canManage && !m.roles.includes('root') && (!props
             <tbody>
               <tr v-for="g in groups.filter((x) => details[x.id])" :key="g.id" :data-testid="'group-details-' + g.name">
                 <td class="text-nowrap"><span class="dot-sm" :style="{ backgroundColor: g.colour }"></span>{{ g.name }}</td>
-                <td><input v-model="details[g.id].category" class="form-control form-control-sm" list="group-categories" maxlength="50" :aria-label="'Category of ' + g.name" data-testid="gd-category" /></td>
-                <td><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
-                <td><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
-                <td style="max-width: 6rem"><input v-model="details[g.id].headcount" class="form-control form-control-sm" inputmode="numeric" :aria-label="'Headcount of ' + g.name" data-testid="gd-headcount" /></td>
-                <td><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
+                <td data-label="Category"><input v-model="details[g.id].category" class="form-control form-control-sm" list="group-categories" maxlength="50" :aria-label="'Category of ' + g.name" data-testid="gd-category" /></td>
+                <td data-label="Code"><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
+                <td data-label="Sector"><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
+                <td data-label="Headcount" style="max-width: 6rem"><input v-model="details[g.id].headcount" class="form-control form-control-sm" inputmode="numeric" :aria-label="'Headcount of ' + g.name" data-testid="gd-headcount" /></td>
+                <td data-label="Radio"><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
                 <td class="text-nowrap">
                   <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
                   <button v-else class="btn btn-sm btn-outline-primary" :disabled="busy || !detailsChanged(g)" data-testid="gd-save" @click="saveDetails(g)">Save</button>
