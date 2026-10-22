@@ -131,7 +131,9 @@ async function changeRole(m, select) {
   if (role === 'planner') {
     const ok = await askConfirm({
       title: 'Make ' + m.display_name + ' a planner?',
-      message: 'Planners edit the timeline and map, run the event and manage everyone below them.',
+      message:
+        'Planners edit the timeline and map, run the event and manage everyone below them.' +
+        (m.groupId ? ' Planners are not in a group, so they will leave ' + groupName(m.groupId) + '.' : ''),
       confirmText: 'Make planner',
     })
     if (!ok) {

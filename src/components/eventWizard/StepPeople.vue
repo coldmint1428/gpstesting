@@ -41,6 +41,11 @@ async function runSearch(value) {
 onUnmounted(() => clearTimeout(timer))
 
 const isAdded = (id) => wizard.people.some((p) => p.id === id)
+
+// Planners are never in a group (034): a new planner leaves the group they were put in at step 3
+function roleChanged(p) {
+  if (p.role === 'planner') wizard.removeFromGroups(p.id)
+}
 </script>
 
 <template>
@@ -90,7 +95,7 @@ const isAdded = (id) => wizard.people.some((p) => p.id === id)
             {{ p.display_name }} <span v-if="p.email" class="text-muted small">{{ p.email }}</span>
           </span>
           <label class="visually-hidden" :for="'role-' + p.id">Role for {{ p.display_name }}</label>
-          <select :id="'role-' + p.id" v-model="p.role" class="form-select form-select-sm w-auto">
+          <select :id="'role-' + p.id" v-model="p.role" class="form-select form-select-sm w-auto" @change="roleChanged(p)">
             <option v-for="r in ROLE_OPTIONS" :key="r.value" :value="r.value">{{ r.label }}</option>
           </select>
           <button type="button" class="btn btn-sm btn-outline-danger" @click="wizard.removePerson(p.id)">Remove</button>
@@ -98,7 +103,7 @@ const isAdded = (id) => wizard.people.some((p) => p.id === id)
       </li>
     </ul>
     <p class="form-text">
-      Planners set up the map and timings. Marshals see every group on the live map.
+      Planners set up the map and timings, and are not in a group. Marshals see every group on the live map.
       Group Admin and IC are chosen in the next step.
     </p>
   </section>

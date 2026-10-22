@@ -38,7 +38,10 @@ const openGroup = computed(() => {
   if (id === 'none') return props.canManage ? { id: 'none', name: 'No group', colour: '#6c757d' } : null
   return shownGroups.value.find((g) => g.id === id) || null
 })
-const membersOf = (groupId) => props.members.filter((m) => (groupId === 'none' ? !m.groupId : m.groupId === groupId))
+// Planners run the whole event and are never in a group (034), so they are not "without a group" either
+const isPlanner = (m) => topRole(m) === 'planner'
+const membersOf = (groupId) =>
+  props.members.filter((m) => (groupId === 'none' ? !m.groupId && !isPlanner(m) : m.groupId === groupId))
 const unassigned = computed(() => membersOf('none'))
 const openMembers = computed(() => (openGroup.value ? membersOf(openGroup.value.id) : []))
 
@@ -349,9 +352,10 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                   </span>
                 </div>
 
-                <!-- Group (root / planner) -->
+                <!-- Group (root / planner); planners are never in a group -->
+                <p v-if="canManage && isPlanner(m)" class="small text-muted mb-2">Planners are not in a group.</p>
                 <select
-                  v-if="canManage"
+                  v-else-if="canManage"
                   class="form-select form-select-sm mb-2"
                   :value="m.groupId || ''"
                   :disabled="busy"

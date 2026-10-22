@@ -26,6 +26,7 @@
 //   roles    supabase/tests/roles_test.sql: profiles and the role hierarchy (001, 002, 030 and 031)
 //   search   supabase/tests/people_search_test.sql: find people by name, add them by id (032)
 //   details  supabase/tests/event_details_test.sql: the root edits the event's details (033)
+//   planners supabase/tests/planners_test.sql: planners are never in a group (034)
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -520,6 +521,28 @@ await phase('details', {
     await runSql(db, read('supabase/tests/event_details_test.sql'), 'event_details_test.sql')
     await runSql(db, read('supabase/migrations/033_event_details.sql'), '033 a second time')
     return ['supabase/tests/event_details_test.sql passed, and 033 re-applies cleanly']
+  },
+})
+
+// ---------- phase 10: planners are never in a group (034, on top of 031); 031's suite must still pass ----------
+await phase('planners', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
+    { name: '034_planners_not_in_groups.sql', sql: read('supabase/migrations/034_planners_not_in_groups.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/planners_test.sql'), 'planners_test.sql')
+    await runSql(db, read('supabase/tests/roles_test.sql'), 'roles_test.sql with 034')
+    await runSql(db, read('supabase/migrations/034_planners_not_in_groups.sql'), '034 a second time')
+    return ['supabase/tests/planners_test.sql and roles_test.sql passed, and 034 re-applies cleanly']
   },
 })
 
