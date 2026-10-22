@@ -217,9 +217,9 @@ html.native-app .ev {
   background: var(--pv-ground);
   min-height: 100vh;
 }
-html.native-app .ev .mono,
-html.native-app .ev .show-num,
-html.native-app .ev .ops-num {
+html.native-app .mono,
+html.native-app .show-num,
+html.native-app .ops-num {
   font-family: 'Jost', system-ui, Roboto, sans-serif;
   font-variant-numeric: tabular-nums;
 }
@@ -324,19 +324,20 @@ html.native-app .ev-map-phone .live-map {
   min-height: 360px;
   border-radius: 20px;
 }
-/* The live show's bar and panel, Planova look on the phone */
-html.native-app .ev-native .show-bar {
+/* The live show's bar and panel, Planova look on the phone. Not qualified by .ev-native any more: the page root that
+   carried that class went with the merge, and these elements still exist. */
+html.native-app .show-bar {
   background: var(--pv-brand);
   border-radius: 20px;
 }
-html.native-app .ev-native .show-panel,
-html.native-app .ev-native .ops-summary,
-html.native-app .ev-native .next-move {
+html.native-app .show-panel,
+html.native-app .ops-summary,
+html.native-app .next-move {
   border-radius: 20px;
   border-color: var(--pv-line);
 }
-html.native-app .ev-native .show-panel .btn-success,
-html.native-app .ev-native .next-move .btn-outline-success {
+html.native-app .show-panel .btn-success,
+html.native-app .next-move .btn-outline-success {
   min-height: 56px;
   font-size: 17px;
 }

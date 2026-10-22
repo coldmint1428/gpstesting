@@ -22,6 +22,7 @@ import { formatDayTime, formatTimeSeconds, sgtIso } from '../utils/time'
 import { groupRoleLabel } from '../utils/people'
 import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, isMarshal, viewRole, canView, pageMode } from '../utils/permissions'
 import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, updateEventDetails, deleteEvent } from '../services/memberService'
+import { isNativeApp } from '../lib/platform'
 import PeoplePanel from '../components/PeoplePanel.vue'
 import EventOverview from '../components/EventOverview.vue'
 import EventPagePlaceholder from '../components/EventPagePlaceholder.vue'
@@ -54,6 +55,7 @@ const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const native = isNativeApp // phone app: "Message everyone" opens as a bottom sheet, not a card in the page
 
 const { event, groups, members, loading, errorMsg, load, me, isRoot, canManage, seesWholeEvent, myGroup } =
   useEventData(props.id)
@@ -557,7 +559,7 @@ async function removeEvent() {
       </div>
 
       <!-- "Message everyone" (032): planners send one message to many groups at once -->
-      <BroadcastPanel v-if="canManage" :broadcasts="broadcasts" :groups="groups" :show="show" :can-run="canManage" />
+      <BroadcastPanel v-if="canManage" :broadcasts="broadcasts" :groups="groups" :show="show" :can-run="canManage" :native="native" />
       </div>
 
       <EventOverview
@@ -614,7 +616,7 @@ async function removeEvent() {
 
       <!-- Map: root / planners edit the zones (v-if: the bench holds locks and a presence row only while it is open) -->
       <template v-if="canManage && page === 'map'">
-        <ZoneOverview :event-id="id" />
+        <ZoneOverview class="mb-3" :event-id="id" />
         <PolygonTestView :event-id="id" embedded />
       </template>
 

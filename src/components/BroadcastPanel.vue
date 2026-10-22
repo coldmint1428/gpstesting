@@ -5,7 +5,7 @@
 // the show, "Resume" can resume it. Under the form: the last day's messages, how many have read each, and who has not
 // (with their group's radio channel), so the radio is used only for those.
 //
-// Website: a card on the Live map page. Phone: a button on the Ops tab that opens the same form in a bottom sheet.
+// Website: a card on the Live page. Phone: a button that opens the same form in a bottom sheet.
 import { computed, onUnmounted, ref, watch } from 'vue'
 import BottomSheet from './BottomSheet.vue'
 import { AUDIENCES, audienceText } from '../composables/useBroadcasts'

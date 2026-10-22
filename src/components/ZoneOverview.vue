@@ -46,9 +46,9 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <div class="ev-surface zo" data-testid="zone-overview">
+  <div class="zo-card" data-testid="zone-overview">
     <div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
-      <span class="ev-label">This event's zones</span>
+      <span class="zo-label">This event's zones</span>
       <span v-if="zones.length" class="small text-muted">{{ zones.length }} in all · {{ summary.join(' · ') }}</span>
     </div>
     <p v-if="loaded && !zones.length" class="small text-muted mb-2" data-testid="zone-overview-empty">
@@ -75,6 +75,21 @@ const summary = computed(() => {
 </template>
 
 <style scoped>
+/* The event workspace this card was built for is gone, so it carries its own surface: the same values the shell's
+   .ev .ev-surface and .ev-label used, to keep the look it had. */
+.zo-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+}
+.zo-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
+}
 .zo-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
