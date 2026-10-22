@@ -25,8 +25,8 @@ function cleanSearchTerm(term) {
     .replace(/^@/, '')
 }
 
-// Step 2 of the wizard: find accounts by username, display name or a whole email address.
-// Returns [{ id, username, display_name }] (at most 10; never the caller; [] for under 2 characters)
+// Find accounts by name (034_people_search_by_name.sql): the wizard's step 2 and the People page.
+// Returns [{ id, display_name, email }] (at most 10; never the caller; [] for under 2 characters)
 export async function searchPeople(term) {
   const clean = cleanSearchTerm(term)
   if (clean.length < 2) return []
@@ -58,21 +58,35 @@ export async function createQuickEvent(name, isSimulation = false) {
   return data
 }
 
-// The events I am in, newest first: [{ id, name, created_at, isSimulation, startsAt, venue, roles: ['root', ...] }]
+// The events I am in, newest first:
+// [{ id, name, created_at, isSimulation, startsAt, venue, roles: ['root', ...], isAdmin, isIC }]
 export async function getMyEvents(userId) {
-  // My role rows, each with its event (RLS only returns events I belong to)
-  const { data, error } = await db()
-    .from('event_roles')
-    .select('role, events (id, name, created_at, is_simulation, starts_at, venue)')
-    .eq('user_id', userId)
-  if (error) throw fail(error)
+  // My role rows, each with its event (RLS only returns events I belong to), and my group flags (for the role badge)
+  const [roles, flags] = await Promise.all([
+    db().from('event_roles').select('role, events (id, name, created_at, is_simulation, starts_at, venue)').eq('user_id', userId),
+    db().from('group_members').select('event_id, is_admin, is_ic').eq('user_id', userId),
+  ])
+  if (roles.error || flags.error) throw fail(roles.error || flags.error)
+  const data = roles.data
+  const flagsByEvent = Object.fromEntries(flags.data.map((f) => [f.event_id, f]))
 
   // One entry per event, with all my roles in it
   const byId = {}
   for (const row of data) {
     const ev = row.events
     if (!byId[ev.id]) {
-      byId[ev.id] = { id: ev.id, name: ev.name, created_at: ev.created_at, isSimulation: ev.is_simulation, startsAt: ev.starts_at, venue: ev.venue, roles: [] }
+      const f = flagsByEvent[ev.id] || {}
+      byId[ev.id] = {
+        id: ev.id,
+        name: ev.name,
+        created_at: ev.created_at,
+        isSimulation: ev.is_simulation,
+        startsAt: ev.starts_at,
+        venue: ev.venue,
+        roles: [],
+        isAdmin: !!f.is_admin,
+        isIC: !!f.is_ic,
+      }
     }
     byId[ev.id].roles.push(row.role)
   }

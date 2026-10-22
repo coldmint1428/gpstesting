@@ -6,10 +6,14 @@ import { supabase } from '../lib/supabase'
 import { useLocationTracker, stopBackgroundTracking } from '../composables/useLocationTracker'
 import { clearAllStartReminders } from '../composables/useStartReminders'
 import { disablePush } from '../composables/usePushNotifications'
+import { forgetMembership } from '../services/memberService'
+
+// Usernames: 3-20 lowercase letters, numbers or _ (the same rule as the database)
+export const USERNAME_RULE = /^[a-z0-9_]{3,20}$/
 
 export const useAuthStore = defineStore('auth', () => {
   const session = ref(null)
-  const profile = ref(null) // { id, username, display_name }
+  const profile = ref(null) // { id, username, display_name, first_name, last_name }
   const ready = ref(false) // true once we've checked for an existing login
 
   const user = computed(() => (session.value ? session.value.user : null))
@@ -63,6 +67,7 @@ export const useAuthStore = defineStore('auth', () => {
           if (!newSession) {
             profile.value = null
             cacheProfile(null)
+            forgetMembership()
           } else if (!profile.value || profile.value.id !== newSession.user.id) {
             // Don't call Supabase directly inside this callback (supabase-js can deadlock)
             setTimeout(loadProfile, 0)
@@ -79,46 +84,77 @@ export const useAuthStore = defineStore('auth', () => {
       profile.value = null
       return
     }
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, username, display_name')
-      .eq('id', user.value.id)
-      .maybeSingle()
+    // '*' rather than naming first_name / last_name: those only exist once 033 is applied, and naming a missing
+    // column fails the whole read (every account then looked logged out)
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.value.id).maybeSingle()
     profile.value = data
     cacheProfile(data)
   }
 
-  // Returns an error message, or '' on success
-  async function signUp(email, password, username, displayName) {
+  // Is this username free? true / false, or an error message. (Before sign-up: a taken username otherwise makes
+  // Supabase answer only "Database error saving new user".)
+  async function usernameAvailable(name) {
+    const { data, error } = await supabase.rpc('username_available', { p_username: name })
+    if (error) return error.message
+    return data
+  }
+
+  // Returns { error, needsConfirm }: error '' on success; needsConfirm when the project asks for email confirmation
+  async function signUp({ email, password, username, firstName, lastName }) {
     const name = username.trim().toLowerCase()
-    if (!/^[a-z0-9_]{3,20}$/.test(name)) {
-      return 'Username: 3-20 characters, only letters, numbers and _'
-    }
+    if (!USERNAME_RULE.test(name)) return { error: 'Username: 3-20 lowercase letters, numbers or _' }
 
-    const { data: free, error: checkError } = await supabase.rpc('username_available', { p_username: name })
-    if (checkError) return checkError.message
-    if (!free) return 'That username is taken'
+    const free = await usernameAvailable(name)
+    if (typeof free === 'string') return { error: free }
+    if (!free) return { error: 'That username is taken' }
 
-    // username + display_name are saved by a database trigger into "profiles"
+    // username + names are saved into "profiles" by a database trigger (033)
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { username: name, display_name: displayName.trim() } },
+      options: { data: { username: name, first_name: firstName.trim(), last_name: lastName.trim() } },
     })
-    if (error) return error.message
-    if (!data.session) return 'Account created. Check your email to confirm, then sign in.'
+    if (error) return { error: error.message }
+    if (!data.session) return { error: '', needsConfirm: true }
 
     session.value = data.session
     await loadProfile()
-    return ''
+    return { error: '' }
   }
 
-  async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    if (error) return error.message
+  // Email or username + password. Returns an error message, or '' on success.
+  async function signIn(identifier, password) {
+    const WRONG = 'Incorrect username/email or password'
+    let email = identifier.trim()
+    if (!email.includes('@')) {
+      const { data, error } = await supabase.rpc('login_email', { p_username: email })
+      // 033 not applied yet: there is no username lookup
+      if (error && error.code === 'PGRST202') return 'Signing in with a username is not available yet. Use your email.'
+      if (error) return error.message
+      if (!data) return WRONG
+      email = data
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) return /confirm/i.test(error.message) ? 'Please confirm your email first (check your inbox).' : WRONG
     session.value = data.session
     await loadProfile()
     if (!profile.value) return 'This account has no profile. Please sign up again.'
+    return ''
+  }
+
+  // My names and username. Returns an error message, or '' on success.
+  async function updateProfile({ username, firstName, lastName }) {
+    const name = username.trim().toLowerCase()
+    if (!USERNAME_RULE.test(name)) return 'Username: 3-20 lowercase letters, numbers or _'
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ username: name, first_name: firstName.trim() || null, last_name: lastName.trim() || null })
+      .eq('id', user.value.id)
+      .select('*')
+      .maybeSingle()
+    if (error) return error.code === '23505' ? 'That username is taken' : error.message
+    profile.value = data
+    cacheProfile(data)
     return ''
   }
 
@@ -142,7 +178,8 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // no storage
     }
+    forgetMembership()
   }
 
-  return { session, profile, ready, user, isLoggedIn, init, signUp, signIn, signOut, loadProfile }
+  return { session, profile, ready, user, isLoggedIn, init, signUp, signIn, signOut, loadProfile, usernameAvailable, updateProfile }
 })

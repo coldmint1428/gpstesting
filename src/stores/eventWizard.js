@@ -25,7 +25,7 @@ export const useEventWizardStore = defineStore('eventWizard', () => {
   const ownerId = ref(null) // whose answers these are (cleared if someone else signs in)
   const step = ref(1)
   const details = ref(emptyDetails())
-  const people = ref([]) // [{ id, username, display_name, role }]  (not the creator)
+  const people = ref([]) // [{ id, display_name, email, role }]  (not the creator)
   const groups = ref([]) // [{ key, name, colour, members: [{ userId, isAdmin, isIC }] }]
   let nextKey = 1
 
@@ -69,7 +69,7 @@ export const useEventWizardStore = defineStore('eventWizard', () => {
   // ---------- Step 2: people ----------
   function addPerson(profile) {
     if (people.value.some((p) => p.id === profile.id)) return
-    people.value.push({ id: profile.id, username: profile.username, display_name: profile.display_name, role: 'participant' })
+    people.value.push({ id: profile.id, display_name: profile.display_name, email: profile.email, role: 'participant' })
   }
 
   // Removing someone also takes them out of their group

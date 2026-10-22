@@ -8,13 +8,13 @@ import BenchAlert from '../components/BenchAlert.vue'
 import BottomSheet from '../components/BottomSheet.vue'
 import { isNativeApp } from '../lib/platform'
 import { useLocationTracker } from '../composables/useLocationTracker'
-import { eventRoleLabel } from '../utils/people'
 import { formatDayTime } from '../utils/time'
+import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-const events = ref([]) // [{ id, name, roles: ['root', ...] }]
+const events = ref([]) // [{ id, name, roles: ['root', ...], isAdmin, isIC }]
 const loading = ref(true)
 const simName = ref('') // merger Stage 3: a name-only test event for virtual groups
 const joinCode = ref('')
@@ -50,6 +50,11 @@ async function joinEvent() {
   } catch (error) {
     errorMsg.value = error.message
   }
+}
+
+// "NDP Rehearsal · Planner": my role in each event (a member who is marshal or IC shows as that)
+function roleLabel(ev) {
+  return ROLE_LABEL[viewRole({ role: topRole(ev), is_ic: ev.isIC, is_marshal: isMarshal(ev) })]
 }
 
 onMounted(loadEvents)
@@ -126,7 +131,7 @@ function roleTone(label) {
     >
       <span class="pv-chip pv-chip-live">● LIVE</span>
       <strong class="pv-live-name">{{ ev.name }}</strong>
-      <span class="pv-live-meta">{{ ev.venue || 'Live now' }} · {{ eventRoleLabel(ev.roles) }}</span>
+      <span class="pv-live-meta">{{ ev.venue || 'Live now' }} · {{ roleLabel(ev) }}</span>
       <span v-if="tracker.isTracking.value && tracker.sharingEventId.value === ev.id" class="pv-live-share">
         <span class="pv-live-dot" aria-hidden="true"></span> Sharing your location · every 10 s
       </span>
@@ -158,8 +163,8 @@ function roleTone(label) {
             <template v-if="!ev.venue && !ev.startsAt">No date yet</template>
           </span>
         </span>
-        <span class="pv-chip" :class="ev.isSimulation ? 'pv-role-sim' : roleTone(eventRoleLabel(ev.roles))">
-          {{ ev.isSimulation ? 'Sim' : eventRoleLabel(ev.roles) }}
+        <span class="pv-chip" :class="ev.isSimulation ? 'pv-role-sim' : roleTone(roleLabel(ev))">
+          {{ ev.isSimulation ? 'Sim' : roleLabel(ev) }}
         </span>
       </RouterLink>
     </template>
@@ -266,7 +271,7 @@ function roleTone(label) {
         </span>
         <span>
           <span v-if="ev.isSimulation" class="badge text-bg-warning ms-1">SIMULATION</span>
-          <span class="badge text-bg-secondary ms-1">{{ eventRoleLabel(ev.roles) }}</span>
+          <span class="badge text-bg-secondary ms-1" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
         </span>
       </RouterLink>
     </div>

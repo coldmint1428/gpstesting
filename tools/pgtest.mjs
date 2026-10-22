@@ -14,7 +14,7 @@
 // this checks the schema and the rules, and not GoTrue, PostgREST or the Realtime socket. Those are
 // what tools/bench_harness.mjs covers instead, from the other end, through two real browsers.
 //
-// It runs five phases, each on a database of its own, and reports every one of them:
+// It runs six phases, each on a database of its own, and reports every one of them:
 //
 //   empty    a database with no bench at all: the migrations must apply in order, 001–005 then 014–019
 //   split    a bench that already holds a canvas, migrated from 016 to 017: the split is checked
@@ -23,6 +23,10 @@
 //   guard    a bench whose canvas holds a shape with no id: 017 must REFUSE it rather than lose it
 //   objects  the new behaviour, from supabase/tests/objects_rls.sql
 //   legacy   supabase/tests/layouts_rls.sql, the suite for the schema 001-005 and 014-016 built
+//   roles    supabase/tests/roles_test.sql: profiles and the role hierarchy (001, 002, 030 and 033)
+//   search   supabase/tests/people_search_test.sql: find people by name, add them by id (034)
+//   details  supabase/tests/event_details_test.sql: the root edits the event's details (035)
+//   planners supabase/tests/planners_test.sql: planners are never in a group (036)
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -456,6 +460,89 @@ await phase('wizard', {
     // 030 must be safe to paste into the SQL Editor a second time
     await runSql(db, read('supabase/migrations/030_event_wizard.sql'), '030_event_wizard.sql a second time')
     return ['supabase/tests/event_wizard.sql passed, and 030 re-applies cleanly']
+  },
+})
+
+// ---------- phase 7: profiles and the role hierarchy (033, on top of the wizard's 030) ----------
+await phase('roles', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/roles_test.sql'), 'roles_test.sql')
+    return ['supabase/tests/roles_test.sql passed']
+  },
+})
+
+// ---------- phase 8: find people by name, add them by id (034, on top of 033) ----------
+await phase('search', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '034_people_search_by_name.sql', sql: read('supabase/migrations/034_people_search_by_name.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/people_search_test.sql'), 'people_search_test.sql')
+    await runSql(db, read('supabase/migrations/034_people_search_by_name.sql'), '034 a second time')
+    return ['supabase/tests/people_search_test.sql passed, and 034 re-applies cleanly']
+  },
+})
+
+// ---------- phase 9: the root edits the event's details (035, on top of 030's columns) ----------
+await phase('details', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '035_event_details.sql', sql: read('supabase/migrations/035_event_details.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/event_details_test.sql'), 'event_details_test.sql')
+    await runSql(db, read('supabase/migrations/035_event_details.sql'), '035 a second time')
+    return ['supabase/tests/event_details_test.sql passed, and 035 re-applies cleanly']
+  },
+})
+
+// ---------- phase 10: planners are never in a group (036, on top of 033); 033's suite must still pass ----------
+await phase('planners', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/planners_test.sql'), 'planners_test.sql')
+    await runSql(db, read('supabase/tests/roles_test.sql'), 'roles_test.sql with 036')
+    await runSql(db, read('supabase/migrations/036_planners_not_in_groups.sql'), '036 a second time')
+    return ['supabase/tests/planners_test.sql and roles_test.sql passed, and 036 re-applies cleanly']
   },
 })
 
