@@ -5,7 +5,7 @@ import { useEventWizardStore, ROLE_OPTIONS } from '../../stores/eventWizard'
 import { formatDayTime } from '../../utils/time'
 
 const props = defineProps({
-  everyone: { type: Array, required: true }, // [{ id, username, display_name, role }] incl. the creator
+  everyone: { type: Array, required: true }, // [{ id, display_name, email, role }] incl. the creator
 })
 const wizard = useEventWizardStore()
 

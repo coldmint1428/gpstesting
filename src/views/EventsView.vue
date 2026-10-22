@@ -5,13 +5,13 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getMyEvents, createQuickEvent, joinEventByCode } from '../services/eventService'
 import BenchAlert from '../components/BenchAlert.vue'
-import { eventRoleLabel } from '../utils/people'
 import { formatDayTime } from '../utils/time'
+import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-const events = ref([]) // [{ id, name, roles: ['root', ...] }]
+const events = ref([]) // [{ id, name, roles: ['root', ...], isAdmin, isIC }]
 const loading = ref(true)
 const simName = ref('') // merger Stage 3: a name-only test event for virtual groups
 const joinCode = ref('')
@@ -46,6 +46,11 @@ async function joinEvent() {
   } catch (error) {
     errorMsg.value = error.message
   }
+}
+
+// "NDP Rehearsal · Planner": my role in each event (a member who is marshal or IC shows as that)
+function roleLabel(ev) {
+  return ROLE_LABEL[viewRole({ role: topRole(ev), is_ic: ev.isIC, is_marshal: isMarshal(ev) })]
 }
 
 onMounted(loadEvents)
@@ -124,7 +129,7 @@ onMounted(loadEvents)
         </span>
         <span>
           <span v-if="ev.isSimulation" class="badge text-bg-warning ms-1">SIMULATION</span>
-          <span class="badge text-bg-secondary ms-1">{{ eventRoleLabel(ev.roles) }}</span>
+          <span class="badge text-bg-secondary ms-1" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
         </span>
       </RouterLink>
     </div>

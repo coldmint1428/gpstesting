@@ -1,5 +1,5 @@
 <script setup>
-// Wizard step 2: find people (by username, name or email), add them, choose their role
+// Wizard step 2: find people by name (their email tells apart two with the same name), add them, choose their role
 import { ref, watch, onUnmounted } from 'vue'
 import { useEventWizardStore, ROLE_OPTIONS } from '../../stores/eventWizard'
 import { searchPeople } from '../../services/eventService'
@@ -17,7 +17,7 @@ let latest = 0 // only the newest search may show its results (older ones can ar
 watch(term, (value) => {
   clearTimeout(timer)
   searchError.value = ''
-  if (value.trim().replace(/^@/, '').length < 2) {
+  if (value.trim().length < 2) {
     results.value = []
     searching.value = false
     return
@@ -48,18 +48,17 @@ const isAdded = (id) => wizard.people.some((p) => p.id === id)
     <h2 class="h5 mb-1">Add people</h2>
     <p class="text-muted small mb-3">You are the event's Root automatically. People can also join later with the event's code.</p>
 
-    <label for="people-search" class="form-label">Find by username, name or email</label>
+    <label for="people-search" class="form-label">Find by name</label>
     <input
       id="people-search"
       v-model="term"
       type="search"
       class="form-control"
-      placeholder="e.g. komin or komin@example.com"
-      autocapitalize="none"
+      placeholder="e.g. Komin Tan"
       autocomplete="off"
       data-testid="wiz-search"
     />
-    <div class="form-text">Type at least 2 characters. Email addresses must be typed in full.</div>
+    <div class="form-text">Type at least 2 characters of their name.</div>
 
     <p v-if="searchError" class="text-danger small mt-2">{{ searchError }}</p>
     <p v-else-if="searching" class="text-muted small mt-2">Searching...</p>
@@ -68,7 +67,7 @@ const isAdded = (id) => wizard.people.some((p) => p.id === id)
     <ul v-if="results.length" class="list-group mt-2" data-testid="wiz-results">
       <li v-for="p in results" :key="p.id" class="list-group-item d-flex justify-content-between align-items-center gap-2">
         <span class="text-truncate">
-          {{ p.display_name }} <span class="text-muted small">@{{ p.username }}</span>
+          {{ p.display_name }} <span v-if="p.email" class="text-muted small">{{ p.email }}</span>
         </span>
         <button
           type="button"
@@ -88,7 +87,7 @@ const isAdded = (id) => wizard.people.some((p) => p.id === id)
       <li v-for="p in wizard.people" :key="p.id" class="list-group-item">
         <div class="d-flex flex-wrap align-items-center gap-2">
           <span class="me-auto text-truncate">
-            {{ p.display_name }} <span class="text-muted small">@{{ p.username }}</span>
+            {{ p.display_name }} <span v-if="p.email" class="text-muted small">{{ p.email }}</span>
           </span>
           <label class="visually-hidden" :for="'role-' + p.id">Role for {{ p.display_name }}</label>
           <select :id="'role-' + p.id" v-model="p.role" class="form-select form-select-sm w-auto">

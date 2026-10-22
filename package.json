@@ -22,7 +22,7 @@
     "@supabase/supabase-js": "^2.117.2",
     "@transistorsoft/capacitor-background-geolocation": "^9.6.0",
     "bootstrap": "^5.3.8",
-    "exceljs": "4.4.0",
+    "exceljs": "^3.4.0",
     "leaflet": "^1.9.4",
     "pinia": "^4.0.3",
     "qrcode": "^1.5.4",
@@ -30,7 +30,7 @@
     "vue-router": "^5.3.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.2",
+    "@capacitor/cli": "^8.4.3",
     "@electric-sql/pglite": "^0.5.9",
     "@vitejs/plugin-vue": "^6.0.9",
     "vite": "^8.3.2"

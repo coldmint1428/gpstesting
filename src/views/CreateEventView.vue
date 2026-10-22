@@ -35,7 +35,7 @@ onMounted(() => {
 
 // The creator (root) plus everyone added in step 2: the people groups are made from
 const everyone = computed(() => [
-  { id: auth.user.id, username: auth.profile.username, display_name: auth.profile.display_name, role: 'root' },
+  { id: auth.user.id, display_name: auth.profile.display_name, email: auth.user.email, role: 'root' },
   ...wizard.people,
 ])
 

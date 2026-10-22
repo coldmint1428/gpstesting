@@ -1,9 +1,8 @@
 <script setup>
-// One event: status (live or not), live map, members & groups, invite, and playback
-// (root / planners). What you see depends on your role.
+// One event: status (live or not) and its pages (/events/:id/<page>): overview, timeline, map, people, groups, live,
+// playback, simulator. Which pages and controls you get depends on your role (src/utils/permissions.js).
 import { ref, computed, watch } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
-import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 import { useEventData } from '../composables/useEventData'
 import { useEventSessions } from '../composables/useEventSessions'
@@ -20,12 +19,16 @@ import { askConfirm, toast } from '../composables/useNotify'
 import { useZoneActivity } from '../composables/useZoneActivity'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
 import { formatDayTime, formatTimeSeconds, sgtIso } from '../utils/time'
-import { eventRoleLabel, groupRoleLabel } from '../utils/people'
+import { groupRoleLabel } from '../utils/people'
+import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, isMarshal, viewRole, canView, pageMode } from '../utils/permissions'
+import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, updateEventDetails, deleteEvent } from '../services/memberService'
+import PeoplePanel from '../components/PeoplePanel.vue'
+import EventOverview from '../components/EventOverview.vue'
+import EventPagePlaceholder from '../components/EventPagePlaceholder.vue'
 import SharingWarnings from '../components/SharingWarnings.vue'
 import EventStatus from '../components/EventStatus.vue'
 import LiveMap from '../components/LiveMap.vue'
 import MembersPanel from '../components/MembersPanel.vue'
-import InvitePanel from '../components/InvitePanel.vue'
 import BenchAlert from '../components/BenchAlert.vue'
 import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
@@ -48,7 +51,7 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
-const { event, groups, members, loading, errorMsg, load, me, myRoles, isRoot, canManage, seesWholeEvent, myGroup } =
+const { event, groups, members, loading, errorMsg, load, me, isRoot, canManage, seesWholeEvent, myGroup } =
   useEventData(props.id)
 
 // Is the event live? (ICs can only share while it is)
@@ -179,7 +182,40 @@ const myNoGo = computed(() => {
 // Latest positions (one connection for the map and the "Not sharing yet" badges)
 const live = useLiveLocations(props.id)
 
-const tab = ref('map') // 'map' | 'members' | 'invite' | 'playback' | 'zones' | 'runsheet' | 'simulator'
+// ---------- Pages and my role ----------
+// The page is in the address (the router guard already checked I may view it)
+const page = computed(() => route.params.page || 'overview')
+function goToPage(name, query = {}) {
+  router.replace({ name: 'event', params: { id: props.id, page: name }, query })
+}
+// My membership as the permission map wants it, from the member list (kept up to date by Realtime)
+const membership = computed(() =>
+  me.value
+    ? { role: topRole(me.value), group_id: me.value.groupId, is_admin: me.value.isAdmin, is_ic: me.value.isIC, is_marshal: isMarshal(me.value) }
+    : null,
+)
+const role = computed(() => viewRole(membership.value)) // root | planner | admin | marshal | ic | member
+const modeOf = (name) => pageMode(name, role.value)
+const visiblePages = computed(() =>
+  PAGES.filter((p) => canView(p, role.value) && (p !== 'simulator' || (event.value && event.value.is_simulation))),
+)
+// Someone changed my role or removed me: keep the router guard's copy right, leave pages I may no longer view
+watch(membership, async (now) => {
+  if (loading.value || !event.value) return
+  if (!now) {
+    if (members.value.length) {
+      toast('You are no longer a member of this event.', 'warning')
+      router.push('/events')
+    }
+    return
+  }
+  const known = await fetchMembership(props.id).catch(() => null)
+  rememberMembership(props.id, { ...(known || {}), ...now, is_simulation: !!event.value.is_simulation })
+  if (!visiblePages.value.includes(page.value)) {
+    toast('Your role in this event changed.', 'info')
+    goToPage('overview')
+  }
+})
 
 // My group's next move (merger Stage 8): any member of a group sees where to be, by when, and when to leave. A push
 // ("Get ready", "Leave now", "Running late", a message) opens the page with ?next=1: the card is scrolled into view.
@@ -196,8 +232,7 @@ watch(
   [() => route.query.next, () => myMoves.loaded.value],
   ([wanted, loaded]) => {
     if (wanted !== '1' || !loaded) return
-    tab.value = 'map'
-    router.replace({ query: {} })
+    goToPage('live')
     setTimeout(() => {
       const el = nextMoveEl.value && (nextMoveEl.value.$el || nextMoveEl.value)
       if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -245,7 +280,7 @@ watch(
   [() => route.query.share, isLive, isIC],
   ([share, nowLive, ic]) => {
     if (share === '1' && nowLive && ic && !sharingHere.value) {
-      router.replace({ query: {} })
+      goToPage('live')
       startSharing()
     }
   },
@@ -291,15 +326,53 @@ const viewText = computed(() => {
 })
 
 function goLive() {
-  tab.value = 'map'
+  goToPage('live')
 }
 
 async function leaveEvent() {
   if (!(await askConfirm({ title: 'Leave this event?', confirmText: 'Leave', danger: true }))) return
   if (sharingHere.value) await tracker.stop() // stop sharing before leaving
-  const { error } = await supabase.rpc('remove_member', { p_event_id: props.id, p_user_id: auth.user.id })
-  if (error) errorMsg.value = error.message
+  const message = await leaveEventCall(props.id, auth.user.id)
+  if (message) errorMsg.value = message
   else router.push('/events')
+}
+
+// ---------- The root edits or deletes the event (EventOverview emits; the view saves) ----------
+const overviewBusy = ref(false)
+const detailsSavedCount = ref(0) // tells EventOverview to close its form
+
+async function saveEventDetails(details) {
+  errorMsg.value = ''
+  overviewBusy.value = true
+  const message = await updateEventDetails(props.id, details)
+  overviewBusy.value = false
+  if (message) errorMsg.value = message
+  else {
+    toast('Event details saved.', 'success', 3000)
+    detailsSavedCount.value++
+    load() // re-fetch, so the page shows what the database stored
+  }
+}
+
+async function removeEvent() {
+  const ok = await askConfirm({
+    title: 'Delete "' + event.value.name + '"?',
+    message: 'Everything in it goes: groups, people, zones, run sheets, recordings. This cannot be undone.',
+    confirmText: 'Delete event',
+    danger: true,
+  })
+  if (!ok) return
+  errorMsg.value = ''
+  overviewBusy.value = true
+  const message = await deleteEvent(props.id)
+  overviewBusy.value = false
+  if (message) {
+    errorMsg.value = message
+    return
+  }
+  if (sharingHere.value) await tracker.stop(false)
+  toast('Event deleted.')
+  router.push('/events')
 }
 </script>
 
@@ -323,7 +396,8 @@ async function leaveEvent() {
         <p v-if="event.description" class="small mb-1" style="white-space: pre-line">{{ event.description }}</p>
         <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
         <span v-if="event.is_simulation" class="badge text-bg-warning me-1" data-testid="sim-badge">SIMULATION</span>
-        <span class="badge text-bg-secondary me-1" data-testid="event-role-badge">{{ eventRoleLabel(myRoles) }}</span>
+        <span class="badge text-bg-secondary me-1" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
+        <span v-if="isMarshal(me)" class="badge text-bg-dark me-1" data-testid="event-marshal-badge">Marshal</span>
         <span v-if="myGroup" class="badge text-bg-info me-1" data-testid="group-role-badge">
           {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}
         </span>
@@ -405,46 +479,34 @@ async function leaveEvent() {
 
       <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-      <ul class="nav nav-tabs mb-3">
-        <li class="nav-item">
-          <button class="nav-link" :class="{ active: tab === 'map' }" data-testid="tab-map" @click="tab = 'map'">Live map</button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" :class="{ active: tab === 'members' }" data-testid="tab-members" @click="tab = 'members'">
-            Members <span class="badge text-bg-light">{{ members.length }}</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" :class="{ active: tab === 'invite' }" data-testid="tab-invite" @click="tab = 'invite'">Invite</button>
-        </li>
-        <li v-if="canManage" class="nav-item">
-          <button class="nav-link" :class="{ active: tab === 'playback' }" data-testid="tab-playback" @click="tab = 'playback'">
-            Playback
-          </button>
-        </li>
-        <!-- The event's zones (merger Stage 1): the polygon bench, for this event only -->
-        <li v-if="canManage" class="nav-item">
-          <button class="nav-link" :class="{ active: tab === 'zones' }" data-testid="tab-zones" @click="tab = 'zones'">
-            Zones
-          </button>
-        </li>
-        <!-- The show's running order (merger Stage 4): root / planners edit, marshals read -->
-        <li v-if="seesWholeEvent" class="nav-item">
-          <button class="nav-link" :class="{ active: tab === 'runsheet' }" data-testid="tab-runsheet" @click="tab = 'runsheet'">
-            Run sheet
-          </button>
-        </li>
-        <!-- Simulation events only (merger Stage 3): the root runs the virtual groups from here -->
-        <li v-if="event.is_simulation && isRoot" class="nav-item">
-          <button class="nav-link" :class="{ active: tab === 'simulator' }" data-testid="tab-simulator" @click="tab = 'simulator'">
-            Simulator
-          </button>
-        </li>
-      </ul>
+      <!-- The pages my role may view: tabs, or a menu on a phone -->
+      <nav aria-label="Event pages" class="mb-3">
+        <ul class="nav nav-tabs d-none d-sm-flex" data-testid="event-nav">
+          <li v-for="p in visiblePages" :key="p" class="nav-item">
+            <RouterLink
+              class="nav-link"
+              :class="{ active: page === p }"
+              :aria-current="page === p ? 'page' : undefined"
+              :to="{ name: 'event', params: { id, page: p } }"
+              replace
+              :data-testid="'tab-' + p"
+            >
+              {{ PAGE_LABEL[p] }}
+              <span v-if="p === 'people'" class="badge text-bg-light">{{ members.length }}</span>
+            </RouterLink>
+          </li>
+        </ul>
+        <div class="d-sm-none">
+          <label for="event-page-select" class="visually-hidden">Page</label>
+          <select id="event-page-select" class="form-select" :value="page" data-testid="event-nav-select" @change="goToPage($event.target.value)">
+            <option v-for="p in visiblePages" :key="p" :value="p">{{ PAGE_LABEL[p] }}</option>
+          </select>
+        </div>
+      </nav>
 
-      <!-- v-show keeps the map alive (and its live connection) when switching tabs. With a live run sheet the show's
-           bar sits on top and its panel beside the map (above it on a phone). -->
-      <div v-show="tab === 'map'">
+      <!-- Live: v-show keeps the map alive (and its live connection) on the other pages. With a live run sheet the
+           show's bar sits on top and its panel beside the map (above it on a phone). -->
+      <div v-show="page === 'live'">
       <ShowBar v-if="show.board.value" :show="show" />
       <OpsSummary v-if="hasOps" :ops="ops" />
       <OpsDecision v-if="show.board.value" :show="show" :ops="ops" :groups="groups" :can-run="canManage" />
@@ -452,7 +514,7 @@ async function leaveEvent() {
       <div :class="show.board.value ? 'col-lg-8' : 'col-12'">
       <LiveMap
         ref="liveMap"
-        :active="tab === 'map'"
+        :active="page === 'live'"
         :event-id="id"
         :positions="live.positions.value"
         :live-since="liveSession ? liveSession.startsAt.getTime() : null"
@@ -478,38 +540,66 @@ async function leaveEvent() {
       </div>
       </div>
 
+      <EventOverview
+        v-if="page === 'overview'"
+        :event="event"
+        :role="role"
+        :mode="modeOf('overview')"
+        :members="members"
+        :groups="groups"
+        :my-group="myGroup"
+        :is-live="isLive"
+        :scheduled-start="scheduledStart"
+        :busy="overviewBusy"
+        :saved-count="detailsSavedCount"
+        @save-details="saveEventDetails"
+        @leave="leaveEvent"
+        @delete="removeEvent"
+      />
+
+      <!-- Groups: root / planners edit every group, a group admin their own; ICs and members see their own group -->
       <MembersPanel
-        v-if="tab === 'members'"
+        v-if="page === 'groups'"
         :event-id="id"
         :members="members"
         :groups="groups"
         :me="me"
         :is-root="isRoot"
         :can-manage="canManage"
+        :only-group-id="role === 'ic' || role === 'member' ? (myGroup ? myGroup.id : 'none') : null"
         :sharing-status="sharingStatus"
         @changed="load"
       />
 
-      <InvitePanel v-if="tab === 'invite'" :event-name="event.name" :join-code="event.join_code" />
+      <PeoplePanel
+        v-if="page === 'people'"
+        :event-id="id"
+        :members="members"
+        :groups="groups"
+        :me="me"
+        :mode="modeOf('people')"
+        @changed="load"
+      />
 
-      <!-- v-show keeps an open replay when peeking at another tab -->
+      <!-- v-show keeps an open replay when peeking at another page -->
       <PlaybackPanel
         v-if="canManage"
-        v-show="tab === 'playback'"
-        :active="tab === 'playback'"
+        v-show="page === 'playback'"
+        :active="page === 'playback'"
         :event-id="id"
         :event-name="event.name"
         :members="members"
         @go-live="goLive"
       />
 
-      <!-- v-if: the bench holds locks and a presence row only while it is open -->
-      <PolygonTestView v-if="canManage && tab === 'zones'" :event-id="id" embedded />
+      <!-- Map: root / planners edit the zones (v-if: the bench holds locks and a presence row only while it is open) -->
+      <PolygonTestView v-if="canManage && page === 'map'" :event-id="id" embedded />
 
+      <!-- Timeline: the run sheet (root / planners edit, marshals read) -->
       <RunSheetPanel
-        v-if="seesWholeEvent && tab === 'runsheet'"
+        v-if="seesWholeEvent && page === 'timeline'"
         :event-id="id"
-        :can-edit="canManage"
+        :can-edit="modeOf('timeline') === 'edit'"
         :list="runSheets"
         :groups="groups"
         :live-session="liveSession"
@@ -519,9 +609,19 @@ async function leaveEvent() {
         @changed="load"
       />
 
-      <SimulatorPanel v-if="event.is_simulation && isRoot && tab === 'simulator'" :event-id="id" @changed="load" />
+      <!-- Not built yet for these roles (a teammate's screens): the view-only map, and the timeline for people who
+           can't read the run sheet -->
+      <EventPagePlaceholder
+        v-if="(page === 'map' && !canManage) || (page === 'timeline' && !seesWholeEvent)"
+        :page="page"
+        :mode="modeOf(page)"
+        :role="role"
+        :group="myGroup"
+        :is-live="isLive"
+        :scheduled-start="scheduledStart"
+      />
 
-      <button v-if="me && !isRoot" class="btn btn-link text-danger px-0 mt-4" @click="leaveEvent">Leave event</button>
+      <SimulatorPanel v-if="event.is_simulation && isRoot && page === 'simulator'" :event-id="id" @changed="load" />
     </template>
   </main>
 </template>

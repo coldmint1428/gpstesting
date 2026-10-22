@@ -40,18 +40,6 @@ export function freshness(date, now, source) {
   return 'offline'
 }
 
-// Role badges. Event roles (root / planner / marshal) are event-scoped and a person can hold several rows
-// (everyone also keeps the 'participant' row that makes them a member) -- so only the HIGHEST is shown:
-// a planner can already do what a marshal can, and "Root · Participant" would read as two jobs.
-// Members with no event role show as "Member".
-const EVENT_ROLE_ORDER = ['root', 'planner', 'marshal']
-const EVENT_ROLE_LABEL = { root: 'Root', planner: 'Planner', marshal: 'Marshal' }
-
-export function eventRoleLabel(roles) {
-  const top = EVENT_ROLE_ORDER.find((r) => (roles || []).includes(r))
-  return top ? EVENT_ROLE_LABEL[top] : 'Member'
-}
-
 // Group roles (member / admin / IC) are group-scoped, so the badge names the group:
 // "Group A: Admin, IC", or just "Group A" for a plain member.
 export function groupRoleLabel(groupName, isAdmin, isIC) {

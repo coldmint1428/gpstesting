@@ -73,7 +73,9 @@ async function logout() {
             </RouterLink>
           </li>
           <li v-if="auth.isLoggedIn" class="nav-item ms-sm-2">
-            <span class="navbar-text small me-2" data-testid="nav-user">@{{ auth.profile.username }}</span>
+            <RouterLink class="navbar-text small me-2 text-decoration-none" to="/profile" data-testid="nav-user">
+              @{{ auth.profile.username }}
+            </RouterLink>
             <button class="btn btn-outline-light btn-sm" data-testid="logout-btn" @click="logout">Log out</button>
           </li>
           <li v-else class="nav-item">

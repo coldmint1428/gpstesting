@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import PolygonTestView from '../views/PolygonTestView.vue'
 import LoginView from '../views/LoginView.vue'
+import SignupView from '../views/SignupView.vue'
+import ProfileView from '../views/ProfileView.vue'
 import EventsView from '../views/EventsView.vue'
 import EventView from '../views/EventView.vue'
 import CreateEventView from '../views/CreateEventView.vue'
@@ -9,6 +11,9 @@ import JoinView from '../views/JoinView.vue'
 import GpsTestView from '../views/GpsTestView.vue'
 import PhoneCheckView from '../views/PhoneCheckView.vue'
 import { useAuthStore } from '../stores/auth'
+import { fetchMembership } from '../services/memberService'
+import { PAGES, PAGE_LABEL, canView, viewRole, defaultPage } from '../utils/permissions'
+import { toast } from '../composables/useNotify'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -25,13 +30,25 @@ const router = createRouter({
       meta: { requiresAuth: true },
       beforeEnter: () => (import.meta.env.DEV ? true : { name: 'events' }),
     },
-    { path: '/login', name: 'login', component: LoginView },
+    // Signed-in users visiting these go to their events (meta.guestOnly)
+    { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
+    { path: '/signup', name: 'signup', component: SignupView, meta: { guestOnly: true } },
 
     // Pages below need a logged-in user (meta.requiresAuth)
     { path: '/events', name: 'events', component: EventsView, meta: { requiresAuth: true } },
     // The 4-step "Create an event" wizard
     { path: '/events/new', name: 'event-new', component: CreateEventView, meta: { requiresAuth: true } },
-    { path: '/events/:id', name: 'event', component: EventView, props: true, meta: { requiresAuth: true } },
+    { path: '/profile', name: 'profile', component: ProfileView, meta: { requiresAuth: true } },
+    // One event, one page of it: /events/:id/timeline, /events/:id/people ... (src/utils/permissions.js decides who sees
+    // which). One route, so moving between pages keeps the same EventView: the live map and the show keep running.
+    // Without a page it opens the role's default page.
+    {
+      path: '/events/:id/:page(' + PAGES.join('|') + ')?',
+      name: 'event',
+      component: EventView,
+      props: true,
+      meta: { requiresAuth: true },
+    },
     {
       path: '/events/:id/share',
       name: 'share',
@@ -50,15 +67,48 @@ const router = createRouter({
 })
 
 // Send logged-out users to the login page, then back to where they were going
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
+  const auth = useAuthStore()
+  if (to.meta.guestOnly) {
+    await auth.init()
+    return auth.isLoggedIn ? to.query.redirect || '/events' : true
+  }
   if (!to.meta.requiresAuth) return true
 
-  const auth = useAuthStore()
   await auth.init()
   if (!auth.isLoggedIn) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
+  if (to.name === 'event') return eventPageGuard(to, from)
   return true
 })
+
+// Members only, and only the pages their role may view (the database limits what they can read anyway)
+async function eventPageGuard(to, from) {
+  const id = to.params.id
+  let membership
+  try {
+    // fresh when arriving from outside the event (I may have been added or removed since)
+    membership = await fetchMembership(id, { fresh: from.name !== 'event' || from.params.id !== id })
+  } catch {
+    return true // offline or the server failed: the page shows its own error
+  }
+  if (!membership) {
+    toast("You don't have access to this event.", 'danger')
+    return { name: 'events' }
+  }
+  const role = viewRole(membership)
+  const page = to.params.page
+  if (!page) {
+    // a "tap to share" / "next move" notification opens the live view
+    const landing = to.query.share || to.query.next ? 'live' : defaultPage(role, membership.live)
+    return { name: 'event', params: { id, page: landing }, query: to.query, replace: true }
+  }
+  if (!canView(page, role) || (page === 'simulator' && !membership.is_simulation)) {
+    toast('The ' + PAGE_LABEL[page] + " page isn't available for your role in this event.", 'warning')
+    return { name: 'event', params: { id, page: 'overview' }, replace: true }
+  }
+  return true
+}
 
 export default router

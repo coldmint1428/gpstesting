@@ -6,7 +6,7 @@ import { askConfirm } from '../../composables/useNotify'
 
 const props = defineProps({
   errors: { type: Object, default: () => ({}) },
-  everyone: { type: Array, required: true }, // [{ id, username, display_name, role }] incl. the creator
+  everyone: { type: Array, required: true }, // [{ id, display_name, email, role }] incl. the creator
 })
 const wizard = useEventWizardStore()
 
@@ -21,9 +21,9 @@ const unassigned = computed(() => props.everyone.filter((p) => !wizard.groupOf[p
 
 // Unassigned people matching the filter, for the open group's "Add" list
 const addable = computed(() => {
-  const f = filter.value.trim().toLowerCase().replace(/^@/, '')
+  const f = filter.value.trim().toLowerCase()
   return unassigned.value.filter(
-    (p) => !f || p.username.includes(f) || p.display_name.toLowerCase().includes(f),
+    (p) => !f || p.display_name.toLowerCase().includes(f),
   )
 })
 
@@ -125,7 +125,7 @@ async function removeGroup(group) {
               <li v-for="m in g.members" :key="m.userId" class="list-group-item px-0 d-flex flex-wrap align-items-center gap-2">
                 <span class="me-auto text-truncate">
                   {{ byId[m.userId].display_name }}
-                  <span class="text-muted small">@{{ byId[m.userId].username }}</span>
+                  <span v-if="byId[m.userId].email" class="text-muted small">{{ byId[m.userId].email }}</span>
                 </span>
                 <div class="form-check form-check-inline m-0">
                   <input :id="'ic-' + m.userId" v-model="m.isIC" class="form-check-input" type="checkbox" />
@@ -145,7 +145,7 @@ async function removeGroup(group) {
               v-model="filter"
               type="search"
               class="form-control form-control-sm mb-2"
-              placeholder="Filter by name or username"
+              placeholder="Filter by name"
               autocomplete="off"
             />
             <p v-if="unassigned.length === 0" class="text-muted small mb-0">Everyone is in a group. Add more people in step 2.</p>
@@ -153,7 +153,7 @@ async function removeGroup(group) {
               <ul class="list-group addable mb-2">
                 <li v-for="p in addable" :key="p.id" class="list-group-item d-flex align-items-center gap-2 py-1">
                   <span class="me-auto text-truncate small">
-                    {{ p.display_name }} <span class="text-muted">@{{ p.username }}</span>
+                    {{ p.display_name }} <span v-if="p.email" class="text-muted">{{ p.email }}</span>
                     <span v-if="p.role === 'root'" class="badge text-bg-dark ms-1">You</span>
                   </span>
                   <button type="button" class="btn btn-sm btn-primary" @click="wizard.addToGroup(g.key, p.id)">Add</button>
