@@ -104,10 +104,13 @@ export const canEdit = (page, role) => EDIT_ACCESS[page]?.includes(role) ?? fals
 export const can = (feature, role) => FEATURE_ACCESS[feature]?.includes(role) ?? false
 export const pageMode = (page, role) => (canEdit(page, role) ? 'edit' : 'view')
 
-// Where an event opens: planning for root / planners, groups for admins, the live view (if live) for everyone else
+// Where an event opens: the run sheet for root / planners, groups for admins, the live view for marshals, ICs and
+// members while the event is on. Out of a live event marshals open the run sheet (they read it) and members and ICs
+// the overview: they cannot read the run sheet, so the timeline would open on its stand-in page.
 export function defaultPage(role, isLive) {
   if (role === 'root' || role === 'planner') return 'timeline'
   if (role === 'admin') return 'groups'
-  if (role === 'marshal') return isLive ? 'live' : 'timeline'
-  return isLive ? 'live' : 'timeline'
+  if (isLive) return 'live'
+  if (role === 'marshal') return 'timeline'
+  return 'overview'
 }
