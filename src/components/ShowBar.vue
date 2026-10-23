@@ -1,11 +1,13 @@
 <script setup>
-// ShowBar - the live show's top bar (merger Stage 6): the server's clock, ON TIME / RUNNING BEHIND / CRITICAL /
-// HELD with ± m:ss, and the next anchor with its countdown. Everyone who sees the show sees the same second.
+// ShowBar - the live show's top bar (merger Stage 6; look from the "Live Timeline + Map" concept): which run sheet,
+// what is on now (cue n of N), the server's clock, ON TIME / RUNNING BEHIND / CRITICAL / HELD with ± m:ss, and the
+// next anchor with its countdown. Everyone who sees the show sees the same second.
 import { computed } from 'vue'
 import { mmss, sgClock } from '../composables/useShow'
 
 const props = defineProps({
   show: { type: Object, required: true }, // useShow()
+  eventName: { type: String, default: '' },
 })
 
 const b = computed(() => props.show.board.value)
@@ -23,22 +25,27 @@ const delay = computed(() => {
   return b.value.delay_s || 0
 })
 
+// The status box: a word, the offset, and a colour (never the colour alone)
 const status = computed(() => {
   const s = b.value
   if (!s) return null
-  if (s.state === 'finished') return { label: 'FINISHED', cls: 'text-bg-secondary', sub: '' }
+  if (s.state === 'finished') return { label: 'FINISHED', big: '', tone: 'off', sub: '' }
   if (s.state === 'held') {
-    return { label: 'HELD', cls: 'text-bg-warning', sub: 'by ' + (s.held_by || 'a planner') + ' · ' + mmss((now.value - new Date(s.held_since).getTime()) / 1000) }
+    return { label: 'HELD', big: mmss((now.value - new Date(s.held_since).getTime()) / 1000), tone: 'risk', sub: 'by ' + (s.held_by || 'a planner') }
   }
   if (s.state === 'before' && next.value) {
-    return { label: 'STARTS IN ' + mmss((new Date(next.value.projected_start).getTime() - now.value) / 1000), cls: 'text-bg-info', sub: '' }
+    return { label: 'STARTS IN', big: mmss((new Date(next.value.projected_start).getTime() - now.value) / 1000), tone: 'info', sub: '' }
   }
-  if (s.anchor && s.anchor.risk_s > 0) {
-    return { label: 'CRITICAL', cls: 'text-bg-danger', sub: 'runs ' + mmss(s.anchor.risk_s) + ' into the anchor' }
-  }
-  if (delay.value >= 10) return { label: 'RUNNING BEHIND +' + mmss(delay.value), cls: 'text-bg-warning', sub: '' }
-  if (delay.value <= -10) return { label: 'AHEAD ' + mmss(delay.value), cls: 'text-bg-info', sub: '' }
-  return { label: 'ON TIME', cls: 'text-bg-success', sub: delay.value ? (delay.value > 0 ? '+' : '') + mmss(delay.value) : '' }
+  if (s.anchor && s.anchor.risk_s > 0) return { label: 'CRITICAL', big: '+' + mmss(delay.value), tone: 'late', sub: 'runs ' + mmss(s.anchor.risk_s) + ' into the anchor' }
+  if (delay.value >= 10) return { label: 'RUNNING BEHIND', big: '+' + mmss(delay.value), tone: 'risk', sub: '' }
+  if (delay.value <= -10) return { label: 'AHEAD', big: '−' + mmss(-delay.value), tone: 'info', sub: '' }
+  return { label: 'ON TIME', big: (delay.value > 0 ? '+' : delay.value < 0 ? '−' : '±') + mmss(Math.abs(delay.value)), tone: 'ok', sub: '' }
+})
+
+// "cue 3 of 12"
+const position = computed(() => {
+  const all = props.show.finished.value.length + props.show.upcoming.value.length + (running.value ? 1 : 0)
+  return running.value ? props.show.finished.value.length + 1 + ' of ' + all : ''
 })
 
 const anchorIn = computed(() => {
@@ -48,29 +55,171 @@ const anchorIn = computed(() => {
 </script>
 
 <template>
-  <div v-if="b" class="show-bar d-flex flex-wrap align-items-center gap-2 gap-md-3 px-3 py-2 mb-2 rounded border" data-testid="show-bar">
-    <div class="show-clock" title="Show time (the server's clock)" data-testid="show-clock">{{ sgClock(now) }}</div>
-    <div v-if="status" class="d-flex align-items-center gap-2">
-      <span class="badge fs-6" :class="status.cls" data-testid="show-status">{{ status.label }}</span>
-      <span v-if="status.sub" class="small text-muted" data-testid="show-status-sub">{{ status.sub }}</span>
+  <div v-if="b" class="show-bar" data-testid="show-bar">
+    <div class="sb-what">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span v-if="b.state !== 'finished'" class="sb-live">● LIVE</span>
+        <strong class="sb-name" data-testid="show-version">{{ b.run_sheet_name }}</strong>
+      </div>
+      <span class="sb-sub" data-testid="show-now-line">
+        <template v-if="running">Now: {{ running.title }}<template v-if="position"> · cue {{ position }}</template></template>
+        <template v-else-if="next && next.wait_kind === 'go'">Waiting for GO: {{ next.title }}</template>
+        <template v-else-if="next && next.wait_kind === 'groups'">Holding for groups: {{ next.title }}</template>
+        <template v-else-if="next">Next: {{ next.title }} at {{ sgClock(next.projected_start) }}</template>
+        <template v-else>The run sheet has finished.</template>
+      </span>
     </div>
-    <div v-if="b.anchor" class="small ms-md-auto" :class="b.anchor.risk_s > 0 ? 'text-danger fw-semibold' : ''" data-testid="show-anchor">
-      ⚓ {{ b.anchor.code }} {{ b.anchor.title }} {{ sgClock(b.anchor.at) }}
-      <span v-if="anchorIn !== null && anchorIn > 0"> · in {{ mmss(anchorIn) }}</span>
-      <span v-if="b.anchor.risk_s > 0"> · at risk by {{ mmss(b.anchor.risk_s) }}</span>
+
+    <div class="sb-clock-box">
+      <span class="sb-clock mono" title="Show time (the server's clock)" data-testid="show-clock">{{ sgClock(now) }}</span>
+      <span class="sb-sub">Show clock · server time</span>
     </div>
-    <div class="small text-muted" :class="{ 'ms-auto': !b.anchor }" data-testid="show-version">{{ b.run_sheet_name }}</div>
+
+    <div v-if="status" class="sb-status" :class="'sb-' + status.tone" data-testid="show-status">
+      <span class="sb-status-label">{{ status.label }}</span>
+      <span v-if="status.big" class="sb-status-big mono">{{ status.big }}</span>
+      <span v-if="status.sub" class="sb-status-sub" data-testid="show-status-sub">{{ status.sub }}</span>
+    </div>
+
+    <div class="sb-anchor" data-testid="show-anchor">
+      <template v-if="b.anchor">
+        <span class="sb-sub">Next fixed time (anchor)</span>
+        <span><strong>⚓ {{ b.anchor.title }} {{ sgClock(b.anchor.at) }}</strong>
+          <template v-if="anchorIn !== null && anchorIn > 0"> · <span class="mono">{{ mmss(anchorIn) }}</span> left</template></span>
+        <span :class="b.anchor.risk_s > 0 ? 'sb-warn' : 'sb-good'">
+          {{ b.anchor.risk_s > 0 ? 'At risk: the show runs ' + mmss(b.anchor.risk_s) + ' into it' : 'Buffer OK' }}
+        </span>
+      </template>
+      <span v-else class="sb-sub">No anchor (fixed time) ahead</span>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .show-bar {
-  background: var(--bs-tertiary-bg);
+  background: #0f1b2d;
+  color: #f8fafc;
+  border-radius: 12px;
+  padding: 14px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
 }
-.show-clock {
-  font-variant-numeric: tabular-nums;
-  font-size: 1.5rem;
+.sb-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.sb-live {
+  background: #dc2626;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+.sb-name {
+  font-size: 16px;
+}
+.sb-sub {
+  font-size: 13px;
+  color: #b6c2d3;
+}
+.sb-clock-box {
+  display: flex;
+  flex-direction: column;
+}
+.sb-clock {
+  font-size: 36px;
+  line-height: 1;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+.sb-status {
+  border-radius: 8px;
+  padding: 6px 14px;
+  display: flex;
+  flex-direction: column;
+  min-width: 132px;
+}
+.sb-status-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.sb-status-big {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.sb-status-sub {
+  font-size: 12px;
+}
+.sb-ok {
+  background: #ccfbf1;
+  color: #115e59;
+}
+.sb-risk {
+  background: #fef3c7;
+  color: #92400e;
+}
+.sb-late {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.sb-info {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+.sb-off {
+  background: #1c2b42;
+  color: #cbd5e1;
+}
+.sb-anchor {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 220px;
+  font-size: 14px;
+}
+.sb-good {
+  font-size: 13px;
+  color: #99f6e4;
+}
+.sb-warn {
+  font-size: 13px;
+  color: #fca5a5;
+  font-weight: 600;
+}
+/* Phone: the clock and the status side by side, so the bar stays a few lines tall and the map is close below */
+@media (max-width: 575.98px) {
+  .show-bar {
+    padding: 12px 14px;
+    gap: 10px 14px;
+  }
+  .sb-what,
+  .sb-anchor {
+    flex-basis: 100%;
+  }
+  .sb-clock {
+    font-size: 30px;
+  }
+  .sb-clock-box .sb-sub {
+    font-size: 12px;
+  }
+  .sb-status {
+    min-width: 0;
+    padding: 4px 10px;
+  }
+  .sb-status-big {
+    font-size: 19px;
+  }
+  .sb-anchor {
+    font-size: 13px;
+  }
 }
 </style>

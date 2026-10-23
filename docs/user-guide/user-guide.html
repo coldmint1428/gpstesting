@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Planova Event Tracker - User Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Judson:wght@700&display=swap" rel="stylesheet" />
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+  :root { --brand: #0b2545; --main: #2563eb; --teal: #0f766e; --accent: #f97316; --ink: #1e293b; --muted: #64748b; --line: #e2e8f0; --soft: #f1f5f9; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Jost', system-ui, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3 { color: var(--brand); line-height: 1.2; }
+  h2 { font-size: 17pt; margin: 0 0 6pt; padding-bottom: 4pt; border-bottom: 2px solid var(--brand); }
+  h3 { font-size: 12.5pt; margin: 14pt 0 4pt; }
+  p { margin: 0 0 6pt; }
+  ol, ul { margin: 0 0 6pt; padding-left: 16pt; }
+  li { margin-bottom: 2pt; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .avoid { break-inside: avoid; }
+  .cover { height: 263mm; display: flex; flex-direction: column; justify-content: center; background: var(--brand); color: #fff; margin: -16mm -15mm 0; padding: 0 22mm; }
+  .cover .logo { font-family: 'Judson', Georgia, serif; font-size: 54pt; line-height: 1; }
+  .cover h1 { color: #fff; font-size: 24pt; margin: 14pt 0 6pt; font-weight: 600; }
+  .cover p { color: rgba(255,255,255,.85); font-size: 12pt; max-width: 130mm; }
+  .cover .tag { display: inline-block; margin-top: 18pt; padding: 4pt 12pt; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 600; font-size: 10pt; }
+  .toc { columns: 2; column-gap: 12mm; }
+  .toc div { break-inside: avoid; margin-bottom: 8pt; }
+  .toc b { color: var(--brand); }
+  .toc span { display: block; color: var(--muted); font-size: 9.5pt; }
+  .note { background: #eff6ff; border-left: 4px solid var(--main); padding: 6pt 9pt; border-radius: 4px; margin: 6pt 0 8pt; }
+  .warn { background: #fff7ed; border-left: 4px solid var(--accent); padding: 6pt 9pt; border-radius: 4px; margin: 6pt 0 8pt; }
+  .tip { background: #f0fdfa; border-left: 4px solid var(--teal); padding: 6pt 9pt; border-radius: 4px; margin: 6pt 0 8pt; }
+  .kicker { text-transform: uppercase; letter-spacing: .06em; font-size: 8.5pt; color: var(--muted); font-weight: 600; margin-bottom: 2pt; }
+  figure { margin: 6pt 0 10pt; break-inside: avoid; }
+  figure img { display: block; border: 1px solid var(--line); border-radius: 6px; }
+  figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 3pt; }
+  .web img { width: 100%; max-height: 112mm; object-fit: cover; object-position: top; }
+  .web.short img { max-height: 90mm; }
+  .web.shorter img { max-height: 66mm; }
+  .web.form img { max-height: 92mm; width: 82%; }
+  .row { display: flex; gap: 8mm; align-items: flex-start; margin: 4pt 0 10pt; break-inside: avoid; }
+  .row .shot { flex: 0 0 52mm; }
+  .row .shot img { width: 52mm; border-radius: 10px; border: 1px solid var(--line); }
+  .row .text { flex: 1; min-width: 0; }
+  .pair { display: flex; gap: 6mm; break-inside: avoid; }
+  .pair > * { flex: 1; min-width: 0; }
+  .pair img { width: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 4pt 0 8pt; }
+  th, td { text-align: left; padding: 4pt 6pt; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--soft); color: var(--brand); }
+  .chip { display: inline-block; padding: 0 7pt; border-radius: 999px; font-weight: 600; font-size: 8.5pt; white-space: nowrap; }
+  .c-ok { background: #dcfce7; color: #166534; } .c-risk { background: #fef3c7; color: #92400e; } .c-late { background: #fee2e2; color: #991b1b; }
+  .c-sig { background: #e2e8f0; color: #334155; } .c-done { background: #ccfbf1; color: #115e59; }
+  .btn { display: inline-block; padding: 0 6pt; border: 1px solid #94a3b8; border-radius: 4px; font-weight: 600; font-size: 9pt; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <div class="cover">
+    <div class="logo">Planova</div>
+    <h1>Event Tracker: User Guide</h1>
+    <p>For testers: what each feature is for and how to use it, on the <b>website</b> and in the <b>Android phone app</b>. Each section shows the screen and the steps to follow, so you know what the app should do when you test it.</p>
+    <div><span class="tag">Tester edition · Website + Android app · October 2026</span></div>
+  </div>
+</section>
+
+<section class="page">
+  <h2>Contents</h2>
+  <div class="toc">
+    <div><b>1. Who does what</b><span>Roles and what each one can do</span></div>
+    <div><b>2. Website: My events</b><span>Join with a code, create an event</span></div>
+    <div><b>3. Website: Create an event</b><span>The 4-step wizard</span></div>
+    <div><b>4. Website: Event page &amp; live map</b><span>Start the event, share, read the statuses</span></div>
+    <div><b>5. Website: Run sheet</b><span>Words, versions, cues, movements, the check, Excel</span></div>
+    <div><b>6. Website: Zones</b><span>Zone types, drawing, editing, the list, floor plans</span></div>
+    <div><b>7. Website: Members</b><span>Groups, people, roles, ICs</span></div>
+    <div><b>8. Website: Invite &amp; Playback</b><span>Code, link, QR; replay a session</span></div>
+    <div><b>9. Phone app: getting started</b><span>My events, join, phone setup, Me</span></div>
+    <div><b>10. Phone app: planner screens</b><span>Ops, Map, Run sheet, People, More</span></div>
+    <div><b>11. Phone app: IC screens</b><span>Your next move, delayed, in position</span></div>
+    <div><b>12. Message everyone</b><span>Send to many groups at once, see who has read it</span></div>
+    <div><b>13. Help when something looks wrong</b><span>Not sharing yet, no signal, links</span></div>
+  </div>
+
+  <h2 style="margin-top:14pt">1. Who does what</h2>
+  <p>Every person in an event has a role. Your role is shown next to the event name (for example <b>Planner · Test group A: Admin, IC</b>).</p>
+  <table class="avoid">
+    <tr><th style="width:24%">Role</th><th>What they do</th></tr>
+    <tr><td><b>Root</b></td><td>Created the event. Can do everything a planner can, and manage the event itself.</td></tr>
+    <tr><td><b>Planner</b></td><td>Builds the run sheet, zones and groups; starts and runs the show; watches every group on the Ops / Live map page; can message everyone at once.</td></tr>
+    <tr><td><b>Marshal</b></td><td>Helps on the ground: sees the groups, can mark a group in position (e.g. heard on the radio) and report delays for it.</td></tr>
+    <tr><td><b>Group admin</b></td><td>Looks after one group: adds its people.</td></tr>
+    <tr><td><b>IC (in charge)</b></td><td>The person whose phone shares the group's location. Gets "Your next move" with a countdown, and can tell the planners about a delay or say "We're in position".</td></tr>
+    <tr><td><b>Member</b></td><td>Belongs to a group; sees where the group must be next.</td></tr>
+  </table>
+  <div class="note"><b>The app supports the radio. It does not replace it.</b> Keep using your usual radio channel and call signs. The app adds a shared live picture and timings, so everyone stays on the same page and fewer radio calls are needed.</div>
+</section>
+
+<section class="page">
+  <div class="kicker">Website</div>
+  <h2>2. My events</h2>
+  <p>After you sign in, <b>My events</b> lists every event you belong to with your role. Click an event to open it.</p>
+  <figure class="web short"><img src="img/web-events.jpg" alt="My events page on the website" /><figcaption>My events: join with a code, create an event, and your event list.</figcaption></figure>
+  <ol>
+    <li><b>Join with a code:</b> type the 6-character code your planner sent (e.g. <i>K7Q2XM</i>) and press <span class="btn">Join</span>.</li>
+    <li><b>Create an event:</b> press <span class="btn">Create an event</span>. You become the event's Root.</li>
+    <li><b>Simulation event:</b> for practice, type a name and press <span class="btn">Create</span>. It has virtual groups and is clearly labelled <span class="chip c-risk">SIMULATION</span>.</li>
+  </ol>
+
+  <h3>3. Create an event (4 steps)</h3>
+  <figure class="web short"><img src="img/web-create.jpg" alt="Create an event wizard" /><figcaption>The wizard: 1. Details, 2. People, 3. Groups, 4. Preview.</figcaption></figure>
+  <ol>
+    <li><b>Details:</b> name (required), description, venue, start and end time (required). Press <span class="btn">Next</span>.</li>
+    <li><b>People:</b> add the people who will take part.</li>
+    <li><b>Groups:</b> make the groups and put people in them.</li>
+    <li><b>Preview:</b> check everything, then create the event. <span class="btn">Start over</span> clears the wizard; <span class="btn">Cancel</span> leaves it.</li>
+  </ol>
+</section>
+
+<section class="page">
+  <div class="kicker">Website</div>
+  <h2>4. Event page &amp; live map</h2>
+  <p>The event page has a tab for each job: <b>Live map, Run sheet, Zones, Members, Invite, Playback</b>. The box at the top always shows whether the event is live.</p>
+  <figure class="web"><img src="img/web-livemap.jpg" alt="Event page with live map" /><figcaption>Not live yet: the planner can start the event now or schedule it.</figcaption></figure>
+  <h3>Start the event</h3>
+  <ol>
+    <li>Press <span class="btn">Start event now</span>, or <span class="btn">Schedule…</span> to pick a start and end time. Pick a <b>Ready</b> run sheet version to run the show with it.</li>
+    <li>Once the event is live, each IC presses <span class="btn">Share my location</span>. Their group's marker appears on the live map within about 15 seconds.</li>
+    <li><span class="btn">My GPS details</span> shows your own last reading and its accuracy.</li>
+  </ol>
+  <h3>Group statuses (map labels, Needs attention list)</h3>
+  <table class="avoid">
+    <tr><th style="width:26%">Status</th><th>Meaning</th></tr>
+    <tr><td><span class="chip c-ok">On track</span></td><td>Will reach its zone in time.</td></tr>
+    <tr><td><span class="chip c-risk">At risk</span></td><td>Will only just make it: the label shows the seconds to spare.</td></tr>
+    <tr><td><span class="chip c-late">Late</span></td><td>Will not make it in time: the label shows by how much (e.g. +1:30).</td></tr>
+    <tr><td><span class="chip c-sig">○ Not sharing yet</span></td><td>None of the group's ICs has pressed Share in this session.</td></tr>
+    <tr><td><span class="chip c-sig">◌ No signal</span></td><td>The ICs were sharing but nothing has been heard for 2 minutes.</td></tr>
+    <tr><td><span class="chip c-done">Arrived</span> / Arrived late</td><td>The group is inside its zone (or an IC / marshal said "in position").</td></tr>
+  </table>
+</section>
+
+<section class="page">
+  <div class="kicker">Website</div>
+  <h2>5. Run sheet</h2>
+  <p>The run sheet is the show's running order. It answers two questions: <b>what happens when</b> (the cues) and <b>which group must be where, by when</b> (the movements). During the show, the app counts down to each cue and tells every group when to leave.</p>
+  <table class="avoid">
+    <tr><th style="width:22%">Word</th><th>What it means</th><th style="width:30%">Example</th></tr>
+    <tr><td><b>Cue</b></td><td>One item of the show, with a start time and a length.</td><td>C01 Pre-show set up, 18:00:00, 1:00</td></tr>
+    <tr><td><b>Section</b></td><td>A heading that groups cues together.</td><td>PRE-SHOW, PARADE</td></tr>
+    <tr><td><b>Movement</b></td><td>A group must be inside a zone by a certain time (usually when a cue starts).</td><td>M01 Test group A → TREES by the time C01 starts</td></tr>
+    <tr><td><b>Zone code</b></td><td>The short name of a zone, drawn on the Zones page. Movements point to it.</td><td>TREES, FORMATION_A</td></tr>
+    <tr><td><b>Version</b></td><td>One complete copy of the run sheet. Keep several (rehearsal, show day) and pick one when you start.</td><td>Rehearsal 1, Show day</td></tr>
+  </table>
+  <div class="tip"><b>Do this first:</b> draw the zones (section 6) and create the groups (section 7). A movement needs both a group and a zone to point to.</div>
+
+  <h3>Step 1: pick or make a version</h3>
+  <figure class="web shorter"><img src="img/web-rs-draft.jpg" alt="A draft run sheet version" /><figcaption>A draft version: the version list, its buttons, the Draft note and Check &amp; mark ready.</figcaption></figure>
+  <p>Every version is in one of three states, shown in the version list:</p>
+  <table class="avoid">
+    <tr><th style="width:22%">State</th><th>What you can do</th></tr>
+    <tr><td>✏️ <b>Draft</b></td><td>Being written. Edit freely. It cannot be picked to run a show yet.</td></tr>
+    <tr><td>✅ <b>Ready</b></td><td>Checked with no problems. It can be picked when the event starts. Editing it makes it a draft again until it is checked.</td></tr>
+    <tr><td>🔒 <b>Used</b></td><td>It has run in a show, so it is kept exactly as it was (for playback and records). To change it, press <span class="btn">Duplicate</span> and edit the copy.</td></tr>
+  </table>
+  <ul>
+    <li><span class="btn">New version</span> starts an empty draft. <span class="btn">Duplicate</span> copies the selected version, with all its cues and movements, as a new draft.</li>
+    <li><span class="btn">Rename</span> changes the version's name; <span class="btn">Delete</span> removes a version that has never been used.</li>
+  </ul>
+</section>
+
+<section class="page">
+  <div class="kicker">Website · Run sheet</div>
+  <h3 style="margin-top:0">Step 2: add the cues</h3>
+  <p>Press <span class="btn">Add cue</span> (top right of the Cues card), or click any cue in the table to edit it. The editor opens right under that cue.</p>
+  <figure class="web form"><img src="img/web-rs-cue.jpg" alt="The cue editor" /><figcaption>The cue editor. "Ends at" under the form shows when the cue will finish.</figcaption></figure>
+  <table class="avoid">
+    <tr><th style="width:24%">Field</th><th>What to enter</th></tr>
+    <tr><td><b>Cue name</b></td><td>What happens, e.g. "Parade &amp; Ceremony".</td></tr>
+    <tr><td><b>Section / Code</b></td><td>Section groups cues under a heading. Code is filled in for you (C01, C02…); change it only to match your own paper run sheet.</td></tr>
+    <tr><td><b>Start</b></td><td>The planned start time. Tick <b>After midnight (+1 day)</b> for cues past 00:00.</td></tr>
+    <tr><td><b>Length (m:ss)</b></td><td>How long it lasts, e.g. 2:30.</td></tr>
+    <tr><td><b>Type</b></td><td><b>Normal:</b> moves later if the show runs late. <b>Flexible (can shorten):</b> can be cut by up to the "Can shorten by" time to win back a delay. <b>⚓ Anchor (fixed time):</b> always starts at its time, e.g. a fly-past or a TV live link.</td></tr>
+    <tr><td><b>How it starts</b></td><td><b>Auto (on time):</b> starts by itself at its time. <b>Auto when groups are ready:</b> starts at its time only once the groups it needs have arrived. <b>Manual (waits for GO):</b> waits until a planner presses GO.</td></tr>
+    <tr><td><b>Area / Department / Notes</b></td><td>For reference only.</td></tr>
+  </table>
+  <p>Press <span class="btn">Save cue</span>. When editing an existing cue you can also move it <span class="btn">↑ Up</span> / <span class="btn">↓ Down</span>, <span class="btn">Add cue after</span>, or <span class="btn">Delete</span> it.</p>
+</section>
+
+<section class="page">
+  <div class="kicker">Website · Run sheet</div>
+  <h3 style="margin-top:0">Step 3: add the movements</h3>
+  <p>Press <span class="btn">Add movement</span> on the Movements card. Each movement says: <i>this group must be inside this zone by this time.</i></p>
+  <figure class="web form"><img src="img/web-rs-move.jpg" alt="The movement editor" /><figcaption>The movement editor. The grey sentence at the top reads back what you have chosen.</figcaption></figure>
+  <table class="avoid">
+    <tr><th style="width:26%">Field</th><th>What to choose</th></tr>
+    <tr><td><b>Who moves</b></td><td><b>One group</b>, or <b>A whole category</b> (every group with that category in Members → Group details, e.g. all "Contingent" groups). For a category you can add exceptions: a group that goes elsewhere or skips it.</td></tr>
+    <tr><td><b>Where to</b></td><td>The zone, by its code. "Not decided yet" is allowed in a draft, but the check flags it.</td></tr>
+    <tr><td><b>By when</b></td><td><b>When a cue starts</b>, <b>when a cue ends</b>, or <b>at a fixed time</b>. Choose the cue next to it.</td></tr>
+    <tr><td><b>Arrive early by</b></td><td>How long before that time the group should already be there (e.g. 2:00).</td></tr>
+    <tr><td><b>Counts as arrived when</b></td><td>How many of the group's ICs must be inside (blank = all of them), and for how long (default 0:20), so a phone passing through does not count.</td></tr>
+    <tr><td><b>Amber when spare &lt;</b></td><td>When the group turns <span class="chip c-risk">At risk</span>: e.g. 0:30 means amber once it has less than 30 s to spare.</td></tr>
+    <tr><td><b>How they travel</b></td><td><b>On foot</b> uses walking routes for the ETA. Vehicle and Fixed route are kept with the plan but timed like walking for now.</td></tr>
+  </table>
+  <p>Press <span class="btn">Add movement</span> to save. The cue's row in the table then shows a chip such as <span class="chip c-done">Test group A → TREES</span>; click it to jump to the movement.</p>
+
+  <h3>Step 4: check it and mark it Ready</h3>
+  <ol>
+    <li>Press <span class="btn">Check &amp; mark ready</span>. The check reads the whole version and lists what would go wrong in the show, for example: a cue that starts before the one above it ends; an ⚓ anchor that the cue before it runs into; a cue with no length; a movement with no zone or no cue; a zone that has become No-Go; a group sent to two zones at the same time; a group with no IC, so its arrival cannot be tracked.</li>
+    <li>Problems appear in red (✗ must fix) or amber (! worth a look) next to the cue or movement. Fix them and check again.</li>
+    <li>With no ✗ problems the version becomes ✅ <b>Ready</b>.</li>
+  </ol>
+  <h3>Step 5: run it</h3>
+  <p>Press <span class="btn">Start event now</span> or <span class="btn">Schedule…</span> and pick the Ready version. From then on it is 🔒 Used.</p>
+  <h3>Excel</h3>
+  <ul>
+    <li><span class="btn">Template</span> downloads an empty Excel workbook with the right columns and an instructions sheet.</li>
+    <li><span class="btn">Import</span> reads a filled workbook and saves it as a <b>new draft</b> version. If a row has a problem, it lists every problem by row number so you can fix the file and import again.</li>
+    <li><span class="btn">Export this version</span> saves the selected version as an Excel file; importing that file again gives an identical copy.</li>
+  </ul>
+</section>
+
+<section class="page">
+  <div class="kicker">Website</div>
+  <h2>6. Zones</h2>
+  <p>Zones are the areas on the map that groups must reach (formation areas, holding areas, doors) or must stay out of (No-Go). Only the event's root and planners can change them; everyone else sees them on the live map.</p>
+  <table class="avoid">
+    <tr><th style="width:22%">Type</th><th>Used for</th></tr>
+    <tr><td><b>Zone</b></td><td>A place a group must reach. Movements in the run sheet point to it.</td></tr>
+    <tr><td><b>No-Go</b></td><td>A place groups must not enter. Entering it sends one alert to planners and marshals and a red banner to the IC.</td></tr>
+    <tr><td><b>Obstacle / Stage / Entrance</b></td><td>Shown on the map to help people find their way.</td></tr>
+  </table>
+  <h3>Overview</h3>
+  <figure class="web short"><img src="img/web-zones.jpg" alt="Zones page with map" /><figcaption>The top of the Zones page lists each zone with its code and how many movements use it. The map below is where you draw.</figcaption></figure>
+</section>
+
+<section class="page">
+  <div class="kicker">Website · Zones</div>
+  <h3 style="margin-top:0">Draw a new area</h3>
+  <figure class="web short"><img src="img/web-zones-draw.jpg" alt="Drawing mode" /><figcaption>After pressing Draw areas: the hint at the top of the map says what to do next.</figcaption></figure>
+  <ol>
+    <li>Zoom the map to the place (scroll wheel or <b>+</b> / <b>−</b>).</li>
+    <li>Press <span class="btn">Draw areas</span>. The hint at the top of the map says <i>Click to add a point.</i></li>
+    <li>Click each corner of the area in turn. You need at least 3 points; lines may not cross.</li>
+    <li>Close the shape by clicking the <b>first dot</b> again, or press <span class="btn">Finish</span>.</li>
+    <li>Type a <b>Name</b> (e.g. "Trees"), choose the <b>Type</b>, then press <span class="btn">Save area</span>. A code is made from the name (TREES).</li>
+    <li>Press <span class="btn">Done</span> to stop drawing. <span class="btn">Clear</span> throws away the shape you are drawing; <b>Esc</b> does the same.</li>
+  </ol>
+  <h3>Change an area</h3>
+  <ul>
+    <li>Click the area on the map to select it. The hint says <i>Drag a dot to move it, click a dot to remove it, click an edge to add one.</i></li>
+    <li>Drag inside the shape to move the whole area. Press <b>Esc</b> during a drag to put it back.</li>
+    <li><span class="btn">Copy</span> then <span class="btn">Paste</span> makes a second area of the same shape next to it (with the next free code, e.g. TREES_2).</li>
+    <li>Undo <b>↶</b> and redo <b>↷</b> sit above the map (Ctrl+Z / Ctrl+Y). Undo only touches your own changes.</li>
+    <li><b>Delete</b> or <b>Backspace</b> deletes the selected area after a "Delete …?" question.</li>
+  </ul>
+</section>
+
+<section class="page">
+  <div class="kicker">Website · Zones</div>
+  <h3 style="margin-top:0">The list of areas</h3>
+  <figure class="web short"><img src="img/web-zones-list.jpg" alt="List of areas" /><figcaption>Each area has its name, code and type. The list scrolls on its own.</figcaption></figure>
+  <ul>
+    <li><b>Name</b> is what people read on the map. Renaming keeps the code, so the run sheet still finds it.</li>
+    <li><b>Code</b> is what the run sheet uses. It must be unique in the event and is written in capitals (typing "form a" gives FORM_A).</li>
+    <li><b>Type</b> can be changed at any time.</li>
+    <li>A zone that a run sheet movement still uses cannot be deleted. Change or delete that movement first.</li>
+  </ul>
+  <h3>Floor plans</h3>
+  <ol>
+    <li>Press <span class="btn">Add a floor plan</span> and choose a picture (PNG or JPG), or copy a picture and press <span class="btn">Paste a floor plan</span>.</li>
+    <li>Drag it into place over the map; drag a corner to resize it and the round knob to turn it. Areas can be drawn on top.</li>
+    <li>Each floor plan has its own name and show / hide switch.</li>
+    <li>The ring next to <b>Storage</b> shows how much of the 4 MB allowance is used. Pictures use almost all of it; areas take a few bytes each.</li>
+  </ol>
+  <div class="note"><b>Working together:</b> several planners can edit at once, one shape each. A shape someone else is editing shows their name and cannot be changed until they let go.</div>
+</section>
+
+<section class="page">
+  <div class="kicker">Website</div>
+  <h2>7. Members</h2>
+  <figure class="web short"><img src="img/web-members.jpg" alt="Members page" /><figcaption>Create groups, add people, set roles and groups.</figcaption></figure>
+  <ol>
+    <li><b>Create a group:</b> pick its colour, type a name, press <span class="btn">Add</span>.</li>
+    <li><b>Add a person:</b> type a username, name or full email, choose a group, press <span class="btn">Add</span>.</li>
+    <li>On each person's card: change their group, make them <b>Group admin</b> or <b>IC</b>, or <span class="btn">Remove from event</span>. The badge shows <b>● Sharing</b> or <b>Not sharing yet</b>.</li>
+    <li><b>Group details</b> (category, code, sector, headcount, radio channel) are used by category movements and shown to ICs.</li>
+  </ol>
+  <div class="pair">
+    <div>
+      <h3>8. Invite</h3>
+      <figure><img src="img/web-invite.jpg" alt="Invite page" /><figcaption>Event code, invite link and QR code.</figcaption></figure>
+      <p>Send the <b>code</b>, the <b>link</b> (<span class="btn">Copy</span>, WhatsApp or Telegram) or let people <b>scan the QR</b>.</p>
+    </div>
+    <div>
+      <h3>Playback</h3>
+      <figure><img src="img/web-playback.jpg" alt="Playback page" /><figcaption>Past sessions: play, download CSV or delete.</figcaption></figure>
+      <p><span class="btn">▶ Play</span> replays a session on the map. Recordings stay online for 7 days; <span class="btn">Download CSV</span> keeps one longer, and <b>Replay from a CSV file</b> plays it back later.</p>
+    </div>
+  </div>
+</section>
+
+<section class="page">
+  <div class="kicker">Android phone app</div>
+  <h2>9. Getting started on the phone</h2>
+  <p>The phone app has the same events as the website, laid out for one hand: <b>tabs at the bottom</b>, one main action per screen, and <b>sheets that slide up</b> for extra choices.</p>
+  <div class="row">
+    <div class="shot"><img src="img/phone-events.png" alt="My events on the phone" /></div>
+    <div class="text">
+      <h3 style="margin-top:0">My events</h3>
+      <ul>
+        <li>A <b>live</b> event shows at the top as a big card: tap <b>Open live view</b>.</li>
+        <li>Other events are listed by date, soonest first, with your role.</li>
+        <li>The orange <span class="btn">+ Join event</span> button opens the join sheet.</li>
+        <li>Bottom tabs: <b>Events</b>, <b>Phone</b> (phone setup), <b>Me</b>.</li>
+      </ul>
+      <h3>Join an event</h3>
+      <ol>
+        <li>Tap <span class="btn">+ Join event</span>.</li>
+        <li>Type the 6-character code and tap <span class="btn">Join</span>. Or open the invite link from WhatsApp or Telegram.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="row">
+    <div class="shot"><img src="img/phone-join.png" alt="Join sheet" /></div>
+    <div class="text">
+      <h3 style="margin-top:0">Phone setup (the Phone tab)</h3>
+      <p>Before your first show, go through the steps on the <b>Phone</b> tab so Android does not pause the location sharing:</p>
+      <ul>
+        <li>Location permission <b>"Allow all the time"</b>.</li>
+        <li>Turn off <b>Power saving</b> while you share.</li>
+        <li>Allow <b>notifications</b> (Get ready / Leave now reminders).</li>
+      </ul>
+      <div class="tip">You can skip a step with <b>Skip for now</b> and come back to it later.</div>
+    </div>
+  </div>
+</section>
+
+<section class="page">
+  <div class="kicker">Android phone app</div>
+  <div class="pair">
+    <figure><img src="img/phone-phonecheck.png" alt="Phone setup" /><figcaption>Phone tab: one setting per step.</figcaption></figure>
+    <figure><img src="img/phone-me.png" alt="Me tab" /><figcaption>Me: who you are and whether you are sharing.</figcaption></figure>
+  </div>
+  <h3>Me</h3>
+  <ul>
+    <li><b>Location sharing</b> tells you whether your phone is sharing now, and for which event. Tap <span class="btn">Stop</span> to stop.</li>
+    <li><b>Phone set-up</b> opens the setup steps again.</li>
+    <li><span class="btn">Log out</span> signs you out of the app.</li>
+  </ul>
+</section>
+
+<section class="page">
+  <div class="kicker">Android phone app</div>
+  <h2>10. Planner screens</h2>
+  <p>Inside an event, the header shows the event name, your role and a red <b>● LIVE</b> badge while the show runs. Planners, roots and marshals get these tabs: <b>Ops, Map, Run sheet, People, More</b>. Tap the back arrow to return to My events.</p>
+  <div class="row">
+    <div class="shot"><img src="img/phone-ops.png" alt="Ops tab" /></div>
+    <div class="text">
+      <h3 style="margin-top:0">Ops</h3>
+      <ul>
+        <li>Before the show: <span class="btn">Start event now</span> or <span class="btn">Schedule…</span>, and <span class="btn">Share my location</span> once live.</li>
+        <li>During the show: the current cue, <b>Needs attention</b> (most urgent group first, with what to do), and your own group's next move if you are also an IC.</li>
+        <li>A red dot on the <b>Ops</b> tab means a group needs attention.</li>
+      </ul>
+      <h3>Map</h3>
+      <p>Every group's marker with its status label, the zones, and the list of who is sharing and when they were last heard.</p>
+    </div>
+  </div>
+  <div class="pair">
+    <figure><img src="img/phone-map.png" alt="Map tab" /><figcaption>Map: groups and zones.</figcaption></figure>
+    <figure><img src="img/phone-runsheet.png" alt="Run sheet tab" /><figcaption>Run sheet: one card per cue, then the movements.</figcaption></figure>
+    <figure><img src="img/phone-people.png" alt="People tab" /><figcaption>People: one card per member.</figcaption></figure>
+  </div>
+</section>
+
+<section class="page">
+  <div class="kicker">Android phone app</div>
+  <div class="row">
+    <div class="shot"><img src="img/phone-more.png" alt="More sheet" /></div>
+    <div class="text">
+      <h3 style="margin-top:0">More</h3>
+      <p>Tap <b>More</b> for the less frequent pages, in a sheet that slides up:</p>
+      <ul>
+        <li><b>Zones</b>: areas, doors and No-Go areas (same as the website).</li>
+        <li><b>Invite</b>: join code, link and QR, with WhatsApp / Telegram buttons.</li>
+        <li><b>Playback</b>: replay a past session.</li>
+        <li><b>Simulator</b> (simulation events only).</li>
+        <li><b>Event info</b>: details, and leave the event.</li>
+      </ul>
+      <p>Tap outside the sheet or the ✕ to close it.</p>
+    </div>
+  </div>
+  <div class="pair">
+    <figure><img src="img/phone-zones.png" alt="Zones on the phone" /><figcaption>Zones: the area list scrolls on its own; the map is below.</figcaption></figure>
+    <figure><img src="img/phone-invite.png" alt="Invite on the phone" /><figcaption>Invite: show the QR to people next to you.</figcaption></figure>
+    <figure><img src="img/phone-playback.png" alt="Playback on the phone" /><figcaption>Playback: play or download a session.</figcaption></figure>
+  </div>
+</section>
+
+<section class="page">
+  <div class="kicker">Android phone app</div>
+  <h2>11. IC screens: your next move</h2>
+  <p>ICs and members get the tabs <b>Now, Map, Group, Info</b>. (A planner who is also an IC sees the same card on Ops.)</p>
+  <div class="row">
+    <div class="shot"><img src="img/phone-nextmove.webp" alt="Your next move card" /></div>
+    <div class="text">
+      <h3 style="margin-top:0">Your next move</h3>
+      <ul>
+        <li><b>Where and by when:</b> e.g. "Be inside trees (TREES) by 18:00:00".</li>
+        <li><b>Time left</b> and <b>distance</b>, and <b>Leave by</b>: the latest time to set off.</li>
+        <li>The status chip (<span class="chip c-ok">● On track</span>) is what the planners see.</li>
+        <li>The small map shows you and the zone.</li>
+      </ul>
+      <h3>Tell planner: delayed</h3>
+      <ol>
+        <li>Tap <span class="btn">Tell planner: delayed</span>. A sheet slides up.</li>
+        <li>Tap a quick reason (Stuck at a gate, Crowd in the way, Waiting for our people, Route blocked) or type one.</li>
+        <li>Tap <span class="btn">Tell the planners</span>. They see it at once on Ops. The button then shows "Planners told ✓" for a minute.</li>
+      </ol>
+      <h3>We're in position</h3>
+      <p>Tap <span class="btn">We're in position</span> when the whole group is in place. It counts at once, without waiting for GPS. You can undo it for 5 minutes.</p>
+      <h3>Stop sharing</h3>
+      <p>Tap <span class="btn">Stop sharing</span> when you are done (also on the Me tab).</p>
+    </div>
+  </div>
+  <div class="warn">Keep the app sharing for the whole show. If your phone is in Power saving or the location permission is not "All the time", Android may pause the sharing and planners will see <b>No signal</b>.</div>
+</section>
+
+<section class="page">
+  <div class="kicker">Website + phone app · root and planners</div>
+  <h2>12. Message everyone</h2>
+  <p>Send one message to many people at once: everyone in the event, every group, all ICs, the staff, one sector or one category. Each person gets a <b>push</b> and a <b>banner</b> on the event page that stays until they press <span class="btn">Got it</span>. You see how many have confirmed, and who has not, so you only need the radio for those.</p>
+  <div class="tip"><b>When to use it:</b> lightning or heavy rain, "hold in place", an evacuation, the wet weather plan, or "the show is running late". To talk to <i>one</i> group, use <b>Message</b> on that group in Needs attention instead.</div>
+  <h3>Send a message</h3>
+  <figure class="web"><img src="img/web-bc-form.jpg" alt="The Message everyone form" /><figcaption>Website: the Message everyone card on the Live map page, with a quick message picked.</figcaption></figure>
+  <ol>
+    <li>Website: on the <b>Live map</b> page press <span class="btn">Write a message</span>. Phone: on the <b>Ops</b> tab press <span class="btn">Write a message</span>; the form slides up.</li>
+    <li>Tap a <b>quick message</b> (⚡ Lightning: shelter, Hold in place, All clear: resume, Wet weather plan, Show running late, Evacuate), or type your own (up to 300 characters). You can change a quick message's words before sending.</li>
+    <li>Choose <b>Who gets it</b> (table below).</li>
+    <li>Tick <b>Urgent</b> for anything about safety: it shows in red. Lightning, Hold and Evacuate tick it for you.</li>
+    <li>During a show, Lightning and Hold offer <b>Also hold the show</b>, and All clear offers <b>Also resume the show</b>: one press sends the message and holds (or resumes) the show.</li>
+    <li>Press <span class="btn">Send</span>. A check says exactly how many people will get it ("Send to 124 people?"). Press <span class="btn">Send</span> again to confirm.</li>
+  </ol>
+  <table class="avoid">
+    <tr><th style="width:30%">Who gets it</th><th>Who that is</th></tr>
+    <tr><td>Everyone in the event</td><td>Every person with any role, except you.</td></tr>
+    <tr><td>Every group's members</td><td>Everyone who is in a group.</td></tr>
+    <tr><td>ICs and group admins</td><td>The people leading each group.</td></tr>
+    <tr><td>Planners and marshals</td><td>The root, planners and marshals.</td></tr>
+    <tr><td>One sector… / One category…</td><td>The members of the groups with that sector or category (set in Members → Group details). A sector also reaches the marshals of that sector.</td></tr>
+  </table>
+</section>
+
+<section class="page">
+  <div class="kicker">Website + phone app · Message everyone</div>
+  <h3 style="margin-top:0">What people see</h3>
+  <figure class="web"><img src="img/web-bc-banner.jpg" alt="An urgent message banner" /><figcaption>An urgent message: a toast as it arrives, and a red banner at the top of the event page until Got it.</figcaption></figure>
+  <ul>
+    <li>A push on their phone, even with the app closed. Tapping it opens the event.</li>
+    <li>A banner at the top of the event page (red if urgent), on every tab. Newer messages show on top.</li>
+    <li><span class="btn">Got it</span> removes it, on all of that person's devices.</li>
+  </ul>
+  <h3>Check who has read it</h3>
+  <figure class="web"><img src="img/web-bc-sent.jpg" alt="Read count and who has not" /><figcaption>Under the form: each message of the last day, "Got it: 0 of 3", and who has not confirmed.</figcaption></figure>
+  <ul>
+    <li><b>Got it: 12 of 15</b> counts people who pressed Got it; <b>seen by</b> counts people who had it on screen.</li>
+    <li>Press <b>Who has not</b> for their names, group, whether they are the IC, and the group's radio channel. Radio only those.</li>
+    <li><span class="btn">Take down</span> removes the banner from everyone's screen (e.g. after All clear). The message stays in your list as a record, and every message is in the show log for playback.</li>
+  </ul>
+  <div class="row">
+    <div class="shot" style="flex-basis:80mm"><img src="img/phone-bc-sheet.png" alt="Message everyone on the phone" style="width:80mm" /></div>
+    <div class="text">
+      <h3 style="margin-top:0">On the phone</h3>
+      <p>The same form opens as a sheet from the <b>Ops</b> tab. Scroll inside the sheet to reach Send; tap outside it or ✕ to close without sending.</p>
+      <div class="note"><b>The radio stays the backup.</b> A push can be delayed by a phone in Power saving or Do Not Disturb. Use "Who has not" to find those people and call them.</div>
+    </div>
+  </div>
+</section>
+
+<section class="page">
+  <h2>13. Help when something looks wrong</h2>
+  <table>
+    <tr><th style="width:36%">What you see</th><th>What to do</th></tr>
+    <tr><td><b>○ Not sharing yet</b> on a group</td><td>None of its ICs has pressed <b>Share my location</b> in this session. Ask the IC to open the event and press Share (the event must be live).</td></tr>
+    <tr><td><b>◌ No signal</b> on a group</td><td>The IC was sharing but nothing has arrived for 2 minutes. Check the IC's phone: is it in Power saving, out of signal, or did they stop sharing? Call them on the radio.</td></tr>
+    <tr><td>"Share my location" is greyed out</td><td>The event is not live yet. A planner must press <b>Start event now</b> (or wait for the scheduled start).</td></tr>
+    <tr><td>Marker appears only after ~15 s</td><td>Normal: the first reading takes about 10-15 seconds after pressing Share. After that the status updates every few seconds.</td></tr>
+    <tr><td>Invite link says "localhost"</td><td>The link was made on a test computer and only works there. Use the event <b>code</b> or the link from the public website.</td></tr>
+    <tr><td>A run sheet version cannot be edited</td><td>It has been used in a show (🔒 Used). Press <b>duplicate it</b> to make an editable copy.</td></tr>
+    <tr><td>A zone cannot be deleted</td><td>The run sheet still has a movement to it. Change or delete that movement first.</td></tr>
+    <tr><td>Blank or wrong page on the phone</td><td>Tap the <b>Events</b> tab or the back arrow; any unknown address now returns to My events.</td></tr>
+  </table>
+  <div class="note"><b>Remember:</b> the radio stays the main way to talk during a show. Use the app to see where everyone is and how the timing looks, and to send quick updates (delayed, in position) that everyone can see.</div>
+</section>
+
+</body>
+</html>

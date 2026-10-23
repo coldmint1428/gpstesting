@@ -45,6 +45,18 @@ const nowInfo = computed(() => {
     pct: Math.min(100, Math.max(0, ((now.value - start) / total) * 100)),
   }
 })
+// "cue 3 of 12" (the running cue's place in this show)
+const position = computed(() => {
+  const done = props.show.finished.value.length
+  return running.value ? done + 1 + ' of ' + (done + 1 + upcoming.value.length) : ''
+})
+// How late (or early) the running cue started against its plan, in whole seconds
+const startOffset = computed(() => {
+  const r = running.value
+  // whole seconds of the two clock times shown, so 01:02:29 against 01:01:30 reads +0:59 (not a rounded +1:00)
+  const whole = (at) => Math.floor(t(at) / 1000)
+  return r && r.planned_start && r.started_at ? whole(r.started_at) - whole(r.planned_start) : 0
+})
 const nextIn = computed(() => (next.value ? secs(t(next.value.projected_start) - now.value) : null))
 const waitingFor = computed(() => (next.value && next.value.waiting_since ? secs(now.value - t(next.value.waiting_since)) : 0))
 
@@ -108,23 +120,36 @@ async function pressSkip(c) {
   <div v-if="b" class="card show-panel" data-testid="show-panel">
     <!-- NOW -->
     <div class="card-body border-bottom">
-      <div class="d-flex align-items-center mb-1">
-        <span class="small text-muted text-uppercase fw-semibold flex-grow-1">Now</span>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <span class="sp-label flex-grow-1">Now</span>
         <span v-if="held" class="badge text-bg-warning" data-testid="show-held">Held · next waits for Resume</span>
+        <span v-if="position" class="show-num small text-muted" data-testid="show-position">cue {{ position }}</span>
       </div>
 
       <template v-if="running">
-        <div class="fw-semibold" data-testid="show-now">
-          <span class="text-muted small me-1">{{ running.code }}</span>{{ running.title }}
-          <span v-for="l in typeLabel(running)" :key="l" class="badge text-bg-light border ms-1">{{ l }}</span>
+        <div class="sp-now-title" data-testid="show-now">
+          <span class="text-muted small fw-normal me-1">{{ running.code }}</span>{{ running.title }}
+          <span v-for="l in typeLabel(running)" :key="l" class="badge text-bg-light border ms-1 align-middle">{{ l }}</span>
         </div>
-        <div class="progress my-2" role="progressbar" :aria-valuenow="Math.round(nowInfo.pct)" aria-valuemin="0" aria-valuemax="100" style="height: 0.6rem">
+        <!-- Planned (struck through when it started late or early) → started, and by how much -->
+        <div class="d-flex flex-wrap gap-1 column-gap-3 small mt-1" data-testid="show-started">
+          <span v-if="Math.abs(startOffset) >= 1">Planned <span class="show-num text-muted text-decoration-line-through">{{ sgClock(running.planned_start) }}</span></span>
+          <span>Started <span class="show-num fw-semibold">{{ sgClock(running.started_at) }}</span><span v-if="running.started_by" class="text-muted"> by {{ running.started_by }}</span></span>
+          <span v-if="Math.abs(startOffset) >= 1" class="show-num fw-semibold" :class="startOffset > 0 ? 'show-late' : 'text-info-emphasis'">
+            {{ startOffset > 0 ? '+' : '−' }}{{ mmss(Math.abs(startOffset)) }}
+          </span>
+        </div>
+        <div class="progress my-2" role="progressbar" :aria-valuenow="Math.round(nowInfo.pct)" aria-valuemin="0" aria-valuemax="100" aria-label="How far the cue has run" style="height: 10px">
           <div class="progress-bar" :class="nowInfo.over ? 'bg-warning' : ''" :style="{ width: nowInfo.pct + '%' }"></div>
         </div>
-        <div class="d-flex small">
-          <span class="flex-grow-1 text-muted">Started {{ sgClock(running.started_at) }}{{ running.started_by ? ' by ' + running.started_by : '' }}</span>
-          <span class="show-num fw-semibold" :class="{ 'text-warning-emphasis': nowInfo.over }" data-testid="show-left">
-            {{ nowInfo.over ? 'over ' + mmss(-nowInfo.left) : mmss(nowInfo.left) + ' left' }}
+        <div class="d-flex small text-muted">
+          <span class="flex-grow-1"><span class="show-num">{{ mmss(Math.max(0, nowInfo.elapsed)) }}</span> elapsed</span>
+          <span class="fw-semibold" :class="nowInfo.over ? 'show-late' : 'text-body'" data-testid="show-left">
+            <template v-if="nowInfo.over">over by <span class="show-num">{{ mmss(-nowInfo.left) }}</span></template>
+            <template v-else>
+              <span class="show-num">{{ mmss(nowInfo.left) }}</span> left of
+              <span class="show-num">{{ mmss(Math.round((t(running.natural_end) - t(running.started_at)) / 1000)) }}</span>
+            </template>
           </span>
         </div>
         <div v-if="running.absorbed_s || running.added_s" class="small text-muted">
@@ -150,9 +175,9 @@ async function pressSkip(c) {
       </div>
 
       <!-- Buttons -->
-      <div v-if="canRun && b.state !== 'finished'" class="d-flex flex-wrap gap-2 mt-3">
+      <div v-if="canRun && b.state !== 'finished'" class="sp-buttons d-flex flex-wrap gap-2 mt-3">
         <button
-          class="btn btn-success flex-grow-1"
+          class="btn btn-success flex-grow-1 sp-go"
           :class="{ 'show-pulse': next && next.wait_kind }"
           :disabled="!!busy || !next || next.type === 'anchor'"
           data-testid="show-go"
@@ -171,16 +196,23 @@ async function pressSkip(c) {
 
     <!-- UP NEXT -->
     <div class="card-body border-bottom">
-      <div class="small text-muted text-uppercase fw-semibold mb-2">Up next</div>
+      <div class="d-flex align-items-baseline mb-2">
+        <span class="sp-label flex-grow-1">Up next</span>
+        <span class="small text-muted">planned → projected</span>
+      </div>
       <p v-if="!upcoming.length" class="small text-muted mb-0">Nothing left.</p>
       <ul class="list-unstyled mb-0 d-grid gap-2" data-testid="show-upcoming">
         <li v-for="c in visibleNext" :key="c.cue_id" class="show-row" :class="{ 'show-anchor': c.type === 'anchor' }" :data-testid="'show-cue-' + c.code">
           <div class="d-flex align-items-start gap-2">
-            <div class="show-num small text-nowrap">
-              <div>{{ sgClock(c.planned_start) }}</div>
-              <div v-if="c.delay_s && c.type !== 'anchor'" :class="c.delay_s > 0 ? 'text-warning-emphasis' : 'text-info-emphasis'">
-                → {{ sgClock(c.projected_start) }} ({{ c.delay_s > 0 ? '+' : '' }}{{ mmss(c.delay_s) }})
-              </div>
+            <!-- planned → projected: a delayed cue shows its planned time struck through and when it will start -->
+            <div class="show-num small text-nowrap show-times">
+              <template v-if="c.delay_s && c.type !== 'anchor'">
+                <div class="text-muted text-decoration-line-through">{{ sgClock(c.planned_start) }}</div>
+                <div class="fw-semibold" :class="c.delay_s > 0 ? 'show-late' : 'text-info-emphasis'" :title="(c.delay_s > 0 ? '+' : '') + mmss(c.delay_s)">
+                  {{ sgClock(c.projected_start) }}
+                </div>
+              </template>
+              <div v-else class="fw-semibold">{{ sgClock(c.planned_start) }}<span v-if="c.type === 'anchor'"> ⚓</span></div>
             </div>
             <div class="flex-grow-1 small">
               <span class="text-muted me-1">{{ c.code }}</span><span class="fw-semibold">{{ c.title }}</span>
@@ -204,7 +236,7 @@ async function pressSkip(c) {
     <!-- Done -->
     <div class="card-body">
       <details data-testid="show-done">
-        <summary class="small text-muted text-uppercase fw-semibold">Done ({{ finished.length }}) and the log</summary>
+        <summary class="sp-label">Done ({{ finished.length }}) and the log</summary>
         <ul class="list-unstyled small mb-2 mt-2 d-grid gap-1">
           <li v-for="c in finished" :key="c.cue_id" :class="{ 'text-muted': c.status === 'skipped' }">
             <span class="show-num">{{ c.status === 'skipped' ? 'skipped' : sgClock(c.started_at) + '–' + sgClock(c.ended_at) }}</span>
@@ -245,5 +277,48 @@ async function pressSkip(c) {
   .show-pulse {
     animation: none;
   }
+}
+.show-times {
+  min-width: 4.6rem;
+}
+.show-panel {
+  border-radius: 12px;
+}
+.sp-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #475569;
+}
+.sp-now-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+/* Phone: GO across the whole width, Hold / +30 s / −30 s / End now share the row under it */
+@media (max-width: 575.98px) {
+  .sp-go {
+    flex-basis: 100%;
+  }
+  .sp-buttons > .btn:not(.sp-go) {
+    flex: 1 1 0;
+    white-space: nowrap;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
+.show-late {
+  color: #92400e;
+}
+.show-panel :deep(.btn-success) {
+  background: #0f766e;
+  border-color: #0f766e;
+}
+.show-panel :deep(.progress-bar) {
+  background: #0f1b2d;
+}
+.show-panel :deep(.progress-bar.bg-warning) {
+  background: #b45309 !important;
 }
 </style>

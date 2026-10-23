@@ -1,0 +1,347 @@
+/* The event workspace (event page): a dark header, every page in a side navigation, full-width pages.
+   Look from the "Live Timeline + Map" concept: navy ink, cool grey ground, teal / amber / red statuses (always with a
+   word and a symbol too), IBM Plex Sans with tabular Plex Mono for times. */
+
+.ev {
+  --ev-navy: #0f1b2d;
+  --ev-navy-2: #1c2b42;
+  --ev-ground: #eef1f5;
+  --ev-line: #cdd5e0;
+  --ev-line-soft: #e2e8f0;
+  --ev-muted: #475569;
+  --ev-head-muted: #b6c2d3;
+  --ev-teal: #0f766e;
+  --ev-amber: #b45309;
+  --ev-red: #b91c1c;
+  --ev-blue: #1d4ed8;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ev-navy);
+  background: var(--ev-ground);
+  min-height: calc(100vh - 56px);
+}
+.ev .mono,
+.ev .show-num,
+.ev .ops-num {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- The site's top bar (every page): same navy as an event's header ---------- */
+.app-nav {
+  background: #0f1b2d;
+  border-bottom: 1px solid #22344f;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.app-nav-inner {
+  max-width: 1680px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+@media (max-width: 991.98px) {
+  .app-nav-inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* ---------- Header ---------- */
+.ev-head {
+  background: var(--ev-navy);
+  color: #f8fafc;
+}
+.ev-head-inner {
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 14px 24px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 24px;
+}
+.ev-back {
+  color: var(--ev-head-muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+.ev-back:hover,
+.ev-back:focus-visible {
+  color: #fff;
+  text-decoration: underline;
+}
+.ev-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 2px 0 0;
+  line-height: 1.2;
+}
+.ev-meta {
+  color: var(--ev-head-muted);
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+}
+.ev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.ev-chip-live {
+  background: #dc2626;
+  color: #fff;
+}
+.ev-chip-sched {
+  background: #fef3c7;
+  color: #78350f;
+}
+.ev-chip-off {
+  background: var(--ev-navy-2);
+  color: #cbd5e1;
+}
+.ev-chip-sim {
+  background: #fde68a;
+  color: #78350f;
+}
+.ev-chip-role {
+  background: #1e3a5f;
+  color: #e2e8f0;
+}
+.ev-desc {
+  color: #cbd5e1;
+  font-size: 13px;
+  white-space: pre-line;
+  margin: 4px 0 0;
+  max-width: 70ch;
+}
+
+/* ---------- Body: side navigation + page ---------- */
+.ev-body {
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.ev-nav {
+  position: sticky;
+  top: 16px;
+  background: #fff;
+  border: 1px solid var(--ev-line);
+  border-radius: 12px;
+  padding: 8px;
+}
+.ev-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.ev-nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ev-navy);
+  text-align: left;
+  border-radius: 8px;
+  padding: 9px 10px;
+  min-height: 44px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ev-nav-btn:hover {
+  background: #f1f5f9;
+}
+.ev-nav-btn:focus-visible {
+  outline: 2px solid var(--ev-blue);
+  outline-offset: 1px;
+}
+.ev-nav-btn[aria-current='page'] {
+  background: var(--ev-navy);
+  color: #fff;
+}
+.ev-nav-btn svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.ev-nav-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.ev-nav-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ev-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev-nav-btn[aria-current='page'] .ev-nav-hint {
+  color: var(--ev-head-muted);
+}
+.ev-nav-badge {
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  background: #e2e8f0;
+  color: var(--ev-navy);
+}
+.ev-nav-badge-live {
+  background: #dc2626;
+  color: #fff;
+}
+.ev-nav-foot {
+  border-top: 1px solid var(--ev-line-soft);
+  margin-top: 8px;
+  padding: 8px 4px 2px;
+}
+
+.ev-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ev-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+.ev-page-head h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+.ev-page-head p {
+  margin: 0;
+  color: var(--ev-muted);
+  font-size: 14px;
+  flex: 1 1 320px;
+}
+.ev-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ev-muted);
+}
+
+/* Cards everywhere inside the workspace: one look */
+.ev .card {
+  border-color: var(--ev-line);
+  border-radius: 12px;
+}
+.ev .alert {
+  border-radius: 10px;
+}
+.ev .ev-surface {
+  background: #fff;
+  border: 1px solid var(--ev-line);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* ---------- Live page ---------- */
+.ev-live {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 16px;
+  align-items: start;
+}
+.ev-live-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  /* beside the map: stays in view and scrolls on its own, so NOW, Up next and Needs attention are all reachable */
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ev .ev-live .live-map {
+  height: calc(100vh - 240px);
+  min-height: 480px;
+  border-radius: 12px;
+}
+.ev .ev-map-only .live-map {
+  height: calc(100vh - 300px);
+  min-height: 420px;
+  border-radius: 12px;
+}
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 1199.98px) {
+  .ev-live {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ev-live-side {
+    order: -1; /* the show's controls first, then the map */
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+  .ev .ev-live .live-map {
+    height: 60vh;
+  }
+}
+@media (max-width: 991.98px) {
+  .ev-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 0 32px;
+    gap: 0;
+  }
+  .ev-nav {
+    top: 0;
+    z-index: 1010;
+    border-radius: 0;
+    border-width: 0 0 1px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .ev-nav ul {
+    display: flex;
+    gap: 4px;
+  }
+  .ev-nav-btn {
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+  .ev-nav-hint,
+  .ev-nav-foot {
+    display: none;
+  }
+  .ev-main {
+    padding: 16px 16px 0;
+  }
+  .ev-head-inner {
+    padding: 12px 16px 14px;
+  }
+  .ev-title {
+    font-size: 20px;
+  }
+  .ev .ev-map-only .live-map {
+    height: 60vh;
+  }
+}

@@ -118,7 +118,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="container py-3 setup" data-testid="phone-check">
+  <main class="container py-3 setup pv-has-tabs" data-testid="phone-check">
     <!-- Not the phone app: nothing to set up here -->
     <template v-if="!readiness.isNative">
       <h1 class="h4">Set up sharing</h1>

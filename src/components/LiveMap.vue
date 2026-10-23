@@ -32,7 +32,7 @@ import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
 import { areaStyle } from '../utils/areaKinds'
-import { statusOf, PROBLEMS } from '../utils/opsStatus'
+import { statusOf, statusLabel, PROBLEMS } from '../utils/opsStatus'
 import { mmss } from '../composables/useShow'
 
 const props = defineProps({
@@ -730,7 +730,7 @@ function drawOpsLines() {
     if (line) L.polyline(line, { color: s.colour, weight: 3, dashArray: '4 7', opacity: 0.9, interactive: false }).addTo(opsLayer)
     const g = groupOf(groupId)
     const text =
-      (g ? g.name : '') + ' · ' + (row.status === 'late' ? '+' + mmss(row.late_s || 0) : row.status === 'at_risk' ? row.spare_s + ' s spare' : s.label)
+      (g ? g.name : '') + ' · ' + (row.status === 'late' ? '+' + mmss(row.late_s || 0) : row.status === 'at_risk' ? row.spare_s + ' s spare' : statusLabel(row))
     L.tooltip({ permanent: true, direction: 'right', offset: [14, 0], className: 'ops-eta-label ' + s.cls, interactive: false })
       .setLatLng(at)
       .setContent(escapeHtml(text))

@@ -2,7 +2,7 @@
 // OpsSummary - the groups at a glance during the live show (merger Stage 7, mock-up screen 5): how many groups are on
 // track / at risk / late / without signal (each count is a filter), and search + category + sector + zone + "My
 // groups". The filters apply to the problem queue and to the map. A marshal's view opens on their sector.
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { STATUS } from '../utils/opsStatus'
 
 const props = defineProps({
@@ -17,6 +17,9 @@ const BUTTONS = ['on_track', 'at_risk', 'late', 'no_signal']
 function toggle(status) {
   f.value.status = f.value.status === status ? '' : status
 }
+// Phone: the search and the four filters fold away behind one button (they would fill the screen above the map)
+const filtersOpen = ref(false)
+const activeFilters = computed(() => ['search', 'category', 'sector', 'zone', 'mine'].filter((k) => f.value[k]).length)
 function clearAll() {
   Object.assign(f.value, { status: '', search: '', category: '', sector: '', zone: '', mine: false })
 }
@@ -38,8 +41,18 @@ function clearAll() {
       {{ STATUS[s].symbol }} {{ c[s] }} {{ STATUS[s].label.toLowerCase() }}
     </button>
     <span v-if="c.done" class="small text-muted" data-testid="ops-count-done">✓ {{ c.done }} done</span>
+    <button
+      type="button"
+      class="btn btn-sm d-sm-none ms-auto"
+      :class="activeFilters ? 'btn-dark' : 'btn-outline-secondary'"
+      :aria-expanded="filtersOpen"
+      data-testid="ops-filters-toggle"
+      @click="filtersOpen = !filtersOpen"
+    >
+      Filters{{ activeFilters ? ' (' + activeFilters + ')' : '' }} {{ filtersOpen ? '▴' : '▾' }}
+    </button>
 
-    <div class="d-flex flex-wrap align-items-center gap-2 ms-lg-auto">
+    <div class="flex-wrap align-items-center gap-2 ms-lg-auto" :class="filtersOpen ? 'd-flex' : 'd-none d-sm-flex'">
       <input
         v-model="f.search"
         type="search"

@@ -129,7 +129,16 @@ watch(layoutId, (id) => {
 // a picture became a row of its own: the same picture used by two floor plans is stored ONCE, so a count
 // of what is on screen would report more than the bench costs. `addedBytes` below is what is left of the
 // arithmetic -- one shape, before it is added.
-const sizeText = computed(() => formatBytes(bytes.value) + ' of ' + formatBytes(MAX_LAYOUT_BYTES))
+// Shown coarsely on purpose. The count covers EVERY shape on the bench, areas included, and an area's
+// points are stored as text: moving one changes how many digits its coordinates take, so the exact byte
+// count wobbles by a few bytes on every drag. To the byte, that read as the floor plans' storage changing
+// whenever an outline was moved. What the planner needs is how close the bench is to the cap, so small
+// benches read "under 1 KB" and larger ones whole KB / one decimal of MB; the exact figure is in the
+// tooltip (see AreaBench).
+const sizeText = computed(() => {
+  const used = bytes.value < 1024 ? 'under 1 KB' : formatBytes(bytes.value)
+  return used + ' of ' + formatBytes(MAX_LAYOUT_BYTES)
+})
 const sizeRatio = computed(() => bytes.value / MAX_LAYOUT_BYTES)
 
 // Would this floor plan fit? A picture that cannot be stored should be refused before it joins the
@@ -154,6 +163,8 @@ watch(mode, async (value, oldValue) => {
   // (A -> B -> A): it is open again, so its lock is not let go of.
   const open = objectIdOf(mode.value)
   if (open === was) return
+  // Undo is writing this shape (see `undoing`): its own write lets go once it has landed.
+  if (undoing.has(was)) return
   locks.end(was)
   // What this page is holding now, if anything -- not blank, which would hide a shape that is held.
   presence.setHolding(locks.holds(open) ? open : '')
@@ -613,9 +624,29 @@ function showShape(kind, id, shape) {
   layout.value[key] = shape ? (list.some((s) => s.id === id) ? list.map((s) => (s.id === id ? shape : s)) : [...rest, shape]) : rest
 }
 
+// Shapes Undo / Redo is writing right now. restore() puts the open shape down first, and putting a shape
+// down lets go of its lock (the `mode` watcher) -- which ran one tick AFTER putBack had been granted the
+// lock and one tick BEFORE it had asked for the write. With nothing unsaved at that instant (the change
+// being undone was already written), the unlock went out ahead of the write and the database refused it:
+// the undo showed on screen and in the step counter, and was not stored. A shape in here is let go of by
+// its own write instead, once that has landed. Added before the first await, so it is in place before
+// the watcher can run.
+const undoing = new Set()
+
+// A take-back that was refused is said, like "Undo left N shapes alone". Usually the lock layer has
+// already said why (somebody else has it, with a take-over to offer), and that sentence is kept.
+function sayNotUndone(id) {
+  const said = locks.refused.value
+  if (said && said.objectId === id) return
+  locks.say(id, 'Undo did not change one shape: this page could not take it, so it is left as it is.')
+}
+
 async function putBack(kind, shape, prev) {
+  undoing.add(shape.id)
   if (!(await mayWrite(shape.id))) {
+    undoing.delete(shape.id)
     showShape(kind, shape.id, prev) // refused: the screen shows what is stored, not an undo that did not happen
+    sayNotUndone(shape.id)
     return
   }
   // A shape the bench does not have is one this page is CREATING (again), and Undo has to know it made
@@ -624,17 +655,27 @@ async function putBack(kind, shape, prev) {
   deletedHere.delete(shape.id)
   // Undo puts everything down first (see restore), so nothing would ever let go of this lock either. Let go
   // once the write has landed: replace() starts the write at once, and a lock released before it is a refusal.
-  bench.replace(kind, shape.id, shape).then(() => letGoIfNotOpen(shape.id), () => {})
+  const done = () => {
+    undoing.delete(shape.id)
+    letGoIfNotOpen(shape.id)
+  }
+  bench.replace(kind, shape.id, shape).then(done, done)
 }
 
 async function takeAway(kind, id, prev) {
+  undoing.add(id)
   if (!(await mayWrite(id))) {
+    undoing.delete(id)
     showShape(kind, id, prev) // refused: it is still on the bench, so it stays on screen
+    sayNotUndone(id)
     return
   }
   madeHere.delete(id)
   deletedHere.add(id)
-  await bench.remove(kind, id)
+  await bench.remove(kind, id).catch(() => false)
+  undoing.delete(id)
+  // A delete that landed took the lock with the shape; one that did not answer would otherwise keep it.
+  letGoIfNotOpen(id)
 }
 
 // Called by the bench for the toolbar and for Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y. One timeline for the whole

@@ -1,0 +1,655 @@
+/* The phone app's look (Android first): the Planova palette and type from the Figma prototype
+   (WAD2 → Prototype of App → "Phone app — native prototype"). Everything here is scoped to html.native-app, which
+   main.js sets only inside the Capacitor app, so the website is untouched. */
+
+html.native-app {
+  --pv-brand: #0b2545;
+  --pv-text: #0f172a;
+  --pv-muted: #64748b;
+  --pv-success: #16a34a;
+  --pv-warning: #d97706;
+  --pv-error: #dc2626;
+  --pv-info: #0284c7;
+  --pv-main: #2563eb;
+  --pv-highlight: #0f766e;
+  --pv-accent: #f97316;
+  --pv-accent-dull: #c2410c;
+  --pv-card: #ffffff;
+  --pv-ground: #f8fafc;
+  --pv-line: #e2e8f0;
+  --pv-tabbar-h: 72px;
+  --pv-safe-top: env(safe-area-inset-top, 0px);
+  --pv-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bs-body-font-family: 'Jost', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bs-primary: #2563eb;
+  --bs-primary-rgb: 37, 99, 235;
+  -webkit-tap-highlight-color: transparent;
+}
+html.native-app body {
+  font-family: 'Jost', system-ui, Roboto, sans-serif;
+  background: var(--pv-ground);
+  color: var(--pv-text);
+  overscroll-behavior-y: none;
+}
+/* Text that sits in the same place on every screen should not be selectable by a long press */
+html.native-app .pv-tabbar,
+html.native-app .pv-head {
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Room for the bottom tabs on every screen that has them. !important: page rules below set their own padding
+   (e.g. .ev-main "14px 14px 0"), and losing this left the end of a page stuck under the tabs (19 Oct: the run
+   sheet's movements, the last members on People, the last event on My events). */
+html.native-app .pv-has-tabs {
+  padding-bottom: calc(var(--pv-tabbar-h) + var(--pv-safe-bottom) + 24px) !important;
+}
+html.native-app .btn {
+  border-radius: 14px;
+  min-height: 44px;
+  font-weight: 600;
+}
+html.native-app .btn-sm {
+  min-height: 36px;
+  border-radius: 10px;
+}
+html.native-app .btn-primary {
+  background: var(--pv-main);
+  border-color: var(--pv-main);
+}
+html.native-app .btn-success {
+  background: var(--pv-highlight);
+  border-color: var(--pv-highlight);
+}
+html.native-app .form-control,
+html.native-app .form-select {
+  border-radius: 14px;
+  min-height: 48px;
+  font-size: 16px; /* 16 px: Android and iOS do not zoom the page when a field is focused */
+}
+html.native-app .card {
+  border-radius: 20px;
+  border-color: var(--pv-line);
+}
+
+/* ---------- Bottom tabs (Material 3 navigation bar) ---------- */
+.pv-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1030;
+  display: flex;
+  background: var(--pv-card);
+  border-top: 1px solid var(--pv-line);
+  padding: 8px max(8px, env(safe-area-inset-left, 0px)) calc(10px + var(--pv-safe-bottom)) max(8px, env(safe-area-inset-right, 0px));
+  min-height: var(--pv-tabbar-h);
+}
+.pv-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pv-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.pv-tab-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 32px;
+  border-radius: 999px;
+  position: relative;
+}
+.pv-tab svg {
+  width: 24px;
+  height: 24px;
+}
+.pv-tab[aria-current='page'] {
+  color: var(--pv-main);
+  font-weight: 600;
+}
+.pv-tab[aria-current='page'] .pv-tab-pill {
+  background: rgba(37, 99, 235, 0.12);
+}
+.pv-tab:focus-visible {
+  outline: 2px solid var(--pv-main);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.pv-tab-dot {
+  position: absolute;
+  top: 2px;
+  right: 14px;
+  min-width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--pv-error);
+  border: 2px solid var(--pv-card);
+}
+
+/* ---------- Bottom sheet ---------- */
+.pv-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  background: rgba(11, 37, 69, 0.55);
+  animation: pv-fade 160ms ease-out;
+}
+.pv-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1050;
+  background: var(--pv-card);
+  border-radius: 28px 28px 0 0;
+  padding: 10px 20px calc(24px + var(--pv-safe-bottom));
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 24px rgba(11, 37, 69, 0.18);
+  animation: pv-rise 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+.pv-grabber {
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--pv-line);
+  margin: 0 auto 14px;
+}
+@keyframes pv-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pv-rise {
+  from {
+    transform: translateY(40px);
+    opacity: 0.6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-scrim,
+  .pv-sheet {
+    animation: none;
+  }
+}
+
+/* ---------- Shared pieces ---------- */
+.pv-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pv-muted);
+}
+.pv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pv-chip-live {
+  background: var(--pv-error);
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.pv-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Event page (phone) ---------- */
+html.native-app .ev {
+  font-family: 'Jost', system-ui, Roboto, sans-serif;
+  background: var(--pv-ground);
+  min-height: 100vh;
+}
+html.native-app .ev .mono,
+html.native-app .ev .show-num,
+html.native-app .ev .ops-num {
+  font-family: 'Jost', system-ui, Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.pv-head {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--pv-brand);
+  color: #fff;
+  padding: calc(10px + var(--pv-safe-top)) 14px 12px 6px;
+}
+.pv-back {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border-radius: 999px;
+}
+.pv-back svg {
+  width: 26px;
+  height: 26px;
+}
+.pv-back:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.pv-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pv-title {
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv-sub {
+  font-size: 13px;
+  margin: 0;
+  color: #b6c2d3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv-chip-sim {
+  background: #fde68a;
+  color: #78350f;
+}
+html.native-app .ev-native .ev-main {
+  padding: 14px 14px 0;
+  gap: 14px;
+}
+.pv-card {
+  background: var(--pv-card);
+  border-radius: 20px;
+  padding: 16px;
+}
+.pv-empty {
+  background: var(--pv-card);
+  border-radius: 20px;
+  padding: 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+.pv-empty strong {
+  font-size: 19px;
+  font-weight: 600;
+}
+.pv-empty span {
+  color: var(--pv-muted);
+}
+.pv-more-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid var(--pv-line);
+  background: var(--pv-card);
+  border-radius: 16px;
+  padding: 12px 14px;
+  min-height: 60px;
+  font: inherit;
+  color: var(--pv-text);
+}
+.pv-chev {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--pv-muted);
+}
+/* The map tab is the map: as tall as the screen allows between the header and the tabs */
+html.native-app .ev-map-phone .live-map {
+  height: calc(100vh - 64px - var(--pv-tabbar-h) - var(--pv-safe-bottom) - 40px);
+  min-height: 360px;
+  border-radius: 20px;
+}
+/* The live show's bar and panel, Planova look on the phone */
+html.native-app .ev-native .show-bar {
+  background: var(--pv-brand);
+  border-radius: 20px;
+}
+html.native-app .ev-native .show-panel,
+html.native-app .ev-native .ops-summary,
+html.native-app .ev-native .next-move {
+  border-radius: 20px;
+  border-color: var(--pv-line);
+}
+html.native-app .ev-native .show-panel .btn-success,
+html.native-app .ev-native .next-move .btn-outline-success {
+  min-height: 56px;
+  font-size: 17px;
+}
+
+/* ---------- My events (phone) ---------- */
+.pv-events {
+  padding: calc(14px + var(--pv-safe-top)) 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pv-events-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 4px 0;
+}
+.pv-hello {
+  margin: 0;
+  color: var(--pv-muted);
+}
+.pv-name {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+}
+.pv-avatar {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--pv-highlight);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 17px;
+  text-decoration: none;
+}
+.pv-live {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--pv-brand);
+  color: #fff;
+  border-radius: 24px;
+  padding: 18px;
+  text-decoration: none;
+}
+.pv-live-name {
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.pv-live-meta {
+  color: rgba(255, 255, 255, 0.75);
+}
+.pv-live-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-weight: 500;
+}
+.pv-live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+.pv-live-open {
+  align-self: stretch;
+  text-align: center;
+  background: var(--pv-accent);
+  border-radius: 16px;
+  padding: 14px;
+  font-weight: 600;
+  font-size: 17px;
+}
+.pv-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--pv-card);
+  border-radius: 20px;
+  padding: 12px 14px;
+  color: var(--pv-text);
+  text-decoration: none;
+}
+.pv-date {
+  flex: none;
+  width: 56px;
+  height: 60px;
+  border-radius: 14px;
+  background: var(--pv-ground);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.pv-date-d {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--pv-brand);
+  line-height: 1.1;
+}
+.pv-date-m {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pv-muted);
+  text-transform: uppercase;
+}
+.pv-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pv-row-text strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+.pv-row-text span {
+  font-size: 14px;
+  color: var(--pv-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv-role-root {
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--pv-highlight);
+}
+.pv-role-planner {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--pv-main);
+}
+.pv-role-marshal {
+  background: rgba(2, 132, 199, 0.12);
+  color: var(--pv-info);
+}
+.pv-role-member {
+  background: rgba(249, 115, 22, 0.14);
+  color: var(--pv-accent-dull);
+}
+.pv-role-sim {
+  background: #fde68a;
+  color: #78350f;
+}
+.pv-fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--pv-tabbar-h) + var(--pv-safe-bottom) + 16px);
+  z-index: 1025;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pv-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 16px 22px 16px 18px;
+  box-shadow: 0 6px 16px rgba(11, 37, 69, 0.25);
+}
+.pv-fab svg {
+  width: 22px;
+  height: 22px;
+}
+.pv-code {
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 28px !important;
+  letter-spacing: 0.4em;
+  font-weight: 600;
+  min-height: 60px !important;
+}
+.pv-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--pv-muted);
+}
+.pv-or::before,
+.pv-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--pv-line);
+}
+
+/* ---------- Sign in (phone) ---------- */
+.pv-login {
+  min-height: 100vh;
+  background: var(--pv-brand);
+  display: flex;
+  flex-direction: column;
+}
+.pv-login-hero {
+  padding: calc(72px + var(--pv-safe-top)) 28px 40px;
+  color: #fff;
+}
+.pv-logo {
+  font-family: 'Judson', Georgia, serif;
+  font-weight: 700;
+  font-size: 48px;
+  line-height: 1;
+}
+.pv-login-hero p {
+  margin: 10px 0 0;
+  font-size: 17px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.pv-login-sheet {
+  flex: 1;
+  background: var(--pv-card);
+  border-radius: 28px 28px 0 0;
+  padding: 24px 22px calc(32px + var(--pv-safe-bottom));
+}
+.pv-login-sheet .nav-pills .nav-link {
+  border-radius: 12px;
+  min-height: 44px;
+  font-weight: 600;
+}
+.pv-login-sheet .nav-pills .nav-link.active {
+  background: var(--pv-main);
+}
+.pv-code::placeholder {
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+/* ---------- Wide tables on a phone screen ----------
+   A table squeezed into ~380 px either cuts off its last column or needs a sideways swipe nobody finds (19 Oct: the
+   run sheet's "Groups must be in…" chips were cut off at the screen edge). On the phone each table row becomes a
+   small stacked block instead: no sideways scrolling, nothing hidden. Cells that need a name say it through
+   data-label. */
+html.native-app .pv-stack thead {
+  display: none;
+}
+html.native-app .pv-stack,
+html.native-app .pv-stack tbody,
+html.native-app .pv-stack tr,
+html.native-app .pv-stack td,
+html.native-app .pv-stack th {
+  display: block;
+  width: auto;
+  max-width: none !important;
+}
+html.native-app .pv-stack tr {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+html.native-app .pv-stack td,
+html.native-app .pv-stack th {
+  border: 0;
+  padding: 2px 0;
+}
+html.native-app .pv-stack td[data-label]::before {
+  content: attr(data-label);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bs-secondary-color);
+  margin-top: 6px;
+}
+html.native-app .pv-stack .d-none {
+  display: none !important;
+}
+/* run sheet cues: time and length side by side, then the cue, then who must be where */
+html.native-app .rs-table.pv-stack tr:not(.rs-section):not(.rs-editor-row) {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+}
+html.native-app .rs-table.pv-stack tr:not(.rs-section):not(.rs-editor-row) > td:nth-child(n + 3) {
+  flex: 1 0 100%;
+}
+html.native-app .rs-table.pv-stack .rs-section th {
+  padding: 6px 14px;
+}
+html.native-app .rs-table.pv-stack .rs-pill {
+  white-space: normal;
+  text-align: left;
+}
+/* lists whose rows have text + a button: the text wraps instead of pushing the button off screen */
+html.native-app .list-group-item > .flex-grow-1,
+html.native-app .card-header > .flex-grow-1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Tap targets the 19 Oct phone check found too small: the run sheet's "group → zone" chips (22 px high) and the
+   new-group colour picker, which the input group squeezed to 13 px wide (on the website too, so that rule is not
+   phone-only). */
+html.native-app .rs-pill-move {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+/* Bootstrap's ".input-group > .form-control" (flex 1, width 1%) wins over a plain rule, hence the longer selector */
+.input-group > input.form-control-color,
+input.form-control-color {
+  flex: 0 0 52px;
+  width: 52px;
+}
+html.native-app input.form-control-color {
+  min-height: 48px;
+}

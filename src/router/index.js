@@ -10,6 +10,8 @@ import CreateEventView from '../views/CreateEventView.vue'
 import JoinView from '../views/JoinView.vue'
 import GpsTestView from '../views/GpsTestView.vue'
 import PhoneCheckView from '../views/PhoneCheckView.vue'
+import MeView from '../views/MeView.vue'
+import { isNativeApp } from '../lib/platform'
 import { useAuthStore } from '../stores/auth'
 import { fetchMembership } from '../services/memberService'
 import { PAGES, PAGE_LABEL, canView, viewRole, defaultPage } from '../utils/permissions'
@@ -18,7 +20,8 @@ import { toast } from '../composables/useNotify'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: HomeView },
+    // The phone app opens on My events: the home page is a list of test pages, useful on the website only
+    { path: '/', name: 'home', component: HomeView, beforeEnter: () => (isNativeApp ? { name: 'events' } : true) },
     // The DEMO drawing bench (no event). Zones are drawn in each event's Zones tab now, so this page is
     // out of the menu and only reachable on local dev (npm run dev) -- for the teammate's editor tests and
     // tools/bench_harness.mjs. On the deployed site it redirects to the events list. To be removed once
@@ -58,11 +61,17 @@ const router = createRouter({
     },
     // "Set up sharing": the phone settings sharing needs (?event=&group=&share=1)
     { path: '/check-phone', name: 'phone-check', component: PhoneCheckView, meta: { requiresAuth: true } },
+    // Phone app: the person, their sharing and sign-out (the website has these in its top bar)
+    { path: '/me', name: 'me', component: MeView, meta: { requiresAuth: true } },
     // Invite link / QR code target: joins the event, then opens it
     { path: '/join/:code', name: 'join', component: JoinView, props: true, meta: { requiresAuth: true } },
 
     // Old test page address now goes to the events list
     { path: '/gps', redirect: '/events' },
+
+    // Any other address (an old or mistyped link) used to show a blank white page - on the phone app with no address
+    // bar and no tabs, so there was no way back. Go to the home page instead (My events on the phone).
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
