@@ -614,36 +614,53 @@ begin
   end if;
 end $$;
 
--- ---------- 8. a second publish does not rewrite the record ----------
+-- ---------- 8. a second publish does not rewrite the record, and a mark belongs to who made it ----------
 do $$
 declare
   v_fork uuid := current_setting('check.fork')::uuid;
   v_anchor uuid := current_setting('check.anchor')::uuid;
   v_s uuid := current_setting('check.session')::uuid;
   v_state text;
+  v_by uuid;
+  v_msg text;
   v_n integer;
 begin
-  -- The group's IC says "they missed that moment" after the hand-over.
+  -- The hand-over recorded the anchor in the publisher's name (§6). The group's IC may not replace that record: a
+  -- person's mark belongs to the person who made it, and the refusal says who and when (064, step 28).
   set local role authenticated;
   set local request.jwt.claims = '{"sub":"ba04a00c-518f-4252-91d5-1081cecec1d2","role":"authenticated"}';
-  perform public.progress_mark(v_s, v_anchor, '0b000000-0000-4000-8000-00000000a001', 'missed');
+  begin
+    perform public.progress_mark(v_s, v_anchor, '0b000000-0000-4000-8000-00000000a001', 'missed');
+    raise exception 'FAIL 8a: an IC replaced the hand-over mark made by somebody else';
+  exception when sqlstate '42501' then
+    get stacked diagnostics v_msg = message_text;
+    if v_msg not like '%recorded that moment already%' then
+      raise exception 'FAIL 8b: the refusal reads "%"', v_msg;
+    end if;
+  end;
 
+  -- The event's ops may correct it -- that is the documented correction path -- and the correction is what the second
+  -- publish must leave alone.
   set local request.jwt.claims = '{"sub":"ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7","role":"authenticated"}';
+  perform public.progress_mark(v_s, v_anchor, '0b000000-0000-4000-8000-00000000a001', 'missed');
   perform public.plan_publish(v_fork, (select rev from public.plans where id = v_fork));
 
-  select state into v_state from public.session_timetable(v_s)
+  select state, marked_by into v_state, v_by from public.session_timetable(v_s)
    where frame_id = v_anchor and group_id = '0b000000-0000-4000-8000-00000000a001';
   if not found then
-    raise exception 'FAIL 8a: the anchor row disappeared after a republish';
+    raise exception 'FAIL 8c: the anchor row disappeared after a republish';
   end if;
   if v_state <> 'missed' then
-    raise exception 'FAIL 8b: a republish rewrote a recorded outcome to "%"', v_state;
+    raise exception 'FAIL 8d: a republish rewrote a recorded outcome to "%"', v_state;
+  end if;
+  if v_by is distinct from 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7' then
+    raise exception 'FAIL 8e: the anchor mark no longer names who corrected it (%)', v_by;
   end if;
   select count(*) into v_n from public.plan_progress
    where session_id = v_s and frame_id = v_anchor
      and group_id = '0b000000-0000-4000-8000-00000000a001';
   if v_n <> 1 then
-    raise exception 'FAIL 8c: % anchor marks after two publishes, expected 1', v_n;
+    raise exception 'FAIL 8f: % anchor marks after two publishes, expected 1', v_n;
   end if;
 end $$;
 

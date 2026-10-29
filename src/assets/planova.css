@@ -974,12 +974,51 @@
   color: var(--pv-ink-soft);
 }
 
+/* Where the moment is (062): the zone its drawn point stands in, named before the detail. A route point stands in
+   none, so it prints nothing rather than a dash -- "no place" is not a fact worth a mark. */
+.pv-sched-place {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pv-ink);
+}
+
 .pv-sched-flag {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--pv-primary);
+}
+
+/* The IC's own press (step 28): a small quiet action inside the row it belongs to, so the schedule still reads as a
+   list of times first and an instrument second. */
+.pv-sched-here {
+  padding: 2px 10px;
+  border: 1px solid var(--pv-primary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pv-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.pv-sched-here:hover:not(:disabled) {
+  background: var(--pv-primary);
+  color: #fff;
+}
+
+.pv-sched-here:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The sentence about the press, on its own line: whitespace between a text node and an element is condensed by the
+   template compiler, so a space typed there disappears and the two sentences run together (seen in step 28's shot). */
+.pv-sched-foot-more {
+  display: block;
+  margin-top: 3px;
 }
 
 /* The five words, coloured so a glance reads the night: arrived is done, late is amber, missed is the one to look
@@ -1122,6 +1161,24 @@
   color: var(--pv-warn);
   background: #fdf4e4;
   border-bottom: 1px solid var(--pv-line);
+}
+
+/* A write's refusal stays on screen until the next write or a dismiss (step 28): the board polls every five seconds
+   and used to wipe the sentence before it could be read. */
+.pv-ops-error-x {
+  margin-left: 8px;
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.pv-ops-error-x:hover {
+  opacity: 1;
 }
 
 .pv-ops-empty {

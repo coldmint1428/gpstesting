@@ -569,6 +569,7 @@ async function removeEvent() {
           :session="scheduleSession"
           :whole="seesWholeEvent"
           :my-group="myGroup"
+          :can-press="isIC"
         />
       </template>
 

@@ -418,6 +418,24 @@ export function usePlan(eventId) {
     return data
   }
 
+  /**
+   * One press from the group's IC: "we are here" at this moment. `progress_mark` is the door (050), and since 064 it
+   * refuses a moment another person already recorded -- unless the caller is the event's ops -- with a sentence
+   * naming who and when. The refusal is thrown like any other: the screen shows its words and keeps them (a poll
+   * does not get to wipe a write's error).
+   */
+  async function markProgress(sessionId, frameId, groupId, state = 'arrived') {
+    if (!sessionId) return null
+    const { data, error } = await supabase.rpc('progress_mark', {
+      p_session: sessionId,
+      p_frame: frameId,
+      p_group: groupId,
+      p_state: state,
+    })
+    if (error) throw error
+    return data
+  }
+
   // ---------- live updates: another tab's change (step 19) ----------
 
   /**
@@ -615,6 +633,7 @@ export function usePlan(eventId) {
     readTimetable,
     readLog,
     ackLog,
+    markProgress,
   }
 }
 

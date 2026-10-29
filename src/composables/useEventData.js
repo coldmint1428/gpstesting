@@ -10,7 +10,7 @@ export function useEventData(eventId) {
 
   const event = ref(null) // { id, name, join_code, is_simulation, description, venue, starts_at, ends_at }
   const groups = ref([]) // [{ id, name, colour, code, category, sector, headcount, radio }]
-  const members = ref([]) // [{ id, username, display_name, roles, groupId, isAdmin, isIC }]
+  const members = ref([]) // [{ id, username, display_name, roles, groupId, isAdmin, isIC, toleranceM }]
   const loading = ref(true)
   const errorMsg = ref('')
 
@@ -22,7 +22,7 @@ export function useEventData(eventId) {
       supabase.from('events').select('id, name, join_code, is_simulation, description, venue, starts_at, ends_at').eq('id', eventId).maybeSingle(),
       supabase.from('groups').select('id, name, colour, code, category, sector, headcount, radio').eq('event_id', eventId).order('created_at'),
       supabase.from('event_roles').select('user_id, role, sector, profiles (username, display_name)').eq('event_id', eventId),
-      supabase.from('group_members').select('group_id, user_id, is_admin, is_ic').eq('event_id', eventId),
+      supabase.from('group_members').select('group_id, user_id, is_admin, is_ic, ic_tolerance_m').eq('event_id', eventId),
     ])
     loading.value = false
 
@@ -51,6 +51,7 @@ export function useEventData(eventId) {
           groupId: null,
           isAdmin: false,
           isIC: false,
+          toleranceM: null, // an IC's arrival radius in metres (063); null for everybody else
           sector: null, // a marshal's sector (merger Stage 7)
         }
       }
@@ -63,6 +64,7 @@ export function useEventData(eventId) {
         m.groupId = row.group_id
         m.isAdmin = row.is_admin
         m.isIC = row.is_ic
+        m.toleranceM = row.ic_tolerance_m
       }
     }
     members.value = Object.values(byId).sort((a, b) => a.display_name.localeCompare(b.display_name))

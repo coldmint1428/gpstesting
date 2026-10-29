@@ -29,6 +29,13 @@
 // client caller, and its rules (an off-site moment has nothing to record, a future one has not happened) are the
 // database's, not repeated here. The hand-back is the other: the log says who has the board and since when, and taking
 // it writes one row whose "from" the database reads off the previous one.
+//
+// WHO CLOSED IT, AND WHY AN ERROR STAYS (step 28). Since 064 the read answers `marked_auto` -- whether the tick closed
+// the moment -- instead of this screen inferring "the phone was there" from a missing name, which is also what a
+// deleted profile looks like. And a write's refusal is kept until the next write (or Dismiss): the board polls every
+// five seconds and used to clear `errorMsg` on every successful poll, so a sentence saying why a mark was refused was
+// wiped before anyone could read it. A refused mark also re-reads, so the row that kept its buttons is corrected
+// rather than left stale.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { supabase } from '../../lib/supabase'
 import { planErrorMessage } from '../../composables/usePlan'
@@ -52,6 +59,7 @@ const handover = ref([]) // the hand-back chain, newest first (057)
 const log = ref([]) // what was sent to the plan's groups, and what the plan changed (058)
 const loaded = ref(false) // one answer has arrived (an empty read is still an answer)
 const errorMsg = ref('')
+const errorSticky = ref(false) // a write's error: a successful poll must not wipe it (step 28)
 const readAt = ref(null)
 const now = ref(Date.now())
 const busy = ref('') // 'mark:<group>:<state>' / 'take' while a write is landing
@@ -121,7 +129,7 @@ async function read() {
     rows.value = answered
     handover.value = hands
     log.value = messages
-    errorMsg.value = ''
+    if (!errorSticky.value) errorMsg.value = ''
     readAt.value = new Date()
   } catch (error) {
     if (sessionId.value === id) errorMsg.value = planErrorMessage(error) || 'Could not read the ops board.'
@@ -256,15 +264,28 @@ function markText(group) {
   const moment = group.current
   if (!moment || !moment.marked_state) return ''
   const when = moment.marked_at ? formatTime(moment.marked_at) : ''
-  const how = moment.marked_by ? 'by hand' : 'the phone was there'
+  // `marked_auto` is the writer (064), not a missing name: a person's mark whose profile was deleted still says a
+  // person did it, which is also why it is still protected from another person.
+  const how = moment.marked_auto ? 'the phone was there' : 'by hand'
   return (moment.marked_state === 'missed' ? 'Missed ' : 'Arrived ') + when + ' · ' + how
 }
 
-/** Record the current moment. One write, then a re-read: the screen never guesses what the row now says. */
+/** Drop a sticky refusal. The next successful write clears it too; nothing else does. */
+function dismissError() {
+  errorMsg.value = ''
+  errorSticky.value = false
+}
+
+/**
+ * Record the current moment. One write, then a re-read: the screen never guesses what the row now says. A refusal --
+ * another person already recorded it (064), a moment that is off site -- keeps its sentence on screen and re-reads,
+ * so the buttons the stale row was still offering go away.
+ */
 async function mark(group, state) {
   const moment = group.current
   if (!moment || busy.value) return
   busy.value = 'mark:' + group.id + ':' + state
+  errorSticky.value = false
   try {
     const { error } = await supabase.rpc('progress_mark', {
       p_session: sessionId.value,
@@ -276,7 +297,9 @@ async function mark(group, state) {
     errorMsg.value = ''
     await read()
   } catch (error) {
+    errorSticky.value = true
     errorMsg.value = planErrorMessage(error) || 'Could not record that.'
+    await read()
   } finally {
     busy.value = ''
   }
@@ -296,12 +319,14 @@ const handText = computed(() => {
 async function takeBoard() {
   if (busy.value) return
   busy.value = 'take'
+  errorSticky.value = false
   try {
     const { error } = await supabase.rpc('handover_take', { p_session: sessionId.value })
     if (error) throw error
     errorMsg.value = ''
     await read()
   } catch (error) {
+    errorSticky.value = true
     errorMsg.value = planErrorMessage(error) || 'Could not take the board.'
   } finally {
     busy.value = ''
@@ -327,6 +352,7 @@ async function send() {
   if (!canSend.value || !planId.value) return
   const { audience, group } = audienceOf()
   sending.value = true
+  errorSticky.value = false
   try {
     const { error } = await supabase.rpc('plan_broadcast', {
       p_plan: planId.value,
@@ -339,6 +365,7 @@ async function send() {
     errorMsg.value = ''
     await read()
   } catch (error) {
+    errorSticky.value = true
     errorMsg.value = planErrorMessage(error) || 'Could not send that message.'
   } finally {
     sending.value = false
@@ -349,11 +376,13 @@ async function send() {
 async function ack(row) {
   if (acking.value) return
   acking.value = row.id
+  errorSticky.value = false
   try {
     const { error } = await supabase.rpc('plan_log_ack', { p_log: row.id })
     if (error) throw error
     await read()
   } catch (error) {
+    errorSticky.value = true
     errorMsg.value = planErrorMessage(error) || 'Could not record that.'
   } finally {
     acking.value = 0
@@ -417,6 +446,7 @@ watch(sessionId, () => {
   rows.value = []
   loaded.value = false
   errorMsg.value = ''
+  errorSticky.value = false
   read()
 })
 watch(
@@ -453,6 +483,7 @@ watch(
 
       <p v-if="errorMsg" class="pv-ops-error" data-testid="ops-error">
         {{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template>
+        <button type="button" class="pv-ops-error-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError">×</button>
       </p>
 
       <p v-if="!loaded" class="pv-ops-empty" data-testid="ops-loading">Reading the ops board…</p>
@@ -518,7 +549,9 @@ watch(
         Times are the plan's own clock, T+0 at {{ t0Text }}. <em>Travel</em> is the time the strip gives a group
         between one moment and its next; the distance is how far its ICs are from where the walk has it now, from
         the midpoint of their newest readings. A moment marked <em>auto</em> closes itself when an IC is inside the
-        zone its point stands in; take the board when you take over so the next person knows who to ask.
+        zone its point stands in, or within that IC's own arrival radius of it; the group's IC can also say
+        <em>We’re here</em> from their own schedule, and a second person cannot replace a mark somebody else made.
+        Take the board when you take over so the next person knows who to ask.
       </p>
 
       <!-- The plan's own log (step 22). Messages a planner sends, and the changes the plan itself made, with the one

@@ -25,6 +25,20 @@ export const setMarshal = (eventId, userId, isMarshal) =>
 
 export const setGroupIC = (groupId, userId, isIC) => call('set_group_ic', { p_group_id: groupId, p_user_id: userId, p_is_ic: isIC })
 
+// How close this IC's phone must be to a moment's point for the tick to close it automatically (063). `userId` null
+// means "me", which is what the IC's own page sends. The database admits the person themself, root/planner, and the
+// group's admin, and refuses anybody who is not an IC -- its message is shown as it is.
+export const setArrivalTolerance = async (eventId, userId, metres) => {
+  const { error } = await supabase.rpc('set_arrival_tolerance', {
+    p_event: eventId,
+    p_metres: metres,
+    p_user: userId || null,
+  })
+  if (error) return error.message
+  forgetMembership(eventId) // the radius is part of my membership; re-read it rather than trust the old copy
+  return ''
+}
+
 export const removeEventMember = (eventId, userId) => call('remove_event_member', { p_event_id: eventId, p_user_id: userId })
 
 // Leaving yourself

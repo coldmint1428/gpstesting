@@ -97,6 +97,19 @@ update public.plan_positions
  where frame_id = '0b000000-0000-4000-8000-0000000f16a2'
    and group_id = '0b000000-0000-4000-8000-00000000a161';
 
+-- The places (step 26). Three zones, so the timetable has a row that names where the group is and rows that name
+-- nothing: Sound's call is at the dock, Sound's +10:00 is at the stage, and Gate Crew's call is at the main gate.
+-- The walk itself has no zone of its own -- the three steps are route points, which is what a null place means.
+-- Every one is kind 'zone' or 'stage', so plan_check's crossing rule (no_go/obstacle only) ignores them and the
+-- browser check's own republish still passes the gate.
+insert into public.zones (id, event_id, code, name, kind, shape, is_circle) values
+  ('0b000000-0000-4000-8000-00000000c16a', '0b000000-0000-4000-8000-000000000e16', 'DOCK', 'Sound Dock', 'zone',
+   extensions.st_geogfromtext('SRID=4326;POLYGON((103.77290 1.33390, 103.77310 1.33390, 103.77310 1.33410, 103.77290 1.33410, 103.77290 1.33390))'), false),
+  ('0b000000-0000-4000-8000-00000000c16b', '0b000000-0000-4000-8000-000000000e16', 'STAGE', 'Stage', 'stage',
+   extensions.st_geogfromtext('SRID=4326;POLYGON((103.77290 1.33410, 103.77310 1.33410, 103.77310 1.33430, 103.77290 1.33430, 103.77290 1.33410))'), false),
+  ('0b000000-0000-4000-8000-00000000c16c', '0b000000-0000-4000-8000-000000000e16', 'GATE', 'Main Gate', 'zone',
+   extensions.st_geogfromtext('SRID=4326;POLYGON((103.77390 1.32990, 103.77410 1.32990, 103.77410 1.33010, 103.77390 1.33010, 103.77390 1.32990))'), false);
+
 -- The session is opened the way the app opens one, except for the door: the fixture writes the row so the clock is
 -- exactly fifteen minutes old when the check starts. t0_at is the plan's own T+0, not now() -- the two are the same
 -- here and the read must agree with the plan.

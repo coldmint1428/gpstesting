@@ -27,6 +27,14 @@
 // (the read deliberately does not consult ended_at — step 14's debt, decided in step 20 — so the screen names the
 // moment instead of re-deciding the rule). A session that has not started reads too, all pending, with the start
 // time in the header: "your schedule" is exactly what a person wants the day before.
+//
+// THE IC'S OWN PRESS (step 28). One role on this screen does something besides read: the group's IC can say "we are
+// here" for the moment the clock is on, which is the manual half of what 063's tick does with a phone. `progress_mark`
+// is the door and its rules are the database's -- the moment must have happened, the group must be on site, and a mark
+// another person already made is refused rather than replaced (064) -- so this screen only decides which row offers
+// the press (the last moment whose time has come and is still unrecorded) and shows the refusal in the database's own
+// words. A write's error is kept until the next write: the read beside it polls every half minute, and an error that a
+// poll can wipe is an error nobody reads.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { formatOffset } from '../../utils/planFrames'
@@ -44,6 +52,9 @@ const props = defineProps({
   // The caller's group, for the header and for the no-group empty state. The rows are the authority for what is
   // shown; this only names it when the read has no rows to name.
   myGroup: { type: Object, default: null },
+  // True for the group's own IC: the one role that may say "we are here" from this screen (step 28). It is passed in
+  // rather than derived here because the membership row is the event's, not this read's.
+  canPress: { type: Boolean, default: false },
   // Seam for the development harness; in the app this is absent and the component reads through usePlan.
   api: { type: Object, default: null },
 })
@@ -60,6 +71,8 @@ const errorMsg = ref('')
 const readAt = ref(null)
 const now = ref(Date.now())
 const busyAck = ref(0) // the log row whose ack is landing
+const busyHere = ref('') // the frame whose "we are here" is landing
+const errorSticky = ref(false) // an error a write made: a successful read must not wipe it (step 28)
 let running = false
 let again = false // something changed while the read was in flight: the answer is stale, ask once more
 let wakeTimer = null
@@ -128,7 +141,9 @@ async function read() {
     }
     rows.value = answered
     if (messages) logRows.value = messages
-    errorMsg.value = ''
+    // A read that succeeds clears a read's error. It does not clear a write's: the sentence a refused press came back
+    // with is the only place that refusal is said, and this poll runs every half minute (step 28).
+    if (!errorSticky.value) errorMsg.value = ''
     readAt.value = new Date()
   } catch (error) {
     if (sessionId.value === id && endedAt.value === at) {
@@ -229,6 +244,52 @@ function latenessText(seconds) {
   return formatDuration(Math.abs(seconds) * 1000) + (seconds > 0 ? ' late' : ' early')
 }
 
+/**
+ * The moment the clock is on: the last one whose time has come. A press belongs to that one and not to a moment
+ * ahead — "we are here" said at +0:00 about +5:00 is a claim nobody can make. The rows are ordered by frame, so the
+ * last due one is the current statement.
+ */
+const currentFrameId = computed(() => {
+  let id = null
+  for (const moment of moments.value) {
+    if (moment.at.getTime() <= clockAt.value.getTime()) id = moment.frameId
+  }
+  return id
+})
+
+/**
+ * Whether this row offers the IC's press. `late` is 050's word for "its time has come and nobody has said anything":
+ * `pending` has not happened, `arrived` and `missed` are already said, and `not_required` is an off-site moment with
+ * nothing to arrive at. The database refuses each of those too; the screen simply does not offer them.
+ */
+function canHere(moment, row) {
+  return props.canPress && phase.value === 'live' && row.state === 'late' && moment.frameId === currentFrameId.value
+}
+
+/**
+ * "We are here", for the moment the clock is on. One write, then a re-read: the row the database now reports is the
+ * one shown, not a mark guessed here. A refusal keeps the database's sentence on screen (the poll does not wipe it)
+ * -- another person's mark, a moment that has not happened, a group that is off site all come back that way.
+ */
+async function here(moment, row) {
+  if (!api.markProgress || busyHere.value) return
+  busyHere.value = moment.frameId
+  errorSticky.value = false
+  errorMsg.value = ''
+  try {
+    await api.markProgress(sessionId.value, moment.frameId, row.group_id, 'arrived')
+    await read()
+  } catch (error) {
+    errorSticky.value = true
+    errorMsg.value = planErrorMessage(error) || 'Could not record that.'
+    // A refusal usually means somebody else got there first; re-read so the row stops offering a press that cannot
+    // land. The sentence stays, because a write's error is sticky.
+    await read()
+  } finally {
+    busyHere.value = ''
+  }
+}
+
 /** The line under the word. States are the database's; countdowns are this screen's arithmetic on planned_at. */
 function detail(row) {
   const planned = new Date(row.planned_at).getTime()
@@ -261,10 +322,12 @@ function detail(row) {
 async function ack(row) {
   if (!api.ackLog || busyAck.value) return
   busyAck.value = row.id
+  errorSticky.value = false
   try {
     await api.ackLog(row.id)
     await read()
   } catch (error) {
+    errorSticky.value = true
     errorMsg.value = planErrorMessage(error) || 'Could not record that.'
   } finally {
     busyAck.value = 0
@@ -306,6 +369,7 @@ watch(sessionId, () => {
   rows.value = []
   loaded.value = false
   errorMsg.value = ''
+  errorSticky.value = false
   read()
 })
 
@@ -433,7 +497,16 @@ watch(
             >
               <span v-if="whole" class="pv-sched-group">{{ row.group_name }}</span>
               <span class="pv-sched-state" data-testid="sched-state">{{ stateLabel(row) }}</span>
+              <span v-if="row.place" class="pv-sched-place" data-testid="sched-place">{{ row.place }}</span>
               <span class="pv-sched-detail">{{ detail(row) }}</span>
+              <button
+                v-if="canHere(moment, row)"
+                type="button"
+                class="pv-sched-here"
+                data-testid="sched-here"
+                :disabled="busyHere === moment.frameId"
+                @click="here(moment, row)"
+              >{{ busyHere === moment.frameId ? 'Saying…' : 'We’re here' }}</button>
               <span v-if="i === nextIndex" class="pv-sched-flag">next</span>
             </div>
           </div>
@@ -442,7 +515,11 @@ watch(
 
       <p v-if="rows.length" class="pv-sched-foot">
         Times are the plan's own clock, T+0 at {{ t0Text }}. A moment marked <em>not required</em> means
-        {{ whole ? 'the group is' : 'your group is' }} off site then, so there is nothing to arrive at.
+        {{ whole ? 'the group is' : 'your group is' }} off site then, so there is nothing to arrive at.<span
+          v-if="canPress"
+          class="pv-sched-foot-more"
+        ><strong>We’re here</strong> records the moment the clock is on; a moment also closes itself when your phone is
+        close enough to its point.</span>
       </p>
     </section>
   </div>
