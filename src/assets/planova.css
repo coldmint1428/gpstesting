@@ -1,10 +1,11 @@
-/* Planova design system for the website (https://claude.ai/artifact/E3BCxpMCA1Fs6w2HJG6AoW).
+/* Planova design system (https://claude.ai/artifact/E3BCxpMCA1Fs6w2HJG6AoW).
    planova-tokens.css holds the design's own token values; this file points Bootstrap and the older event-workspace
    styles (event-shell.css) at them, and styles the screens that were redrawn (log in, my events, join).
-   Loaded after event-shell.css. Everything is scoped to html:not(.native-app): the phone app keeps native.css, and
-   its own pv- classes, until it is moved over too. New classes here use the pl- prefix so they never meet native.css. */
+   Loaded after event-shell.css and before native.css, so the phone app's own rules (html.native-app ...) still win
+   where they exist and this theme fills in everything else (buttons, forms, badges, alerts). New classes here use
+   the pl- prefix so they never meet native.css's pv- classes. */
 
-html:not(.native-app) {
+html {
   /* Bootstrap, pointed at the tokens */
   --bs-body-font-family: var(--font-ui);
   --bs-body-color: var(--text-primary);
@@ -31,39 +32,39 @@ html:not(.native-app) {
   --bs-focus-ring-color: rgba(36, 79, 63, 0.35);
 }
 
-html:not(.native-app) body {
+html body {
   font-family: var(--font-ui);
   background: var(--bg-canvas);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
 }
-html:not(.native-app) :focus-visible {
+html :focus-visible {
   outline: var(--focus-width) solid var(--border-focus);
   outline-offset: var(--focus-offset);
 }
-html:not(.native-app) ::selection {
+html ::selection {
   background: var(--selection-bg);
 }
-html:not(.native-app) h1,
-html:not(.native-app) h2,
-html:not(.native-app) h3,
-html:not(.native-app) h4,
-html:not(.native-app) h5,
-html:not(.native-app) h6 {
+html h1,
+html h2,
+html h3,
+html h4,
+html h5,
+html h6 {
   font-weight: 600;
 }
-html:not(.native-app) code,
-html:not(.native-app) .font-monospace {
+html code,
+html .font-monospace {
   font-family: var(--font-mono);
 }
 
 /* ---------- Buttons: forest primary, forest-outlined secondary, 8px corners ---------- */
-html:not(.native-app) .btn {
+html .btn {
   --bs-btn-border-radius: var(--radius-md);
   --bs-btn-font-weight: 600;
   --bs-btn-focus-shadow-rgb: 36, 79, 63;
 }
-html:not(.native-app) .btn-primary {
+html .btn-primary {
   --bs-btn-bg: var(--brand-primary);
   --bs-btn-border-color: var(--brand-primary);
   --bs-btn-color: var(--text-on-brand);
@@ -77,8 +78,8 @@ html:not(.native-app) .btn-primary {
   --bs-btn-disabled-border-color: transparent;
   --bs-btn-disabled-color: var(--text-disabled);
 }
-html:not(.native-app) .btn-outline-primary,
-html:not(.native-app) .btn-outline-secondary {
+html .btn-outline-primary,
+html .btn-outline-secondary {
   --bs-btn-color: var(--text-link);
   --bs-btn-border-color: var(--border-strong);
   --bs-btn-hover-bg: var(--interactive-hover-overlay);
@@ -91,7 +92,7 @@ html:not(.native-app) .btn-outline-secondary {
   --bs-btn-disabled-border-color: var(--border-subtle);
   border-width: 1.5px;
 }
-html:not(.native-app) .btn-danger {
+html .btn-danger {
   --bs-btn-bg: var(--danger-solid);
   --bs-btn-border-color: var(--danger-solid);
   --bs-btn-hover-bg: var(--danger-solid-hover);
@@ -99,7 +100,7 @@ html:not(.native-app) .btn-danger {
   --bs-btn-active-bg: var(--danger-solid-hover);
   --bs-btn-active-border-color: var(--danger-solid-hover);
 }
-html:not(.native-app) .btn-outline-danger {
+html .btn-outline-danger {
   --bs-btn-color: var(--status-error-fg);
   --bs-btn-border-color: var(--status-error-fg);
   --bs-btn-hover-bg: var(--danger-solid);
@@ -107,7 +108,7 @@ html:not(.native-app) .btn-outline-danger {
   border-width: 1.5px;
 }
 /* The design has one primary colour: green is for a status, not for buttons, so "success" buttons are forest too */
-html:not(.native-app) .btn-success {
+html .btn-success {
   --bs-btn-bg: var(--brand-primary);
   --bs-btn-border-color: var(--brand-primary);
   --bs-btn-color: var(--text-on-brand);
@@ -121,7 +122,7 @@ html:not(.native-app) .btn-success {
   --bs-btn-disabled-border-color: transparent;
   --bs-btn-disabled-color: var(--text-disabled);
 }
-html:not(.native-app) .btn-warning {
+html .btn-warning {
   --bs-btn-color: var(--text-primary);
   --bs-btn-bg: var(--status-warning-bg);
   --bs-btn-border-color: var(--status-warning-border);
@@ -134,7 +135,7 @@ html:not(.native-app) .btn-warning {
   border-width: 1.5px;
 }
 /* Warning orange is for borders and icons; the label stays readable */
-html:not(.native-app) .btn-outline-warning {
+html .btn-outline-warning {
   --bs-btn-color: #a8480c;
   --bs-btn-border-color: var(--status-warning-border);
   --bs-btn-hover-bg: var(--status-warning-bg);
@@ -145,7 +146,7 @@ html:not(.native-app) .btn-outline-warning {
   --bs-btn-active-border-color: var(--status-warning-border);
   border-width: 1.5px;
 }
-html:not(.native-app) .btn-outline-light {
+html .btn-outline-light {
   --bs-btn-color: var(--text-on-chrome);
   --bs-btn-border-color: rgba(255, 255, 255, 0.6);
   --bs-btn-hover-bg: var(--bg-canvas);
@@ -155,141 +156,141 @@ html:not(.native-app) .btn-outline-light {
 
 /* ---------- Forms ---------- */
 /* Inputs, cards, lists and menus sit on the white surface, the page behind them on the canvas */
-html:not(.native-app) .card {
+html .card {
   --bs-card-bg: var(--bg-surface);
 }
-html:not(.native-app) .list-group {
+html .list-group {
   --bs-list-group-bg: var(--bg-surface);
 }
-html:not(.native-app) .dropdown-menu {
+html .dropdown-menu {
   --bs-dropdown-bg: var(--bg-surface);
 }
-html:not(.native-app) .modal-content {
+html .modal-content {
   --bs-modal-bg: var(--bg-surface);
 }
-html:not(.native-app) .input-group-text {
+html .input-group-text {
   background-color: var(--bg-inset);
   border-color: var(--border-default);
 }
-html:not(.native-app) .form-control,
-html:not(.native-app) .form-select {
+html .form-control,
+html .form-select {
   background-color: var(--bg-surface);
   border-color: var(--border-default);
   border-radius: var(--radius-md);
   font-size: 16px;
 }
-html:not(.native-app) .form-control-sm,
-html:not(.native-app) .form-select-sm {
+html .form-control-sm,
+html .form-select-sm {
   font-size: 14px;
 }
-html:not(.native-app) .form-control:hover,
-html:not(.native-app) .form-select:hover {
+html .form-control:hover,
+html .form-select:hover {
   border-color: var(--border-strong);
 }
-html:not(.native-app) .form-control:focus,
-html:not(.native-app) .form-select:focus {
+html .form-control:focus,
+html .form-select:focus {
   border-color: var(--border-strong);
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--border-focus);
 }
-html:not(.native-app) .form-check-input {
+html .form-check-input {
   border-color: var(--border-default);
 }
-html:not(.native-app) .form-check-input:checked {
+html .form-check-input:checked {
   background-color: var(--brand-primary);
   border-color: var(--brand-primary);
 }
-html:not(.native-app) .form-switch .form-check-input:not(:checked) {
+html .form-switch .form-check-input:not(:checked) {
   background-color: var(--control-off);
   border-color: var(--control-off);
 }
-html:not(.native-app) .form-label {
+html .form-label {
   font-weight: 500;
 }
 
 /* ---------- Cards, lists, alerts ---------- */
-html:not(.native-app) .card {
+html .card {
   --bs-card-border-color: var(--border-default);
   --bs-card-border-radius: var(--radius-lg);
   --bs-card-inner-border-radius: calc(var(--radius-lg) - 1px);
   --bs-card-cap-bg: var(--bg-inset);
 }
-html:not(.native-app) .list-group {
+html .list-group {
   --bs-list-group-border-color: var(--border-subtle);
   --bs-list-group-border-radius: var(--radius-md);
 }
-html:not(.native-app) .alert {
+html .alert {
   border-radius: var(--radius-md);
 }
-html:not(.native-app) .alert-success {
+html .alert-success {
   --bs-alert-bg: var(--status-success-bg);
   --bs-alert-border-color: var(--status-success-border);
   --bs-alert-color: var(--status-success-fg);
 }
-html:not(.native-app) .alert-danger {
+html .alert-danger {
   --bs-alert-bg: var(--status-error-bg);
   --bs-alert-border-color: var(--status-error-border);
   --bs-alert-color: var(--status-error-fg);
 }
-html:not(.native-app) .alert-warning {
+html .alert-warning {
   --bs-alert-bg: var(--status-warning-bg);
   --bs-alert-border-color: var(--status-warning-border);
   --bs-alert-color: var(--status-warning-fg);
 }
-html:not(.native-app) .alert-info {
+html .alert-info {
   --bs-alert-bg: var(--status-info-bg);
   --bs-alert-border-color: var(--status-info-border);
   --bs-alert-color: var(--status-info-fg);
 }
-html:not(.native-app) .modal-content {
+html .modal-content {
   border-radius: var(--radius-xl);
 }
-html:not(.native-app) .badge.text-bg-success {
+html .badge.text-bg-success {
   background-color: var(--status-success-fg) !important;
 }
-html:not(.native-app) .badge.text-bg-danger {
+html .badge.text-bg-danger {
   background-color: var(--danger-solid) !important;
 }
-html:not(.native-app) .badge.text-bg-primary {
+html .badge.text-bg-primary {
   background-color: var(--brand-primary) !important;
 }
 
 /* ---------- Top bar: dark chrome with the Planova logo ---------- */
-html:not(.native-app) .app-nav {
+html .app-nav {
   background: var(--bg-chrome);
   border-bottom: 1px solid var(--chrome-border);
   font-family: var(--font-ui);
   min-height: var(--topbar-mobile);
 }
-html:not(.native-app) .app-nav .navbar-brand {
+html .app-nav .navbar-brand {
   display: inline-flex;
   align-items: center;
   padding: 0;
 }
-html:not(.native-app) .app-nav .navbar-brand img {
+html .app-nav .navbar-brand img {
   display: block;
   height: 36px;
   width: auto;
 }
-html:not(.native-app) .app-nav .nav-link,
-html:not(.native-app) .app-nav .navbar-text {
+html .app-nav .nav-link,
+html .app-nav .navbar-text {
   color: var(--text-on-chrome-muted);
   font-weight: 500;
 }
-html:not(.native-app) .app-nav .nav-link:hover,
-html:not(.native-app) .app-nav .nav-link:focus-visible,
-html:not(.native-app) .app-nav .nav-link.router-link-exact-active,
-html:not(.native-app) .app-nav .navbar-text:hover {
+html .app-nav .nav-link:hover,
+html .app-nav .nav-link:focus-visible,
+html .app-nav .nav-link.router-link-exact-active,
+html .app-nav .navbar-text:hover {
   color: var(--text-on-chrome);
 }
-html:not(.native-app) .app-nav .nav-link.router-link-exact-active {
+html .app-nav .nav-link.router-link-exact-active {
   box-shadow: inset 0 -2px 0 var(--chrome-indicator);
 }
-html:not(.native-app) .app-nav :focus-visible {
+html .app-nav :focus-visible {
   outline-color: var(--focus-on-chrome);
 }
 
 /* ---------- Event workspace: event-shell.css colours re-pointed at the tokens ---------- */
-html:not(.native-app) .ev {
+html .ev {
   --ev-navy: var(--bg-chrome);
   --ev-navy-2: var(--chrome-hover);
   --ev-ground: var(--bg-canvas);
@@ -304,90 +305,90 @@ html:not(.native-app) .ev {
   font-family: var(--font-ui);
   color: var(--text-primary);
 }
-html:not(.native-app) .ev .mono,
-html:not(.native-app) .ev .show-num,
-html:not(.native-app) .ev .ops-num {
+html .ev .mono,
+html .ev .show-num,
+html .ev .ops-num {
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
 /* The event header is the design's light top bar: white, a hairline under it, the back link as a breadcrumb */
-html:not(.native-app) .ev {
+html .ev {
   --ev-head-muted: var(--text-secondary);
 }
-html:not(.native-app) .ev-head {
+html .ev-head {
   background: var(--bg-surface);
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-subtle);
 }
-html:not(.native-app) .ev-back {
+html .ev-back {
   color: var(--text-link);
   font-weight: 500;
 }
-html:not(.native-app) .ev-back:hover,
-html:not(.native-app) .ev-back:focus-visible {
+html .ev-back:hover,
+html .ev-back:focus-visible {
   color: var(--brand-primary-pressed);
 }
-html:not(.native-app) .ev-title {
+html .ev-title {
   font-weight: 600;
   font-size: 28px;
   letter-spacing: -0.28px;
   color: var(--text-primary);
 }
-html:not(.native-app) .ev-chip {
+html .ev-chip {
   border: 1px solid var(--border-subtle);
   font-weight: 500;
 }
-html:not(.native-app) .ev-chip-live {
+html .ev-chip-live {
   background: var(--status-success-bg);
   color: var(--status-success-fg);
   border-color: var(--status-success-border);
 }
-html:not(.native-app) .ev-chip-sched,
-html:not(.native-app) .ev-chip-sim {
+html .ev-chip-sched,
+html .ev-chip-sim {
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
   border-color: var(--status-warning-border);
 }
-html:not(.native-app) .ev-chip-off {
+html .ev-chip-off {
   background: var(--bg-canvas);
   color: var(--text-secondary);
   border-color: var(--border-default);
 }
-html:not(.native-app) .ev-chip-role {
+html .ev-chip-role {
   background: var(--brand-primary-subtle);
   color: var(--text-link);
   border-color: var(--border-default);
 }
-html:not(.native-app) .ev-desc {
+html .ev-desc {
   color: var(--text-secondary);
 }
 @media (max-width: 991.98px) {
-  html:not(.native-app) .ev-title {
+  html .ev-title {
     font-size: 22px;
   }
 }
 /* The page navigation is the design's dark sidebar: chrome, a light selected row with a sage bar */
-html:not(.native-app) .ev-nav {
+html .ev-nav {
   background: var(--bg-chrome);
   border-color: var(--bg-chrome);
 }
-html:not(.native-app) .ev-nav-btn {
+html .ev-nav-btn {
   position: relative;
   color: var(--text-on-chrome-muted);
 }
-html:not(.native-app) .ev-nav-btn:hover {
+html .ev-nav-btn:hover {
   background: var(--chrome-hover);
   color: var(--text-on-chrome);
 }
-html:not(.native-app) .ev-nav-btn:focus-visible {
+html .ev-nav-btn:focus-visible {
   outline-color: var(--focus-on-chrome);
 }
-html:not(.native-app) .ev-nav-btn[aria-current='page'] {
+html .ev-nav-btn[aria-current='page'] {
   background: var(--chrome-selected);
   color: var(--text-on-chrome);
   box-shadow: none;
 }
-html:not(.native-app) .ev-nav-btn[aria-current='page']::before {
+html .ev-nav-btn[aria-current='page']::before {
   content: '';
   position: absolute;
   left: 0;
@@ -397,54 +398,54 @@ html:not(.native-app) .ev-nav-btn[aria-current='page']::before {
   border-radius: 0 2px 2px 0;
   background: var(--chrome-indicator);
 }
-html:not(.native-app) .ev-nav-hint,
-html:not(.native-app) .ev-nav-btn[aria-current='page'] .ev-nav-hint {
+html .ev-nav-hint,
+html .ev-nav-btn[aria-current='page'] .ev-nav-hint {
   color: var(--text-on-chrome-muted);
 }
-html:not(.native-app) .ev-nav-badge {
+html .ev-nav-badge {
   background: var(--chrome-hover);
   color: var(--text-on-chrome);
 }
-html:not(.native-app) .ev-nav-badge-live {
+html .ev-nav-badge-live {
   background: var(--bg-surface);
   color: var(--status-error-fg);
 }
-html:not(.native-app) .ev-nav-foot {
+html .ev-nav-foot {
   border-top-color: var(--chrome-border);
 }
-html:not(.native-app) .ev-page-head h2 {
+html .ev-page-head h2 {
   font-weight: 600;
   font-size: 28px;
   letter-spacing: -0.28px;
 }
-html:not(.native-app) .ev-label {
+html .ev-label {
   font-weight: 600;
   letter-spacing: 1.2px;
 }
-html:not(.native-app) .ev .ev-surface {
+html .ev .ev-surface {
   background: var(--bg-surface);
   border-color: var(--border-default);
 }
 @media (max-width: 991.98px) {
-  html:not(.native-app) .ev-nav {
+  html .ev-nav {
     border-color: var(--chrome-border);
   }
-  html:not(.native-app) .ev-page-head h2 {
+  html .ev-page-head h2 {
     font-size: 24px;
   }
 }
 
 /* ---------- Ops statuses: text keeps 4.5:1 on white, symbol and word still carry the meaning ---------- */
-html:not(.native-app) .ops-late { color: var(--status-error-fg); }
-html:not(.native-app) .ops-risk { color: #a8480c; }
-html:not(.native-app) .ops-ok { color: var(--status-info-fg); }
-html:not(.native-app) .ops-done { color: var(--status-success-fg); }
-html:not(.native-app) .ops-pill.ops-late,
-html:not(.native-app) .ops-chip.ops-late { background: var(--status-error-bg); }
-html:not(.native-app) .ops-pill.ops-risk,
-html:not(.native-app) .ops-chip.ops-risk { background: var(--status-warning-bg); border-color: var(--status-warning-border); }
-html:not(.native-app) .ops-pill.ops-ok,
-html:not(.native-app) .ops-chip.ops-ok { background: var(--status-info-bg); border-color: var(--status-info-border); }
+html .ops-late { color: var(--status-error-fg); }
+html .ops-risk { color: #a8480c; }
+html .ops-ok { color: var(--status-info-fg); }
+html .ops-done { color: var(--status-success-fg); }
+html .ops-pill.ops-late,
+html .ops-chip.ops-late { background: var(--status-error-bg); }
+html .ops-pill.ops-risk,
+html .ops-chip.ops-risk { background: var(--status-warning-bg); border-color: var(--status-warning-border); }
+html .ops-pill.ops-ok,
+html .ops-chip.ops-ok { background: var(--status-info-bg); border-color: var(--status-info-border); }
 
 /* ================= Redrawn screens (pl- classes) ================= */
 
@@ -829,14 +830,14 @@ html:not(.native-app) .ops-chip.ops-ok { background: var(--status-info-bg); bord
 /* ================= Everything else Bootstrap draws, in the design's terms ================= */
 
 /* Tables: small capitals header on an inset ground, hairlines between rows */
-html:not(.native-app) .table {
+html .table {
   --bs-table-bg: transparent;
   --bs-table-border-color: var(--border-subtle);
   --bs-table-hover-bg: var(--interactive-hover-overlay);
   --bs-table-active-bg: var(--interactive-selected);
   --bs-table-striped-bg: var(--bg-inset);
 }
-html:not(.native-app) .table > thead > tr > th {
+html .table > thead > tr > th {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 1px;
@@ -847,108 +848,108 @@ html:not(.native-app) .table > thead > tr > th {
 }
 
 /* Badges (Bootstrap's text-bg-*): a tinted ground and a hairline, status colours only for a status */
-html:not(.native-app) .badge {
+html .badge {
   font-weight: 500;
 }
-html:not(.native-app) .badge.text-bg-secondary {
+html .badge.text-bg-secondary {
   background-color: var(--bg-inset) !important;
   color: var(--text-primary) !important;
   border: 1px solid var(--border-subtle);
 }
-html:not(.native-app) .badge.text-bg-light {
+html .badge.text-bg-light {
   background-color: var(--bg-canvas) !important;
   color: var(--text-primary) !important;
   border: 1px solid var(--border-subtle) !important;
 }
-html:not(.native-app) .badge.text-bg-info {
+html .badge.text-bg-info {
   background-color: var(--status-info-bg) !important;
   color: var(--status-info-fg) !important;
   border: 1px solid var(--status-info-border);
 }
-html:not(.native-app) .badge.text-bg-warning {
+html .badge.text-bg-warning {
   background-color: var(--status-warning-bg) !important;
   color: var(--status-warning-fg) !important;
   border: 1px solid var(--status-warning-border);
 }
-html:not(.native-app) .badge.text-bg-dark {
+html .badge.text-bg-dark {
   background-color: var(--bg-chrome) !important;
   color: var(--text-on-chrome) !important;
 }
-html:not(.native-app) .bg-light {
+html .bg-light {
   background-color: var(--bg-inset) !important;
 }
-html:not(.native-app) .text-success {
+html .text-success {
   color: var(--status-success-fg) !important;
 }
-html:not(.native-app) .text-danger {
+html .text-danger {
   color: var(--status-error-fg) !important;
 }
-html:not(.native-app) .text-warning-emphasis {
+html .text-warning-emphasis {
   color: #a8480c !important;
 }
-html:not(.native-app) .btn-link {
+html .btn-link {
   color: var(--text-link);
 }
-html:not(.native-app) .btn-link.text-danger {
+html .btn-link.text-danger {
   color: var(--status-error-fg) !important;
 }
 
 /* Tabs and pills */
-html:not(.native-app) .nav-tabs {
+html .nav-tabs {
   --bs-nav-tabs-link-active-color: var(--text-link);
   --bs-nav-tabs-link-active-border-color: var(--border-default) var(--border-default) #fff;
   --bs-nav-link-color: var(--text-secondary);
   --bs-nav-link-hover-color: var(--text-primary);
   --bs-nav-tabs-border-color: var(--border-subtle);
 }
-html:not(.native-app) .nav-pills {
+html .nav-pills {
   --bs-nav-pills-link-active-bg: var(--brand-primary);
 }
 
 /* Menus and dialogs */
-html:not(.native-app) .dropdown-menu {
+html .dropdown-menu {
   --bs-dropdown-border-color: var(--border-subtle);
   --bs-dropdown-border-radius: var(--radius-md);
   --bs-dropdown-link-active-bg: var(--brand-primary);
   box-shadow: var(--elevation-2);
 }
-html:not(.native-app) .modal-content {
+html .modal-content {
   border: 0;
   box-shadow: var(--elevation-3);
 }
-html:not(.native-app) .modal-backdrop {
+html .modal-backdrop {
   --bs-backdrop-bg: #1d1f1d;
   --bs-backdrop-opacity: 0.6;
 }
-html:not(.native-app) .modal-title {
+html .modal-title {
   font-weight: 600;
 }
 
 /* Toasts: the design's dark toast with the status shown as a coloured edge (the words say it too) */
-html:not(.native-app) .toast {
+html .toast {
   border-radius: var(--radius-md);
   box-shadow: var(--elevation-2);
 }
-html:not(.native-app) .toast.text-bg-success,
-html:not(.native-app) .toast.text-bg-danger,
-html:not(.native-app) .toast.text-bg-warning,
-html:not(.native-app) .toast.text-bg-info,
-html:not(.native-app) .toast.text-bg-primary,
-html:not(.native-app) .toast.text-bg-secondary {
+html .toast.text-bg-success,
+html .toast.text-bg-danger,
+html .toast.text-bg-warning,
+html .toast.text-bg-info,
+html .toast.text-bg-primary,
+html .toast.text-bg-secondary {
   background-color: var(--bg-inverse) !important;
   color: var(--text-inverse) !important;
   border-left: 4px solid var(--border-default) !important;
 }
-html:not(.native-app) .toast.text-bg-success { border-left-color: var(--status-success-border) !important; }
-html:not(.native-app) .toast.text-bg-danger { border-left-color: var(--status-error-border) !important; }
-html:not(.native-app) .toast.text-bg-warning { border-left-color: var(--status-warning-border) !important; }
-html:not(.native-app) .toast.text-bg-info { border-left-color: var(--status-info-border) !important; }
-html:not(.native-app) .toast .btn-close {
+html .toast.text-bg-success { border-left-color: var(--status-success-border) !important; }
+html .toast.text-bg-danger { border-left-color: var(--status-error-border) !important; }
+html .toast.text-bg-warning { border-left-color: var(--status-warning-border) !important; }
+html .toast.text-bg-info { border-left-color: var(--status-info-border) !important; }
+html .toast .btn-close {
   filter: invert(1) grayscale(100%) brightness(200%);
 }
 
 /* Progress */
-html:not(.native-app) .progress {
+html .progress {
   --bs-progress-bg: var(--bg-muted);
   --bs-progress-bar-bg: var(--timeline-active);
   --bs-progress-border-radius: var(--radius-full);
@@ -1050,42 +1051,56 @@ html:not(.native-app) .progress {
   }
 }
 /* Each step's content sits in one outlined card */
-html:not(.native-app) .wizard > section {
+html .wizard > section {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: 24px;
 }
-html:not(.native-app) .wizard > section > h2 {
+html .wizard > section > h2 {
   font-size: 20px;
   font-weight: 600;
 }
 @media (max-width: 767.98px) {
-  html:not(.native-app) .wizard > section {
+  html .wizard > section {
     padding: 16px;
   }
 }
-html:not(.native-app) .wizard {
+html .wizard {
   max-width: 62rem;
 }
 
 /* ---------- Page chrome shared by the older screens ---------- */
-html:not(.native-app) main.container > h1.h4 {
+html main.container > h1.h4 {
   font-size: 28px;
   letter-spacing: -0.28px;
 }
-html:not(.native-app) .ev .card,
-html:not(.native-app) .ev .ev-surface {
+html .ev .card,
+html .ev .ev-surface {
   box-shadow: none;
 }
-html:not(.native-app) .ev .card-header {
+html .ev .card-header {
   font-weight: 600;
 }
 
+/* The Start / Schedule / End panel inside the status card */
+html .time-panel {
+  background: var(--bg-inset);
+  border-color: var(--border-subtle);
+}
+html .time-card {
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+}
+html .time-label {
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  html:not(.native-app) *,
-  html:not(.native-app) *::before,
-  html:not(.native-app) *::after {
+  html *,
+  html *::before,
+  html *::after {
     transition-duration: 0s !important;
     animation-duration: 0s !important;
     scroll-behavior: auto !important;

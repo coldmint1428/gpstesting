@@ -416,7 +416,8 @@ html.native-app .ev-native .next-move .btn-outline-success {
 .pv-live-open {
   align-self: stretch;
   text-align: center;
-  background: var(--pv-accent);
+  background: var(--bg-canvas); /* a light button on the dark chrome card */
+  color: var(--bg-chrome);
   border-radius: 16px;
   padding: 14px;
   font-weight: 600;
@@ -485,8 +486,8 @@ html.native-app .ev-native .next-move .btn-outline-success {
   color: var(--pv-info);
 }
 .pv-role-member {
-  background: rgba(209, 93, 15, 0.14);
-  color: var(--pv-accent-dull);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
 }
 .pv-role-sim {
   background: var(--status-warning-bg);
@@ -502,7 +503,7 @@ html.native-app .ev-native .next-move .btn-outline-success {
   gap: 8px;
   border: 0;
   border-radius: 999px;
-  background: var(--pv-accent);
+  background: var(--brand-primary);
   color: #fff;
   font: inherit;
   font-size: 16px;
