@@ -1625,3 +1625,247 @@
   line-height: 1.45;
   color: var(--pv-ink);
 }
+
+/* ---------- the follower's map (step 29) ----------
+   The Map tab for everyone the board is not for: the walk their group is meant to take, on the venue's zones, with
+   nothing of another group's. It borrows the schedule's frame (a card, a head, a quiet sub) and the board's map, and it
+   owns pv-route-*. The one thing it does not own is the geography: the zones are drawn with the Live map's areaStyle,
+   so the venue keeps one palette whichever map a person opens. */
+
+.pv-route {
+  display: flex;
+  flex-direction: column;
+  background: var(--pv-canvas);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  overflow: hidden;
+}
+
+.pv-route-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-route-title {
+  margin: 0 0 3px;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--pv-ink);
+}
+
+.pv-route-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-route-sub strong {
+  color: var(--pv-ink);
+  font-weight: 600;
+}
+
+.pv-route-asof {
+  color: var(--pv-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A sentence about the session (scheduled, ended, a failed read): one line between the head and the map. */
+.pv-route-line {
+  margin: 0;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--pv-line);
+  background: #f7f9f7;
+  font-size: 12.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-route-line.is-warn {
+  background: var(--pv-danger-soft);
+  color: var(--pv-danger);
+}
+
+/* The map's box. The card over it is positioned against this, not against the page. */
+.pv-route-stage {
+  position: relative;
+  height: clamp(340px, 58vh, 560px);
+  background: #e8ece9;
+  border-bottom: 1px solid var(--pv-line);
+}
+
+/* The next moment, over the map: "Next 7:40 pm · Main Gate · in 12 min", and one tap centres the map on it. */
+.pv-route-next {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 500;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  max-width: min(340px, calc(100% - 24px));
+  padding: 9px 13px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: var(--pv-radius);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--pv-shadow);
+  font: inherit;
+  text-align: left;
+  color: var(--pv-ink);
+  cursor: pointer;
+}
+
+.pv-route-next:hover {
+  border-color: var(--pv-primary);
+}
+
+.pv-route-next:focus-visible {
+  outline: 2px solid var(--pv-ok);
+  outline-offset: 2px;
+}
+
+.pv-route-next-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pv-ink-faint);
+}
+
+.pv-route-next-at {
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-route-next-place {
+  font-size: 13px;
+}
+
+.pv-route-next-in {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pv-ok);
+}
+
+.pv-route-note {
+  margin: 0;
+  padding: 12px 14px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--pv-ink-soft);
+}
+
+.pv-route-empty {
+  max-width: 64ch;
+  padding: 22px 16px 26px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--pv-ink-soft);
+}
+
+.pv-route-foot {
+  margin: 0;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--pv-line);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--pv-ink-faint);
+}
+
+/* A moment on the map: a 12 px dot with the group's colour, and a label hanging out to its right. Leaflet's divIcon
+   wrapper must not paint anything -- the dot and the label are the whole mark. */
+.pv-route-pin {
+  background: transparent;
+  border: 0;
+  overflow: visible;
+}
+
+.pv-route-dot {
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.pv-route-dot-mark {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--pv-dot, var(--pv-primary));
+  box-shadow: 0 1px 3px rgba(15, 30, 22, 0.45);
+}
+
+/* The moment the clock is on: bigger, with the ring a person's eye lands on. */
+.pv-route-dot.is-current .pv-route-dot-mark {
+  inset: -4px;
+  border-width: 3px;
+}
+
+/* The moment that has not happened yet: the one the card names. */
+.pv-route-dot.is-next .pv-route-dot-mark {
+  box-shadow: 0 0 0 3px rgba(36, 79, 63, 0.16), 0 1px 3px rgba(15, 30, 22, 0.45);
+}
+
+.pv-route-dot-label {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--pv-ink-soft);
+  pointer-events: none;
+}
+
+/* Every stated moment is labelled with its clock time and its place; the moment the clock is on and the next one carry
+   the weight, and the rest sit back so the two that matter read first. */
+.pv-route-dot.is-current .pv-route-dot-label,
+.pv-route-dot.is-next .pv-route-dot-label,
+.pv-route-dot.is-focused .pv-route-dot-label {
+  border-color: var(--pv-line);
+  background: rgba(255, 255, 255, 0.97);
+  font-weight: 700;
+  color: var(--pv-ink);
+}
+
+.pv-route-pin:hover .pv-route-dot-label {
+  border-color: var(--pv-line);
+  background: #fff;
+  color: var(--pv-ink);
+}
+
+/* A place on the schedule is a way to the map (step 29): quiet until pointed at, so the timetable still reads as text. */
+.pv-sched-place-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--pv-line-strong);
+}
+
+.pv-sched-place-link:hover,
+.pv-sched-place-link:focus-visible {
+  color: var(--pv-primary);
+  border-bottom-color: var(--pv-primary);
+}
+
+.pv-sched-place-link:focus-visible {
+  outline: 2px solid var(--pv-ok);
+  outline-offset: 2px;
+}

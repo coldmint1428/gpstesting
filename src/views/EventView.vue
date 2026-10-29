@@ -27,7 +27,6 @@ import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, upda
 import { isNativeApp } from '../lib/platform'
 import PeoplePanel from '../components/PeoplePanel.vue'
 import EventOverview from '../components/EventOverview.vue'
-import EventPagePlaceholder from '../components/EventPagePlaceholder.vue'
 import SharingWarnings from '../components/SharingWarnings.vue'
 import EventStatus from '../components/EventStatus.vue'
 import LiveMap from '../components/LiveMap.vue'
@@ -39,6 +38,7 @@ import ZoneOverview from '../components/ZoneOverview.vue'
 import SimulatorPanel from '../components/SimulatorPanel.vue'
 import PlanBoard from '../components/plan/PlanBoard.vue'
 import PlanSchedule from '../components/plan/PlanSchedule.vue'
+import PlanRoute from '../components/plan/PlanRoute.vue'
 import PlanOps from '../components/plan/PlanOps.vue'
 import { usePlan } from '../composables/usePlan'
 import { useBroadcasts } from '../composables/useBroadcasts'
@@ -573,15 +573,16 @@ async function removeEvent() {
         />
       </template>
 
-      <!-- Not built yet for these roles: the view-only map -->
-      <EventPagePlaceholder
+      <!-- Map: the follower's own walk for everyone the board is not for (step 29); root and planner keep the zones
+           editor (v-if: the bench holds locks and a presence row only while it is open). -->
+      <PlanRoute
         v-if="page === 'map' && !canManage"
-        :page="page"
-        :mode="modeOf(page)"
-        :role="role"
-        :group="myGroup"
-        :is-live="isLive"
-        :scheduled-start="scheduledStart"
+        :event-id="id"
+        :session="scheduleSession"
+        :whole="seesWholeEvent"
+        :my-group="myGroup"
+        :groups="groups"
+        :focus-t="route.query.t"
       />
 
       <SimulatorPanel v-if="event.is_simulation && isRoot && page === 'simulator'" :event-id="id" @changed="load" />

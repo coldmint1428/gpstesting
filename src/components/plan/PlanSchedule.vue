@@ -36,6 +36,7 @@
 // words. A write's error is kept until the next write: the read beside it polls every half minute, and an error that a
 // poll can wipe is an error nobody reads.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { formatOffset } from '../../utils/planFrames'
 import { planErrorMessage, usePlan } from '../../composables/usePlan'
@@ -497,7 +498,16 @@ watch(
             >
               <span v-if="whole" class="pv-sched-group">{{ row.group_name }}</span>
               <span class="pv-sched-state" data-testid="sched-state">{{ stateLabel(row) }}</span>
-              <span v-if="row.place" class="pv-sched-place" data-testid="sched-place">{{ row.place }}</span>
+              <!-- A place opens the Map tab on that moment (step 29). One link, not a map: this page stays the list it
+                   was, and step 16's assertion that it asks for nothing but the timetable keeps holding. A row with no
+                   place has no link. -->
+              <RouterLink
+                v-if="row.place"
+                class="pv-sched-place-link"
+                :to="{ name: 'event', params: { id: eventId, page: 'map' }, query: { t: String(moment.t_s) } }"
+                :aria-label="'Show ' + row.place + ' on the map'"
+                data-testid="sched-place-link"
+              ><span class="pv-sched-place" data-testid="sched-place">{{ row.place }}</span></RouterLink>
               <span class="pv-sched-detail">{{ detail(row) }}</span>
               <button
                 v-if="canHere(moment, row)"
