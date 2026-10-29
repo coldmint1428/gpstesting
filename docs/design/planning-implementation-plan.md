@@ -1,9 +1,11 @@
-# Planning stage — implementation plan (v24)
+# Planning stage — implementation plan (v27)
 
-Twenty-five steps. v6's decisions stand; v7 is the result of a third audit round that asked a different question:
+Twenty-eight steps. v6's decisions stand; v7 is the result of a third audit round that asked a different question:
 not *is the design right* but *will each step actually execute*. Nine findings, two blockers, all folded in below.
-v8–v24 are the same plan with the finished steps' **Done** blocks written: what now exists, the command that
-proves it, what the step found, and what it left owing.
+v8–v27 are the same plan with the finished steps' **Done** blocks written: what now exists, the command that
+proves it, what the step found, and what it left owing. Steps 26, 27 and 28 are the ones added after the
+twenty-five were closed: they come from using the thing, not from the plan, and the last one is the first about the
+person pressing rather than the phone deciding.
 
 **Your decisions, unchanged:** impossibility is cumulative (25 m per frame step, so 3 frames = 75 m); verification
 is per group per frame with bulk toggles; no deadlines — a key time is a frame; multi-select drag, weighted
@@ -14,12 +16,15 @@ states and undo-across-publish are out.
 
 ## Where this is
 
-**All twenty-five steps are done.** Step 25 deleted the run-sheet stack, so the plan is the only engine left in the
-product. The work was done one step at a time and stopped for review after each.
+**All twenty-eight steps are done.** Step 25 deleted the run-sheet stack, so the plan is the only engine left in the
+product; step 26 made a timetable row say *where* the moment is; step 27 made a moment close itself when the IC's
+phone is close enough, with a radius that is the IC's own; step 28 gave the group's IC a press of their own ("we're
+here") and made a mark belong to the person who made it. The work was done one step at a time and stopped for
+review after each.
 
 | | |
 |---|---|
-| ✅ done | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 |
+| ✅ done | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 |
 | ▶ next | nothing in this plan — the debts below are the next list |
 
 When a step finishes, its block below gains a **Done** line saying what now exists and the command that proves it.
@@ -151,7 +156,7 @@ When a step finishes, its block below gains a **Done** line saying what now exis
 
 ---
 
-## The 25 steps
+## The 28 steps
 
 ### Infrastructure first
 
@@ -1013,8 +1018,12 @@ lateness. Lateness is computed from `t0_at`, not `starts_at`.
 session: `state` ('arrived' or 'missed'), `marked_at` and `marked_by` — and two functions. **`progress_mark()`** is
 the only writer: it checks membership, then the role (the event's ops, or **the group's own IC or admin**), then
 that the frame is in this session's plan, that the group stands in the plan at that moment, that it is not off
-site there, and that the moment being recorded has happened and is after T+0. Saying it twice **corrects** one row
-rather than adding a second opinion. **`session_status(p_session, p_at default now())`** returns one row per group
+site there, and that the instant it is being recorded *for* has happened and is after T+0. Saying it twice **corrects**
+one row rather than adding a second opinion — **narrowed in step 28** (064): a person's mark may be replaced by the
+person who made it or by the event's ops and by nobody else, while an automatic close may be replaced by any hand.
+**Half of the "has happened" sentence was not true until then**: the `p_at` is checked against `now()`, but the
+*frame's* planned time never was, so a frame in the future could be recorded with `p_at` defaulting to now and read as
+an early arrival (finding 113, still open). **`session_status(p_session, p_at default now())`** returns one row per group
 per frame with `planned_at`, `state`, `lateness`, `marked_at` and `marked_by`, walking the plan's carry-forward (a
 group's state at a frame comes from its last statement at or before it, exactly as the board draws it). It takes
 the clock as a parameter so a screen can ask "how did this look at 18:20" and so the check can stand at a chosen
@@ -1295,7 +1304,10 @@ the cut), while a frame after the cut is still ordinary. Publishing carries the 
 `t0_at`, new revision, the anchor *arrived* with zero lateness and the publisher's name, the off-site group
 *not_required*, and exactly one mark — only one of the two groups is on site at the cut. Then the done-when as
 numbers: the copy's position at the cut equals the original's to 1e-12, before and after the switch, and the
-timetable has no row planned before the cut. A second publish leaves it all as an IC recorded it. **Proven to bite:**
+timetable has no row planned before the cut. **Amended in step 28:** the hand-over records the anchor in the
+**publisher's** name through `progress_mark`, so the group's IC can no longer replace it (064's guard; step 17's §8 now
+proves the refusal and then has the event's root correct it). A second publish leaves the record as the last person
+entitled to make it left it. **Proven to bite:**
 with the cut never taken, `FAIL 2a: a plan copied mid-walk has no cut`; with the anchor carried forward instead of
 interpolated, `FAIL 3c: Gate Crew's anchor is at 1.3302171, expected 1.33030394 (the walk at 420)`; with the
 hand-over not recorded, `FAIL 6g: the anchor reads "pending" on the timetable, expected arrived` (the check's
@@ -1563,7 +1575,8 @@ neither pair. (And one correction the regression run forced: `plan_ops` and 052'
 rows** for a session whose plan has been deleted, instead of refusing — finding 79, which step 19's own deletion test
 found as an HTTP 400 in a planner's console.)
 
-**The one decision worth naming: `auto` is a rule about the DRAWN POINT, not about the phones.** 046 gave a position
+**The one decision worth naming: `auto` is a rule about the DRAWN POINT, not about the phones** (a claim step 27
+half-overturned; see the end of this paragraph). 046 gave a position
 `verify` = `auto` (trusted as drawn) or `manual` (somebody must confirm), and nothing read it. The rule now is: the
 group's **current** moment, whose position is `auto` and on site, closes itself as `arrived` when an IC **of that
 group** (`group_members.is_ic`, not the reading's own group id — who an IC is is a fact about the event, not about the
@@ -1572,7 +1585,11 @@ own containment). The plan has no notion of a destination area, so the only real
 planner dropped it in; a badge in an empty field can never close itself and waits for a tap. The row is written with
 `marked_by` null (the tick, not a person) and `marked_at` = **the later of the planned time and the IC's entry**, so a
 tick that runs twenty seconds late still records when the group was actually there. `manual` is not advice: the tick
-skips it, and the screen offers the two buttons instead.
+skips it, and the screen offers the two buttons instead. **Changed in step 27** (063): the place test is still what
+decides *whether a moment can close itself at all* — a route point still waits for a tap — but "inside its zone" is no
+longer the only way to be there. An IC within **their own arrival radius** of the drawn point closes it too, because a
+phone in a pocket is not a polygon; the gate is what this paragraph was really protecting, and it survived (narrowed to
+the kinds 062 calls a place, so a cordon is not one).
 
 **The forecast is arithmetic, not a route.** `plan_eta_tick` divides straight-line metres (from the group's midpoint to
 its next moment's point) by `group_positions.speed_mps`, with a floor of 0.5 m/s and a default of 1.3 m/s when no speed
@@ -1598,7 +1615,9 @@ plan* (t0+60) because its IC was already inside — and nothing else: Sound is `
 Security's presence is by a man who is **not yet its IC** (it closes only after the membership row is inserted, and then
 it is dated from his **entry**, t0+80, not from the moment). A second call closes nothing. **Section 2**: at t0+190 every
 group's current point is outside its box, and nothing closes — "inside its zone" is about the drawn point, not about the
-phones. **Section 3**: the tick queues **one** nudge (Sound's IC), titled "Now: stage", naming the zone, carrying the frame
+phones. (Since step 27 this section proves something narrower and still true: nothing closes because the phones are far
+from the points — a phone *within its radius* would close a placed moment, and a route point would not. The sentence it
+was written for, "a drawn point outside every box has no area to be inside", moved into 063's gate.) **Section 3**: the tick queues **one** nudge (Sound's IC), titled "Now: stage", naming the zone, carrying the frame
 id a tap opens; a second tick adds nothing; a No-Go entry still becomes a push; the forecast queues exactly **two**
 (Security's leave-now and running-behind), carrying the **307 m the database measures**, while Gate Crew (0 m away) and
 Sound (no fix at that instant) and Backstage (off site) get nothing. **Section 4**: the chain's second row's `from_user`
@@ -2071,6 +2090,279 @@ that name a row or a function that no longer exists are closed by this file, not
 
 ---
 
+**26. A row says where the moment is** — M, needs 16 — **DONE** (062).
+
+**The model this serves, restated because the step is small and the model is not.** A moment is a point. A point
+inside a zone is a **place** — "be at Main Gate by 7:40" — and a point outside every zone is a **route point**: it
+exists so the map can draw the walk and so nobody thinks the group went through a wall. Nothing is refused for
+standing in open ground; a walk may cross the whole venue. The member's schedule says the place. That is the whole
+of this step, and it is worth having because a follower used to read "6:45 pm · doors" with no answer to "where".
+
+**What now exists.** `session_timetable` gains a trailing `place text`: the name of the zone the moment's own drawn
+point stands in, or null. It is a **drop and re-create**, not a `create or replace`, because the return type changed
+(R2, the same dance 052 did for the same reason), the body is **057's** (R8) with the deleted-plan guard intact, and
+both grants are named again (R4). The lookup is 057's own convention — stage first, then an entrance, then any other,
+then the name — **copied rather than reinvented**, because two functions answering "the zone this point is in"
+differently is the kind of second opinion this plan keeps refusing (finding 48). Two kinds are excluded: a
+**no-go area** and an **obstacle** are zones, but "be at Store room (no-go)" is not an instruction anybody can
+follow, so a point inside one answers null. An **off-site** moment is not a place either, even when the excursion
+keeps a coordinate inside a zone. And a **carried frame has no point at all**, so it has no place: the plan does not
+say the group is somewhere at that frame, it says the previous statement still stands. The client is one span with
+its own testid and one CSS rule, placed between the state word and the detail so a row reads `7:40 · due · Main Gate`.
+
+**Fixture.** `step16-schedule-prep.sql` gained three zones — the dock, the stage and the main gate — because its
+event had none, so every row would have said nothing and the screen proof would have been vacuous. The three steps of
+Gate Crew's walk stay outside all three, so the same screen shows the placed and the unplaced case.
+
+**Done when, at the database.** `dev/checks/step26-place.sql` — one transaction, rolled back, twelve assertions. The
+read answers **eighteen rows** (three groups × six frames); Gate Crew's call answers **Main Gate**; a carried frame
+answers **null**; a route point answers **null** *and* is proved to stand in **no zone at all**, so the null is not a
+point in open ground that would have been null anyway; the stage point is proved to stand in **two** zones before the
+read is asked which, so the tie-break is exercised and not assumed; the answer is **Stage**; a point inside the no-go
+area answers **null** and is proved to stand in **exactly one** zone; an off-site moment whose coordinate is inside
+the stage answers **null**; and the same read through a **member's own door** still answers **Stage** (six rows). **Two bites**, each
+restoring the file afterwards: dropping the kind filter makes it fail `FAIL 1g: a point inside a no-go area answered
+the place Store room (no-go)`; dropping the `state = 'on_site'` condition makes it fail `FAIL 1h: an off-site moment
+answered the place Stage`.
+
+**Done when, through the screen.** `dev/checks/step26-place.mjs` — twelve assertions over two tabs. Sound's member
+reads `Sound Dock`, then nothing (off site), then `Stage`, then nothing twice (carried), with the five state words
+**unmoved** — a place that displaced a word would be a regression this step could otherwise hide. The page is proved
+to have asked `session_timetable` **and** to have made **zero** requests for the plan's frames or positions, so the
+place came from the one read and not from a lookup the member's screen is not allowed to make. The marshal's tab then
+shows both groups on one frame saying **different** places (`Main Gate` / `Sound Dock`), which is what makes this a
+row-level fact rather than a frame-level one. Evidence: `shots/step26-member-place.png`,
+`shots/step26-marshal-place.png`.
+
+**Found while doing it:** three findings (103–105). `my_schedule` **never existed** — the name came from the 052
+filename and had travelled into this plan's step list, where it read as a function (103); a name invented in a
+conversation can survive a document and then a search that finds nothing, so step names are checked against the
+catalogue before they are used. **057 already answered this question twice** (`plan_collect_pushes` and
+`plan_eta_tick`) and answered it with no-go areas included, so copying the convention for a *label* meant inheriting
+"be at Stores (no-go)"; the ordering is shared and the kinds are not, which is worth knowing before a third copy
+appears (104). A **thirteenth column is safe only because every consumer reads by name** — there is no positional
+destructuring anywhere in the client or the checks — while three assertions pin exact text in three elements, so the
+new fact needed its own element and its own testid rather than being appended to the detail line (105).
+
+**Suite.** `step26-place.sql` **12**; the timetable's neighbours re-run green: **step15-timetable**, **step16-schedule**,
+**step17-fork** (with its prep), **step22-log-targeting**, **step23-import** (with its prep); browser **step16** 69
+(5 tabs) and **step17** 44 (3 tabs) unchanged, so the extra span broke no exact-text assertion; **step26** 12 (2
+tabs); `npm run test:db` **322**; `npm run build` clean; ledger **62 files, 62 applied, 0 drifted**.
+
+**Owing.** The place is a **name and nothing else**: a route point is silent, so a planner cannot label one "the corner
+of the road", and a member cannot tell a walk from a gap. A **carried frame is silent too**, even though the group is
+still standing wherever the last statement put it — the read reports what the plan states at that frame, not where the
+group is, and carrying the point forward would be a second copy of the walk 051 owns. **Overlapping zones resolve by
+kind then name**, so two zones of the same kind covering the same point resolve alphabetically, and nothing tells a
+planner their zones overlap. The **ops board still identifies a moment by its numbers**: `plan_ops` returns
+`plan_lat`/`plan_lng` and no place, so a marshal reading the table sees the walk's midpoint rather than the name —
+giving it one is a second `drop`/`create` of a 26-column function, and a decision rather than a fix. And the state
+chip and the place now sit side by side and read as one phrase ("ARRIVED Sound Dock"); a long zone name pushes the
+detail onto a second line, which is legible but not designed.
+
+**27. Arrival by distance, per IC** — M, needs 21 — **DONE** (063).
+
+**The model this serves, in your words.** "The planner is the one who plans routes by creating new frames; the map's
+line between two moments is indeed the path." On the member's end the timeline says what time to be at which zone and
+the map draws the route; the intermediate moments **are** the route and nobody is judged for cutting a corner, though
+a marshal may confirm one. "What really matters is if they are in their zone by the planned time." On the ground that
+is a **distance**: "we calculate reached a moment as distance from planned latlng to actual latlng (let planner
+configure)". 057 could only close a moment when an IC stood inside the polygon the point was drawn in, which is a
+claim about a drawing, not about a phone in a crowd.
+
+**What now exists.** `group_members` gains **`ic_tolerance_m`** — `integer not null default 30`, `check (between 5 and
+100)`. It lives on the membership row because that row already says "this person, in this group, at this event": one
+radius per IC per event, no new table, and 002's read policy already lets the event's people read their own. The CHECK
+is the band's real door — nothing can store 4 or 400, whatever a function forgets to ask. **`set_arrival_tolerance(
+p_event, p_metres, p_user default null)`** is the only writer (R3: `group_members` has a read policy and no write
+policy anywhere), security definer, and it admits the same three callers 050's `progress_mark` admits: the person
+themself, the event's root or planner, and the group's own admin. It refuses a person who is not an IC ("only an IC
+shares a phone, so only an IC has an arrival radius") and answers the metres now in force.
+
+**`plan_auto_close` is re-created from 057's body** (R8, `create or replace` — its signature did not change, so its
+grants from 057 stand: revoked from everyone and run by the tick as its definer). Two things changed and nothing else:
+
+* **the place gate is kept, and narrowed to a place.** A moment may close itself only when its drawn point stands in a
+  zone of the kinds 062 calls a place — `zone`, `stage`, `entrance`. That is what keeps a **route point** from closing
+  (a phone passing within thirty metres of a corner is not an arrival), and it means a moment drawn inside a cordon now
+  waits for a tap, so "somewhere to have arrived at" answers the same way in the read and in the tick (finding 104).
+* **the evidence is a phone as well as a polygon.** For each IC of the group: inside a zone containing the point
+  (057's test, unchanged) **or** within *that IC's own radius* of the point. The distance test is the live map's, not a
+  new one (021): a reading older than **two minutes** or worse than **100 m** is not evidence, and the radius is
+  widened by **`min(accuracy, 15)`** exactly as 021 widens a zone's edge. `locations` carries no session id, so the
+  window is also bounded by the session's own `t0_at` — a reading from before the clock the group was told says where
+  somebody was, not that they are here — and `source = 'stop'` is not a position at all. The **earliest** evidence
+  dates the arrival and `marked_at = greatest(planned, first)` (057's expression, unchanged), `marked_by` null.
+
+**The screens.** The IC's own number is on **"My GPS details"** — a card under the database status: *"Your group counts
+as arrived at a moment when your phone is this close to its point — or anywhere inside the zone it stands in"*, a box,
+`metres`, Save, and the database's sentence in red when the number is outside the band. The planner's is on the
+event's **People** page: ICs get a `Radius` box beside their IC switch, the group admin who does not share a phone does
+not, and a change is toasted in words ("testuser4 now counts as arrived within 25 m."). `useEventData` carries
+`toleranceM` on each member so both screens read the same row.
+
+**Fixture.** `step27-tolerance.sql` builds its own plan on the bench event: **eight frames ten minutes apart**, Gate
+Crew walking due east 20.59 m a step (so every step is legal and the strip's only subject is the tick), a **Gate** box
+round the first moment, a **Crossing** lane over the third to the seventh, and a deliberate **gap** with no zone for
+the second — the route point. It publishes through the product's gate and starts a real session through
+`start_event()`, then stands at chosen seconds with readings it wrote itself. The no-go cordon for the last section is
+added **after** the publish, because a walk that ends inside a cordon is a crossing the publish gate refuses.
+
+**Done when, at the database.** `dev/checks/step27-tolerance.sql` — one transaction, rolled back, **41 assertions**.
+**A**: every membership row carries 30 m, and 4 and 101 are refused by the column itself. **B** (thirteen): the door —
+the IC sets their own (and the row says so), 4, 101 and null are refused through the function, a person who is not an
+IC is refused **even by themselves**, an admin of *another* group is refused, one IC cannot set another's, the same
+call goes through once the caller is made that group's admin, an outsider is refused, a client cannot call the tick,
+the planner sets both numbers the check then stands on, and the anon key cannot execute the function at all. **C–D**:
+an IC at **distance 0** ten seconds before T+0 closes **nothing**; the same IC at 25 m closes nothing through a **5 m**
+radius and closes the moment through **30 m** — same reading, same second, one changed number — dated to the reading
+and marked by nobody. **E**: an IC standing exactly on the route point closes nothing, and the point is first proved to
+stand in **no** zone. **F**: two ICs of one group, 30 m and 100 m; the same 60 m reading is refused through the first
+(whose number is re-read in the same breath) and closes the moment through the second. **G**: a five-minute-old reading
+is refused, a 200 m accuracy is refused, and a 40 m reading with a 30 m radius and 20 m accuracy **counts**, because
+`30 + min(20, 15) = 45`. **H**: 057's zone branch still closes — with no reading at all — and dates the arrival to the
+plan, not to the IC's early entry. **I**: `manual` stays open with the IC on the point. **J**: the same person at the
+same distance, no longer an IC, closes nothing. **K**: a moment drawn in a cordon stays open, the point first proved to
+stand in exactly one zone. **L**: four moments closed in all, and no others.
+
+**Proven to bite, four times** (each restored by re-applying 063; the ledger then showed 0 drifted). Dropping the
+kind filter from the gate → `FAIL K2: an IC standing in a no-go area closed 1 moment(s), expected none`. Dropping the
+session-start bound → `FAIL D1`. Replacing `gm.ic_tolerance_m` with a constant `30` → `FAIL C1`. Dropping the zone
+branch from the evidence query → `FAIL H1`.
+
+**Done when, through the screen.** `dev/checks/step27-radius.mjs` — **17 assertions over three tabs**. The IC's page
+opens on the radius the row carries, saves a new one (worked out from what it found, so a repeat run proves the same
+thing), the call is proved to have gone to the database, and a **reload** still reads the new number — the row, not the
+box. `4` is then refused and the check asserts the message is the **server's** sentence ("An arrival radius is between
+5 and 100 metres, not 4."), excusing exactly one HTTP 400. The planner's People page shows that same number, has a
+radius control for **both** ICs and none for the group admin, and a change made there comes back from a re-read of the
+list. A third tab (a group admin who does not share a phone) has no card and no box at all. Evidence:
+`shots/step27-ic-radius.png`, `shots/step27-ic-refused.png`, `shots/step27-planner-radius.png`.
+
+**Found while doing it:** three findings (106–108). The first version of the **session-start assertion could not
+fail**: its reading sat exactly on `p_at - 2 minutes`, the comparison is strict `>`, and the window's own edge excluded
+it whether the T0 bound was there or not — so the check passed for a reason that had nothing to do with the rule it
+named (106). A reading placed ten seconds before T+0 made the bite appear. **A cordon cannot be reached by a legal
+walk**, so the no-go assertion had to add its zone after the publish: the publish gate refuses a crossing, and the
+assertion is about the tick, not about the gate (107). And the plan itself said `auto` was "about the DRAWN POINT, not
+about the phones" — true of 057, half-false from this file on, so step 21's paragraph is amended where it stands rather
+than left to contradict the code (108).
+
+**Suite.** `step27-tolerance.sql` **41**; the plan's own neighbours re-run green: **step14-actuals**,
+**step15-timetable**, **step16-schedule** (with its prep), **step17-fork** (with its prep), **step21-push-handover**
+(with its prep), **step22-log-targeting**, **step23-import** (with its prep), **step26-place**; browser **step16** 69
+(5 tabs), **step17** 44 (3 tabs), **step21** 15 (1 tab — the tick that closes a moment by zone still closes it),
+**step27** 17 (3 tabs); `npm run test:db` **322**; `npm run test:sheet` **58**; `npm run build` clean; ledger **63
+files, 63 applied, 0 drifted**.
+
+**Owing.** The radius is **not on the ops board**: a marshal sees a group that has not closed itself and cannot see why.
+**Two ICs of one group each have a number and the first one close enough wins**, so a group with one tight and one
+loose IC is judged by whichever is nearer, and nothing on any screen says so. **A radius is per event, not per venue**:
+two events at one venue copy nothing between them, so a planner sets it twice. Nothing **tells an IC** that a planner
+changed their radius — the change is a toast on the planner's screen only — and the IC's card does not say **who** last
+set it. The **planner's box has no sentence**: the IC's card explains what the number does, the People page's label says
+only `Radius`, so the explanation is on the other person's page. The IC's own card **leaves a refused number in the
+box**: the message is right and the row is unchanged, but the field still reads 4 until it is retyped. A moment drawn
+inside a **no-go area can now never close itself**, which is the intended reading of "not a place" and a surprise for
+anyone who meant "a staffed gate inside a closed area" — that has to be a second, plain zone. And the **100 m ceiling
+is a judgement, not a measurement**: the band is a product decision (5 m is below any honest fix, 100 m is where "here"
+stops meaning anything in a crowd) and nothing in the system tests it against a real venue.
+
+**28. The IC's own "we're here" press** — M, needs 21 — **DONE** (064).
+
+**The gap this closes.** `progress_mark` (050) has admitted the group's IC and its admin since the day it was written,
+but the only client caller was the ops board — and the ops board is mounted only for root, planner and marshal
+(`EventView.vue`'s `seesWholeEvent`), exactly the three roles the function exempts. Half of its role check had never
+been reached by anything: the door was real and no screen knocked on it, and the guard the earlier plan asked for ("a
+second person must not replace a mark") would have protected a case that could not happen. So this step is the screen
+first: the timetable step 16 gave every member offers its IC **one** press — "We're here" on the moment the clock is on
+— and the guard comes with it, because now two people marking is a real thing.
+
+**What now exists — the screen.** `PlanSchedule.vue` gains a `canPress` prop, passed as `isIC` from `EventView`; the
+press is rendered on the row whose state is `late` (050's word for "its time has come and nobody has said anything")
+and only on the moment the clock is on (the last one whose time has come), so the moments ahead and the off-site ones
+offer nothing. Pressing calls **`markProgress`** in `usePlan` (one `progress_mark` call), then re-reads: the row the
+database reports is the one shown, never a mark guessed by the browser. A refusal keeps the database's sentence. The
+ops board says which writer closed a moment — `marked_auto` (064) rather than a missing name — and a write's error is
+**sticky**: `PlanOps` used to clear `errorMsg` on every successful five-second poll, so a sentence saying why a mark
+was refused was wiped before anyone could read it, and a refused mark left the stale row's buttons in place; both
+screens now keep a write's error until the next write (or a dismiss) and the ops board re-reads after a refusal.
+
+**What now exists — the door.** `plan_progress` gains **`marked_auto`** — `boolean not null default false`, true only
+for the tick's own close. It exists because a null `marked_by` already meant three things (the tick, a deleted profile,
+a repair) and the FK is `on delete set null`: deleting a person silently turned their mark into the tick's, which the
+board read as "the phone was there" and which the new guard would then let anyone overwrite. The one-time backfill is
+the truth for older rows — until this file only the tick left the name null. **`progress_mark`** is re-created from
+050's body (R8, `create or replace` — the signature is unchanged) with one guard between the T+0 check and the upsert:
+when a row exists, it is not the tick's, its author is not the caller, and the caller is not the event's ops, the call
+is refused with *"<name> recorded that moment already, at <time>. Ask the event's ops to change it."* — the name from
+`show_who` and the time from `sg_hms`, the two helpers 026 and 028 already ship. The maker may correct their own, the
+event's ops may correct anything (that is what ops are for), and an automatic close is nobody's statement, so any hand
+may correct it. `plan_auto_close` writes `marked_auto = true` (063's body, one column), and `plan_ops` answers the
+column (a DROP + CREATE, R2, because the return type changes).
+
+**Fixture.** `step28-mark-guard.sql` builds its own event: two ICs in one group, an admin in the other, a plan whose
+printed T+0 is seventy seconds ago, and a stage box round Gate Crew's +1:00 point. A reading on that point lets the
+tick close the moment, which is what the "a hand may correct the phone's close" section stands on.
+`step28-here-prep.sql` is the browser bench: a live plan at +0:00 / +5:00 / +10:00 with T+0 a few seconds old, Gate
+Crew's IC on the moment with **no reading at all** (so only the press can close it), and Sound's IC standing on its own
++0:00 point so the deployed five-second job closes that one by itself.
+
+**Done when, at the database.** `dev/checks/step28-mark-guard.sql` — one transaction, rolled back, **32 assertions**.
+**A**: `marked_auto` exists, is `not null`, defaults false. **B**: the IC's own press names them and is not flagged
+automatic. **C**: a second IC is refused, the sentence names the marker and the time, and the row is unchanged. **D**:
+the maker may correct their own, dated to the instant they give. **E**: the group's admin may record its own group.
+**F**: an IC of another group still gets the role sentence, not the guard's. **G**: the tick closes Gate Crew's +1:00
+(and only it), with no name and the flag set. **H**: a hand may correct that close, and the row then names the person
+and stops being automatic. **I**: a person's mark whose profile is gone (name null, flag false) is still refused —
+"someone recorded that moment already" — which is the bug the flag fixes. **J**: the event's ops may correct anything.
+**K**: `plan_ops` answers `marked_auto` and the mark in force. **L**: the timetable carries the mark, and the IC still
+sees only their own group.
+
+**Proven to bite, four times** (each restored by re-applying 064; the ledger then showed 0 drifted). The guard never
+fires (`v_prev.marked_auto is null`) → `FAIL C1: a second IC replaced the first IC's mark`. Protect only rows that
+still carry a name → `FAIL I1: a mark whose author is gone was treated as the tick's and replaced`. No ops bypass →
+`FAIL J1: the ops correction was refused: someone recorded that moment already...`. The tick not flagged
+(`null, true` → `null, false`) → `FAIL G2: the tick's close is not flagged automatic`.
+
+**Done when, through the screen.** `dev/checks/step28-here.mjs` — **23 assertions over four tabs**. The IC's schedule
+offers exactly one press, on the +0:00 moment and not on the +5:00 one; pressing it writes `progress_mark` (the
+browser's own resource timings), the row turns "arrived" and records when, and the press is gone afterwards. A
+**reload** finds the same row, so the mark is the database's. The group's **second IC** opens the same page and reads
+the moment already recorded, with nothing to press. The planner's ops board says **"Arrived … · by hand"** for Gate
+Crew's press and **"Arrived … · the phone was there"** for Sound's tick, and neither recorded moment offers
+the Arrived/Missed buttons. Evidence: `shots/step28-here.png` (the press on the row), `shots/step28-arrived.png` (the
+row after it) and `shots/step28-ops.png` (the two writers, side by side).
+
+**Found while doing it:** findings 109–113. The guard was **dead code** until this screen existed (109). Adding it
+**broke step 17's §8**, which had Gate Crew's IC overwrite the hand-over mark; the section now proves the refusal first
+and then has the event's root correct it — the documented correction path, and a stronger assertion than before (110).
+The ops board's **poll wiped a write's error** within five seconds, and a refused mark left its buttons on a stale row
+(111). `marked_by`'s null was **three meanings**, which the flag separates (112). And one more was found by writing
+064 and is **not fixed here**: `progress_mark`'s comment has always claimed that a moment "that has not happened yet
+cannot be recorded", but only the `p_at` is checked — a frame in the future can be recorded with `p_at` defaulting to
+now and reads as an early arrival (113; the trap is `plan_publish`'s hand-over, which marks the anchor on a session
+whose clock may not have started).
+
+**Suite.** `step28-mark-guard.sql` **32**; the plan's neighbours re-run green: **step2-session-plan**,
+**step3-group-scope**, **step4-frame-id**, **step5-fill-gap**, **step11-geometry**, **step14-actuals**,
+**step15-timetable**, **step16-schedule** (with its prep), **step17-fork** (with its prep, amended),
+**step20-ops**, **step21-push-handover**, **step22-log-targeting**, **step23-import** (with its prep),
+**step26-place**, **step27-tolerance**; browser **step16** 69 (5 tabs), **step17** 44 (3 tabs), **step21** 15 (1
+tab), **step27** 17 (3 tabs), **step28** 23 (4 tabs); `npm run test:db` **322**; `npm run test:sheet` **58**;
+`npm run build` clean; ledger **64 files, 64 applied, 0 drifted**.
+
+**Owing.** The press is the **IC's only**: `progress_mark` also admits the group's admin, but the admin's timetable has
+no press — and no screen offers a "we were not here" (missed) press to anyone but the ops board. The **refusal cannot
+be staged in the browser** (two people and one stale screen, one browser profile), so the guard's sentence is proved at
+the database and not through the interface. The ops board still has **no "change this mark" control** — ops can correct
+through the API, not on the screen — and it still reports the marker as a **uuid**, so it cannot name the person whose
+mark it is showing. The **future-frame hole** (113) is the next thing on the door. And the hand-over marks the anchor
+in the **publisher's** name, so the IC can no longer correct an anchor it disagrees with: the guard working as
+intended, with "the publisher or another ops hand" the only correction path.
+
+---
+
 ## Coverage
 
 | Asked for | Step |
@@ -2095,6 +2387,9 @@ that name a row or a function that no longer exists are closed by this file, not
 | Targeted broadcast, single ack, playback | 22 (done) |
 | CSV | 23 (done) |
 | Old stack gone | 24 (done), 25 (done) |
+| A timetable row says where the moment is | 26 (done) |
+| A moment closes when the IC's phone is close enough, at a radius the IC or the planner sets | 27 (done) |
+| A mark belongs to the person who made it, and the IC can say "we're here" from their own schedule | 28 (done) |
 
 **Out, by your decision:** named states / waypoint hierarchy · undo across a publish boundary.
 
@@ -2256,9 +2551,11 @@ of any hand-run.
 **New from step 14:** there was **no screen** for actuals until step 16 — `progress_mark` still has no client caller
 (step 21's arrival marking is where a tap is made), so what step 14 proved is the data and its rules, and step 16
 proved that the timetable *reads* them (arrived, missed, when, by whom) on a member's own schedule.
-A mark is **last write wins**: two marshals recording the same frame both succeed and the later `marked_at` /
-`marked_by` replace the earlier with no history, which is step 21's hand-back log's job and nothing here notices the
-overwrite. The table was readable by **any member** until 052 narrowed it to the caller's own group (step 3's
+A mark WAS **last write wins**: two marshals recording the same frame both succeeded and the later `marked_at` /
+`marked_by` replaced the earlier with no history — **changed in step 28** (064): two ops hands still both succeed (ops
+may correct), but two ICs no longer do — the second is refused with who marked it and when — and a deleted profile no
+longer turns a person's mark into the tick's (`marked_auto`). What is still missing is the history the hand-back log
+would have to carry; nothing records an overwrite. The table was readable by **any member** until 052 narrowed it to the caller's own group (step 3's
 finding 23, closed).
 **Deleting a
 frame erases what happened at it**, by design, and undo does not bring the record back: step 13 restores the frame
@@ -2463,3 +2760,36 @@ archive. The 25 m refusal lives in the client, which means a caller that bypasse
 database's own gate is still `plan_check` at publish). The reader accepts a header without a `group` column — a bare
 timetable of times and notes — and importing one empties the plan's positions, a reading no screen offers. And it is one
 CSV with one sheet: no template, no workbook, no second tab.
+
+**New from step 26:** the place is a **zone name or nothing**, so the screen cannot say "on the way to the stage" and a
+member cannot tell a walk from a gap; a carried frame is silent even though the group is still standing there, because
+the read reports what the plan *states* at that frame. The lookup answers with the **first** zone by kind and then by
+name, so a point inside two zones of the same kind resolves alphabetically, and nothing anywhere warns a planner that
+two zones overlap — the same silence that made the no-go question worth deciding. The **ops board still speaks in
+coordinates**: `plan_ops` has `plan_lat`/`plan_lng` and no place, so the marshal's table and the member's schedule
+now describe the same moment in two different vocabularies, and closing that is a 26-column drop-and-create rather
+than a column. The member's page remains **one read** on purpose (step 16's check forbids a `plan_positions` request),
+which is what made a server-side column necessary — and also means the place can never be a client-side enrichment of
+something the plan did not state.
+
+**New from step 27:** the radius is a number **nothing shows on the ops board** — `plan_ops` has no tolerance and no
+"how far off was the phone", so a marshal watches a group stay late and cannot see whether the phone was 40 m short or
+had stopped reporting. **Two ICs of one group each carry a number and the nearest close wins**, so the group's honesty
+is the loosest phone in it, and no screen says which IC closed what. It is **per event**, so two events in one venue
+share nothing. A planner can change an IC's radius **without telling them**: the change is toasted on the planner's
+own screen, and the IC's card says neither who set the number nor that it moved. The **whole band is a judgement**
+(5 m .. 100 m, default 30) written into a CHECK, and nothing in the product tests it against a venue. And the
+**session-start bound is a workaround**: `locations` has no session id, so the tick bounds its own window by `t0_at` —
+a reading written during setup, within two minutes of T+0, still counts if the group happens to be standing on the
+moment's point when the clock starts.
+
+**New from step 28:** the **future-frame hole** is the next thing on the door — `progress_mark` refuses a future
+`p_at` but not a future *frame*, so a hand-crafted call can record "arrived" two and a half minutes early (113); the
+fix has to decide what `plan_publish`'s hand-over does on a session whose clock has not started, which is why it was
+not smuggled into this step. The **press is the IC's only**: the group's admin is admitted by the door and has no
+screen, and nobody can record "we were not here" except the ops board. The **refusal cannot be staged in the
+browser** (two people, one stale screen, one browser profile), so the guard's sentence is proved at the database and
+not through the interface. The ops board has **no "change this mark" control** and still answers the marker as a
+uuid, so it can neither offer a correction nor name the person who made the mark it is showing. And the hand-over
+records the anchor in the **publisher's** name, so after this step the group's IC cannot replace it — the guard
+working as intended, with "the publisher or another ops hand" the only correction path.

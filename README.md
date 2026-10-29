@@ -479,6 +479,56 @@ member's next-move card, the group-message banner, the workbook (`runSheetFile.j
 `route-eta` Edge Function and the six legacy PGlite suites that tested the dropped functions; the map lost its ops
 clusters, the Playback tab lost its "Ran with" line, and the Zones card lost its per-zone movement count.
 
+A timetable row now says **where** the moment is. A moment is a point: inside a zone it is a *place* ("be at Main
+Gate by 7:40"), outside every zone it is only the route, and nothing is refused for standing in open ground.
+`session_timetable` gained a trailing `place` column — the name of the zone the moment's own drawn point stands in —
+by being dropped and re-created (the return type changed, so `create or replace` cannot do it), with 057's body and
+its deleted-plan guard kept. The lookup is 057's own rule (stage, then an entrance, then any other, then the name),
+copied rather than reinvented, with two exclusions: a **no-go area** and an obstacle are zones but never places, and
+an **off-site** moment is not a place either. A frame that only carries a group forward has no point, so it has no
+place. The schedule prints it between the state word and the detail, so a row reads `7:40 · due · Main Gate`.
+`dev/checks/step26-place.sql` proves the column at the database (twelve assertions, including that the route point
+really stands in no zone and that the stage point really stands in two zones before the tie-break is asked), and its
+two bites are recorded in the plan document; `dev/checks/step26-place.mjs` proves it on the screen for a member and a
+marshal, and asserts the page still makes no request for the plan's frames. `dev/checks/step16-schedule-prep.sql`
+gained three zones so the fixture has somewhere for a moment to be. Screenshots: `shots/step26-member-place.png`,
+`shots/step26-marshal-place.png`.
+
+A moment also closes itself when the IC's **phone is close enough**, not only when it is inside the polygon the point
+was drawn in. The radius is the IC's own: `group_members.ic_tolerance_m` (5–100 m, default 30) lives on the membership
+row — one number per person per event, no new table, and 002's read policy already covers it. `group_members` has no
+write policy, so the only writer is `set_arrival_tolerance(p_event, p_metres, p_user default null)`, a security-definer
+function with the same three doors `progress_mark` uses (the person themself, root/planner, the group's own admin); it
+refuses anybody who is not an IC, because only an IC shares a phone. `plan_auto_close` was re-created from 057's body
+with two changes: the moment's point must still stand in a place (a route point never closes itself, and a cordon is
+not a place — the same kinds step 26 calls one), and the evidence is now "an IC inside a zone containing the point **or**
+within that IC's own radius of it", using the live map's own rules from 021 (a reading no older than two minutes, none
+worse than 100 m, widened by `min(accuracy, 15)`), with the window also bounded by the session's `t0_at` because
+`locations` carries no session id. The earliest evidence dates the arrival and `marked_at` is still `greatest(planned,
+first)`. The IC sets the number on **My GPS details**; the planner sets it on the event's **People** page, where only
+ICs get the box. `dev/checks/step27-tolerance.sql` proves it at the database (41 assertions, four recorded bites:
+per-IC numbers, the session-start bound, the kind filter on the place gate, and 057's zone branch) and
+`dev/checks/step27-radius.mjs` proves it on the screen (17 assertions over three tabs: the IC's own card saving and
+surviving a reload, a 4 m refusal in the server's own words, the planner's list, and a group admin with no card at
+all). Screenshots: `shots/step27-ic-radius.png`, `shots/step27-ic-refused.png`, `shots/step27-planner-radius.png`.
+
+A mark also belongs to the person who made it, and the IC can make one from their own timetable. `PlanSchedule` gives
+the group's IC a **We're here** press on the moment the clock is on — and only that moment: the ones ahead have not
+happened and the off-site ones have nothing to arrive at. Pressing calls `progress_mark` and re-reads, so the row the
+database reports is the one shown. `progress_mark` was re-created from 050's body with one guard: a mark made by one
+person is not replaced by another IC or the group's admin — the refusal names who marked it and when — while the
+maker may correct their own, the event's ops may correct anything, and the tick's automatic close may be corrected by
+any hand. `plan_progress` gained `marked_auto` so "the phone was there" is a fact about the writer rather than a
+missing name (deleting a profile used to turn a person's mark into the tick's), and `plan_ops` answers it, so the ops
+board says **by hand** for a press and **the phone was there** for the tick. The same pass fixed two screen bugs the
+audit found: the ops board's five-second poll wiped a refused write's sentence before anyone could read it (a write's
+error is sticky now, on both screens), and a refused mark left the stale row's buttons in place (the board re-reads
+after a refusal). `dev/checks/step28-mark-guard.sql` proves the door (32 assertions, four recorded bites: no guard, a
+null name treated as the tick, no ops bypass, the tick not flagged), `dev/checks/step28-here.mjs` proves the press on
+the screen (23 assertions over four tabs: one press, the write, a reload, the group's second IC, and the two writers
+side by side on the ops board). Screenshots: `shots/step28-here.png`, `shots/step28-arrived.png`,
+`shots/step28-ops.png`.
+
 ### Checking the schema without a database (`npm run test:db`)
 
 The bench's rules are decided in SQL, and until round 4 the only way to find out whether a migration was
