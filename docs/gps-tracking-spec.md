@@ -426,13 +426,27 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveM
 
 ### 12.5 Movements engine and ops view (merger Stage 7, 18 Oct)
 
+> **Deleted in step 25 (061).** This whole section describes the run-sheet movements engine as it was: its tables
+> (`movement_status`, `movement_routes`, `group_messages`), its functions (`move_step`, `ops_board`, `my_moves`,
+> `route_*`, `message_group`, `mark_in_position`), its Edge Function (`route-eta`) and its components (`useOps`,
+> `useGroupMessages`, `opsStatus`, `OpsSummary`, `OpsQueue`, `OpsDecision`, `CueChips`, and `LiveMap`'s clusters and
+> rings) are gone from the database and the repository. A plan session's staff view of the walk is `plan_ops` /
+> `PlanOps`, a table of moments rather than a drawing — see `docs/design/planning-implementation-plan.md`. The section
+> is kept as the record of what the plan replaced.
+
 - Tables (027): `movement_status` (PK session + movement + group; `state` waiting / active / done; `status` pending, on_track, at_risk, late, no_signal, arrived, arrived_late, missed, skipped; `cand_status` for the two-look rule; `planned_deadline`, `deadline`, `eta`, `spare_s`, `late_s`, `leave_by`, `remaining_m`, `speed_mps`, `basis` route / straight / inside, `moving_since`, `ics_inside / required / sharing / no_signal`, `arrived_at`, `handled_by`, `acked_status`, `snoozed_until`, `updated_at`), `movement_routes` (OneMap path per movement + group; no RLS policy: only `ops_board` hands routes out), `group_messages` (Realtime; the group's members and ops roles read), `event_roles.sector`.
 - Engine `move_step(session, now)` (pg_cron `gps-move-tick`, 5 s, via `move_tick`; needs the show of Stage 6): rows from `rs_moves`; per group the earliest unfinished movement is active. Deadline: cue start = when the cue is due (`due_at`; for a started cue `least(started, when the cue before ended)`), cue end = projected / real end, or the fixed time; minus `early_s`. Per IC (group members with `is_ic`): newest reading of the session, open presence in the zone, distance (`move_dist`: inside 0, < 50 m straight, within 50 m of the route along it, else straight × 1.3 / 1.4 / 1 in simulations), progress from the IC's earliest reading 50–90 s before. ETA k-th fastest (k = `min_ics` or ICs heard in 2 min), rounded up to 5 s. Arrived at the k-th (entered + `dwell_s`). Two looks must agree before a status changes (arrived, arrived late, missed and the first look apply at once).
 - Routes: `gps-route-eta` (30 s) posts to the Edge Function `route-eta` only when `route_due()`; the function claims up to 20 (`route_claim`), calls OneMap routing (`walk` / `drive`, polyline precision 5, else 6) and saves (`route_save`); an error is saved too (the straight line is used).
 - Ops view reads `ops_board(session, since)` every 4 s (full read first, then rows changed since the last read with a 10 s overlap; full read every minute and when the version changes). Buttons: `ops_handle`, `ops_ack`, `ops_snooze`, `message_group`, `show_keep_holding`; `set_marshal_sector` (Members). Client: `composables/useOps.js`, `useGroupMessages.js`, `utils/opsStatus.js`, `components/OpsSummary.vue`, `OpsQueue.vue`, `OpsDecision.vue`, `CueChips.vue`; `LiveMap` gets `opsActive` and `opsVisible` (clusters below zoom 16, rings + route lines).
-- Simulation: `sim_follow_plan` (called by `move_step` in simulation events) gives a virtual group with an active movement a new leg from where it stands to the zone's middle at the movement's pace, leaving 60 s before its leave by (`late_2min` +120 s); `wrong_zone` groups are left alone. `sim_plan_movements(event, sheet, cue)` adds one movement per virtual group to a Draft.
+- Simulation: `sim_follow_plan` (called by `move_step` in simulation events) gives a virtual group with an active movement a new leg from where it stands to the zone's middle at the movement's pace, leaving 60 s before its leave by (`late_2min` +120 s); `wrong_zone` groups are left alone. `sim_plan_movements(event, sheet, cue)` adds one movement per virtual group to a Draft. **Retired in step 24 (060):** `sim_follow_plan` is called by `sim_tick` and aims each group at its next on-site plan moment, `sim_plan_movements` is gone, and `move_step`/`move_tick` no longer exist.
 
 ### 12.6 IC phone: next move and pushes (merger Stage 8, 18 Oct)
+
+> **Partly deleted in step 25 (061).** The next-move half of this section (`my_moves`, `NextMoveCard`,
+> `useMyMoves`, `report_delay`, `mark_in_position`, `push_collect_moves`) went with the run-sheet engine; a member's
+> own moments are the Schedule page (`session_timetable`, step 16) and a plan push still opens `?next=1`, which now
+> lands there. The push *delivery* half (`push_queue`, `push_kick`, `send-reminders`, `claim_push_queue`,
+> `usePushNotifications`) is unchanged and is what the plan's pushes ride on.
 
 - Tables (028): `push_queue` (`user_id`, `event_id`, `session_id`, `kind` get_ready / leave_now / late / message / nogo, unique `dedup`, `title`, `body`, `data`, `sent_at`; RLS on, no policy, kept 2 days); `movement_status.delay_note / delay_at / delay_by`.
 - Queueing: `move_tick` → `move_step` → `push_collect_moves(session, now)` for real events. Recipients: members of the group with `is_ic` or `is_admin`. Dedup `kind:session:movement:group:user`. Get ready: `leave_by − 60 s ≤ now < leave_by`; Leave now: `leave_by ≤ now < leave_by + 5 min`; both only while not moving and nobody inside. Late: status `late` and (moving, or no leave by, or 60 s past it). `message_group` queues `message`; `push_collect_nogo()` (cron) queues `nogo` for zone alerts of the last 2 min in real events.
@@ -446,7 +460,9 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveM
 - `show_add_time`: refused (PT409, "<who> added +30 s … (2 s ago)") when someone else changed the same cue's time in the last 5 s.
 - Pushes (`push_collect_moves`): while `show_state.held_since` is set nothing about moves; 20 s into a hold kind `hold` ("Show on hold"); within 2 min after a resume kind `resume` to everyone told on hold (Leave now / Keep going / Leave at …); kind `next` when the group's previous movement arrived in the last 2 min; Get ready / Leave now keyed by code + leave-by + zone, not repeated when the leave-by moved less than 2 min, the zone is the same, or `next` / `resume` / `change` already said it; late once per code, a minute after `next` / `resume` / `change`. Push data has `code`, `zoneId`, `leaveBy`, `at`; tag `move-<code>-<group>`; kind `show` for hold / resume.
 - Version switch (`move_step` section 1): handled_by, acked_status, snoozed_until and the delay carry over by code + group; kind `change` "Change of plan" to ICs / admins of a group whose active movement is gone ("cancelled, wait for instructions") or goes to another zone.
-- `zones_guard_live` (before delete): refused while a live session's unfinished movement uses the zone.
+- `zones_guard_live` (before delete): refused while a live session's unfinished movement uses the zone. **Dropped in
+  step 25 (061)** with the movement it pointed at: a plan states positions as lat/lng, so a plan pins no zone, and
+  deleting a zone mid-event is no longer refused.
 - Radio: `groups.radio` (≤ 40 chars, `set_group_radio`, root / planner); `mark_in_position(session, movement, group, undo)` (ops or the group's IC / admin; basis `reported`, logged as kind `radio`; undo within 5 min, which also pushes "Correction: not in position yet" if a `next` went out); `show_missing_groups` counts an arrived movement; `report_delay` open to ops ("radio, <who>"). `ops_board` rows and `my_moves` have `radio`; `my_moves` also `can_report`, `is_ic`, `held_since`.
 - Phone: `ReminderMessagingService` draws kinds move / message / nogo / show itself when the app is open; `usePushNotifications` routes kind `show` to the card.
 

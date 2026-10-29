@@ -1,0 +1,612 @@
+{
+  "viewerPath": "/artifact/E3BCxpMCA1Fs6w2HJG6AoW",
+  "kind": "public",
+  "ver": "1792749594-bdac",
+  "title": "Planova",
+  "favicon": "🎨",
+  "icon": "Palette",
+  "tint": "violet",
+  "mode": "public",
+  "hasThumb": true,
+  "translateEnabled": true,
+  "shareSheetV2": true,
+  "installEnabled": true,
+  "public_view_count": 15,
+  "copyPageLinkEnabled": true,
+  "duplicable": true,
+  "dataSignInRequired": true,
+  "hot": true,
+  "seq": 88,
+  "files": [
+    {
+      "path": "SKILL.md",
+      "size": 16041,
+      "contentType": "text/markdown",
+      "sha256": "7b5b213ab3808034376a70884a0f2c1f44fbf6ef6f767d259ccdb814bf223ed6"
+    },
+    {
+      "path": "artifact-type/app.css",
+      "size": 353388,
+      "contentType": "text/css",
+      "sha256": "59dbf0a4cd49a33f342e914e46b1747d082b35581d7027f8059bb1d63f061177"
+    },
+    {
+      "path": "artifact-type/app.js",
+      "size": 4307219,
+      "contentType": "text/javascript",
+      "sha256": "3deedab618b9431de5a4a3b3f5367845425503c43c03f68905fc9d6db9d64cfe"
+    },
+    {
+      "path": "artifact-type/dc-runtime.js",
+      "size": 187897,
+      "contentType": "text/javascript",
+      "sha256": "3f160299989dc595cf434dac7b7f3e6fd20ed015a2d99e075c3eac09dffe0f10"
+    },
+    {
+      "path": "artifact-type/fast-edit-worker.js",
+      "size": 983903,
+      "contentType": "text/javascript",
+      "sha256": "18e7e4395b5e25f4a482f14c74fa91959d4772ce7ca3a23411abeb1505efc8b1"
+    },
+    {
+      "path": "artifact-type/fonts/anthropicons-fizzy-lake.woff2",
+      "size": 25316,
+      "contentType": "font/woff2",
+      "sha256": "6381a3311f9afc1acdd4e9b99b99f337dcc6029bb75cdae6ae653e5cb1f1ff87"
+    },
+    {
+      "path": "artifact-type/fonts/anthropicons-variable.woff2",
+      "size": 102336,
+      "contentType": "font/woff2",
+      "sha256": "b22ac48434f5c5c7641089f861e3e7d3c7854d0ca1c42653afa8f167e1f4843e"
+    },
+    {
+      "path": "artifact-type/reference/brand-colors.md",
+      "size": 2234,
+      "contentType": "text/markdown",
+      "sha256": "f451f1e68b640f2bbe4d15420339ddcb7a84595cb7d12e888caa1a6bd5bd4b3a"
+    },
+    {
+      "path": "artifact-type/reference/brand-typography.md",
+      "size": 1534,
+      "contentType": "text/markdown",
+      "sha256": "d3aa7f635e355d674680a54fe305d4efc66463c25ec04e0a1243f8937a9ece20"
+    },
+    {
+      "path": "artifact-type/reference/craft.md",
+      "size": 15978,
+      "contentType": "text/markdown",
+      "sha256": "fe43de97c87c5488557f3a01028a9d9332a23c0629cd55dae42ec6b3c202b08d"
+    },
+    {
+      "path": "artifact-type/reference/design-system-components.md",
+      "size": 12348,
+      "contentType": "text/markdown",
+      "sha256": "be6d36c90371cd28dccc509d4e1cf7bd65f1b8253de8cd4d084123303dcebdb7"
+    },
+    {
+      "path": "artifact-type/reference/diagrams.md",
+      "size": 9638,
+      "contentType": "text/markdown",
+      "sha256": "c5747e7ab8d8bd04e7ac484f10be02728b9f8f2df1c024024d1d218be9bb20a7"
+    },
+    {
+      "path": "artifact-type/reference/format.md",
+      "size": 11295,
+      "contentType": "text/markdown",
+      "sha256": "b509b31cc2db41a7ddc247f67b164c0f6f755e3f07d909ad3baf20a27718b771"
+    },
+    {
+      "path": "artifact-type/reference/google-fonts-families.json",
+      "size": 26440,
+      "contentType": "application/json",
+      "sha256": "82a204043c9adf9d3134fa1850513921b4269a3358671a2d6d8831f447b2ed4c"
+    },
+    {
+      "path": "artifact-type/reference/google-fonts-notices.json",
+      "size": 60582,
+      "contentType": "application/json",
+      "sha256": "b764de9e3b7a62974d60604d0a051a014a9a8e070001835a0964782473b6af64"
+    },
+    {
+      "path": "artifact-type/reference/google-fonts-reserved.json",
+      "size": 7403,
+      "contentType": "application/json",
+      "sha256": "ce9fc8edddf7222dab49edbdae00b8f7f2bc9c99c8832648e61dd93a0140f9be"
+    },
+    {
+      "path": "artifact-type/reference/print.md",
+      "size": 5443,
+      "contentType": "text/markdown",
+      "sha256": "ed7b2b2c069c0fb164201afe15041158f2c5427bed2cb6c25a84876d51ac0253"
+    },
+    {
+      "path": "artifact-type/reference/questions.md",
+      "size": 4419,
+      "contentType": "text/markdown",
+      "sha256": "34139a6b25e7b6048b8c98afbb7892116c9c3dc7369f22b5cf9c88d06cab108e"
+    },
+    {
+      "path": "artifact-type/reference/view-state.md",
+      "size": 8779,
+      "contentType": "text/markdown",
+      "sha256": "2b40c2de9bda3130f15d5c4fb5ec8529224d2eea8bf7df6426205dd52bbcb87c"
+    },
+    {
+      "path": "artifact-type/thumbnail/thumbnail.json",
+      "size": 359,
+      "contentType": "application/json",
+      "sha256": "eb391285e03f9f372be5219759be433cebeee2deda20841593a06f050c3fbb9c"
+    },
+    {
+      "path": "index.html",
+      "size": 34986,
+      "contentType": "text/html",
+      "sha256": "d79c709af47aa93d9c12ac3103f45057ffcc0a012a005245361860df67f370c5"
+    },
+    {
+      "path": "project/D-Admin-Attendance-Absent.dc.html",
+      "size": 848,
+      "contentType": "text/html",
+      "sha256": "a6da093285bb3d98b4bc10cdf39b64fe150f3424ea3b2e75a7e214bedaff7f91"
+    },
+    {
+      "path": "project/D-Admin-Attendance-Present.dc.html",
+      "size": 850,
+      "contentType": "text/html",
+      "sha256": "1a01ff59840b74d6eb26d5b5a9cb5c77a224d57fef23fa7177ecfa3d0fe9da57"
+    },
+    {
+      "path": "project/D-Admin-Attendance.dc.html",
+      "size": 835,
+      "contentType": "text/html",
+      "sha256": "5e15c2fe99ff0bfcde1f22e7f60146052750fb63c65fe79576de19bf81daf82c"
+    },
+    {
+      "path": "project/D-Admin-Group.dc.html",
+      "size": 55239,
+      "contentType": "text/html",
+      "sha256": "a9fdec92df252443a5748b4887445c0c2bb06b59be3fc6c7a4419ff4f8ed1255"
+    },
+    {
+      "path": "project/D-Admin-Members-Blocked.dc.html",
+      "size": 826,
+      "contentType": "text/html",
+      "sha256": "a3e44b2a78449bd729ac298a06306e694abc54737330abbf489fc4649587270f"
+    },
+    {
+      "path": "project/D-Admin-Members.dc.html",
+      "size": 23167,
+      "contentType": "text/html",
+      "sha256": "572ddaae92ad2d30580e4bd7f7bc5b8e4a54e174e2e3697124755395d4f1e75f"
+    },
+    {
+      "path": "project/D-Admin-Route.dc.html",
+      "size": 821,
+      "contentType": "text/html",
+      "sha256": "4e369241f6839d9ae9e2bfc0369cb54ef1c0ae1918781e4d2267fa2a892b3739"
+    },
+    {
+      "path": "project/D-Create-CSV.dc.html",
+      "size": 848,
+      "contentType": "text/html",
+      "sha256": "1a44633c3bba63dcd62cb7193f5caf93150fcbcbefc4ab261db875418a24538e"
+    },
+    {
+      "path": "project/D-Create-Details.dc.html",
+      "size": 863,
+      "contentType": "text/html",
+      "sha256": "141241b041a80d7c6aebadeb03915e6b957c838299aa6c2304aef0f08348313d"
+    },
+    {
+      "path": "project/D-Create-Done.dc.html",
+      "size": 829,
+      "contentType": "text/html",
+      "sha256": "803aa4c580881b460b5a30eb6b55e0c3959af98e39391349c064945650134299"
+    },
+    {
+      "path": "project/D-Create-Groups.dc.html",
+      "size": 854,
+      "contentType": "text/html",
+      "sha256": "722da63cf679add42cdc9a1c95ebd386a0414a70d58735b60bc7d2cf85602fbd"
+    },
+    {
+      "path": "project/D-Create-Invite.dc.html",
+      "size": 856,
+      "contentType": "text/html",
+      "sha256": "4931e08a1b3f34c25c49835d94b4d99656c91bbf500a638014c1cb23eb138877"
+    },
+    {
+      "path": "project/D-Create-Participants.dc.html",
+      "size": 855,
+      "contentType": "text/html",
+      "sha256": "0a7b93ed7a1fd21b0e8bc9ed362eb5edd5e547d12ccf74c639f2ee75ff9127b8"
+    },
+    {
+      "path": "project/D-Create-Review.dc.html",
+      "size": 848,
+      "contentType": "text/html",
+      "sha256": "2109f73fcc8fc6968743beb5a886599f6493dfce264f54e22cbcb79da2bd0b34"
+    },
+    {
+      "path": "project/D-Create-Wizard.dc.html",
+      "size": 75424,
+      "contentType": "text/html",
+      "sha256": "42813b1afa07e6d05a269e58c9ea8f0c01ff5091ea58ca16ad7cf5e90eb9b91b"
+    },
+    {
+      "path": "project/D-IC-Now.dc.html",
+      "size": 819,
+      "contentType": "text/html",
+      "sha256": "ed9c0acb65be4bc4bde830e3e8656654537205481b5754e41211b0a555a49789"
+    },
+    {
+      "path": "project/D-Join.dc.html",
+      "size": 4599,
+      "contentType": "text/html",
+      "sha256": "830b63483d080fb8494941b3b5e4b0f758f8e026a367dafb381824180a5bf2d0"
+    },
+    {
+      "path": "project/D-MyEvents.dc.html",
+      "size": 9847,
+      "contentType": "text/html",
+      "sha256": "a34b4c6b56d1e59fa0de95c25135bc655dec38f7c779a83c07b4960cc0389779"
+    },
+    {
+      "path": "project/D-Participant-Attendance.dc.html",
+      "size": 860,
+      "contentType": "text/html",
+      "sha256": "f7b628b5e7c6b103f1ffaea5588bc7a82e1a3ab1c9023ef4abb50d1d3dedb33d"
+    },
+    {
+      "path": "project/D-Participant-Home.dc.html",
+      "size": 837,
+      "contentType": "text/html",
+      "sha256": "3fd562a59ad4739a408675f5640370d55c388a146fb11a8bf1fd431e5bf913ba"
+    },
+    {
+      "path": "project/D-Participant-Mark.dc.html",
+      "size": 845,
+      "contentType": "text/html",
+      "sha256": "9c04d39a47690fdf1ff960c7fee7386afb7b59df7d1984a1930fce62f5c8c872"
+    },
+    {
+      "path": "project/D-Planner-Live-NoSignal.dc.html",
+      "size": 868,
+      "contentType": "text/html",
+      "sha256": "fff3f3ba60df4da0e5383370fac45f21fe13554d1f3a900b214fae546cd34c42"
+    },
+    {
+      "path": "project/D-Planner-Live.dc.html",
+      "size": 847,
+      "contentType": "text/html",
+      "sha256": "4217f307d47d7ea28669e0fe32772cabfc3771d2c47cd43ad17bf2dfd0da35d6"
+    },
+    {
+      "path": "project/D-Planner-Overview.dc.html",
+      "size": 835,
+      "contentType": "text/html",
+      "sha256": "3f5a473b2583e477cfbc12f7a7501a2789b61e70b7de8a32a52fd8a897902eae"
+    },
+    {
+      "path": "project/D-Planner-Playback.dc.html",
+      "size": 830,
+      "contentType": "text/html",
+      "sha256": "8421647ab74f24e50174a6a4a24f4fbdcb916a595a44bc6d26219b03b97ecc0a"
+    },
+    {
+      "path": "project/D-Planner-Timeline-Errors.dc.html",
+      "size": 860,
+      "contentType": "text/html",
+      "sha256": "ea723397b5f3c5bc3860aefdbb2771b558ad1e72821a200d64c8a25e9031ff95"
+    },
+    {
+      "path": "project/D-Planner-Timeline.dc.html",
+      "size": 123411,
+      "contentType": "text/html",
+      "sha256": "8adf94a8d75de72619d26a5e294a77e5565f8ca346d8e07c882ae6db9126d2ac"
+    },
+    {
+      "path": "project/D-Planner-Zones.dc.html",
+      "size": 17718,
+      "contentType": "text/html",
+      "sha256": "38b82383706a63148e62a9f10f613405c683d9b29e0db451b2610afa6b5f50b2"
+    },
+    {
+      "path": "project/D-Root-AsParticipant.dc.html",
+      "size": 869,
+      "contentType": "text/html",
+      "sha256": "25622e0113728176199cb3a3d0cdb5b5dd15510683537448ecbbae5916dacab3"
+    },
+    {
+      "path": "project/D-Root-Groups.dc.html",
+      "size": 14697,
+      "contentType": "text/html",
+      "sha256": "e3b82d091cdd37c9800520c94ad41e7a176e0e5c93eb67d01ed5cd4bf0a3116e"
+    },
+    {
+      "path": "project/D-Root-Overview.dc.html",
+      "size": 13837,
+      "contentType": "text/html",
+      "sha256": "0868dddbdd224b3fd72255cbf04d0b64eb9b91b696e095736ce5ce92b62c0752"
+    },
+    {
+      "path": "project/D-Root-Participants.dc.html",
+      "size": 16014,
+      "contentType": "text/html",
+      "sha256": "f62d1a9f612b4d4ee5700154c933c582f29a224ebb21295b97212691feef4513"
+    },
+    {
+      "path": "project/D-Stress-Live-Late.dc.html",
+      "size": 866,
+      "contentType": "text/html",
+      "sha256": "02b030830b4b8d66018bf6c388718963e55495f8de9d75660421b14ec3e0d14f"
+    },
+    {
+      "path": "project/D-Stress-Live.dc.html",
+      "size": 854,
+      "contentType": "text/html",
+      "sha256": "2039dc83d6e67c93e1d32b6afc97a9dad55c746cc46be1733821d62fc284fdb3"
+    },
+    {
+      "path": "project/D-Stress-Overview.dc.html",
+      "size": 849,
+      "contentType": "text/html",
+      "sha256": "f2d48549032d0a1b3886e876e41bb5fc21e9a73a4eae6763d9e3efaf31f47a87"
+    },
+    {
+      "path": "project/D-Stress-Plan.dc.html",
+      "size": 840,
+      "contentType": "text/html",
+      "sha256": "a713507a5318785edeeb96ed2cefc54d3c132037f62b8825350ed00fa9a92ff5"
+    },
+    {
+      "path": "project/D-Stress-Playback.dc.html",
+      "size": 837,
+      "contentType": "text/html",
+      "sha256": "1bef70da24d5a7138781e0a958dab0d92992d59d466f9bd1e126a6a52a399261"
+    },
+    {
+      "path": "project/M-Admin-Attendance.dc.html",
+      "size": 922,
+      "contentType": "text/html",
+      "sha256": "b93af9ba00bb9b0f8d369dac84eb95ed1040f98614452aba38860bdae2ce056c"
+    },
+    {
+      "path": "project/M-Admin-Group.dc.html",
+      "size": 912,
+      "contentType": "text/html",
+      "sha256": "b707f172794686fa03cbbb07eb92cd1cebf5c06ef432ae4f1168c703603b386e"
+    },
+    {
+      "path": "project/M-Admin-Members-Error.dc.html",
+      "size": 896,
+      "contentType": "text/html",
+      "sha256": "3b2bf8e4ffca3cf263ab81390419c2de8c0f8d5770ec939b486ac961291c2f1b"
+    },
+    {
+      "path": "project/M-Admin-Members.dc.html",
+      "size": 894,
+      "contentType": "text/html",
+      "sha256": "2e4d02439454f698675ee3d31ef2fbca2e91d32f94a9070e62bb347e27dffd47"
+    },
+    {
+      "path": "project/M-Attendance-Late.dc.html",
+      "size": 927,
+      "contentType": "text/html",
+      "sha256": "a7c21737e685a565e21c6088cffee52780bc55ce752f1a3b931bdc3f5154fcd2"
+    },
+    {
+      "path": "project/M-Create-Details.dc.html",
+      "size": 910,
+      "contentType": "text/html",
+      "sha256": "71584ef6f962d600ffbb10d843ef4c9ea60cd9c88343530a9f4f7112406d9c1f"
+    },
+    {
+      "path": "project/M-Create-Errors.dc.html",
+      "size": 917,
+      "contentType": "text/html",
+      "sha256": "9077c50b0d243ffb792659744285a5ea88ab0bb82183df79ee259d03ae7ed42b"
+    },
+    {
+      "path": "project/M-Create-Groups.dc.html",
+      "size": 907,
+      "contentType": "text/html",
+      "sha256": "8090ea4e10cd43310f1122c270643226433b60d006f5102e34f6d68fbd7ee200"
+    },
+    {
+      "path": "project/M-Create-Participants.dc.html",
+      "size": 907,
+      "contentType": "text/html",
+      "sha256": "d1ffdc52a5e792bbbbc0f38165d23e924f0f806d419f0b8bf1a92e80f6bf7272"
+    },
+    {
+      "path": "project/M-Create-Review.dc.html",
+      "size": 907,
+      "contentType": "text/html",
+      "sha256": "34b5e67776fa0785b1e98ccf5b1c4e06e6ecec07d7e63c2e123f784b6d2768e0"
+    },
+    {
+      "path": "project/M-IC-Attendance.dc.html",
+      "size": 915,
+      "contentType": "text/html",
+      "sha256": "91b8a902f6616d9beaabd16c86f069cff5a5bdc2f361064e2fb30b30eab7433a"
+    },
+    {
+      "path": "project/M-IC-Location-Off.dc.html",
+      "size": 918,
+      "contentType": "text/html",
+      "sha256": "b3317738d159f3117a54aaaa5d8b628bce8f1a278a617d48b10a8005aa78046b"
+    },
+    {
+      "path": "project/M-IC-Now.dc.html",
+      "size": 898,
+      "contentType": "text/html",
+      "sha256": "207836f4297cd7945e8575413d63c2a97bd466d2d3faf0b0ae93749c0e76bd9e"
+    },
+    {
+      "path": "project/M-Join.dc.html",
+      "size": 3095,
+      "contentType": "text/html",
+      "sha256": "50091ba536ba593aab547f078db6b1b8a7c83f384a45373ce6a0fd173bbc5c53"
+    },
+    {
+      "path": "project/M-MyEvents.dc.html",
+      "size": 6336,
+      "contentType": "text/html",
+      "sha256": "0700e27631e5c0499fbbc7245f68cc79519eadf676834c9d633b63dbf9bed302"
+    },
+    {
+      "path": "project/M-Participant-Attendance.dc.html",
+      "size": 940,
+      "contentType": "text/html",
+      "sha256": "5b78d20e6f9cf388e8f14f87cae50897ca6f29c104aa19f7ad32542de6deae46"
+    },
+    {
+      "path": "project/M-Participant-Checkin.dc.html",
+      "size": 952,
+      "contentType": "text/html",
+      "sha256": "75a9816ff9e5388b5fb76a27cde881483154780871e2f5d08e281063d72b2c93"
+    },
+    {
+      "path": "project/M-Participant-Home.dc.html",
+      "size": 918,
+      "contentType": "text/html",
+      "sha256": "3488d7f9a49985a088802fd74d5ea8b5a9f33ffc2d3ede17b3747ec677513f7c"
+    },
+    {
+      "path": "project/M-Planner-Live-Detail.dc.html",
+      "size": 941,
+      "contentType": "text/html",
+      "sha256": "cd52ac281d1b7d25871934f303d3fa49bf87d688b0a2e8e7aadb846c6363f3dd"
+    },
+    {
+      "path": "project/M-Planner-Live.dc.html",
+      "size": 926,
+      "contentType": "text/html",
+      "sha256": "c0a53426fc28ccdccc9b0468cd68d28537a652d3524f366cbe11359badb72b5a"
+    },
+    {
+      "path": "project/M-Planner-Overview.dc.html",
+      "size": 914,
+      "contentType": "text/html",
+      "sha256": "f90359195ec0139b0778ea206a75c1d129fe2df38c549139e30f5dc38595629f"
+    },
+    {
+      "path": "project/M-Planner-Playback.dc.html",
+      "size": 909,
+      "contentType": "text/html",
+      "sha256": "8e9c2fdcad31336a6371483d66dafe56fd83ec34c645857d9636243c174ee54a"
+    },
+    {
+      "path": "project/M-Planner-Timeline.dc.html",
+      "size": 927,
+      "contentType": "text/html",
+      "sha256": "c1ee90b698a330b6ee8637b48add104817b6cb696fcb496b8a02514b4e4380b9"
+    },
+    {
+      "path": "project/M-Planner-Zones.dc.html",
+      "size": 8063,
+      "contentType": "text/html",
+      "sha256": "2259c936137350328de45f83e2459c4d76c29f7cae4f3c1c6053abaf09f8c93f"
+    },
+    {
+      "path": "project/M-Root-AsParticipant.dc.html",
+      "size": 931,
+      "contentType": "text/html",
+      "sha256": "0989eaffee8a00b3194f1bb830b7b34f7fb8d48cfdf96cedb20ee4538b6e47a3"
+    },
+    {
+      "path": "project/M-Root-Groups.dc.html",
+      "size": 6283,
+      "contentType": "text/html",
+      "sha256": "80afd5572ceb95750d50de29284194214ccaaecd531835a3e4727d22b3addcf7"
+    },
+    {
+      "path": "project/M-Root-Invite.dc.html",
+      "size": 3961,
+      "contentType": "text/html",
+      "sha256": "20ef7b69619bf41040cec39be16dc9b8ea9cf3a3e7be7fb002bbb3dec9305123"
+    },
+    {
+      "path": "project/M-Root-Overview.dc.html",
+      "size": 6895,
+      "contentType": "text/html",
+      "sha256": "7798f354e241fce59484a490528c221b0cf9618d4315e705b3c15e1c4af57713"
+    },
+    {
+      "path": "project/M-Root-Participants.dc.html",
+      "size": 6153,
+      "contentType": "text/html",
+      "sha256": "f7664f2a70e22cd30f6ca9317c29eec81cfc19338d1249e8139dc46479a71404"
+    },
+    {
+      "path": "project/M-SignIn.dc.html",
+      "size": 2703,
+      "contentType": "text/html",
+      "sha256": "ec3cb726e5bb0e8dc6fe68298913c80ec56cd5660bae1393e84c645b899153f8"
+    },
+    {
+      "path": "project/M-Stress-Live.dc.html",
+      "size": 933,
+      "contentType": "text/html",
+      "sha256": "bbd1212c91d5b389fbca69a17c52d0ed90caddeaa2db6d51c56e2eb28bfbf302"
+    },
+    {
+      "path": "project/M-Stress-Overview.dc.html",
+      "size": 917,
+      "contentType": "text/html",
+      "sha256": "2a985f1addef84af10cf9433605df34ad30f8fbb276eb125672d69746daa34f9"
+    },
+    {
+      "path": "project/M-Stress-Plan.dc.html",
+      "size": 908,
+      "contentType": "text/html",
+      "sha256": "e914f5712b0b83e94a2e2554a7f1b8444f692da6dab252f355229886a5b06b4b"
+    },
+    {
+      "path": "project/M-Stress-Playback.dc.html",
+      "size": 916,
+      "contentType": "text/html",
+      "sha256": "4cd3673e6fc2c575b49cef8b66e9a401a5d2d46f0dd6428bb7b717591ff7dc88"
+    },
+    {
+      "path": "project/Main.dc.html",
+      "size": 5088,
+      "contentType": "text/html",
+      "sha256": "b927eb10277229c4fa6015066612b1b8afbe68b9c088a31ab49b09845092bdc7"
+    },
+    {
+      "path": "project/canvas.json",
+      "size": 18983,
+      "contentType": "application/json",
+      "sha256": "0c1e87313fa91e455c98e7f81f3dae51155cef24d8e196d3f505bfaaa61e35a1"
+    },
+    {
+      "path": "project/ds/planova/components/bundle.css",
+      "size": 69006,
+      "contentType": "text/css",
+      "sha256": "ec39fcd5babf6f851eedb983bd41dae58165c59e06dc8b9860c0ced38e097035"
+    },
+    {
+      "path": "project/ds/planova/tokens.json",
+      "size": 49783,
+      "contentType": "application/json",
+      "sha256": "f19bf6e63ac2d0783de7ac0e41204705d7dd073e25a9522866fa6f03e2300a43"
+    },
+    {
+      "path": "project/planova-app.css",
+      "size": 47277,
+      "contentType": "text/css",
+      "sha256": "0d14fd14c07af452b43aed053ebf4602cb91776aaf7b7e1f9096ed76aae3ef8f"
+    },
+    {
+      "path": "project/planova-tokens.css",
+      "size": 5742,
+      "contentType": "text/css",
+      "sha256": "f10c0408b8a76bde87e709c8e8d5e21cb2d45bf4818eb59246c4bc4169189eea"
+    }
+  ],
+  "filesNarrowed": true,
+  "serverNow": 1793101476514
+}
