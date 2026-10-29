@@ -529,6 +529,25 @@ the screen (23 assertions over four tabs: one press, the write, a reload, the gr
 side by side on the ops board). Screenshots: `shots/step28-here.png`, `shots/step28-arrived.png`,
 `shots/step28-ops.png`.
 
+A follower also has a map of their own walk now. The Map tab is `PlanRoute` for everyone the plan board is not for (a
+member, an IC, a group admin, a marshal); root and planner keep the zone editor there. It draws the venue's zones from
+`event_zones` with the Live map's own colours, then one dashed line per group in the group's colour through the moments
+that group **stated** — an off-site moment breaks the line rather than being drawn through, and a carried frame does not
+break it — a dot on each of those moments labelled with its clock time and its place, the moment the clock is on ringed,
+the next one flagged, and a card over the map ("Next 7:40 pm · Main Gate · in 12 min") that centres on the moment it
+names. Nothing here is live position (that stays on the Live page) and nothing here is routing: the line is the plan.
+`session_timetable` gained trailing `lat` and `lng` — the moment's own drawn point, dropped and re-created because the
+return type changed, with 062's body kept — so the map reads the call the schedule already polls rather than a second
+door, and the coordinates are null exactly where 062's join finds no point (a carried frame, an off-site moment); a route
+point in open ground has a point and no place. The schedule's place is now a **link** to the map on that moment
+(`/events/:id/map?t=300`), so the timetable stays a list and step 16's "this page asks for nothing but the timetable"
+still holds. `dev/checks/step29-route.sql` proves the read at the database (32 assertions, three recorded bites: the
+engine's scope, the carried point, the off-site point), `dev/checks/step29-route.mjs` proves the screen (51 assertions
+over seven tabs: Gate Crew's member, the schedule's link and the same address opened cold, Sound's member, two events
+with nothing to draw — never started, and running without a plan — and the planner's board of the same walk for
+comparison). Screenshots: `shots/step29-route-gate.png`, `shots/step29-route-sound.png`,
+`shots/step29-schedule-link.png`, `shots/step29-route-empty.png`, `shots/step29-board.png`.
+
 ### Checking the schema without a database (`npm run test:db`)
 
 The bench's rules are decided in SQL, and until round 4 the only way to find out whether a migration was

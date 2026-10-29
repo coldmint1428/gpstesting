@@ -1,11 +1,12 @@
-# Planning stage — implementation plan (v27)
+# Planning stage — implementation plan (v29)
 
-Twenty-eight steps. v6's decisions stand; v7 is the result of a third audit round that asked a different question:
+Twenty-nine steps. v6's decisions stand; v7 is the result of a third audit round that asked a different question:
 not *is the design right* but *will each step actually execute*. Nine findings, two blockers, all folded in below.
-v8–v27 are the same plan with the finished steps' **Done** blocks written: what now exists, the command that
+v8–v29 are the same plan with the finished steps' **Done** blocks written: what now exists, the command that
 proves it, what the step found, and what it left owing. Steps 26, 27 and 28 are the ones added after the
-twenty-five were closed: they come from using the thing, not from the plan, and the last one is the first about the
-person pressing rather than the phone deciding.
+twenty-five were closed: they come from using the thing, not from the plan, and the last of them is about the
+person pressing rather than the phone deciding. Step 29 is the first written before it was built, and the last one
+in the list: a follower has a map of their own walk.
 
 **Your decisions, unchanged:** impossibility is cumulative (25 m per frame step, so 3 frames = 75 m); verification
 is per group per frame with bulk toggles; no deadlines — a key time is a frame; multi-select drag, weighted
@@ -16,16 +17,17 @@ states and undo-across-publish are out.
 
 ## Where this is
 
-**All twenty-eight steps are done.** Step 25 deleted the run-sheet stack, so the plan is the only engine left in the
-product; step 26 made a timetable row say *where* the moment is; step 27 made a moment close itself when the IC's
-phone is close enough, with a radius that is the IC's own; step 28 gave the group's IC a press of their own ("we're
-here") and made a mark belong to the person who made it. The work was done one step at a time and stopped for
-review after each.
+**All twenty-nine steps are done.** Step 25 deleted the run-sheet stack, so the plan is the only engine left in the
+product; step 26 made a timetable row say *where* the moment is; step 27 made a moment close itself when the IC's phone
+is close enough, with a radius that is the IC's own; step 28 gave the group's IC a press of their own ("we're here") and
+made a mark belong to the person who made it. Step 29, the last, gives the follower the picture the whole stage has
+been drawing for other people: the walk their group is meant to take, on the venue's zones, and nothing of any other
+group. The work was done one step at a time and stopped for review after each.
 
 | | |
 |---|---|
-| ✅ done | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 |
-| ▶ next | nothing in this plan — the debts below are the next list |
+| ✅ done | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 |
+| ▶ next | nothing in this plan. What is still owed is named in each step's **Owing** line, and the two candidates for a step 30 are there: the planned line under the live map, and the ops board's "change this mark" control |
 
 When a step finishes, its block below gains a **Done** line saying what now exists and the command that proves it.
 
@@ -156,7 +158,7 @@ When a step finishes, its block below gains a **Done** line saying what now exis
 
 ---
 
-## The 28 steps
+## The 29 steps
 
 ### Infrastructure first
 
@@ -2363,6 +2365,115 @@ intended, with "the publisher or another ops hand" the only correction path.
 
 ---
 
+**29. The follower's own map** — M, needs 16, 26 — **DONE** (065)
+
+A member, an IC or a marshal opens the Map tab and sees the walk their group is meant to take — the line through their
+own group's moments, on the venue's zones — and nothing of any other group.
+
+**The gap this closes.** The Map tab was `EventPagePlaceholder` for every role but root and planner (`EventView.vue`,
+whose condition was `!canManage`): it printed "the event map: zones and areas, view only" and drew nothing, and a
+**marshal** kept the same stub. The one read a follower had — `session_timetable` — answered the moment's place *name*
+and not its point (062), so even with a map there would have been nothing to join up. The walk was drawn only where the
+walk is drawn. That placeholder was the last page still using the component, so it is gone with this step.
+
+**What now exists — the screen.** `PlanRoute.vue` is mounted on the Map tab for everyone the board is not for
+(`page === 'map' && !canManage`); root and planner keep the zone editor there. It draws the venue's zones from
+`event_zones` — the call `LiveMap` already makes for the same person, with the Live map's own `areaStyle`, so the venue
+keeps one palette whichever map a person opens — then the walk: one dashed line per group in the group's colour, a dot
+on every *stated* on-site moment labelled with its clock time and its place, the moment the clock is on ringed, the next
+one flagged. An off-site statement **breaks** the line instead of being drawn through (046, step 10): the group is not
+on the map then, and the break is the plan's own sentence. A header card — "Next 7:40 pm · Main Gate · in 12 min" —
+floats over the map and centres it on the moment it names. The schedule gains one **link**, not a map: a row's place
+opens the Map tab on that moment (`?t=300`), and a row with no place has no link, so step 16's timetable stays the list
+it is and its assertion that the page asks for nothing but the timetable keeps holding.
+
+**What now exists — the read.** `session_timetable` gains **`lat`** and **`lng`**: the moment's own stated point, null
+where 062's join finds no point at all — a frame that only carries the group forward, and an off-site statement. The
+join is 062's, unchanged, so the place and the point come from the same row of `plan_positions` and cannot disagree.
+R2: the return type changes, so DROP + CREATE + re-GRANT, the body copied from 062 (R8), the grants named again (R4).
+No new function and no new grant surface: the map reads the call the timetable already makes, thirty seconds apart, so
+the two screens share one poll and "only your group" stays in the one place it is proved (040's scope inside
+`session_status`, 052). A second read was rejected for the reason step 16's finding gives — a second door is a second
+place the scope can drift.
+
+**The direction of the rule, which this step first wrote backwards.** A null point always has a null place, and a place
+always has a point — but a point may stand in **no zone at all**. A route point in open ground is a point and not a
+place (062), so "null exactly when the place is null" is false on the first real walk; the check asserts the three
+directions separately (1e–1f), and the read's own comment says so.
+
+**Fixture.** `step29-route.sql` builds its own event inside a transaction and rolls it back: two groups, a live session
+opened through the product's own doors (`plan_publish`, then `start_event`), and a five-frame walk in which Gate Crew is
+at the gate, 20 m north in open ground, carried, off site, and at the stage, while Sound walks a parallel lane 33 m west
+with a point at every frame. `step29-route-prep.sql` is the browser bench of the same shape, with T+0 five seconds before
+it commits, so +0:00 is the moment the clock is on and +5:00 is the next one the card names.
+
+**Done when, at the database.** `dev/checks/step29-route.sql` — one transaction, rolled back, **32 assertions**.
+**1**: ten rows for the planner; Gate Crew's +0:00 answers the plan's point and the gate's place; the carried frame
+answers no point and no place; the off-site moment answers `not_required` and no point *while keeping its coordinate in
+`plan_positions`*; a route point answers a point and no place; lat and lng are null together and a null point never has a
+place; the walk's far end is the stage; three points for Gate Crew, five for Sound. **2**: a Sound member reads five
+rows, none of Gate Crew's, and `session_status` called straight answers the same five — the engine is scoped, not the
+wrapper. **3**: a Gate Crew member reads their own five, two of them without a point (the frames the map needs to know
+the walk stops). **4**: a marshal reads ten, and the carried frame is still null in that read. **5**: an outsider is
+refused by both the timetable and the engine. **6**: `anon` cannot execute and `authenticated` can.
+
+**Proven to bite, three times** (each restored before the next run, the check then re-run green, the ledger showing 0
+drifted). `session_status`'s scope replaced by `where true` → `FAIL 2a: the Sound member read 10 rows`. 065's point join
+carried forward from the last on-site statement instead of matched by frame → `FAIL 1c: a carried frame answered the
+point 1.33018, 103.774, expected none`. 065's `and pp.state = 'on_site'` deleted → `FAIL 1d: an off-site moment answered
+the point 1.33054, 103.774, expected none`.
+
+**Done when, through the screen.** `dev/checks/step29-route.mjs` — **51 assertions over seven tabs**. Gate Crew's member
+sees three dots, one line, no dot of Sound's, labels naming the gate and the stage, a next card naming the next moment and
+its place, the moment the clock is on marked, and a page that asked the timetable for the points and never asked for the
+plan's frames or positions. The schedule offers a link on the three placed moments and none on the carried or off-site
+rows; following it opens the map on that moment, marks it, and the same address opened **cold** lands on it again — the
+focus is in the URL, not in the click. Sound's member sees five dots and one line, **none** of Gate Crew's: the pair of
+tabs proves the scope through the interface, not by hiding elements. Two more tabs are the sentences a map must say
+instead of drawing nothing: an event that has never been started ("No schedule yet, so there is no walk to draw") and one
+running without a plan ("This event is running without a plan") — and in both the map is **not drawn** (its box is zero
+high) and there is nothing on it. The planner's board of the same walk is the last tab, for comparison. Evidence:
+`shots/step29-route-gate.png` (the follower's map), `shots/step29-route-sound.png` (the other follower's, with no trace of
+the first), `shots/step29-schedule-link.png` (the place as a way to the map), `shots/step29-route-empty.png` (the sentence
+instead of an empty map) and `shots/step29-board.png` (the same walk on the board, for the people who draw it).
+
+**Found while doing it:** findings 114–119. The first version created the map in the same tick the rows arrived, before
+`v-show` had put the stage in the layout: Leaflet measured **zero**, `fitBounds` framed the walk for a viewport nobody
+had, and the map opened at the minimum zoom on the wrong part of the island with its dots at negative coordinates — the
+screenshot was a grey box (114). The same map was given its first view with `setView(…, 16)`, which on a fresh map starts
+a **zoom animation** while `getZoom()` still answers the old zoom; the walk was drawn and framed during it, so the polyline
+was computed for zoom 12 (`d` was `M0 0`) and the fit that followed landed on layers placed for the zoom the map was
+leaving. The first view is instant now, as every fit on the board has been since finding 39 (115). The plan's own rule was
+written **backwards** before there was code to check it: `lat`/`lng` are null exactly where 062's join finds no point, but
+a route point in open ground has a point and **no place**, so "null exactly when the place is null" fails on the first real
+walk; the check asserts the three directions separately and the read's comment says which way the rule runs (116). And every
+dot was labelled only **under a mouse**: the labels were `opacity: 0` until hover, so the step's own sentence — every dot
+labelled with its clock time and its place — was true of the DOM and not of the screen (117). The empty-state tabs then
+found two more, in the empty states themselves: an event that has never been started sat on "Reading your route…" for
+ever, because `loaded` was only ever set by a read and there was nothing to read (118); and an event running without a
+plan asked the timetable anyway, and the engine's "not running a plan" came back as a **console error** on a page that had
+already decided there was nothing to show (119). Both are answered before the read now.
+
+**Suite.** `step29-route.sql` **32**; the neighbours re-run green: **step16-schedule** (with its prep, 69) and
+**step26-place** (with its prep, 12); browser **step29** 51 (7 tabs); `npm run test:db` **322**; `npm run test:sheet`
+**58**; `npm run build` clean; ledger **65 files, 65 applied, 0 drifted**.
+
+**What it is not.** No live position on this tab (that stays the Live page); no walk-time or distance estimate; no
+routing — the line is the plan, not a pathfinder; no editing; the IC's press stays on the schedule. The live map's
+planned line *underneath* the person's dot is deliberately **not** here: same data, a thin layer, but a second screen's
+change, and it should be seen working on the first one before it is copied. That is the first candidate for a step 30.
+
+**Owing.** A marshal's map draws **every** group's walk at once (the read answers all of them) and offers no way to look
+at one — the board's tick boxes are the answer on the board, and this screen has none. The map names the plan's revision
+and the read's time ("as of 7:42 pm") but has no "this is older than the plan" warning of its own: the 30 s poll is the
+age, as on the schedule. **Zones are read once**, so a planner who edits the venue mid-event needs a reload to see it —
+the walk itself is live. Two moments that share a place can put their labels on top of each other when the whole walk is
+framed. The schedule's place is a way into the map for a **follower**; a planner has the board and no link. And the one
+privacy cost this step spends: a follower's phone now holds **their own group's coordinates for the whole walk**, a
+longer trail than the live map keeps, because the map cannot draw a line it was never given.
+
+---
+
 ## Coverage
 
 | Asked for | Step |
@@ -2390,6 +2501,7 @@ intended, with "the publisher or another ops hand" the only correction path.
 | A timetable row says where the moment is | 26 (done) |
 | A moment closes when the IC's phone is close enough, at a radius the IC or the planner sets | 27 (done) |
 | A mark belongs to the person who made it, and the IC can say "we're here" from their own schedule | 28 (done) |
+| A follower opens a map and sees the walk their own group is meant to take, and nothing of another group | 29 (done) |
 
 **Out, by your decision:** named states / waypoint hierarchy · undo across a publish boundary.
 
