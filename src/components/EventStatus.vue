@@ -313,7 +313,7 @@ function remind() {
             <span v-else class="text-muted">no end time</span>
             <span v-if="canManage && icCount" class="text-muted"> · {{ sharingCount }} of {{ icCount }} ICs sharing</span>
             <span v-if="openPlanName" data-testid="status-plan"> · Running plan: <strong>{{ openPlanName }}</strong></span>
-            <span v-else-if="hasPlans" class="text-muted" data-testid="status-run-sheet"> · running nothing (tracking only)</span>
+            <span v-else-if="hasPlans" class="text-muted" data-testid="status-tracking-only"> · running nothing (tracking only)</span>
           </template>
           <template v-else-if="scheduledStart">
             Starts <strong>{{ formatDayTime(scheduledStart) }}</strong> ·

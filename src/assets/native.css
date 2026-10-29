@@ -579,10 +579,9 @@ html.native-app .next-move .btn-outline-success {
 }
 
 /* ---------- Wide tables on a phone screen ----------
-   A table squeezed into ~380 px either cuts off its last column or needs a sideways swipe nobody finds (19 Oct: the
-   run sheet's "Groups must be in…" chips were cut off at the screen edge). On the phone each table row becomes a
-   small stacked block instead: no sideways scrolling, nothing hidden. Cells that need a name say it through
-   data-label. */
+   A table squeezed into ~380 px either cuts off its last column or needs a sideways swipe nobody finds. On the phone
+   each table row becomes a small stacked block instead: no sideways scrolling, nothing hidden. Cells that need a name
+   say it through data-label. */
 html.native-app .pv-stack thead {
   display: none;
 }
@@ -615,35 +614,11 @@ html.native-app .pv-stack td[data-label]::before {
 html.native-app .pv-stack .d-none {
   display: none !important;
 }
-/* run sheet cues: time and length side by side, then the cue, then who must be where */
-html.native-app .rs-table.pv-stack tr:not(.rs-section):not(.rs-editor-row) {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 12px;
-}
-html.native-app .rs-table.pv-stack tr:not(.rs-section):not(.rs-editor-row) > td:nth-child(n + 3) {
-  flex: 1 0 100%;
-}
-html.native-app .rs-table.pv-stack .rs-section th {
-  padding: 6px 14px;
-}
-html.native-app .rs-table.pv-stack .rs-pill {
-  white-space: normal;
-  text-align: left;
-}
 /* lists whose rows have text + a button: the text wraps instead of pushing the button off screen */
 html.native-app .list-group-item > .flex-grow-1,
 html.native-app .card-header > .flex-grow-1 {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-/* Tap targets the 19 Oct phone check found too small: the run sheet's "group → zone" chips (22 px high) and the
-   new-group colour picker, which the input group squeezed to 13 px wide (on the website too, so that rule is not
-   phone-only). */
-html.native-app .rs-pill-move {
-  min-height: 36px;
-  padding: 6px 14px;
-  font-size: 14px;
 }
 /* Bootstrap's ".input-group > .form-control" (flex 1, width 1%) wins over a plain rule, hence the longer selector */
 .input-group > input.form-control-color,

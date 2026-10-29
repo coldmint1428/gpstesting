@@ -19,21 +19,25 @@
 // engine (052), so a member's read answers their group's rows alone, and a marshal's answers both. The map draws what
 // arrived. A client-side filter would look identical in a browser and be a different rule.
 //
-// ONE READ, THE SAME ONE THE SCHEDULE MAKES. The timetable, every 30 s, woken at each moment and on a publish (the
-// session's revision moves and useEventSessions already listens to event_sessions). The zones are the one extra call
-// `event_zones`, which the Live map already makes for the same person, read once. A second read for the route was
-// rejected: two doors is two places the scope can drift (step 16's finding 48).
+// ONE READ, THE SAME ONE THE SCHEDULE MAKES. The timetable, every 30 s, woken at each moment, and on a publish (the
+// session's revision moves and useEventSessions already listens to event_sessions). The read, its guards and its wake
+// live in `usePlanWalk` (step 30), which the live map asks too: one implementation, two screens. The zones are the one
+// extra call `event_zones`, which the Live map already makes for the same person, read once. A second read for the
+// route was rejected: two doors is two places the scope can drift (step 16's finding 48).
 //
 // A ROW WITH NO POINT IS STILL A ROW. A carried frame and an off-site statement answer null coordinates (065), and
-// they are what tells the map where the walk stops. A group with one statement draws a dot and no line.
+// they are what tells the map where the walk stops. The rules that turn rows into a line are `planWalk`'s (a run, a
+// break at an off-site statement, a single point with no line), because the live map draws the same walk and the same
+// rules must not exist twice.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
 import { areaStyle } from '../../utils/areaKinds'
 import { escapeHtml } from '../../utils/people'
+import { walksOf } from '../../utils/planWalk'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
-import { planErrorMessage } from '../../composables/usePlan'
+import { usePlanWalk } from '../../composables/usePlanWalk'
 import { supabase } from '../../lib/supabase'
 import '../../assets/planova.css'
 
@@ -52,14 +56,10 @@ const props = defineProps({
   focusT: { type: [String, Number], default: null },
 })
 
-const POLL_MS = 30000 // the floor, not the point: the wake at each moment is what keeps the screen honest
 const TICK_MS = 1000
 
-const rows = ref([]) // the read, exactly as it answered
+const { rows, loaded, errorMsg, readAt } = usePlanWalk({ session: () => props.session })
 const zones = ref([])
-const loaded = ref(false) // one answer has arrived (an empty read is still an answer)
-const errorMsg = ref('')
-const readAt = ref(null)
 const now = ref(Date.now())
 const mapEl = ref(null)
 let map = null
@@ -69,10 +69,6 @@ let dotLayer = null
 let fittedWithPoints = false // the camera is set once the walk is in hand, then it is the follower's
 let appliedFocus = null // the `?t=` moment this map has already opened on
 let retries = 0 // frames spent waiting for the stage to be laid out (see draw)
-let running = false
-let again = false
-let wakeTimer = null
-let pollTimer = null
 let tickTimer = null
 
 const sessionId = computed(() => (props.session ? props.session.id : null))
@@ -145,34 +141,15 @@ function colourOf(groupId) {
 }
 
 /**
- * The walks, one per group. A run is a stretch of on-site statements with nothing between them: an off-site moment
- * breaks it exactly as the board breaks its line (PlanBoard's drawLines), because the group is not on the map then. A
- * carried frame has no point of its own but does not break the line — the walk continues from the statement it carries.
+ * The walks, one per group, with each group's colour from the event's palette. The rules are `planWalk`'s: a run is a
+ * stretch of on-site statements, an off-site moment breaks it exactly as the board breaks its line (PlanBoard's
+ * drawLines), and a carried frame has no point of its own but does not break the line -- the walk continues from the
+ * statement it carries.
  */
 const tracks = computed(() => {
-  const byGroup = new Map()
-  for (const row of rows.value) {
-    let track = byGroup.get(row.group_id)
-    if (!track) {
-      track = { id: row.group_id, name: row.group_name, colour: colourOf(row.group_id), rows: [], points: [], runs: [] }
-      byGroup.set(row.group_id, track)
-    }
-    track.rows.push(row) // rows arrive ordered by t_s
-  }
-  for (const track of byGroup.values()) {
-    track.points = track.rows.filter((row) => row.lat != null)
-    let run = []
-    for (const row of track.rows) {
-      if (row.state === 'not_required') {
-        if (run.length) track.runs.push(run)
-        run = []
-      } else if (row.lat != null) {
-        run.push([row.lat, row.lng])
-      }
-    }
-    if (run.length) track.runs.push(run)
-  }
-  return byGroup
+  const walks = walksOf(rows.value)
+  for (const track of walks.values()) track.colour = colourOf(track.id)
+  return walks
 })
 
 /** What a dot says: its clock time and its place, or the time alone at a route point. */
@@ -323,79 +300,7 @@ function ensureMap() {
   return true
 }
 
-// ---------- the read ----------
-
-/**
- * Read the timetable and schedule the next ask. Guarded like the schedule's: a poll that would overlap is deferred, a
- * failed read keeps what is on screen, and an answer that belongs to a session (or a clock) this screen has moved past
- * is thrown away and asked again.
- */
-async function read() {
-  const id = sessionId.value
-  if (!id) {
-    // Nothing to ask. `loaded` is what tells the screen that waiting is over, so a member whose event has never been
-    // started gets the sentence rather than a spinner that never resolves (the map is not drawn either way).
-    loaded.value = true
-    return
-  }
-  // A session that runs no plan has no timetable to ask for: the sentence below is the answer, and asking anyway gets
-  // the engine's "not running a plan" back as a console error on a page that had already decided there was nothing to show.
-  if (!props.session.planId) {
-    rows.value = []
-    loaded.value = true
-    return
-  }
-  if (running) {
-    again = true
-    return
-  }
-  running = true
-  const at = endedAt.value
-  try {
-    const args = { p_session: id }
-    if (at) args.p_at = at.toISOString()
-    const { data, error } = await supabase.rpc('session_timetable', args)
-    if (error) throw error
-    if (sessionId.value !== id || endedAt.value !== at) {
-      again = true
-      return
-    }
-    rows.value = data || []
-    errorMsg.value = ''
-    readAt.value = new Date()
-  } catch (error) {
-    if (sessionId.value === id && endedAt.value === at) {
-      errorMsg.value = planErrorMessage(error) || 'Could not read your route.'
-    }
-  } finally {
-    running = false
-    loaded.value = true
-    if (again) {
-      again = false
-      read()
-      return
-    }
-    planWake()
-  }
-}
-
-/** Wake at the next planned moment, so "next" becomes "now" at the second it does (the schedule's rule). */
-function planWake() {
-  clearTimeout(wakeTimer)
-  wakeTimer = null
-  if (endedAt.value || !rows.value.length) return
-  const at = Date.now()
-  let soonest = null
-  for (const row of rows.value) {
-    const t = new Date(row.planned_at).getTime()
-    if (t > at && (soonest == null || t < soonest)) soonest = t
-  }
-  if (soonest == null || soonest - at > 120000) return
-  wakeTimer = setTimeout(() => {
-    now.value = Date.now()
-    read()
-  }, soonest - at + 300)
-}
+// ---------- the geography and the clock ----------
 
 /** The event's zones, once: the geography under the walk, not a live layer (a planner's zone edit is a reload away). */
 async function readZones() {
@@ -410,49 +315,28 @@ async function readZones() {
   }
 }
 
-function onLook() {
-  if (document.hidden) return
-  now.value = Date.now()
-  read()
-}
-
 function onTick() {
   now.value = Date.now()
 }
 
 onMounted(() => {
   readZones()
-  read()
   tickTimer = setInterval(onTick, TICK_MS)
-  pollTimer = setInterval(() => {
-    if (!document.hidden) read()
-  }, POLL_MS)
-  document.addEventListener('visibilitychange', onLook)
-  window.addEventListener('focus', onLook)
 })
 
 onBeforeUnmount(() => {
-  clearTimeout(wakeTimer)
-  clearInterval(pollTimer)
   clearInterval(tickTimer)
-  document.removeEventListener('visibilitychange', onLook)
-  window.removeEventListener('focus', onLook)
   if (map) {
     map.remove()
     map = null
   }
 })
 
+// A different session is a different walk: the read starts again in usePlanWalk, and the camera forgets the moment it
+// was opened on.
 watch(sessionId, () => {
-  rows.value = []
-  loaded.value = false
-  errorMsg.value = ''
   appliedFocus = null
-  read()
 })
-
-watch(endedAt, () => read())
-watch(() => (props.session ? props.session.planRev : null), () => read())
 
 // The read and the zones both feed the picture: redraw when either answers, never on the tick (the dots are the plan's
 // moments, not the second hand's). `flush: 'post'` so the stage has been taken out of or put back into the layout before

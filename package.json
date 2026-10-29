@@ -12,6 +12,7 @@
     "db:status": "node tools/migrate.mjs status",
     "db:up": "node tools/migrate.mjs up",
     "test:sheet": "node tools/plan_sheet_test.mjs",
+    "test:walk": "node tools/plan_walk_test.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npm run build && npx cap sync android && npx cap open android"
   },

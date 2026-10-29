@@ -474,6 +474,7 @@ async function removeEvent() {
         :event-id="id"
         :positions="live.positions.value"
         :live-since="liveSession ? liveSession.startsAt.getTime() : null"
+        :session="liveSession"
         :on-reading="live.onReading"
         :now="live.now.value"
         :live-error="live.errorMsg.value"

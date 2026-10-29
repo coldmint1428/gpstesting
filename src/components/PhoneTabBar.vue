@@ -1,7 +1,7 @@
 <script setup>
 // PhoneTabBar - the phone app's bottom navigation (Material 3 navigation bar, Figma "Tab bar / …" components).
-// The tabs are given by the page: outside an event Events · Phone · Me, inside one they follow the role
-// (ICs and members: Now · Map · Group · Info; root / planners: Ops · Map · Run sheet · People · More).
+// The tabs are given by the page: outside an event Events · Phone · Me. No event screen shows this bar (App.vue mounts
+// it for /events, /phone-check and /me only): an event's phone pages are the event view's own tabs.
 // A tab is either a page of the current screen (`key`, reported with `select`) or a route (`to`).
 import { RouterLink } from 'vue-router'
 
@@ -21,7 +21,6 @@ const ICONS = {
   group: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   info: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16v-4', 'M12 8h.01'],
   ops: ['M22 12h-4l-3 9L9 3l-3 9H2'],
-  runsheet: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'],
   more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
 }
 </script>

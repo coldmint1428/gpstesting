@@ -15,9 +15,17 @@
 //
 // Ops view (merger Stage 7) was here: zoomed out, groups gathered into one bubble per zone with the worst movement
 // status, and a dashed line along the group's route to its zone. It read `movement_status` through `useOps`, and step
-// 25 deleted that engine with the run sheet. A plan session's picture of the walk is `PlanOps` (step 20), which is a
-// table of moments rather than a drawing, so the map keeps only what it always did for everyone: people, groups,
-// trails and zones.
+// 25 deleted that engine with the run sheet.
+//
+// THE PLAN UNDER THE PEOPLE (step 30). While the live session runs a plan, the walk the plan states is drawn under the
+// people: one dashed line per group in the group's colour, broken where the plan takes the group off site, and the leg
+// the clock is on redrawn bold and solid -- the one comparison this page exists for, "they should be between the gate
+// and the stage and they are still at the gate", in one picture instead of a row on one page and a line on another.
+// The rows are `session_timetable`'s, through `usePlanWalk` (the follower's map asks the same composable), and the
+// rules that turn them into a line are `planWalk`'s. There is no interpolated "should be here" mark between two
+// moments: a mark says what the plan states, and a plan states points at moments, not a pace between them (step 20
+// refused to invent an ETA for the same reason). The line is `interactive: false` on purpose -- a line across the venue
+// must not swallow the taps meant for the people under it, which are this screen's subject.
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles + reverse geocoding (c) Singapore Land Authority
@@ -28,6 +36,8 @@ import { supabase } from '../lib/supabase'
 import { createSingaporeMap } from '../utils/onemap'
 import { newTrack, addReading, noteDelay, prune, advance, positionAt, trailUpTo } from '../utils/liveMotion'
 import { placeName } from '../composables/useReverseGeocode'
+import { usePlanWalk } from '../composables/usePlanWalk'
+import { walksOf, legNow } from '../utils/planWalk'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
@@ -51,6 +61,9 @@ const props = defineProps({
   zoneCounts: { type: Object, default: () => ({}) }, // zoneId -> { ics, groups }
   noGoOccupied: { type: Array, default: () => [] }, // No-Go zone ids somebody is inside
   groupPositions: { type: Object, default: () => ({}) }, // groupId -> { speedMps, icsSharing, lastSeen }
+  // The live session, when it is running a plan: the walk the plan states is drawn under the people (step 30). Null
+  // while the event is not live, or is live without a plan -- and then nothing is drawn and nothing is asked for.
+  session: { type: Object, default: null },
 })
 
 const positions = computed(() => props.positions)
@@ -64,7 +77,9 @@ const personMarkers = {} // userId -> Leaflet marker
 const groupMarkers = {} // groupId -> Leaflet marker (groups with 2+ ICs on the map)
 const tracks = {} // userId -> recent readings + playhead (liveMotion.js)
 const places = {} // userId -> place name text (filled when a tooltip opens)
-let fittedOnce = false
+let framed = false // the camera has been set once
+let framedWithPlan = false // ...and the plan's walk was in that frame
+let userMoved = false // somebody dragged the map: the view is theirs now, not every read's
 
 // Follow mode: keep one person centred on the map while they move
 const followedId = ref(null) // userId being followed (null = not following)
@@ -259,11 +274,8 @@ function render() {
 
   if (followedId.value && !personMarkers[followedId.value]) stopFollowing() // they're no longer on the map
 
-  // Zoom to everyone the first time we have data
-  if (!fittedOnce && people.value.length > 0) {
-    map.fitBounds(L.latLngBounds(people.value.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: 17 })
-    fittedOnce = true
-  }
+  // Zoom to everyone the first time we have data (with the plan's walk in the frame, when there is one: `frameOnce`).
+  frameOnce()
   startLoop()
 }
 
@@ -662,17 +674,129 @@ function watchZones() {
     })
 }
 
+// ---------- The plan's walk under the people (step 30) ----------
+// The read is `session_timetable` (065) through usePlanWalk, which the follower's map asks too, and it is enabled only
+// while this is the page on show: the Live page is `v-show`n, so this panel is mounted on every page of the event and a
+// read from it would otherwise poll behind whatever the person is looking at (finding 72).
+const plan = usePlanWalk({
+  session: () => props.session,
+  enabled: () => props.active && !!props.session && !!props.session.planId,
+})
+const showPlan = ref(true) // a layer, not a preference: not remembered across a reload (the same as Zones)
+let planLayer = null
+
+const planWalks = computed(() => walksOf(plan.rows.value))
+const planRev = computed(() => {
+  const rows = plan.rows.value
+  return rows.length ? rows[0].plan_rev : props.session ? props.session.planRev : null
+})
+/** Whether there is a line at all: a group whose whole walk is one stated point draws a mark, not a road. */
+const planLine = computed(() => [...planWalks.value.values()].some((walk) => walk.runs.some((run) => run.length > 1)))
+/** The points the walk stands on, for framing the map when nobody is sharing yet. */
+const planPoints = computed(() => {
+  const out = []
+  for (const walk of planWalks.value.values()) for (const row of walk.points) out.push([row.lat, row.lng])
+  return out
+})
+/**
+ * Which two statements the clock is between, per group, as a string. The bold leg moves only when the clock crosses a
+ * moment, so this is what the redraw watches: the map ticks every second and the line must not be rebuilt every tick.
+ */
+const legKey = computed(() => {
+  const parts = []
+  for (const walk of planWalks.value.values()) {
+    const leg = legNow(walk.rows, props.now)
+    parts.push(walk.id + ':' + (leg ? leg[0].t_s + '-' + leg[1].t_s : '-'))
+  }
+  return parts.join('|')
+})
+
+/**
+ * Draw the walk, or clear it. A run is a dashed line in the group's colour at 55 %; the leg the clock is on is the same
+ * line again, bold and solid, over it -- the stretch the group is meant to be walking right now. Every path says which
+ * group and which revision it is, which is the only handle a browser check has on a Leaflet line.
+ */
+function drawPlan() {
+  if (!map || !planLayer) return
+  planLayer.clearLayers()
+  frameOnce() // the walk may be the first thing that arrived; the camera waits for it
+  if (!showPlan.value) return
+  for (const walk of planWalks.value.values()) {
+    const group = groupOf(walk.id)
+    const colour = group ? group.colour : '#244f3f'
+    for (const run of walk.runs) {
+      if (run.length < 2) continue
+      const line = L.polyline(run, {
+        color: colour,
+        weight: 2,
+        opacity: 0.55,
+        dashArray: '5 6',
+        interactive: false, // a line must not swallow the taps meant for the people under it
+      }).addTo(planLayer)
+      const element = line.getElement()
+      if (element) {
+        element.setAttribute('data-plan-line', walk.id)
+        if (planRev.value != null) element.setAttribute('data-plan-rev', String(planRev.value))
+      }
+    }
+    const leg = legNow(walk.rows, props.now)
+    if (!leg) continue
+    const [from, to] = leg
+    const bold = L.polyline(
+      [
+        [from.lat, from.lng],
+        [to.lat, to.lng],
+      ],
+      { color: colour, weight: 4, opacity: 0.95, interactive: false },
+    ).addTo(planLayer)
+    const element = bold.getElement()
+    if (element) {
+      element.setAttribute('data-plan-leg', walk.id)
+      element.setAttribute('data-leg-from', String(from.t_s))
+      element.setAttribute('data-leg-to', String(to.t_s))
+    }
+  }
+}
+
+// The walk is drawn from the read, the clock's leg and the toggle -- not on every tick, which is what `legKey` is for.
+watch([planWalks, legKey, showPlan, () => props.groups], drawPlan, { flush: 'post' })
+
+/**
+ * Frame the map once -- the people and the plan's walk together when there is a walk, because 80 m of line inside a
+ * 1.5 km viewport is a picture of a neighbourhood rather than of the venue. The people's answer may land first, so the
+ * camera is allowed one refit when the walk arrives; after somebody has dragged the map the view is theirs, not every
+ * read's.
+ */
+function frameOnce() {
+  if (!map || userMoved) return
+  const walk = planPoints.value
+  if (framed && (framedWithPlan || !walk.length)) return
+  const size = map.getSize()
+  if (!size.x || !size.y) return // measured while the page was hidden: the next draw frames it properly
+  const bounds = L.latLngBounds([])
+  for (const person of people.value) bounds.extend([person.lat, person.lng])
+  for (const point of walk) bounds.extend(point)
+  if (!bounds.isValid()) return
+  map.fitBounds(bounds.pad(walk.length ? 0.2 : 0.3), { maxZoom: walk.length ? 20 : 17, animate: false })
+  framed = true
+  if (walk.length) framedWithPlan = true
+}
+
 let unsubscribe = null
 let resizeObserver = null
 onMounted(() => {
   // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
   map = createSingaporeMap(mapEl.value)
   zoneLayer = L.layerGroup().addTo(map) // under the trail and the markers
+  planLayer = L.layerGroup().addTo(map) // the plan's walk: over the zones, under the people and their trails
   trailLayer = L.layerGroup().addTo(map)
   map.on('zoomend', placeZoneLabels)
   watchZones()
-  // Dragging the map yourself means "let me look around": stop following
-  map.on('dragstart', stopFollowing)
+  // Dragging the map yourself means "let me look around": stop following, and keep the camera where it is put.
+  map.on('dragstart', () => {
+    userMoved = true
+    stopFollowing()
+  })
   // Tap empty map: hide the trail (the first tap only closes an open trail popup)
   map.on('click', () => {
     if (Date.now() - popupClosedAt < 400) return
@@ -680,9 +804,8 @@ onMounted(() => {
   })
   if (props.onReading) unsubscribe = props.onReading(onNewReading)
   document.addEventListener('visibilitychange', onVisibility)
-  // The map's box changes size when the page it sits in is resized (a phone turning, a panel opening): Leaflet must
-  // be told. (It was written for the run sheet panel that opened beside it, which step 25 removed; the observer is
-  // still right for every other resize.)
+  // The map's box changes size when the page it sits in is resized (a phone turning, the window changing shape): Leaflet
+  // must be told, or it keeps drawing for the box it was last measured in.
   if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => map && map.invalidateSize())
     resizeObserver.observe(mapEl.value)
@@ -725,10 +848,23 @@ onUnmounted(() => {
       <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0d6efd"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
+      <!-- The plan under the people (step 30): what a dashed line is, and which one is loud. -->
+      <span v-if="planLine" data-testid="map-plan-legend">
+        <span class="plan-swatch" aria-hidden="true"></span>a group’s plan · the bold one is due now
+      </span>
       <span v-if="liveSince">Tap a marker to see their trail · tap the trail for times</span>
       <label v-if="zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
         <input v-model="showZones" class="form-check-input" type="checkbox" />
         <span class="form-check-label">Zones ({{ zoneCount }})</span>
+      </label>
+      <label
+        v-if="planLine"
+        class="form-check form-check-inline mb-0"
+        :class="{ 'ms-auto': !zoneCount }"
+        data-testid="plan-toggle"
+      >
+        <input v-model="showPlan" class="form-check-input" type="checkbox" />
+        <span class="form-check-label">Plan<template v-if="planRev != null"> (v{{ planRev }})</template></span>
       </label>
     </div>
 
@@ -811,6 +947,15 @@ onUnmounted(() => {
 .dot-stopped {
   background-color: transparent !important;
   border: 2px dashed #6c757d;
+}
+/* The plan's line in the legend: the same dashed stroke the map draws it with. */
+.plan-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+  border-top: 2px dashed #244f3f;
 }
 :global(.trail-hover) {
   cursor: pointer;

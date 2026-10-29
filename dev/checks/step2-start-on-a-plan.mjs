@@ -1,12 +1,19 @@
 // Step 2, proved through the screen: a session is started from the Start dialog on a plan — not merely through the
-// function the dialog would have called. Step 1 exists so that this sentence can be checked instead of believed.
+// function the dialog would have called — and a session started on nothing says so. Step 1 exists so that this
+// sentence can be checked instead of believed.
 //
 //     node tools/run.mjs dev/checks/step2-start-on-a-plan.mjs --session .tmp/session.json
 //
 // Requires: the plan bench (supabase/fixtures/plan_bench.sql), its "Clean walk" plan published (the SQL check
 // dev/checks/step2-session-plan.sql does that), the event not live, and a session for testuser1 as the file above.
+//
+// Step 30 re-pointed the "no run sheet is claimed" assertion. It used to assert the ABSENCE of a test id called
+// `status-run-sheet` on the sentence "running nothing (tracking only)" -- and step 30 renamed that id to
+// `status-tracking-only`, so the old assertion would have been permanently true without ever looking at anything. The
+// presence that absence was standing in for is now checked directly: the same dialog starts a second, tracking-only
+// session, and the sentence it puts on screen is read.
 export default {
-  name: 'step 2 — start a session from the UI on a plan, and no run-sheet machinery appears',
+  name: 'step 2 — start a session from the UI on a plan, and on nothing',
 
   async run({ newTab, base }) {
     const eventId = '0b000000-0000-4000-8000-000000000e01'
@@ -65,8 +72,8 @@ export default {
     await tab.waitFor('[data-testid=status-live]', { timeout: 15000 })
     await tab.assertContains('[data-testid=status-plan]', 'Clean walk')
     await tab.assertThat(
-      'no run sheet is claimed by the session',
-      `!document.querySelector('[data-testid=status-run-sheet]')`,
+      'a plan session claims no tracking-only sentence',
+      `!document.querySelector('[data-testid=status-tracking-only]')`,
     )
     // The run-sheet machinery is not merely hidden for a plan session: step 25 deleted it, and its testid went with
     // the component. If either were on screen again, something would have brought the engine back.
@@ -76,6 +83,35 @@ export default {
     )
 
     await tab.shot('shots/step2-plan-session-live.png')
+
+    // ---------- tracking only: the sentence a session with no plan says ----------
+    await tab.click('[data-testid=end-event-btn]')
+    await tab.waitFor('[data-testid=confirm-dialog]')
+    await tab.click('[data-testid=confirm-ok]')
+    await tab.waitFor('[data-testid=status-not-started]', { timeout: 15000 })
+
+    await tab.click('[data-testid=start-event-btn]')
+    await tab.waitFor('[data-testid=start-form]')
+    // "Nothing: tracking only" is the empty value of the picker: choosing nothing is a real choice, not the default the
+    // dialog opens on, so it is set the way a person choosing it would set it.
+    await tab.eval(`
+      (() => {
+        const sel = document.querySelector('#start-engine')
+        sel.value = ''
+        sel.dispatchEvent(new Event('change'))
+        return sel.value
+      })()
+    `)
+    await tab.click('[data-testid=start-confirm-btn]')
+    await tab.waitFor('[data-testid=confirm-dialog]')
+    await tab.assertContains('[data-testid=confirm-dialog]', 'tracking only')
+    await tab.click('[data-testid=confirm-ok]')
+
+    await tab.waitFor('[data-testid=status-tracking-only]', { timeout: 15000 })
+    const tracking = (await tab.text('[data-testid=status-tracking-only]')).replace(/\s+/g, ' ').trim()
+    tab.pass(`a session started on nothing says: "${tracking}"`)
+    await tab.assertThat('a session started on nothing says so', /running nothing \(tracking only\)/.test(tracking))
+    await tab.assertThat('and claims no plan', `!document.querySelector('[data-testid=status-plan]')`)
 
     // ---------- put the bench back: end the event ----------
     await tab.click('[data-testid=end-event-btn]')
