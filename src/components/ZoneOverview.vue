@@ -84,7 +84,7 @@ const summary = computed(() => {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 8px 10px;
   min-width: 0;

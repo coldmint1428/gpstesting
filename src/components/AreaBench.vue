@@ -3291,9 +3291,9 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 /* Somebody is being told no. The same red as the line or the outline the sentence is about, so the
    words and the thing they describe are obviously one thing. */
 .bench-hint-bad {
-  color: #b02a37;
-  border: 1px solid #dc3545;
-  background: #fdf2f3;
+  color: var(--status-error-fg);
+  border: 1px solid var(--status-error-border);
+  background: var(--status-error-bg);
 }
 
 .bench-draft {

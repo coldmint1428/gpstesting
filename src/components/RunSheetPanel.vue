@@ -885,21 +885,21 @@ const todayIso = isoDate(new Date())
   white-space: nowrap;
 }
 .rs-pill-anchor {
-  background: #0f1b2d;
+  background: var(--bg-chrome);
   color: #fff;
 }
 .rs-pill-flex {
-  background: #e0f2fe;
-  color: #0c4a6e;
+  background: var(--brand-primary-subtle);
+  color: var(--text-link);
 }
 .rs-pill-move {
-  background: #ccfbf1;
-  color: #115e59;
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
   cursor: pointer;
 }
 .rs-pill-move:hover,
 .rs-pill-move:focus-visible {
-  background: #99f6e4;
+  background: var(--accent-200);
 }
 .rs-flash {
   animation: rs-flash 1.6s ease-out;
@@ -907,7 +907,7 @@ const todayIso = isoDate(new Date())
 @keyframes rs-flash {
   0%,
   40% {
-    background: #fef3c7;
+    background: var(--status-warning-bg);
   }
 }
 @media (prefers-reduced-motion: reduce) {

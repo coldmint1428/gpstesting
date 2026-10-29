@@ -24,7 +24,7 @@ async function loadEvents() {
   loading.value = true
   try {
     events.value = await getMyEvents(auth.user.id)
-    if (native) liveIds.value = await getLiveEventIds(events.value.map((e) => e.id))
+    liveIds.value = await getLiveEventIds(events.value.map((e) => e.id)).catch(() => [])
   } catch (error) {
     errorMsg.value = error.message
   } finally {
@@ -102,6 +102,36 @@ function monthOf(iso) {
 function timeOf(iso) {
   return iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' }) : ''
 }
+// ---------- Website: Ongoing / Upcoming / Past, with a search ----------
+const tab = ref('')
+const search = ref('')
+const isPast = (e) => !!e.startsAt && new Date(e.startsAt).getTime() < Date.now() - 12 * 3600 * 1000
+const tabLists = computed(() => {
+  const live = events.value.filter((e) => liveIds.value.includes(e.id))
+  const rest = events.value.filter((e) => !liveIds.value.includes(e.id))
+  const byStart = (a, b) => new Date(a.startsAt || 8.64e15).getTime() - new Date(b.startsAt || 8.64e15).getTime()
+  return {
+    ongoing: live,
+    upcoming: rest.filter((e) => !isPast(e)).sort(byStart),
+    past: rest.filter(isPast).sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()),
+  }
+})
+// The live event already has its own card above, so the list opens on Upcoming (then Ongoing, then Past)
+const activeTab = computed(() => tab.value || (tabLists.value.upcoming.length ? 'upcoming' : tabLists.value.ongoing.length ? 'ongoing' : 'past'))
+const shownEvents = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return tabLists.value[activeTab.value].filter((e) => !q || (e.name + ' ' + (e.venue || '')).toLowerCase().includes(q))
+})
+const WEB_TABS = [
+  { key: 'ongoing', label: 'Ongoing' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'past', label: 'Past' },
+]
+function roleClass(ev) {
+  const label = roleLabel(ev)
+  return label === 'Root' ? 'pl-role--root' : label === 'Planner' ? 'pl-role--planner' : label === 'Marshal' ? 'pl-role--marshal' : label === 'IC' ? 'pl-role--ic' : ''
+}
+
 const ROLE_TONE = { Root: 'pv-role-root', Planner: 'pv-role-planner', Marshal: 'pv-role-marshal' }
 function roleTone(label) {
   return ROLE_TONE[label] || 'pv-role-member'
@@ -199,81 +229,114 @@ function roleTone(label) {
     </BottomSheet>
   </main>
 
-  <main v-else class="container py-3">
-    <h1 class="h4 mb-3">My events</h1>
+  <!-- ===== Website: My events (Planova) ===== -->
+  <main v-else class="pl-page">
+    <div class="pl-page__head">
+      <div>
+        <h1 class="pl-h-page">{{ greeting }} {{ firstName }}</h1>
+        <p class="pl-meta mb-0">Your role is set per event, so what you can do changes from event to event.</p>
+      </div>
+      <div class="pl-actions">
+        <form class="d-flex gap-2" @submit.prevent="joinEvent">
+          <input
+            v-model="joinCode"
+            class="form-control text-uppercase"
+            style="width: 8.5rem"
+            placeholder="Event code"
+            maxlength="6"
+            autocapitalize="characters"
+            required
+            aria-label="Event code"
+            data-testid="join-code"
+          />
+          <button class="btn btn-outline-primary" type="submit" data-testid="join-btn">Join</button>
+        </form>
+        <RouterLink :to="{ name: 'event-new' }" class="btn btn-primary" data-testid="create-event-btn">Create event</RouterLink>
+      </div>
+    </div>
 
     <BenchAlert v-if="errorMsg" data-testid="events-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-    <div class="row g-3 mb-4">
-      <div class="col-12 col-md-6">
-        <form class="card h-100" @submit.prevent="joinEvent">
-          <div class="card-body">
-            <h2 class="h6">Join with a code</h2>
-            <div class="input-group">
-              <input
-                v-model="joinCode"
-                class="form-control text-uppercase"
-                placeholder="e.g. K7Q2XM"
-                maxlength="6"
-                autocapitalize="characters"
-                required
-                aria-label="Event code"
-                data-testid="join-code"
-              />
-              <button class="btn btn-primary" type="submit" data-testid="join-btn">Join</button>
-            </div>
-          </div>
-        </form>
-      </div>
-      <div class="col-12 col-md-6">
-        <div class="card h-100">
-          <div class="card-body">
-            <h2 class="h6">Create an event</h2>
-            <p class="small text-muted mb-2">Details, people, groups and roles, step by step. You become the event's Root.</p>
-            <RouterLink :to="{ name: 'event-new' }" class="btn btn-success" data-testid="create-event-btn">Create an event</RouterLink>
+    <!-- Live now: straight into the event -->
+    <RouterLink
+      v-for="ev in tabLists.ongoing.slice(0, 1)"
+      :key="'live-' + ev.id"
+      :to="{ name: 'event', params: { id: ev.id } }"
+      class="pl-live"
+      :data-testid="'live-' + ev.id"
+    >
+      <span class="pl-badge pl-badge--success"><span class="pl-badge__dot"></span>Live now</span>
+      <span class="pl-live__text">
+        <span class="pl-live__name d-block">{{ ev.name }}</span>
+        <span class="pl-meta d-block">
+          <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
+          · You are <strong>{{ roleLabel(ev) }}</strong>
+        </span>
+      </span>
+      <span class="pl-live__cta">Open event</span>
+    </RouterLink>
 
-            <form class="mt-3" @submit.prevent="createSimulation">
-              <label for="sim-name" class="form-label small mb-1">Or a simulation event (virtual groups for testing, clearly labelled)</label>
-              <div class="input-group input-group-sm">
-                <input
-                  id="sim-name"
-                  v-model="simName"
-                  class="form-control"
-                  placeholder="Simulation name"
-                  maxlength="80"
-                  required
-                  data-testid="sim-event-name"
-                />
-                <button class="btn btn-outline-secondary" type="submit" data-testid="create-sim-btn">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
+    <div class="pl-page__head">
+      <div class="pl-tabs" role="tablist" aria-label="Event list">
+        <button
+          v-for="t in WEB_TABS"
+          :key="t.key"
+          type="button"
+          class="pl-tab"
+          role="tab"
+          :aria-selected="activeTab === t.key"
+          :data-testid="'events-tab-' + t.key"
+          @click="tab = t.key"
+        >
+          {{ t.label }}<span v-if="tabLists[t.key].length" class="pl-count">{{ tabLists[t.key].length }}</span>
+        </button>
+      </div>
+      <div class="pl-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 1 1 16 0" /></svg>
+        <input v-model="search" class="form-control" type="search" placeholder="Search events" aria-label="Search events" />
       </div>
     </div>
 
-    <p v-if="loading" class="text-muted">Loading...</p>
-    <p v-else-if="events.length === 0" class="text-muted" data-testid="no-events">
-      You're not in any events yet. Join one with a code or create one.
-    </p>
-    <div v-else class="list-group" data-testid="event-list">
-      <RouterLink
-        v-for="ev in events"
-        :key="ev.id"
-        :to="{ name: 'event', params: { id: ev.id } }"
-        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-      >
-        <span>
-          {{ ev.name }}
-          <span v-if="ev.startsAt || ev.venue" class="d-block small text-muted" data-testid="event-list-when">
-            <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
+    <p v-if="loading" class="pl-meta">Loading...</p>
+    <div v-else-if="events.length === 0" class="pl-empty" data-testid="no-events">
+      <strong>No events yet</strong>
+      <span class="pl-meta">Join one with a code, or create your own.</span>
+      <RouterLink :to="{ name: 'event-new' }" class="btn btn-primary mt-2">Create event</RouterLink>
+    </div>
+    <div v-else-if="shownEvents.length === 0" class="pl-empty">
+      <strong>{{ search ? 'No events match your search' : 'Nothing here yet' }}</strong>
+      <span class="pl-meta">{{ search ? 'Try a different name or venue.' : 'Events in this tab will show up here.' }}</span>
+    </div>
+    <ul v-else class="pl-list" data-testid="event-list">
+      <li v-for="ev in shownEvents" :key="ev.id">
+        <RouterLink :to="{ name: 'event', params: { id: ev.id } }" class="pl-row">
+          <span class="pl-row__lead">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v16H4V5m3-3v6m10-6v6M4 10h16" /></svg>
           </span>
-        </span>
-        <span>
-          <span v-if="ev.isSimulation" class="badge text-bg-warning ms-1">SIMULATION</span>
-          <span class="badge text-bg-secondary ms-1" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
-        </span>
-      </RouterLink>
-    </div>
+          <span class="pl-row__body">
+            <span class="pl-row__title">{{ ev.name }}</span>
+            <span class="pl-row__meta" data-testid="event-list-when">
+              <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
+              <template v-if="!ev.startsAt && !ev.venue">No date yet</template>
+            </span>
+          </span>
+          <span class="pl-row__trail">
+            <span v-if="ev.isSimulation" class="pl-badge pl-badge--warning">Simulation</span>
+            <span class="pl-role" :class="roleClass(ev)" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
+            <svg class="pl-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+          </span>
+        </RouterLink>
+      </li>
+    </ul>
+
+    <!-- A name-only test event for virtual groups (Stage 3) -->
+    <details class="pl-meta">
+      <summary>Create a simulation event (virtual groups for testing)</summary>
+      <form class="mt-2 d-flex gap-2" style="max-width: 28rem" @submit.prevent="createSimulation">
+        <label for="sim-name" class="visually-hidden">Simulation name</label>
+        <input id="sim-name" v-model="simName" class="form-control" placeholder="Simulation name" maxlength="80" required data-testid="sim-event-name" />
+        <button class="btn btn-outline-secondary" type="submit" data-testid="create-sim-btn">Create</button>
+      </form>
+    </details>
   </main>
 </template>

@@ -356,7 +356,7 @@ async function undoInPosition() {
 }
 .nm-ring-track {
   fill: none;
-  stroke: #e2e8f0;
+  stroke: var(--border-subtle);
   stroke-width: 10;
 }
 .nm-ring-arc {
@@ -366,36 +366,36 @@ async function undoInPosition() {
   transition: stroke-dashoffset 1s linear;
 }
 circle.nm-ring-go {
-  stroke: #f97316;
+  stroke: var(--brand-primary);
 }
 circle.nm-ring-risk {
-  stroke: #d97706;
+  stroke: var(--status-warning-border);
 }
 circle.nm-ring-late {
-  stroke: #dc2626;
+  stroke: var(--status-error-fg);
 }
 circle.nm-ring-ok {
-  stroke: #0f766e;
+  stroke: var(--status-info-border);
 }
 .nm-ring-label {
   font-size: 12px;
-  fill: #64748b;
+  fill: var(--text-secondary);
   font-weight: 500;
 }
 .nm-ring-value {
   font-size: 26px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  fill: #c2410c;
+  fill: var(--brand-primary);
 }
 text.nm-ring-risk {
-  fill: #b45309;
+  fill: #a8480c;
 }
 text.nm-ring-late {
-  fill: #dc2626;
+  fill: var(--status-error-fg);
 }
 text.nm-ring-ok {
-  fill: #0f766e;
+  fill: var(--status-info-fg);
 }
 .nm-hero-text {
   min-width: 0;
@@ -413,23 +413,24 @@ text.nm-ring-ok {
 .nm-tile {
   display: flex;
   flex-direction: column;
-  background: #f1f5f9;
+  background: var(--bg-inset);
   border-radius: 8px;
   padding: 8px 12px;
 }
 .nm-tile-late {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--status-error-bg);
+  color: var(--status-error-fg);
 }
 .nm-tile-label {
   font-size: 12px;
-  color: #475569;
+  color: var(--text-secondary);
 }
 .nm-tile-late .nm-tile-label {
   color: inherit;
 }
 .nm-tile-big {
-  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
   font-size: 26px;
   font-weight: 600;
   line-height: 1.2;
