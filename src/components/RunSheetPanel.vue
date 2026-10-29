@@ -885,21 +885,21 @@ const todayIso = isoDate(new Date())
   white-space: nowrap;
 }
 .rs-pill-anchor {
-  background: var(--bg-chrome);
+  background: #0f1b2d;
   color: #fff;
 }
 .rs-pill-flex {
-  background: var(--brand-primary-subtle);
-  color: var(--text-link);
+  background: #e0f2fe;
+  color: #0c4a6e;
 }
 .rs-pill-move {
-  background: var(--status-info-bg);
-  color: var(--status-info-fg);
+  background: #ccfbf1;
+  color: #115e59;
   cursor: pointer;
 }
 .rs-pill-move:hover,
 .rs-pill-move:focus-visible {
-  background: var(--accent-200);
+  background: #99f6e4;
 }
 .rs-flash {
   animation: rs-flash 1.6s ease-out;
@@ -907,7 +907,7 @@ const todayIso = isoDate(new Date())
 @keyframes rs-flash {
   0%,
   40% {
-    background: var(--status-warning-bg);
+    background: #fef3c7;
   }
 }
 @media (prefers-reduced-motion: reduce) {

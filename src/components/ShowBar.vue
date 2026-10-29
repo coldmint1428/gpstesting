@@ -97,8 +97,8 @@ const anchorIn = computed(() => {
 
 <style scoped>
 .show-bar {
-  background: var(--bg-chrome);
-  color: var(--text-on-chrome);
+  background: #0f1b2d;
+  color: #f8fafc;
   border-radius: 12px;
   padding: 14px 20px;
   display: flex;
@@ -114,7 +114,7 @@ const anchorIn = computed(() => {
   min-width: 0;
 }
 .sb-live {
-  background: var(--danger-solid);
+  background: #dc2626;
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -127,7 +127,7 @@ const anchorIn = computed(() => {
 }
 .sb-sub {
   font-size: 13px;
-  color: var(--text-on-chrome-muted);
+  color: #b6c2d3;
 }
 .sb-clock-box {
   display: flex;
@@ -160,24 +160,24 @@ const anchorIn = computed(() => {
   font-size: 12px;
 }
 .sb-ok {
-  background: var(--status-info-bg);
-  color: var(--status-info-fg);
+  background: #ccfbf1;
+  color: #115e59;
 }
 .sb-risk {
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
+  background: #fef3c7;
+  color: #92400e;
 }
 .sb-late {
-  background: var(--status-error-bg);
-  color: var(--status-error-fg);
+  background: #fee2e2;
+  color: #991b1b;
 }
 .sb-info {
-  background: var(--brand-primary-subtle);
-  color: var(--text-link);
+  background: #dbeafe;
+  color: #1e3a8a;
 }
 .sb-off {
-  background: var(--chrome-hover);
-  color: var(--text-on-chrome-muted);
+  background: #1c2b42;
+  color: #cbd5e1;
 }
 .sb-anchor {
   display: flex;
@@ -188,11 +188,11 @@ const anchorIn = computed(() => {
 }
 .sb-good {
   font-size: 13px;
-  color: var(--accent-300);
+  color: #99f6e4;
 }
 .sb-warn {
   font-size: 13px;
-  color: var(--status-error-border);
+  color: #fca5a5;
   font-weight: 600;
 }
 /* Phone: the clock and the status side by side, so the bar stays a few lines tall and the map is close below */

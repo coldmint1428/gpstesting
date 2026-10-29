@@ -289,7 +289,7 @@ async function pressSkip(c) {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-secondary);
+  color: #475569;
 }
 .sp-now-title {
   font-size: 20px;
@@ -309,16 +309,16 @@ async function pressSkip(c) {
   }
 }
 .show-late {
-  color: #a8480c;
+  color: #92400e;
 }
 .show-panel :deep(.btn-success) {
-  background: var(--status-success-fg);
-  border-color: var(--status-success-fg);
+  background: #0f766e;
+  border-color: #0f766e;
 }
 .show-panel :deep(.progress-bar) {
-  background: var(--timeline-active);
+  background: #0f1b2d;
 }
 .show-panel :deep(.progress-bar.bg-warning) {
-  background: #a8480c !important;
+  background: #b45309 !important;
 }
 </style>

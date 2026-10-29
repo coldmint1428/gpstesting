@@ -60,14 +60,12 @@ async function submit() {
 </script>
 
 <template>
-  <main class="pl-login">
-    <section class="pl-login__brand">
-      <h1>Plan the venue. Move every group on time.</h1>
-    </section>
-    <section class="pl-login__form">
-      <div class="pl-login__card">
-        <h2 class="pl-h-page mb-1">Create account</h2>
-        <p class="pl-meta mb-3">One account for every event you are part of.</p>
+  <main class="container py-4">
+    <div class="row justify-content-center">
+      <div class="col-12 col-sm-10 col-md-7 col-lg-5">
+        <div class="card">
+          <div class="card-body">
+            <h1 class="h4 mb-3">Create account</h1>
             <form novalidate @submit.prevent="submit">
               <div class="row g-2 mb-3">
                 <div class="col-12 col-sm-6">
@@ -122,10 +120,12 @@ async function submit() {
             <p class="small text-center mt-3 mb-0">
               Already have an account?
               <RouterLink :to="{ name: 'login', query: route.query.redirect ? { redirect: route.query.redirect } : {} }" data-testid="to-login">
-                Log in
+                Sign in
               </RouterLink>
             </p>
+          </div>
+        </div>
       </div>
-    </section>
+    </div>
   </main>
 </template>

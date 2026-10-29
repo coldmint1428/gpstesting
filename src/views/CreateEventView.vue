@@ -113,21 +113,17 @@ async function startOver() {
 
     <!-- Stepper -->
     <nav aria-label="Steps" class="mb-4">
-      <ol class="stepper pl-wz-steps">
-        <li v-for="s in STEPS" :key="s.n">
+      <ol class="stepper list-unstyled d-flex gap-1 mb-0">
+        <li v-for="s in STEPS" :key="s.n" class="flex-fill">
           <button
             type="button"
-            class="pl-wz-step"
-            :class="{ 'is-current': s.n === wizard.step, 'is-done': s.n < wizard.step }"
+            class="btn btn-sm w-100"
+            :class="s.n === wizard.step ? 'btn-primary' : s.n < wizard.step ? 'btn-outline-primary' : 'btn-outline-secondary'"
             :aria-current="s.n === wizard.step ? 'step' : undefined"
             :disabled="s.n > wizard.step"
             @click="goTo(s.n)"
           >
-            <span class="pl-wz-step__bar"></span>
-            <span class="pl-wz-step__row">
-              <span class="pl-wz-step__mk" aria-hidden="true">{{ s.n }}</span>
-              <span class="pl-wz-step__txt"><span class="d-none d-md-inline">{{ s.label }}</span><span class="d-md-none">{{ s.short }}</span></span>
-            </span>
+            {{ s.n }}. <span class="d-none d-md-inline">{{ s.label }}</span><span class="d-md-none">{{ s.short }}</span>
           </button>
         </li>
       </ol>
