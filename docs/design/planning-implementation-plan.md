@@ -1,12 +1,13 @@
-# Planning stage — implementation plan (v29)
+# Planning stage — implementation plan (v31)
 
-Twenty-nine steps. v6's decisions stand; v7 is the result of a third audit round that asked a different question:
+Thirty steps. v6's decisions stand; v7 is the result of a third audit round that asked a different question:
 not *is the design right* but *will each step actually execute*. Nine findings, two blockers, all folded in below.
-v8–v29 are the same plan with the finished steps' **Done** blocks written: what now exists, the command that
+v8–v31 are the same plan with the finished steps' **Done** blocks written: what now exists, the command that
 proves it, what the step found, and what it left owing. Steps 26, 27 and 28 are the ones added after the
 twenty-five were closed: they come from using the thing, not from the plan, and the last of them is about the
-person pressing rather than the phone deciding. Step 29 is the first written before it was built, and the last one
-in the list: a follower has a map of their own walk.
+person pressing rather than the phone deciding. Steps 29 and 30 were the two written before they were built — a
+follower has a map of their own walk, and the same walk is drawn under the **live** map for the people running the
+night — and both were corrected by building them.
 
 **Your decisions, unchanged:** impossibility is cumulative (25 m per frame step, so 3 frames = 75 m); verification
 is per group per frame with bulk toggles; no deadlines — a key time is a frame; multi-select drag, weighted
@@ -17,17 +18,19 @@ states and undo-across-publish are out.
 
 ## Where this is
 
-**All twenty-nine steps are done.** Step 25 deleted the run-sheet stack, so the plan is the only engine left in the
+**All thirty steps are done.** Step 25 deleted the run-sheet stack, so the plan is the only engine left in the
 product; step 26 made a timetable row say *where* the moment is; step 27 made a moment close itself when the IC's phone
 is close enough, with a radius that is the IC's own; step 28 gave the group's IC a press of their own ("we're here") and
-made a mark belong to the person who made it. Step 29, the last, gives the follower the picture the whole stage has
-been drawing for other people: the walk their group is meant to take, on the venue's zones, and nothing of any other
-group. The work was done one step at a time and stopped for review after each.
+made a mark belong to the person who made it; step 29 gave the follower the picture the whole stage has been drawing for
+other people: the walk their group is meant to take, on the venue's zones, and nothing of any other group. Step 30 puts
+that same walk **under the live map**, for the people running the night — one dashed line per group, the leg the clock
+is on drawn bold — and takes the last traces of the deleted engine out of the code, including an assertion that would
+have stopped being able to fail. The work was done one step at a time and stopped for review after each.
 
 | | |
 |---|---|
-| ✅ done | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 |
-| ▶ next | nothing in this plan. What is still owed is named in each step's **Owing** line, and the two candidates for a step 30 are there: the planned line under the live map, and the ops board's "change this mark" control |
+| ✅ done | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30 |
+| ▶ next | **nothing planned.** The candidates left are the debts the steps wrote down, and v29's first one is still the ops board's "change this mark" control. The list that is ready to pick from is the Owing lines, not a step |
 
 When a step finishes, its block below gains a **Done** line saying what now exists and the command that proves it.
 
@@ -158,7 +161,7 @@ When a step finishes, its block below gains a **Done** line saying what now exis
 
 ---
 
-## The 29 steps
+## The 30 steps
 
 ### Infrastructure first
 
@@ -2460,8 +2463,9 @@ already decided there was nothing to show (119). Both are answered before the re
 
 **What it is not.** No live position on this tab (that stays the Live page); no walk-time or distance estimate; no
 routing — the line is the plan, not a pathfinder; no editing; the IC's press stays on the schedule. The live map's
-planned line *underneath* the person's dot is deliberately **not** here: same data, a thin layer, but a second screen's
-change, and it should be seen working on the first one before it is copied. That is the first candidate for a step 30.
+planned line *underneath* the person's dot was deliberately **not** here: same data, a thin layer, but a second screen's
+change, and it should be seen working on the first one before it is copied. Step 30 did it, and the copy was one file:
+`planWalk.js` and `usePlanWalk.js` are both screens' now.
 
 **Owing.** A marshal's map draws **every** group's walk at once (the read answers all of them) and offers no way to look
 at one — the board's tick boxes are the answer on the board, and this screen has none. The map names the plan's revision
@@ -2471,6 +2475,155 @@ the walk itself is live. Two moments that share a place can put their labels on 
 framed. The schedule's place is a way into the map for a **follower**; a planner has the board and no link. And the one
 privacy cost this step spends: a follower's phone now holds **their own group's coordinates for the whole walk**, a
 longer trail than the live map keeps, because the map cannot draw a line it was never given.
+
+---
+
+**30. The plan under the live map, and the last words of the run sheet** — M, needs 29. **DONE.**
+
+Two things, both of them debts v29 wrote down: the map that shows where people *are* should show where the plan says
+they should be, and an engine that was deleted in step 25 should stop appearing in the code.
+
+**Where the gap was.** The live map drew people (a dot with initials, faded when the phone is stale), a diamond for a
+group with two or more ICs, trails, and the venue's zones. It had drawn the present and nothing else since step 25
+deleted the ops view with the run sheet. The plan's legs are on the **same page** as a table (step 20's `plan_ops`: a
+row per group, its state, its moment, its leg, its place), and the walk is on the **follower's** map (step 29). So the
+one comparison the whole stage exists for — *they should be between the gate and the stage, and they are still at the
+gate* — was split between a row and a dot on one screen and a line on another, and nothing joined them. v29 named this
+as the first candidate for a step 30 in so many words: "same data, a thin layer, but a second screen's change".
+
+**The second gap, corrected.** Step 24's Owing line says the Run sheet tab "is still there and can still be edited,
+checked and made Ready", and its own parenthetical two lines later says step 25 closed it — which is what happened: the
+tab, the editor, the workbook and the tables are gone, and `step25-gone.mjs` asserts the words have left the event's
+pages. So the half of this step that was planned as "hide the tab" was already done, and the honest version of it was
+smaller and sharper: **five traces** of a dead engine left in the code — and one of them was an assertion that had to be
+re-pointed in the same change, or it became vacuous the moment the trace went (finding 49's shape, and the reason this
+half was not a find-and-delete).
+
+**What the screen does.** On the Live page, under the people: **one dashed line per group** the read answered, in that
+group's colour, 2 px at 55 % — drawn only between moments that state a point, and **broken** where a moment is off site
+(step 9's rule for the board, step 29's for the follower's map: the same rule, not a third one). The leg the clock is on
+is drawn again over it, 4 px and solid: the stretch a group is meant to be walking **right now**, and the only thing on
+that screen allowed to be loud. Everything else is as it was, except that the legend gains one line ("a group's plan ·
+the bold one is due now") and one checkbox beside the Zones one — `Plan (v1)`, the revision the session follows — on by
+default and not remembered across a reload.
+
+**Why there is no interpolated dot — the decision this step makes.** The obvious next mark is "where the plan says they
+are at this second", between two moments. It is refused on the app's own rule: a mark says what the plan **states**, and
+a plan states points at moments and no pace between them. Step 20 refused to invent an ETA out of the strip for the same
+reason, and step 29's map has dots rather than a moving pin. A dot interpolated between two frames would be a position
+nobody wrote, sitting in the same colour as the ones who did — exactly the confusion the ops table exists to prevent.
+The bold **leg** says the useful half of it without inventing anything: it is the pair of statements the clock falls
+between.
+
+**The read: none new.** The line is drawn from `session_timetable` (065), the call the schedule polls and the follower's
+map already draws from. No function, no door, no new scope: staff read every group and a member reads their own because
+052's scope answers inside the engine and not in a filter on the screen — the sentence steps 16 and 29 are built on, and
+this step inherits it rather than restating it. The revision and T+0 the line needs arrive with the rows and with the
+session the page already holds.
+
+**One implementation, adopted by two screens.** The poll behind step 29 is subtle: an overlapping ask is deferred, a
+failed read keeps what is on screen, an answer for a session the screen has moved past is thrown away, the next planned
+moment is a wake-up, and a page nobody is looking at does not ask (findings 72, 79, 118, 119). A second copy of that in
+the live map is a second set of guards to drift apart. So the read moved into **`src/composables/usePlanWalk.js`** and
+both screens ask it, with `enabled` the switch that keeps the live map from polling behind a planner's board (the Live
+page is `v-show`n, so a panel on it runs on every page — finding 72's trap). The grouping — *a run is a stretch of
+on-site statements, a carried moment does not break it, an off-site one does* — and the question "which two statements
+is the clock between" moved to a pure **`src/utils/planWalk.js`**, which is what lets them be proved without a browser.
+Step 29's 51 assertions, re-run **unmodified**, are the proof that adopting the composable changed nothing a follower
+can see. Writing it turned four watchers into one: a new session arrives with a new plan and a new revision *at the same
+moment*, so watching them separately asked the engine for the same rows three times (visible in the first run of the
+step's own check as "3 timetable reads"). The answer is now keyed on one string — session, plan, revision, end time — and
+a change of session is what clears the rows.
+
+**Part 1 — the five traces.** (a) `PhoneTabBar.vue` draws no tabs inside an event: the `runsheet` icon and the header
+comment naming "Ops · Map · Run sheet · People · More" described a bar that component no longer renders — the icon is
+gone, the comment tells the truth (the bar is drawn for `/events`, `/phone-check` and `/me` only). (b) `EventStatus.vue`'s
+"running nothing (tracking only)" sentence carried `data-testid="status-run-sheet"`, a name from an engine that cannot
+run: it is `status-tracking-only` now. (c) That rename made `step2-start-on-a-plan.mjs`'s "no run sheet is claimed"
+assertion — which asserted the *absence* of that id — permanently true, so the check was re-pointed at the sentence
+itself: the same tab starts a second, tracking-only session from the same dialog and reads "running nothing (tracking
+only)", which is the presence the absence was standing in for (16 assertions, up from 14). (d) `native.css` kept three
+blocks for tables that no longer exist (`rs-table`, `rs-pill`, `rs-pill-move`), and their comments were the only
+leftovers of a swept stylesheet that named the run sheet in the middle of a sentence (finding 95's family: a cut-off
+`Groups must be in…` and a mangled `group → zone`). They are gone, and a grep for the classes is the proof nothing uses
+them — `pv-stack`, which the board's dialogs do use, stays. (e) `LiveMap.vue`'s ResizeObserver comment said it was
+"written for the run sheet panel that opened beside it": the observer is right for a phone turning, which is what the
+comment says now. `src/` still mentions "run sheet" in six comments, every one of them explaining what was deleted and
+why; the words are gone from the screens (step 25's check reads them).
+
+**The camera, which the plan got wrong.** The plan said "first fit = people if any, else the plan's points", and that is
+what the first build did — so the fixture, whose two ICs stand 25 m apart, was framed at the people's fit (capped at
+zoom 17) and the walk arrived as a smudge in the middle of a 1.5 km viewport: a picture of a neighbourhood (121). The fit
+is now the **union** of the people and the walk, capped at zoom 20 (OneMap's tiles enlarge past 19), and because the
+people's answer usually lands first the camera is allowed **one** refit when the walk arrives — unless somebody has
+dragged the map, after which the view is theirs (the `dragstart` that stopped following now also says so).
+
+**Fixture.** `dev/checks/step30-planline-prep.sql` — step 29's browser bench with three additions: a **GPS reading** for
+each group (Gate Crew's IC and Sound's member, both about 25 m **off** the plan's line, fresh enough to be "Live", so the
+shot and the check hold both halves of the question at once: where the plan says the group is, and where the group
+actually is), a **marshal** role (the identity that reads every group from the Live page), and the two empty benches
+(`…e3a` never started, `…e3b` running without a plan) carried over so one prep serves every tab. It keeps step 29's
+event and frame ids, so either check can run on either prep; the pair is named together in the README, because a change
+to one is a change to the other. Run within five minutes of the prep, as step 29's is: the bold leg is the pair
++0:00 → +5:00 only while the clock is between them.
+
+**Done when, through the screen.** `dev/checks/step30-planline.mjs` — **55 assertions over seven tabs**. **1**, staff on
+the Live page: two dashed lines, one per group, each `data-plan-line` carrying its group's id and its revision; each
+group's line in its own colour, 2 px at 55 %, dashed; one bold leg per group, `data-leg-from`/`data-leg-to` naming the
++0:00 and +5:00 moments, 4 px with no dashes; the ops table's row for Gate Crew says `active` and "Now +0:00", so the
+line and the row agree (a cross-read: the row's offset is `plan_ops`'s, the leg's is the timetable's); the legend names
+the leg; the checkbox is there, checked, and named for the revision; a press on a person's dot still selects them (the
+line does not eat the tap); and the page asked the timetable for the walk and never asked for the plan's frames or
+positions. **2**, the toggle: unchecked, no line and no leg, the same people still there; checked again, the walk returns
+— a hidden layer, not a discarded read. **3**, two identities on the same address: a **Sound member** sees one line and it
+is Sound's, with its own leg; **Gate Crew's IC** sees one line and it is Gate Crew's; neither sees the staff board at
+all. **4**, a **marshal**: two lines and the board's two rows. **5–6**, the two empty benches: no line, no legend line, no
+checkbox, and the map that is still there is the people's. **7**, the shots: `shots/step30-planline-staff.png` (both
+walks under both people, the board above) and `shots/step30-planline-sound.png` (one member's own line, and no board).
+
+**Done when, in the code**, without a browser: `npm run test:walk` (`tools/plan_walk_test.mjs`) — **26 assertions**. It
+proves the four rules of a run (a stretch of on-site statements, a carried moment that does not break it and adds no
+vertex, an off-site one that breaks it into two, a walk of one point kept as a dot) and the five places the clock can be
+(before the first statement, on the first leg, exactly on a statement, into and across an off-site gap, after the last),
+plus the grouping and the two cases a leg is refused for (a carried moment, an off-site one). **The four mutations live
+in the test**: it rewrites `planWalk.js` four ways — an off-site moment that does not break, a carried moment that does,
+a leg that does not include its own end, a leg for a walk of one point — imports each as a `data:` module and asserts
+that its named case comes out red, so the red-first proof runs on every `npm run test:walk` rather than once in a
+session. A mutation whose anchor line has moved throws instead of passing quietly (finding 49's family, one level up: a
+proof that can no longer fail).
+
+**What it is not.** No interpolated "should be here" dot, for the reason above. **No per-group filtering** on the live
+map: the board has tick boxes and this map gets the legend, and a marshal who wants one group's line is the debt this
+step adds. No tap on a line — it is `interactive: false` on purpose, because a dashed line across the venue would
+swallow the taps meant for the people under it, and the taps are the screen's subject. No walk time or distance (step
+29's refusal, unchanged). No notice when a republish moves the line: the composable re-reads on the revision and
+redraws, and the ops table's own numbers are the announcement. Nothing is drawn for a session that runs no plan, which
+is the divide step 29's empty states already drew.
+
+**Owing it adds.** A republish redraws silently. A marshal has no way to isolate one group. Two lines that cross look
+like one at low zoom, and a group with a single stated point draws no line at all (a run of one is a dot). The checkbox
+is not remembered, and neither is the camera: it frames the venue once and then it is the person's, so a group that
+walks out of the frame stays out of it until somebody pans. And the composable is now shared: a change to `usePlanWalk`
+has to be re-proved by **both** checks, which is a coupling worth writing down where the file is read (it is, at the top
+of the composable). The live map also reads the timetable only while it is the page on show, so a planner who sits on
+the Timeline page is not watching the walk — which is right, and is finding 72's rule rather than a new gap.
+
+**Suite.** `step30-planline` (**55**, 7 tabs); **step 29 re-run unmodified** (**51**) for the adoption; step 16's
+schedule (**69**) and step 2's start (**16**, up from 14: the re-pointed assertion) for the screens it touches; step 25
+gone (**10**); `npm run test:walk` (**26**); `npm run test:db` **322**; `npm run test:sheet` **58**; `npm run build`
+clean; ledger **65 files, 65 applied, 0 pending, 0 drifted** — this step adds **no migration**.
+
+**Found while doing it:** findings 120–122. A `watch` registered **above** the `computed` it watches throws on mount —
+"cannot access 'planWalks' before initialization" — because the two live in the same `setup` body and the `const` is
+still in its temporal dead zone when the watcher is created; the watcher belongs below what it watches (120). The camera
+framed the people and left the walk a smudge (121, above). And the harness's `shot()` captures the **viewport**, not the
+page: the Live page is taller than 1500 px (the board, the log, then the map), so the first pictures of this step were
+pictures of the board with the map cut in half — the shot now scrolls the map into view first, which is the same family
+as finding 95's "a screenshot must be of the thing" (122).
+
+This block was written before the code, which makes it the second step in this plan (after 29) to be planned in the
+document rather than discovered in it — and the second to be corrected by building it: the counts above are what came
+out, not what was guessed.
 
 ---
 
@@ -2502,6 +2655,7 @@ longer trail than the live map keeps, because the map cannot draw a line it was 
 | A moment closes when the IC's phone is close enough, at a radius the IC or the planner sets | 27 (done) |
 | A mark belongs to the person who made it, and the IC can say "we're here" from their own schedule | 28 (done) |
 | A follower opens a map and sees the walk their own group is meant to take, and nothing of another group | 29 (done) |
+| A staff map that draws the plan's walk under the live dots, with the leg due now made loud, and no dead run-sheet traces left in the code | 30 (done) |
 
 **Out, by your decision:** named states / waypoint hierarchy · undo across a publish boundary.
 

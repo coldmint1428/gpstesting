@@ -548,6 +548,37 @@ with nothing to draw — never started, and running without a plan — and the p
 comparison). Screenshots: `shots/step29-route-gate.png`, `shots/step29-route-sound.png`,
 `shots/step29-schedule-link.png`, `shots/step29-route-empty.png`, `shots/step29-board.png`.
 
+The Live page now draws that same walk **under the people**. While the live session runs a plan, the map shows one dashed
+line per group in the group's colour (2 px at 55 %), broken where the plan takes the group off site, and the leg the clock
+is on redrawn over it, 4 px and solid — the stretch a group is meant to be walking *right now*, and the only loud thing on
+that screen. The legend gains a line for it ("a group's plan · the bold one is due now") and a `Plan (vN)` checkbox
+beside Zones, on by default and not remembered. There is deliberately **no interpolated "should be here" dot** between two
+moments: a mark says what the plan states, and a plan states points at moments and no pace between them (step 20 refused to
+invent an ETA for the same reason); the bold leg is the pair of statements the clock falls between. The line is
+`interactive: false`, so a press on a person's dot still follows that person, and nothing is drawn or asked for when the
+session runs no plan. The rules that turn timetable rows into a line — a run of on-site statements, a carried moment that
+does not break it, an off-site one that does, a walk of one point that is a dot — are `src/utils/planWalk.js`, and the read
+(the poll, the wake at the next moment, the guards against an overlapping ask and a stale answer, and `enabled`, which keeps
+a `v-show`n page from asking behind the one on screen) is `src/composables/usePlanWalk.js`. **Both maps ask that one
+composable**, so `PlanRoute` no longer owns its own copy of the poll, and step 29's 51 assertions re-run unmodified are the
+proof that the move changed nothing a follower can see. The camera frames the people and the walk **together** (capped at
+zoom 20, with one refit when the walk arrives): framing the people alone left an 80 m walk a smudge in a 1.5 km viewport.
+`dev/checks/step30-planline-prep.sql` is step 29's bench plus a GPS reading 25 m off each group's line and a marshal;
+`dev/checks/step30-planline.mjs` proves the screen (55 assertions over seven tabs: staff with the board's row on the same
+moment the bold leg starts from, the toggle off and on, Sound's member and Gate Crew's IC on the same address each seeing
+only their own line, a marshal seeing both, and the two empty benches with no line and no checkbox), and
+`npm run test:walk` (26 assertions) proves the geometry and the clock without a browser — including four mutated copies of
+`planWalk.js`, imported one at a time, each of which must turn its named case red. Screenshots:
+`shots/step30-planline-staff.png`, `shots/step30-planline-sound.png`.
+
+The last words of the run sheet left the code in the same pass: an unused `runsheet` icon and a header comment in
+`PhoneTabBar.vue` that described a bar it no longer draws, three dead `rs-*` blocks in `native.css` (whose comments were
+the last place a swept stylesheet still named the run sheet mid-sentence), and a comment on the live map's resize observer.
+The sentence "running nothing (tracking only)" carried a test id named after the dead engine (`status-run-sheet`); it is
+`status-tracking-only` now, and the step-2 check that asserted the **absence** of the old id — an assertion that would have
+been permanently true from the moment of the rename — now starts a second, tracking-only session and reads the sentence
+itself (16 assertions, up from 14).
+
 ### Checking the schema without a database (`npm run test:db`)
 
 The bench's rules are decided in SQL, and until round 4 the only way to find out whether a migration was
