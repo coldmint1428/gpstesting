@@ -8,7 +8,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 
 export function useEventSessions(eventId) {
-  const sessions = ref([]) // newest first: { id, startsAt: Date, endedAt: Date|null, endReason, scheduledEnd, runSheetId }
+  const sessions = ref([]) // newest first: { id, startsAt: Date, endedAt: Date|null, endReason, scheduledEnd, planId, t0At, planRev }
   const loaded = ref(false)
   const errorMsg = ref('')
   const now = ref(Date.now())
@@ -16,7 +16,7 @@ export function useEventSessions(eventId) {
   async function load() {
     const { data, error } = await supabase
       .from('event_sessions')
-      .select('id, starts_at, ended_at, end_reason, scheduled_end, run_sheet_id')
+      .select('id, starts_at, ended_at, end_reason, scheduled_end, plan_id, t0_at, plan_rev')
       .eq('event_id', eventId)
       .order('starts_at', { ascending: false })
     if (error) {
@@ -31,7 +31,9 @@ export function useEventSessions(eventId) {
       endedAt: s.ended_at ? new Date(s.ended_at) : null,
       endReason: s.end_reason,
       scheduledEnd: s.scheduled_end ? new Date(s.scheduled_end) : null,
-      runSheetId: s.run_sheet_id, // the run sheet version it runs with (null = tracking only)
+      planId: s.plan_id, // 039: the plan it runs with (step 24: a plan or nothing)
+      t0At: s.t0_at ? new Date(s.t0_at) : null, // when the plan's clock read T+0 (null = starts_at)
+      planRev: s.plan_rev,
     }))
     loaded.value = true
     timeStartTimer()
@@ -70,10 +72,15 @@ export function useEventSessions(eventId) {
     if (error) throw new Error(error.message)
     return data
   }
-  // runSheetId: the version to run with, or null for tracking only (merger Stage 4)
-  const startEvent = (runSheetId = null) => call('start_event', { p_run_sheet: runSheetId || null })
-  const scheduleStart = (date, runSheetId = null) =>
-    call('schedule_event_start', { p_starts_at: new Date(date).toISOString(), p_run_sheet: runSheetId || null })
+  // The plan to run with, or null for tracking only. Since 060 there is no run-sheet parameter to pass: a session
+  // runs a plan or nothing, and the run-sheet engine can no longer be started at all.
+  const startEvent = (planId = null) =>
+    call('start_event', { p_plan: planId || null })
+  const scheduleStart = (date, planId = null) =>
+    call('schedule_event_start', {
+      p_starts_at: new Date(date).toISOString(),
+      p_plan: planId || null,
+    })
   const cancelSchedule = () => call('cancel_scheduled_start')
   const endEvent = () => call('end_event') // returns how many people were stopped
   const scheduleEnd = (date) => call('schedule_event_end', { p_ends_at: new Date(date).toISOString() })

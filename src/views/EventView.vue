@@ -1,7 +1,9 @@
 <script setup>
 // One event: status (live or not) and its pages (/events/:id/<page>): overview, timeline, map, people, groups, live,
 // playback, simulator. Which pages and controls you get depends on your role (src/utils/permissions.js).
-import { ref, computed, watch } from 'vue'
+// The run-sheet half of this page -- the classic editor, the live show's bar and panel, the ops queue, the member's
+// next-move card and the group message -- was deleted in step 25 with the engine that fed it.
+import { ref, computed, watch, onMounted } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useEventData } from '../composables/useEventData'
@@ -18,7 +20,7 @@ import { clearPushReminders } from '../composables/usePushNotifications'
 import { askConfirm, toast } from '../composables/useNotify'
 import { useZoneActivity } from '../composables/useZoneActivity'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
-import { formatDayTime, formatTimeSeconds, sgtIso } from '../utils/time'
+import { formatDayTime, formatTimeSeconds } from '../utils/time'
 import { groupRoleLabel } from '../utils/people'
 import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, isMarshal, viewRole, canView, pageMode } from '../utils/permissions'
 import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, updateEventDetails, deleteEvent } from '../services/memberService'
@@ -35,18 +37,10 @@ import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
 import ZoneOverview from '../components/ZoneOverview.vue'
 import SimulatorPanel from '../components/SimulatorPanel.vue'
-import RunSheetPanel from '../components/RunSheetPanel.vue'
-import ShowBar from '../components/ShowBar.vue'
-import ShowPanel from '../components/ShowPanel.vue'
-import { useShow } from '../composables/useShow'
-import { useRunSheetList } from '../composables/useRunSheets'
-import OpsSummary from '../components/OpsSummary.vue'
-import OpsQueue from '../components/OpsQueue.vue'
-import OpsDecision from '../components/OpsDecision.vue'
-import { useOps } from '../composables/useOps'
-import { useGroupMessages } from '../composables/useGroupMessages'
-import NextMoveCard from '../components/NextMoveCard.vue'
-import { useMyMoves } from '../composables/useMyMoves'
+import PlanBoard from '../components/plan/PlanBoard.vue'
+import PlanSchedule from '../components/plan/PlanSchedule.vue'
+import PlanOps from '../components/plan/PlanOps.vue'
+import { usePlan } from '../composables/usePlan'
 import { useBroadcasts } from '../composables/useBroadcasts'
 import BroadcastBanner from '../components/BroadcastBanner.vue'
 import BroadcastPanel from '../components/BroadcastPanel.vue'
@@ -64,47 +58,35 @@ const { event, groups, members, loading, errorMsg, load, me, isRoot, canManage, 
 const sessions = useEventSessions(props.id)
 const { isLive, liveSession, scheduledStart } = sessions
 
-// Run sheet versions (merger Stage 4): root / planners edit, marshals read; ICs and members don't see them.
-// One list for the Run sheet tab, the Start / Schedule picker and Playback.
-const runSheets = useRunSheetList(props.id, seesWholeEvent)
-// The live show (merger Stage 6): while the live session runs a run sheet, root / planners / marshals see it
-// beside the map (planners press GO / Hold / +30 s). What happens arrives here once, as a toast, whatever tab is open.
-const showSession = computed(() =>
-  seesWholeEvent.value && liveSession.value && liveSession.value.runSheetId ? liveSession.value.id : null,
-)
-const SHOW_TOAST = {
-  waiting_go: ['warning', 10000],
-  waiting_groups: ['warning', 12000],
-  anchor_risk: ['danger', 12000],
-  anchor_cut: ['danger', 12000],
-  finished: ['info', 6000],
-  go: ['info', 5000],
-  hold: ['warning', 6000],
-  resume: ['info', 5000],
-  skip: ['info', 5000],
-  end_now: ['info', 5000],
-  add_time: ['info', 5000],
-  switch: ['info', 6000],
-  keep_holding: ['warning', 6000],
-  delay_report: ['warning', 12000],
-  // 'message' (to a group) is not toasted: the sender is told, and a message to 20 waiting groups would be 20 toasts
-}
-const show = useShow(showSession, {
-  onLog(entry) {
-    const how = SHOW_TOAST[entry.kind]
-    if (how) toast(entry.message, how[0], how[1])
-  },
+// Plans (039): a session runs a plan or nothing (step 24). The Start dialog needs the list of plans.
+const startPlans = usePlan(props.id)
+const planSession = computed(() => !!(liveSession.value && liveSession.value.planId))
+// What the schedule reads (step 16): the session that is running or about to run, or -- once the event is over -- the
+// last one, so a member can still see how the night went. Null before anything has been started, which is the one
+// case with no timetable to show.
+const scheduleSession = computed(() => {
+  const open = sessions.openSession.value
+  if (open) return open
+  const last = sessions.sessions.value[0]
+  return last && last.planId ? last : null
 })
-
-// Start / schedule / cancel / end / switch change which version is Used, scheduled or live. Realtime doesn't
-// announce a cancelled schedule (a deleted row), so reload whenever the session state changes.
+// The page mounts before the event's data (and so before "am I staff?") has arrived, so the list is loaded when the
+// answer becomes yes rather than at mount: at mount `seesWholeEvent` is still false and the Start dialog would open
+// with nothing in it.
+// `plansReady` exists so the Start button cannot be pressed while the list is still on its way: pressing it then
+// opened the dialog with no plan in it and quietly meant "tracking only", which is the wrong thing to do by accident.
+const plansReady = ref(false)
 watch(
-  () => sessions.sessions.value.map((x) => x.id + (x.endedAt ? 'e' : '') + (x.runSheetId || '') + x.startsAt.getTime()).join(),
-  () => {
-    if (seesWholeEvent.value) runSheets.load()
+  seesWholeEvent,
+  (yes) => {
+    if (!yes || startPlans.plans.value.length) return
+    startPlans
+      .loadPlans()
+      .catch(() => {})
+      .finally(() => (plansReady.value = true))
   },
+  { immediate: true },
 )
-
 // Zones during the live session (merger Stage 2): who is inside which zone, group positions, No-Go alerts.
 // A No-Go entry is told to the event's root / planners / marshals (toast) and to the IC who entered it.
 const zoneActivity = useZoneActivity(props.id, computed(() => (liveSession.value ? liveSession.value.id : null)), {
@@ -157,27 +139,9 @@ function flushNoGoToasts() {
   }
 }
 
-// The groups' movements during the show (merger Stage 7): statuses, the problem queue and the map's clusters. Read
-// by root / planners / marshals only (the same people who see the show).
-const ops = useOps(showSession, { groups, zones: zoneActivity.zones, myUserId: computed(() => (auth.user ? auth.user.id : null)) })
-const hasOps = computed(() => !!show.board.value && ops.rows.value.length > 0)
+// The map, for "the group I picked is over there". The ops queue that used to call this is gone with the run sheet
+// engine (step 25); the ref stays because the Live page owns the map.
 const liveMap = ref(null)
-function focusGroup(groupId) {
-  if (liveMap.value) liveMap.value.focusGroup(groupId)
-}
-
-// A message from the ops view to my group ("Please head to FORMATION_1 now"): a toast when it arrives, and the newest
-// one stays on the page while the event is live (until closed).
-const groupMessages = useGroupMessages(
-  computed(() => (myGroup.value ? myGroup.value.id : null)),
-  computed(() => (liveSession.value ? liveSession.value.id : null)),
-  {
-    onMessage(m) {
-      toast('Message from ' + m.from + ': ' + m.body, 'warning', 15000)
-    },
-  },
-)
-const closedMessage = ref(null)
 
 // "Message everyone" (032): planners send one message to many groups at once; whoever it reaches sees a banner until
 // they press Got it (and a toast as it arrives).
@@ -215,6 +179,11 @@ const modeOf = (name) => pageMode(name, role.value)
 const visiblePages = computed(() =>
   PAGES.filter((p) => canView(p, role.value) && (p !== 'simulator' || (event.value && event.value.is_simulation))),
 )
+// The Timeline tab is the planner's board; for everyone else it is their own timetable, and the tab says so
+// (step 16). The address stays /timeline, so one page keeps one name in the URL.
+function pageLabel(name) {
+  return name === 'timeline' && modeOf('timeline') !== 'edit' ? 'Schedule' : PAGE_LABEL[name]
+}
 // Someone changed my role or removed me: keep the router guard's copy right, leave pages I may no longer view
 watch(membership, async (now) => {
   if (loading.value || !event.value) return
@@ -233,26 +202,13 @@ watch(membership, async (now) => {
   }
 })
 
-// My group's next move (merger Stage 8): any member of a group sees where to be, by when, and when to leave. A push
-// ("Get ready", "Leave now", "Running late", a message) opens the page with ?next=1: the card is scrolled into view.
-const myMoves = useMyMoves(
-  computed(() => (liveSession.value ? liveSession.value.id : null)),
-  computed(() => !!myGroup.value),
-)
-const myPosition = computed(() => {
-  const p = auth.user ? live.positions.value[auth.user.id] : null
-  return p && p.source !== 'stop' ? { lat: p.lat, lng: p.lng } : null
-})
-const nextMoveEl = ref(null)
+// A push ("get ready", "leave now", "you are late", a message) opens the page with ?next=1. It used to scroll to the
+// member's "next move" card, which was read from `movements` and deleted with the run-sheet engine (step 25). The
+// member's own moments live on the Schedule page now (step 16), so that is where the push lands.
 watch(
-  [() => route.query.next, () => myMoves.loaded.value],
-  ([wanted, loaded]) => {
-    if (wanted !== '1' || !loaded) return
-    goToPage('live')
-    setTimeout(() => {
-      const el = nextMoveEl.value && (nextMoveEl.value.$el || nextMoveEl.value)
-      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 100)
+  () => route.query.next,
+  (wanted) => {
+    if (wanted === '1') goToPage('timeline')
   },
   { immediate: true },
 )
@@ -373,7 +329,7 @@ async function saveEventDetails(details) {
 async function removeEvent() {
   const ok = await askConfirm({
     title: 'Delete "' + event.value.name + '"?',
-    message: 'Everything in it goes: groups, people, zones, run sheets, recordings. This cannot be undone.',
+    message: 'Everything in it goes: groups, people, zones, plans, recordings. This cannot be undone.',
     confirmText: 'Delete event',
     danger: true,
   })
@@ -425,7 +381,9 @@ async function removeEvent() {
       </div>
 
       <EventStatus :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount"
-        :run-sheets="seesWholeEvent ? runSheets : null" :planned-start="event.starts_at" :planned-end="event.ends_at">
+        :plans="seesWholeEvent ? startPlans.plans.value : []"
+        :plans-ready="!seesWholeEvent || plansReady"
+        :planned-start="event.starts_at" :planned-end="event.ends_at">
         <!-- Only the group's IC shares, and only while the event is live. One tap starts sharing. -->
         <template v-if="isIC" #sharing>
           <div class="d-flex flex-wrap align-items-center gap-2">
@@ -464,30 +422,9 @@ async function removeEvent() {
         <strong>You are inside a No-Go area:</strong> {{ myNoGo.map((z) => z.name).join(', ') }}. Please leave it now.
       </div>
 
-      <!-- A message from the planners to my group (merger Stage 7) -->
-      <div
-        v-if="groupMessages.latest.value && closedMessage !== groupMessages.latest.value.id"
-        class="alert alert-warning py-2 d-flex align-items-start gap-2"
-        role="alert"
-        data-testid="group-message"
-      >
-        <span class="flex-grow-1">
-          <strong>Message from {{ groupMessages.latest.value.from }}</strong>
-          <span class="text-muted small"> · {{ formatTimeSeconds(groupMessages.latest.value.at) }}</span><br />
-          {{ groupMessages.latest.value.body }}
-        </span>
-        <button type="button" class="btn-close" aria-label="Close" @click="closedMessage = groupMessages.latest.value.id"></button>
-      </div>
-
-      <NextMoveCard
-        v-if="liveSession && myGroup"
-        ref="nextMoveEl"
-        :moves="myMoves"
-        :my-position="myPosition"
-        :sharing="sharingHere"
-        @stop-sharing="tracker.stop()"
-        @share="startSharing"
-      />
+      <!-- A message from the planners to my group used to sit here. It was written by the ops board's
+           `message_group`, which step 25 deleted with the run sheet engine and which nothing else wrote, so the
+           banner that could never receive a message went with it. "Message everyone" (032) is right below. -->
 
       <SharingWarnings v-if="sharingHere" />
       <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
@@ -510,7 +447,7 @@ async function removeEvent() {
               replace
               :data-testid="'tab-' + p"
             >
-              {{ PAGE_LABEL[p] }}
+              {{ pageLabel(p) }}
               <span v-if="p === 'people'" class="badge text-bg-light">{{ members.length }}</span>
             </RouterLink>
           </li>
@@ -523,14 +460,14 @@ async function removeEvent() {
         </div>
       </nav>
 
-      <!-- Live: v-show keeps the map alive (and its live connection) on the other pages. With a live run sheet the
-           show's bar sits on top and its panel beside the map (above it on a phone). -->
+      <!-- Live: v-show keeps the map alive (and its live connection) on the other pages. -->
       <div v-show="page === 'live'">
-      <ShowBar v-if="show.board.value" :show="show" />
-      <OpsSummary v-if="hasOps" :ops="ops" />
-      <OpsDecision v-if="show.board.value" :show="show" :ops="ops" :groups="groups" :can-run="canManage" />
+      <!-- A plan session's staff picture of the walk: a row per group, its moment, its leg and where its ICs are
+           (step 20). It is mounted only while the Live page is shown: the page itself is kept alive by v-show for the
+           map, and a panel that polls every five seconds must not run behind a planner who is drawing the plan. -->
+      <PlanOps v-if="page === 'live' && planSession && seesWholeEvent" :session="liveSession" />
       <div class="row g-3">
-      <div :class="show.board.value ? 'col-lg-8' : 'col-12'">
+      <div class="col-12">
       <LiveMap
         ref="liveMap"
         :active="page === 'live'"
@@ -548,18 +485,12 @@ async function removeEvent() {
         :zone-counts="zoneActivity.countsByZone.value"
         :no-go-occupied="zoneActivity.noGoOccupied.value"
         :group-positions="zoneActivity.groupPositions.value"
-        :ops-active="hasOps ? ops.active.value : {}"
-        :ops-visible="hasOps ? ops.visibleGroupIds.value : null"
       />
-      </div>
-      <div v-if="show.board.value" class="col-lg-4 order-first order-lg-last">
-        <ShowPanel :show="show" :can-run="canManage" :ops="hasOps ? ops : null" />
-        <OpsQueue v-if="hasOps" class="mt-3" :ops="ops" :now="show.now.value" @select="focusGroup" />
       </div>
       </div>
 
       <!-- "Message everyone" (032): planners send one message to many groups at once -->
-      <BroadcastPanel v-if="canManage" :broadcasts="broadcasts" :groups="groups" :show="show" :can-run="canManage" :native="native" />
+      <BroadcastPanel v-if="canManage" :broadcasts="broadcasts" :groups="groups" :native="native" />
       </div>
 
       <EventOverview
@@ -620,24 +551,30 @@ async function removeEvent() {
         <PolygonTestView :event-id="id" embedded />
       </template>
 
-      <!-- Timeline: the run sheet (root / planners edit, marshals read) -->
-      <RunSheetPanel
-        v-if="seesWholeEvent && page === 'timeline'"
-        :event-id="id"
-        :can-edit="modeOf('timeline') === 'edit'"
-        :list="runSheets"
-        :groups="groups"
-        :live-session="liveSession"
-        :event-name="event.name"
-        :planned-day="event.starts_at ? sgtIso(new Date(event.starts_at)).slice(0, 10) : ''"
-        :members="members"
-        @changed="load"
-      />
+      <!-- Timeline: the plan board for the people who draw it, and the timetable for the people who follow it
+           (step 16). Root and planner get the strip, the map and the inspector; a member, an IC, a group admin or a
+           marshal gets their own moments on the plan's clock, from the one read that is already scoped to them (052).
+           The root's "open the classic run sheet" button was here until step 25 deleted the run sheet. -->
+      <template v-if="page === 'timeline'">
+        <PlanBoard
+          v-if="modeOf('timeline') === 'edit'"
+          :event-id="id"
+          :can-edit="modeOf('timeline') === 'edit'"
+          :only-group-id="seesWholeEvent ? null : myGroup ? myGroup.id : 'none'"
+          :live-session="liveSession"
+        />
+        <PlanSchedule
+          v-else
+          :event-id="id"
+          :session="scheduleSession"
+          :whole="seesWholeEvent"
+          :my-group="myGroup"
+        />
+      </template>
 
-      <!-- Not built yet for these roles (a teammate's screens): the view-only map, and the timeline for people who
-           can't read the run sheet -->
+      <!-- Not built yet for these roles: the view-only map -->
       <EventPagePlaceholder
-        v-if="(page === 'map' && !canManage) || (page === 'timeline' && !seesWholeEvent)"
+        v-if="page === 'map' && !canManage"
         :page="page"
         :mode="modeOf(page)"
         :role="role"

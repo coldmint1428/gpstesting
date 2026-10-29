@@ -800,7 +800,7 @@ onUnmounted(() => {
       <div>
         <h1 v-if="!embedded" class="h4 mb-1">Polygon bench</h1>
         <p v-else class="small text-muted mb-1" data-testid="zones-intro">
-          Every area drawn here is one of this event's zones, with a code the run sheet uses.
+          Every area drawn here is one of this event's zones, with a code the plan and the radio use.
           <template v-if="!canEdit"> Only the event's root and planners can change them.</template>
         </p>
         <!-- Who else is on the bench. A planner working alone sees nothing here at all, which is

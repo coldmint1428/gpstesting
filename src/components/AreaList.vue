@@ -34,7 +34,7 @@ const props = defineProps({
   // the same colours as the chip on the shape, so the list and the map are recognisably telling
   // the planner the same thing. This component only draws it and decides nothing.
   presence: { type: Object, default: null },
-  // An event's bench (020): every area is a zone with a CODE the run sheet refers to (FORMATION_1).
+  // An event's bench (020): every area is a zone with a CODE a plan and the radio refer to (FORMATION_1).
   showCode: { type: Boolean, default: false },
 })
 

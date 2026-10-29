@@ -1,6 +1,6 @@
 <script setup>
-// Stand-in for event screens not built yet for some roles (the view-only map, and the timeline for people who can't
-// read the run sheet). It already gets what the real screen needs: replace this component, keep the props.
+// Stand-in for event screens not built yet for some roles (the view-only map). It already gets what the real screen
+// needs: replace this component, keep the props.
 //   page : 'map' | 'timeline'      mode : 'edit' | 'view' (from canEdit in src/utils/permissions.js)
 //   role : root | planner | marshal | admin | ic | member      group : my group (or null)
 import { computed } from 'vue'

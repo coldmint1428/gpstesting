@@ -8,8 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:db": "node tools/pgtest.mjs",
-    "test:runsheet": "node tools/run_sheet_file_test.mjs",
-    "make:template": "node tools/make_run_sheet_template.mjs",
+    "check:board": "node tools/run.mjs dev/checks/board-smoke.mjs",
+    "db:status": "node tools/migrate.mjs status",
+    "db:up": "node tools/migrate.mjs up",
+    "test:sheet": "node tools/plan_sheet_test.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npm run build && npx cap sync android && npx cap open android"
   },

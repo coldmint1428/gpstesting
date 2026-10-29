@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plan board preview</title>
+    <!-- An inline icon so the browser's automatic /favicon.ico request is not a 404 in the console: the check
+         runner treats any failed request as a failure, and it should be able to stay that strict. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23244f3f'/%3E%3C/svg%3E"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #eef1ef;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Development harness: renders src/components/plan/PlanBoard.vue against fixtures, with no session and no
+         database. Not part of the build (Vite only builds index.html), safe to delete once the board is wired. -->
+    <div id="app"></div>
+    <script type="module" src="/dev/preview.js"></script>
+  </body>
+</html>

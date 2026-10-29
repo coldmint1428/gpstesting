@@ -1,0 +1,1570 @@
+/* planova.css — the planning board's look.
+ *
+ * Scoped under .pv so the rest of the app keeps its own styling while this is the only screen using it.
+ * Colours are the sage/forest set from the Planova design; nothing here relies on Bootstrap's theme, but the
+ * board sits inside a Bootstrap page, so the few resets that matter (buttons, headings) are handled locally.
+ */
+
+.pv {
+  --pv-primary: #244f3f;
+  --pv-primary-deep: #163026;
+  --pv-chrome: #213322;
+  --pv-canvas: #f5f7f5;
+  --pv-surface: #ffffff;
+  --pv-ink: #1b241f;
+  --pv-ink-soft: #5d6c63;
+  --pv-ink-faint: #8b978f;
+  --pv-line: #e0e6e2;
+  --pv-line-strong: #c3cfc8;
+  --pv-danger: #a63a2f;
+  --pv-danger-soft: #f7e7e4;
+  --pv-warn: #a9721c;
+  --pv-ok: #2f6b4f;
+  --pv-radius: 10px;
+  --pv-radius-sm: 6px;
+  --pv-shadow: 0 1px 2px rgba(20, 35, 28, 0.06), 0 8px 22px rgba(20, 35, 28, 0.06);
+
+  color: var(--pv-ink);
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'tnum' 1;
+}
+
+.pv *,
+.pv *::before,
+.pv *::after {
+  box-sizing: border-box;
+}
+
+/* ---------- shell ---------- */
+
+.pv-board {
+  display: flex;
+  flex-direction: column;
+  min-height: 660px;
+  background: var(--pv-canvas);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  overflow: hidden;
+}
+
+/* The board is three bands: the head (identity and actions), the body (map + inspector) and the time bar.
+   The map takes whatever height is left, which is why the body is the only part that flexes.
+   Named pv-board-* on purpose: src/assets/native.css already owns .pv-head, .pv-title and .pv-empty for the
+   phone shell, and an earlier version of this file borrowed .pv-head and silently inherited its display:flex. */
+.pv-board-head {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.pv-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+@media (min-width: 992px) {
+  /* Explicit areas, because auto-placement put the time bar between the map and the inspector. The map owns the
+     top-left, the bar sits under it, and the inspector runs the full height of the body on the right. */
+  .pv-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-rows: minmax(360px, 1fr) auto;
+    grid-template-areas:
+      'stage inspector'
+      'bar inspector';
+  }
+  .pv-stage {
+    grid-area: stage;
+    min-height: 360px;
+  }
+  .pv-bar {
+    grid-area: bar;
+  }
+  .pv-inspector {
+    grid-area: inspector;
+    border-left: 1px solid var(--pv-line);
+    border-top: 0;
+    overflow-y: auto;
+  }
+}
+
+/* ---------- toolbar ---------- */
+
+.pv-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-board-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pv-spacer {
+  flex: 1 1 auto;
+}
+
+.pv-btn {
+  appearance: none;
+  border: 1px solid var(--pv-line-strong);
+  background: var(--pv-surface);
+  color: var(--pv-ink);
+  border-radius: var(--pv-radius-sm);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.pv-btn:hover:not(:disabled) {
+  border-color: var(--pv-primary);
+  background: #f2f6f4;
+}
+
+.pv-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pv-btn.is-primary {
+  background: var(--pv-primary);
+  border-color: var(--pv-primary);
+  color: #f4f8f6;
+}
+
+.pv-btn.is-primary:hover:not(:disabled) {
+  background: var(--pv-primary-deep);
+}
+
+.pv-btn.is-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--pv-ink-soft);
+}
+
+.pv-btn.is-danger {
+  color: var(--pv-danger);
+  border-color: #e4c6c1;
+}
+
+.pv-select,
+.pv-log-select {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: var(--pv-radius-sm);
+  background: var(--pv-surface);
+  color: var(--pv-ink);
+  max-width: 220px;
+}
+
+.pv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: #eef2f0;
+  color: var(--pv-ink-soft);
+}
+
+.pv-badge.is-live {
+  background: #e2f0e8;
+  color: var(--pv-ok);
+}
+
+.pv-badge.is-bad,
+.pv-badge.is-blocked {
+  background: var(--pv-danger-soft);
+  color: var(--pv-danger);
+}
+
+/* ---------- the running plan's strip (step 15) ----------
+   One line naming the revision of the running plan this page is showing, and — when a fresh read says a newer one
+   exists — a second line that says so in words, with the button that catches up. It sits between the head and the
+   body so it stays on screen whatever the inspector is doing.
+
+   Named pv-run-* on purpose, not pv-live-*: native.css already owns .pv-live, .pv-live-dot and friends for the
+   phone shell's live-event card (`background: var(--pv-brand); color: #fff`), and the first version of this strip
+   borrowed the name -- so its text came out white on a cream band, and a screenshot was the only way to see it.
+   The same trap caught .pv-head in this file's first version; the phone shell owns that prefix too. */
+
+.pv-run {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 12px;
+  background: #eef4ef;
+  border-bottom: 1px solid var(--pv-line);
+  font-size: 12.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-run-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pv-run-line strong {
+  color: var(--pv-ink);
+  font-weight: 600;
+}
+
+.pv-run-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pv-ok);
+  box-shadow: 0 0 0 3px rgba(47, 107, 79, 0.14);
+}
+
+.pv-run-clock {
+  padding-left: 8px;
+  border-left: 1px solid var(--pv-line-strong);
+}
+
+.pv-run.is-stale {
+  background: #fdf4e4;
+}
+
+.pv-run-warn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--pv-warn);
+  font-weight: 500;
+}
+
+.pv-run-warn .pv-btn {
+  border-color: var(--pv-warn);
+  background: var(--pv-warn);
+  color: #fff;
+}
+
+.pv-run-warn .pv-btn:hover:not(:disabled) {
+  background: #8d5f14;
+}
+
+/* ---------- stage (map) ---------- */
+
+.pv-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 340px;
+  background: #e8ece9;
+}
+
+.pv-map {
+  position: absolute;
+  inset: 0;
+}
+
+.pv-map .leaflet-container {
+  background: #e8ece9;
+  font-family: inherit;
+}
+
+/* The geography is a reference, not a tool: it must not feel clickable from the planner. */
+.pv-map .leaflet-interactive {
+  cursor: default;
+}
+
+.pv-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 500;
+  max-width: 300px;
+  padding: 7px 10px;
+  border-radius: var(--pv-radius-sm);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--pv-shadow);
+  font-size: 12px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-marker-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.pv-marker {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 30, 22, 0.4);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* ---------- time bar ---------- */
+
+.pv-bar {
+  flex: 0 0 auto;
+  background: var(--pv-surface);
+  border-top: 1px solid var(--pv-line);
+}
+
+.pv-bar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--pv-line);
+  font-size: 12px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-track {
+  position: relative;
+  height: 104px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  padding-bottom: 6px;
+}
+
+.pv-track-inner {
+  position: relative;
+  height: 100%;
+  min-width: 100%;
+}
+
+.pv-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 22px;
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--pv-line);
+}
+
+.pv-tick > span {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 10px;
+  color: var(--pv-ink-faint);
+  white-space: nowrap;
+}
+
+.pv-frames {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.pv-frame {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pv-frame:active {
+  cursor: grabbing;
+}
+
+.pv-frame-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pv-primary);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--pv-line-strong);
+}
+
+.pv-frame-pole {
+  width: 2px;
+  flex: 1;
+  background: var(--pv-line-strong);
+}
+
+.pv-frame.is-selected .pv-frame-dot {
+  background: var(--pv-primary-deep);
+  box-shadow: 0 0 0 2px var(--pv-primary-deep);
+}
+
+.pv-frame.is-selected .pv-frame-pole {
+  background: var(--pv-primary-deep);
+}
+
+.pv-frame.is-bad .pv-frame-dot {
+  background: var(--pv-danger);
+  box-shadow: 0 0 0 1px var(--pv-danger);
+}
+
+.pv-frame.is-bad .pv-frame-pole {
+  background: repeating-linear-gradient(to bottom, var(--pv-danger) 0 3px, transparent 3px 6px);
+}
+
+/* ---------- a copy's starting frame (step 17) ----------
+   The first dot of a plan copied from a running one: a ring, so "this is where the copy begins" is visible on the bar
+   without a second label. Its time field is disabled and the note under it says why. */
+.pv-frame.is-cut .pv-frame-dot {
+  box-shadow: 0 0 0 2px var(--pv-surface), 0 0 0 4px var(--pv-warn);
+}
+
+.pv-frame.is-cut .pv-frame-pole {
+  background: repeating-linear-gradient(to bottom, var(--pv-warn) 0 3px, transparent 3px 6px);
+}
+
+.pv-cut-note {
+  border-left: 2px solid var(--pv-warn);
+  padding-left: 8px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-band {
+  position: absolute;
+  top: 52px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(166, 58, 47, 0.2);
+  pointer-events: none;
+}
+
+.pv-now {
+  position: absolute;
+  top: 22px;
+  bottom: 0;
+  width: 2px;
+  background: var(--pv-warn);
+  pointer-events: none;
+}
+
+/* What is selected, drawn along the strip: the frames that will move, before anything moves. */
+.pv-selection {
+  position: absolute;
+  top: 44px;
+  height: 16px;
+  border-radius: 8px;
+  background: rgba(36, 79, 63, 0.1);
+  border: 1px solid rgba(36, 79, 63, 0.28);
+  pointer-events: none;
+}
+
+/* The rubber band of a sweep that has not been released yet. */
+.pv-sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(36, 79, 63, 0.08);
+  border-left: 1px solid rgba(36, 79, 63, 0.35);
+  border-right: 1px solid rgba(36, 79, 63, 0.35);
+  pointer-events: none;
+}
+
+/* ---------- inspector ---------- */
+
+.pv-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--pv-surface);
+  border-top: 1px solid var(--pv-line);
+  min-width: 0;
+}
+
+.pv-inspector h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pv-ink-faint);
+}
+
+.pv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pv-field > label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pv-ink-faint);
+}
+
+.pv-input {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: var(--pv-radius-sm);
+  background: var(--pv-surface);
+  color: var(--pv-ink);
+  width: 100%;
+}
+
+.pv-input:focus,
+.pv-select:focus,
+.pv-btn:focus-visible {
+  outline: 2px solid var(--pv-primary);
+  outline-offset: 1px;
+}
+
+.pv-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.pv-group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius-sm);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pv-group-row:hover {
+  background: rgba(36, 79, 63, 0.04);
+}
+
+.pv-group-row.is-selected {
+  border-color: var(--pv-primary-deep);
+  background: rgba(36, 79, 63, 0.08);
+}
+
+.pv-group-row.is-bad {
+  border-color: #e4c6c1;
+  background: var(--pv-danger-soft);
+}
+
+/* A group that is not ticked steps back, so a planner can look at one without losing the rest of the picture. */
+.pv-marker.is-dim {
+  opacity: 0.35;
+}
+
+/* An end of a stretch the database refuses: the same red as the bar and the lane, as a ring, so the badge still
+   reads as a person and not as a stop sign. */
+.pv-marker.is-bad {
+  box-shadow:
+    0 0 0 3px rgba(166, 58, 47, 0.5),
+    0 1px 4px rgba(15, 30, 22, 0.4);
+}
+
+.pv-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.pv-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-group-state {
+  font-size: 11px;
+  color: var(--pv-ink-faint);
+  white-space: nowrap;
+}
+
+/* One group: the row that ticks it, and beneath it the two flag controls. The chips are siblings of the row, never
+   inside it — a button inside a button is not a thing a browser can honour. */
+.pv-group-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pv-seg {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding-left: 18px; /* lines the chips up under the group's name, past the swatch */
+}
+
+.pv-seg-btn {
+  appearance: none;
+  border: 1px solid var(--pv-line);
+  background: var(--pv-surface);
+  color: var(--pv-ink-faint);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  padding: 4px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pv-seg-btn:hover:not(:disabled) {
+  border-color: var(--pv-line-strong);
+  color: var(--pv-ink-soft);
+}
+
+.pv-seg-btn.is-on {
+  background: var(--pv-primary);
+  border-color: var(--pv-primary);
+  color: #f4f8f6;
+}
+
+/* Off site drawn hollow and dashed, the way the plan draws a place nobody is: the same shape the badge used to have. */
+.pv-seg-btn[data-testid='state-off'].is-on {
+  background: var(--pv-surface);
+  border: 1px dashed var(--pv-primary);
+  color: var(--pv-primary);
+}
+
+.pv-seg-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pv-seg-btn:focus-visible {
+  outline: 2px solid var(--pv-primary);
+  outline-offset: 1px;
+}
+
+.pv-seg-sep {
+  width: 1px;
+  margin: 3px 3px;
+  background: var(--pv-line);
+}
+
+.pv-flag-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pv-flag-label {
+  font-size: 11px;
+  color: var(--pv-ink-faint);
+}
+
+.pv-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: var(--pv-radius-sm);
+  background: var(--pv-danger-soft);
+  border: 1px solid #ecd3ce;
+  font-size: 12px;
+  color: #6d2b23;
+}
+
+/* One warning plus the button that fixes it. The text takes the width and wraps; the button keeps its size. */
+.pv-gap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.pv-gap-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pv-gap-fill {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+/* The database's own rows: separated from the walks by a rule, because the control beside them is "Show", not
+   "Fill" -- a crossing is fixed by time or another waypoint, and only the planner knows which one. They keep the
+   gap rows' layout but not their class: a "gap" is the board's own 25 m warning, and a count of gaps must not
+   start counting the database's sentences. */
+.pv-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-top: 1px dashed #ecd3ce;
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+.pv-block-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pv-board-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--pv-ink-soft);
+  font-size: 13px;
+}
+
+.pv-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pv-note {
+  font-size: 11px;
+  color: var(--pv-ink-faint);
+  line-height: 1.4;
+}
+
+/* The sheet's file picker (step 23): a real <input type=file>, kept out of the layout because the button beside it is
+   the control a planner is meant to press. It must still exist and still be clickable from script -- hiding it with
+   display:none would stop the picker opening on some browsers. */
+.pv-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- the schedule (step 16) ----------
+   The timetable a person follows: moments down a page, each with the plan's clock, the planner's note, and what the
+   clock has made of it. Deliberately not the board: no strip, no map, no controls.
+
+   Names checked against native.css before they were used: .pv-row, .pv-row-text, .pv-live, .pv-head, .pv-title,
+   .pv-sub, .pv-empty and .pv-card all belong to the phone shell, and the first version of the strip in step 15 was
+   white-on-cream because it borrowed .pv-live (finding 41). Everything here is pv-sched-*; nothing else owns that. */
+
+.pv-sched {
+  display: flex;
+  flex-direction: column;
+  background: var(--pv-canvas);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  overflow: hidden;
+}
+
+.pv-sched-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-sched-title {
+  margin: 0 0 3px;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--pv-ink);
+}
+
+.pv-sched-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-sched-sub strong {
+  color: var(--pv-ink);
+  font-weight: 600;
+}
+
+.pv-sched-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 4px 10px;
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  background: #f7f9f7;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-sched-now {
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.15;
+  color: var(--pv-ink);
+}
+
+.pv-sched-t0 {
+  font-size: 11.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-sched-elapsed {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pv-primary);
+}
+
+.pv-sched-line {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--pv-ink-soft);
+  background: #eef4ef;
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-sched-line.is-warn {
+  background: #fdf4e4;
+  color: var(--pv-warn);
+}
+
+.pv-sched-empty {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 28px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--pv-ink-soft);
+  text-align: center;
+}
+
+.pv-sched-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pv-sched-moment {
+  position: relative;
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-sched-moment:last-child {
+  border-bottom: 0;
+}
+
+.pv-sched-moment.is-next {
+  background: #f2f7f3;
+}
+
+.pv-sched-moment.is-next::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--pv-primary);
+}
+
+.pv-sched-when {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pv-sched-at {
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--pv-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-sched-offset {
+  font-size: 11.5px;
+  color: var(--pv-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-sched-note {
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--pv-ink-soft);
+}
+
+.pv-sched-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pv-sched-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pv-sched-group {
+  min-width: 84px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pv-ink);
+}
+
+.pv-sched-state {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #eef2f0;
+  color: var(--pv-ink-soft);
+}
+
+.pv-sched-detail {
+  font-size: 12px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-sched-flag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pv-primary);
+}
+
+/* The five words, coloured so a glance reads the night: arrived is done, late is amber, missed is the one to look
+   at, and not required is deliberately grey -- nobody is expected anywhere. */
+.pv-sched-row.is-arrived .pv-sched-state {
+  background: #e2f0e8;
+  color: var(--pv-ok);
+}
+
+.pv-sched-row.is-late .pv-sched-state {
+  background: #fdf0dc;
+  color: var(--pv-warn);
+}
+
+.pv-sched-row.is-missed .pv-sched-state {
+  background: var(--pv-danger-soft);
+  color: var(--pv-danger);
+}
+
+.pv-sched-row.is-not-required .pv-sched-state,
+.pv-sched-row.is-not-required .pv-sched-detail {
+  color: var(--pv-ink-faint);
+}
+
+.pv-sched-foot {
+  margin: 0;
+  padding: 9px 14px 11px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pv-ink-faint);
+  border-top: 1px solid var(--pv-line);
+}
+
+@media (max-width: 640px) {
+  .pv-sched-head {
+    flex-direction: column;
+  }
+
+  .pv-sched-clock {
+    align-items: flex-start;
+  }
+
+  .pv-sched-moment {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .pv-sched-when {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+}
+
+/* ---------- the ops board (step 20) ----------
+   The staff's picture of a plan that is running: a row per group, its three-word state, the moment it is on, the
+   leg ahead, and where its ICs really are. It sits above the live map, so it is deliberately a band rather than a
+   card grid: one line per group reads at a glance, and the second line carries the numbers.
+
+   As with the strip and the schedule, names are pv-ops-*: native.css owns .pv-live and .pv-head, and a borrowed
+   name is how the step-15 strip ended up white on cream (finding 41). */
+
+.pv-ops {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+  background: var(--pv-canvas);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  overflow: hidden;
+}
+
+.pv-ops-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-ops-title {
+  margin: 0 0 3px;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--pv-ink);
+}
+
+.pv-ops-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-ops-sub strong {
+  color: var(--pv-ink);
+  font-weight: 600;
+}
+
+.pv-ops-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 4px 10px;
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  background: #f7f9f7;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-ops-now {
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.15;
+  color: var(--pv-ink);
+}
+
+.pv-ops-t0 {
+  font-size: 11.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-ops-elapsed {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pv-primary);
+}
+
+.pv-ops-error {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--pv-warn);
+  background: #fdf4e4;
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-ops-empty {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 26px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--pv-ink-soft);
+  text-align: center;
+}
+
+.pv-ops-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pv-ops-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--pv-line);
+  border-left: 3px solid transparent;
+}
+
+.pv-ops-row:last-child {
+  border-bottom: 0;
+}
+
+.pv-ops-row.is-active {
+  border-left-color: var(--pv-ok);
+  background: #f4f8f5;
+}
+
+.pv-ops-row.is-done {
+  border-left-color: var(--pv-line-strong);
+}
+
+.pv-ops-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.pv-ops-line.is-detail {
+  font-size: 12.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-ops-name {
+  min-width: 128px;
+  font-weight: 600;
+  color: var(--pv-ink);
+}
+
+.pv-ops-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pv-ink-soft);
+}
+
+.pv-ops-row.is-active .pv-ops-state {
+  border-color: var(--pv-ok);
+  background: var(--pv-ok);
+  color: #fff;
+}
+
+.pv-ops-row.is-done .pv-ops-state {
+  color: var(--pv-ink-faint);
+}
+
+.pv-ops-when {
+  font-variant-numeric: tabular-nums;
+  color: var(--pv-ink);
+}
+
+.pv-ops-next,
+.pv-ops-travel {
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-ops-travel::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--pv-ink-faint);
+}
+
+.pv-ops-place {
+  color: var(--pv-ink-soft);
+}
+
+.pv-ops-place::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--pv-ink-faint);
+}
+
+.pv-ops-row.is-active .pv-ops-place {
+  color: var(--pv-ink);
+}
+
+/* ---------- what was recorded about the moment, or the two buttons that record it (step 21) ---------- */
+.pv-ops-line.is-mark {
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.pv-ops-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11.5px;
+  color: var(--pv-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-ops-mark.is-arrived {
+  border-color: var(--pv-ok);
+  color: var(--pv-ok);
+}
+
+.pv-ops-mark.is-miss {
+  border-color: var(--pv-danger);
+  color: var(--pv-danger);
+}
+
+/* The two taps. Quiet by default: this is a board read at a glance, and a row of loud buttons would shout over it. */
+.pv-ops-act {
+  padding: 2px 10px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pv-ink);
+  cursor: pointer;
+}
+
+.pv-ops-act:hover:enabled {
+  border-color: var(--pv-ink-soft);
+}
+
+.pv-ops-act:focus-visible {
+  outline: 2px solid var(--pv-ok);
+  outline-offset: 1px;
+}
+
+.pv-ops-act:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.pv-ops-act.is-miss {
+  color: var(--pv-danger);
+}
+
+/* The hand-back line: who has the board, and the one button that says "it is mine now". */
+.pv-ops-hand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--pv-line);
+}
+
+.pv-ops-with {
+  flex: 1 1 220px;
+  font-size: 12px;
+  color: var(--pv-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-ops-foot {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pv-ink-faint);
+  background: #f7f9f7;
+  border-top: 1px solid var(--pv-line);
+}
+
+@media (max-width: 640px) {
+  .pv-ops-head {
+    flex-direction: column;
+  }
+
+  .pv-ops-clock {
+    align-items: flex-start;
+  }
+
+  .pv-ops-name {
+    min-width: 0;
+  }
+}
+
+/* ---------- the run (step 22) ----------
+   The strip's clock while the plan is being played: a cursor between the moments, and the dots it has passed stepped
+   back so "how far along" reads without a second scale. The open frame's line stays the warm colour; this one is the
+   plan's own green, so "mine to edit" and "mine to watch" are never the same vertical. */
+
+.pv-playhead {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  width: 2px;
+  background: var(--pv-primary);
+  pointer-events: none;
+}
+
+.pv-playhead::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--pv-primary);
+  box-shadow: 0 0 0 2px var(--pv-surface);
+}
+
+.pv-play-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pv-primary);
+}
+
+.pv-frame.is-behind .pv-frame-dot {
+  opacity: 0.4;
+}
+
+.pv-marker.is-walking {
+  box-shadow: 0 0 0 3px rgba(36, 79, 63, 0.18);
+}
+
+/* ---------- the plan log (step 22) ----------
+   The ops board's foot: one composer, then what has been sent -- a message, or a change the plan made -- with the tally
+   a planner acts on ("3 of 5 got it · waiting on Sound"). A timeline row is the plan's own voice, so it is tinted and
+   quieter rather than dressed as a second kind of message. */
+
+.pv-log {
+  border-top: 1px solid var(--pv-line);
+  background: var(--pv-surface);
+}
+
+.pv-log-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px 6px;
+}
+
+.pv-log-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--pv-ink);
+}
+
+.pv-log-note {
+  flex: 1 1 260px;
+  font-size: 11.5px;
+  color: var(--pv-ink-faint);
+}
+
+.pv-log-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+
+.pv-log-form .pv-input {
+  flex: 1 1 220px;
+}
+
+.pv-log-empty {
+  margin: 0;
+  padding: 4px 14px 12px;
+  font-size: 12px;
+  color: var(--pv-ink-faint);
+}
+
+.pv-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pv-log-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 7px 14px 9px;
+  border-top: 1px solid var(--pv-line);
+}
+
+.pv-log-row.is-timeline {
+  background: #f7f9f7;
+}
+
+.pv-log-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pv-log-kind {
+  padding: 1px 7px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--pv-ink-soft);
+}
+
+.pv-log-row.is-timeline .pv-log-kind {
+  border-color: var(--pv-primary);
+  color: var(--pv-primary);
+}
+
+.pv-log-from {
+  font-size: 12px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-log-tally {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pv-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-log-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--pv-ink);
+}
+
+/* ---------- messages on the schedule (step 22) ----------
+   The member's side of the same log: what a planner said and "your times changed", with one tap to say it was read.
+   An acked row stays as a quiet line rather than disappearing, because it is a record of what they were told. */
+
+.pv-sched-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.pv-sched-msg {
+  padding: 8px 12px;
+  border: 1px solid var(--pv-line);
+  border-left: 3px solid var(--pv-line-strong);
+  border-radius: var(--pv-radius);
+  background: var(--pv-surface);
+}
+
+.pv-sched-msg.is-new {
+  border-left-color: var(--pv-primary);
+}
+
+.pv-sched-msg.is-timeline {
+  background: #f7f9f7;
+}
+
+.pv-sched-msg-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pv-sched-msg-title {
+  font-size: 13px;
+  color: var(--pv-ink);
+}
+
+.pv-sched-msg-at {
+  font-size: 11.5px;
+  color: var(--pv-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-sched-msg-done {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--pv-ok);
+}
+
+.pv-sched-ack {
+  margin-left: auto;
+  padding: 3px 12px;
+  border: 1px solid var(--pv-primary);
+  border-radius: 999px;
+  background: var(--pv-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+
+.pv-sched-ack:hover:enabled {
+  background: var(--pv-primary-deep);
+}
+
+.pv-sched-ack:focus-visible {
+  outline: 2px solid var(--pv-ok);
+  outline-offset: 1px;
+}
+
+.pv-sched-ack:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.pv-sched-msg-body {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pv-ink);
+}
