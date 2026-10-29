@@ -990,8 +990,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.4rem;
   padding: 0.25rem 0.75rem;
-  background: #fff3cd;
-  color: #664d03;
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
   border-radius: 999px;
   font-size: 0.8125rem;
 }
