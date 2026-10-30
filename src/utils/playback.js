@@ -178,7 +178,9 @@ export function timelineMarks(recording, limit = 300) {
 
 // ---------- CSV (download, and replay after the 7 days) ----------
 
-export const CSV_TITLE = '# Event Tracker playback'
+export const CSV_TITLE = '# Planova playback'
+// Files saved before the rename still open
+const OLD_CSV_TITLE = '# Event Tracker playback'
 export const CSV_COLUMNS = ['time_sgt', 'name', 'username', 'group', 'group_colour', 'lat', 'lng', 'accuracy_m', 'source', 'user_id', 'group_id']
 
 function csvCell(value) {
@@ -307,7 +309,7 @@ export function csvToRecording(text) {
   let headerIndex = -1
   for (let i = 0; i < Math.min(rows.length, 10); i++) {
     const first = (rows[i][0] || '').trim()
-    if (first.startsWith(CSV_TITLE)) {
+    if (first.startsWith(CSV_TITLE) || first.startsWith(OLD_CSV_TITLE)) {
       eventName = rows[i][2] || ''
       from = parseCsvTime(rows[i][3])
       to = parseCsvTime(rows[i][4])

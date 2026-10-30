@@ -116,15 +116,15 @@ export function usePhoneReadiness() {
         key: 'battery',
         icon: '🔋',
         label: 'Battery use: Unrestricted',
-        title: 'Let Event Tracker run in the background',
+        title: 'Let Planova run in the background',
         why: "So Android doesn't pause sharing in the background.",
         body: 'Otherwise Android may pause sharing to save battery, and planners lose sight of you.',
         action: 'Allow in background',
-        tapHint: 'Choose "Allow". If no box appears: Settings → Apps → Event Tracker → Battery → Unrestricted.',
+        tapHint: 'Choose "Allow". If no box appears: Settings → Apps → Planova → Battery → Unrestricted.',
         required: false,
         ok: unrestricted,
         fixLabel: 'Allow',
-        howTo: 'Settings → Apps → Event Tracker → Battery → Unrestricted',
+        howTo: 'Settings → Apps → Planova → Battery → Unrestricted',
       })
     }
 

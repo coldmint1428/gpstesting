@@ -29,7 +29,7 @@ const isLocalhost = /localhost|127\.0\.0\.1/.test(appUrl)
 
 const inviteLink = computed(() => appUrl + '/join/' + props.joinCode)
 const message = computed(
-  () => 'Join "' + props.eventName + '" on Event Tracker. Code: ' + props.joinCode + ' - ' + inviteLink.value,
+  () => 'Join "' + props.eventName + '" on Planova. Code: ' + props.joinCode + ' - ' + inviteLink.value,
 )
 const whatsappUrl = computed(() => 'https://wa.me/?text=' + encodeURIComponent(message.value))
 const telegramUrl = computed(
@@ -37,7 +37,7 @@ const telegramUrl = computed(
     'https://t.me/share/url?url=' +
     encodeURIComponent(inviteLink.value) +
     '&text=' +
-    encodeURIComponent('Join "' + props.eventName + '" on Event Tracker. Code: ' + props.joinCode),
+    encodeURIComponent('Join "' + props.eventName + '" on Planova. Code: ' + props.joinCode),
 )
 
 // Re-draw the QR code whenever the link changes

@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Event Tracker</string>
+        <string>Planova</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -78,9 +78,9 @@
 		<string>com.transistorsoft.fetch</string>
 	</array>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Event Tracker shares your group's location with event planners, even when your phone is locked.</string>
+	<string>Planova shares your group's location with event planners, even when your phone is locked.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Event Tracker shows your position and shares it with event planners.</string>
+	<string>Planova shows your position and shares it with event planners.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Motion detection saves battery by pausing GPS while you are standing still.</string>
 </dict>

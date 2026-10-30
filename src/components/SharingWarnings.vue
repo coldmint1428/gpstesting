@@ -21,7 +21,7 @@ const { isNative, powerSaveOn, batteryRestricted, openBatterySettings } = useLoc
         Allow in background
       </button>
       <div class="small mt-1">
-        Or: Settings → Apps → Event Tracker → Battery → Unrestricted.
+        Or: Settings → Apps → Planova → Battery → Unrestricted.
       </div>
     </div>
   </div>
