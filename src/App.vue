@@ -8,6 +8,7 @@ import { enablePush } from './composables/usePushNotifications'
 import NotifyHost from './components/NotifyHost.vue'
 import PhoneTabBar from './components/PhoneTabBar.vue'
 import { isNativeApp } from './lib/platform'
+import logoOnDark from './assets/brand/planova-logo-on-dark.svg' // the approved logo for dark backgrounds (the top bar is dark chrome)
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -60,7 +61,7 @@ async function logout() {
 <template>
   <nav v-if="!isNativeApp" class="navbar navbar-expand-sm navbar-dark app-nav">
     <div class="container-fluid app-nav-inner">
-      <RouterLink class="navbar-brand fw-semibold" to="/">Event Tracker</RouterLink>
+      <RouterLink class="navbar-brand" to="/" aria-label="Planova home"><img :src="logoOnDark" alt="Planova" /></RouterLink>
       <button
         class="navbar-toggler"
         type="button"
@@ -93,7 +94,7 @@ async function logout() {
             <button class="btn btn-outline-light btn-sm" data-testid="logout-btn" @click="logout">Log out</button>
           </li>
           <li v-else class="nav-item">
-            <RouterLink class="nav-link" to="/login">Sign in</RouterLink>
+            <RouterLink class="nav-link" to="/login">Log in</RouterLink>
           </li>
         </ul>
       </div>

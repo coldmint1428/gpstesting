@@ -7,7 +7,9 @@ import router from './router'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 import './assets/map-markers.css' // person / group markers on the maps
+import './assets/planova-tokens.css' // Planova design tokens (the design's own values)
 import './assets/event-shell.css' // the event workspace: header, side navigation, pages
+import './assets/planova-theme.css' // Planova theme for the website: Bootstrap, the event workspace and the redrawn screens (after event-shell.css)
 import './assets/native.css' // the phone app's own look (Android first), only under html.native-app
 import { isNativeApp } from './lib/platform'
 
