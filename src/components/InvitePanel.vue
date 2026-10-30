@@ -17,9 +17,13 @@ const copied = ref(false)
 // which other people can't open, so we prefer VITE_PUBLIC_APP_URL (e.g. the Vercel link).
 // The phone app never falls back to its own address: a build made without the variable (a
 // local .env that leaves it blank) still shares links people can open -- the deployed site.
+// Nor does the website on a laptop (npm run dev, http://localhost:5173): VITE_PUBLIC_APP_URL set on Vercel only
+// reaches Vercel's own builds, and the deployed site reads the same database, so its link works for a local event.
 const DEPLOYED_URL = 'https://gpstesting.vercel.app'
+const ownOrigin = window.location.origin
 const appUrl = (
-  import.meta.env.VITE_PUBLIC_APP_URL || (Capacitor.isNativePlatform() ? DEPLOYED_URL : window.location.origin)
+  import.meta.env.VITE_PUBLIC_APP_URL ||
+  (Capacitor.isNativePlatform() || /localhost|127\.0\.0\.1/.test(ownOrigin) ? DEPLOYED_URL : ownOrigin)
 ).replace(/\/$/, '')
 const isLocalhost = /localhost|127\.0\.0\.1/.test(appUrl)
 
