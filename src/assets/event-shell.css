@@ -19,9 +19,11 @@
   background: var(--ev-ground);
   min-height: calc(100vh - 56px);
 }
-.ev .mono,
-.ev .show-num,
-.ev .ops-num {
+/* Times and numbers line up (the show clock, cue times, zone codes). Deliberately unscoped: the workspace root that
+   used to carry .ev is gone, and the phone overrides the face in native.css. Keep this rule if the .ev rules go. */
+.mono,
+.show-num,
+.ops-num {
   font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }

@@ -9,3 +9,20 @@ dist
 # Firebase app config (download from the Firebase console, see docs/gps-checklist.md)
 android/app/google-services.json
 GoogleService-Info.plist
+
+# Local scratch: harvested sessions, payloads, screenshots-in-progress, logs.
+.tmp/
+
+# Raw design captures. The authored notes (planning-implementation-plan.md,
+# planova-gap-analysis.md) and the artboards themselves are tracked; these are
+# the network dumps, duplicated page snapshots and PNG renders taken from the
+# artifact host, ~55 MB of machinery that documents nothing the artboards don't.
+docs/design/frames/
+docs/design/net/
+docs/design/net2/
+docs/design/signedin/
+docs/design/artifact-*.html
+docs/design/artifact-*.png
+docs/design/planova/desktop-png/
+docs/design/planova/mobile-png/
+docs/design/planova/source/

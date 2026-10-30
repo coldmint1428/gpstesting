@@ -1,7 +1,7 @@
--- supabase/tests/roles_test.sql -- 031_people_and_roles.sql: profiles, the role hierarchy, IC and removing people.
+-- supabase/tests/roles_test.sql -- 033_people_and_roles.sql: profiles, the role hierarchy, IC and removing people.
 --
--- Runs locally with `node tools/pgtest.mjs roles` (001, 002, 030 and 031 on an empty PGlite) and in the Supabase SQL Editor
--- after 031. One transaction that ends in ROLLBACK: the test accounts, event and groups disappear.
+-- Runs locally with `node tools/pgtest.mjs roles` (001, 002, 030 and 033 on an empty PGlite) and in the Supabase SQL Editor
+-- after 033. One transaction that ends in ROLLBACK: the test accounts, event and groups disappear.
 -- Each check raises 'FAIL n: ...'.
 --
 -- Event "Roles test": root R, planners P and P2, M (a member with the marshal duty), Group 1 (admin A, IC U1, member U2),

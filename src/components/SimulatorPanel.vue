@@ -1,16 +1,16 @@
 <script setup>
 // SimulatorPanel - the root's controls for a SIMULATION event (merger Stage 3, migration 022).
 //
-// Set up N virtual groups (each 1-3 virtual ICs that walk from 200-600 m away to one of the event's zones),
-// choose how they behave, then Start / Pause / Reset. The server moves them every 10 s and their readings go
-// through the same path as a real phone, so the live map, zone presence and No-Go alerts all react to them.
-// Virtual ICs are fake accounts that cannot sign in; Reset deletes them and everything they sent.
+// Set up N virtual groups (each 1-3 virtual ICs), choose how they behave, then Start / Pause / Reset. The server moves
+// them every 10 s and their readings go through the same path as a real phone, so the live map, zone presence and
+// No-Go alerts all react to them. Virtual ICs are fake accounts that cannot sign in; Reset deletes them and everything
+// they sent.
 //
-// Rehearsal (merger Stage 7): "Plan their movements" gives every virtual group a movement to the zone it walks to in a
-// Draft run sheet version, due at a cue. While a show runs that version, groups with a movement follow the plan
-// instead: they wait, leave a minute before their leave-by time ("2 min late" a minute after it) and walk at the
-// movement's pace, one movement after another.
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+// Since 060 they walk the PLAN: each group's next leg is to its own next on-site moment in the published plan, timed
+// to arrive a minute early ("2 min late": two minutes later; "stops halfway" and "loses signal" keep their meanings).
+// That is why Start needs a published plan, and why the old "Plan their movements" card is gone -- a strip already
+// says where each group stands and when, so there is nothing to generate.
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { askConfirm, toast } from '../composables/useNotify'
 
@@ -24,6 +24,7 @@ const run = ref(null) // { status, ticks, readings, started_at }
 const groupCount = ref(0)
 const icCount = ref(0)
 const byScript = ref({}) // script -> number of groups
+const livePlan = ref(null) // the published plan the groups walk to (060); null = none yet
 const busy = ref(false)
 
 const groups = ref(20)
@@ -47,7 +48,7 @@ let timer = null
 let channel = null
 
 async function load() {
-  const [s, r, g, ics] = await Promise.all([
+  const [s, r, g, ics, p] = await Promise.all([
     supabase.from('sim_scripts').select('key, label, description').order('sort'),
     supabase.from('sim_runs').select('status, ticks, readings, started_at').eq('event_id', props.eventId).maybeSingle(),
     supabase.from('sim_groups').select('script').eq('event_id', props.eventId),
@@ -56,6 +57,7 @@ async function load() {
       .select('user_id, profiles!inner (is_simulated)', { count: 'exact', head: true })
       .eq('event_id', props.eventId)
       .eq('profiles.is_simulated', true),
+    supabase.from('plans').select('id, name').eq('event_id', props.eventId).eq('status', 'live').order('updated_at', { ascending: false }).limit(1),
   ])
   if (!s.error) scripts.value = s.data || []
   if (!r.error) run.value = r.data
@@ -66,32 +68,7 @@ async function load() {
     byScript.value = counts
   }
   if (!ics.error) icCount.value = ics.count || 0
-}
-
-// ---------- Plan their movements (Stage 7) ----------
-const drafts = ref([]) // Draft versions of this event
-const planSheet = ref('')
-const planCues = ref([])
-const planCue = ref('')
-async function loadDrafts() {
-  const { data } = await supabase.from('run_sheets').select('id, name, status').eq('event_id', props.eventId).eq('status', 'draft').order('created_at')
-  drafts.value = data || []
-  if (!drafts.value.some((d) => d.id === planSheet.value)) planSheet.value = drafts.value.length ? drafts.value[0].id : ''
-}
-watch(planSheet, async (id) => {
-  planCues.value = []
-  planCue.value = ''
-  if (!id) return
-  const { data } = await supabase.from('cues').select('id, code, title, start_time').eq('run_sheet_id', id).order('position')
-  planCues.value = data || []
-  if (planCues.value.length) planCue.value = planCues.value[0].id
-})
-async function planMovements() {
-  const sheet = drafts.value.find((d) => d.id === planSheet.value)
-  const cue = planCues.value.find((c) => c.id === planCue.value)
-  if (!sheet || !cue) return
-  await call('sim_plan_movements', { p_sheet: sheet.id, p_cue: cue.id }, (n) =>
-    n + ' movements added to "' + sheet.name + '" (due at ' + cue.code + '). Mark it Ready, then start the event with it.')
+  if (!p.error) livePlan.value = (p.data || [])[0] || null
 }
 
 async function call(fn, args, done) {
@@ -165,8 +142,10 @@ onUnmounted(() => {
           {{ groupCount }} groups · {{ icCount }} virtual ICs
           <template v-if="run"> · {{ run.ticks }} ticks · {{ run.readings }} readings</template>
         </span>
+        <span v-if="livePlan" class="small text-muted" data-testid="sim-plan-name"> · walking the plan "{{ livePlan.name }}"</span>
+        <span v-else class="small text-danger" data-testid="sim-plan-missing"> · publish a plan first</span>
         <div class="ms-auto d-flex flex-wrap gap-2">
-          <button v-if="status !== 'running'" class="btn btn-success btn-sm" :disabled="busy || !groupCount" data-testid="sim-start" @click="start">
+          <button v-if="status !== 'running'" class="btn btn-success btn-sm" :disabled="busy || !groupCount || !livePlan" data-testid="sim-start" @click="start">
             Start
           </button>
           <button v-else class="btn btn-warning btn-sm" :disabled="busy" data-testid="sim-pause" @click="pause">Pause</button>
@@ -183,9 +162,10 @@ onUnmounted(() => {
         <div>
           <h2 class="h6 mb-1">Add virtual groups</h2>
           <p class="small text-muted mb-0">
-            Each group walks from a random spot 200–600 m away to one of this event's zones (Zones tab) at 1.0–1.5 m/s.
-            Its virtual ICs send a reading every 10 s with 5–15 m of GPS noise. Virtual ICs are fake accounts that cannot sign in;
-            Reset removes them.
+            Each group starts at a random spot 200–600 m from one of this event's zones (Zones tab) and then walks to its
+            own moments in the published plan, leaving late enough to arrive a minute early. Its virtual ICs send a
+            reading every 10 s with 5–15 m of GPS noise. Virtual ICs are fake accounts that cannot sign in; Reset
+            removes them.
           </p>
         </div>
         <div class="d-flex flex-wrap gap-3">
@@ -215,35 +195,6 @@ onUnmounted(() => {
             Add {{ groups }} groups
           </button>
           <span v-if="status === 'running'" class="small text-muted ms-2">Pause to add more.</span>
-        </div>
-      </div>
-    </form>
-
-    <form class="card" data-testid="sim-plan" @submit.prevent="planMovements">
-      <div class="card-body d-grid gap-2">
-        <div>
-          <h2 class="h6 mb-1">Plan their movements (rehearsal)</h2>
-          <p class="small text-muted mb-0">
-            Gives every virtual group without one a movement to the zone it walks to, in a Draft version, due at a cue's start.
-            While a show runs that version, groups with a movement wait, leave a minute before their leave-by time
-            ("2 min late": a minute after it) and walk at the movement's pace, one movement after another.
-          </p>
-        </div>
-        <p v-if="!drafts.length" class="small text-muted mb-0">Make a Draft version with at least one cue in the Run sheet tab first.</p>
-        <div v-else class="d-flex flex-wrap align-items-end gap-2">
-          <label class="form-label mb-0 small">Version
-            <select v-model="planSheet" class="form-select form-select-sm" data-testid="sim-plan-sheet" @focus="loadDrafts">
-              <option v-for="d in drafts" :key="d.id" :value="d.id">{{ d.name }}</option>
-            </select>
-          </label>
-          <label class="form-label mb-0 small">Due at the start of
-            <select v-model="planCue" class="form-select form-select-sm" data-testid="sim-plan-cue">
-              <option v-for="c in planCues" :key="c.id" :value="c.id">{{ c.code }} {{ c.title }} ({{ c.start_time }})</option>
-            </select>
-          </label>
-          <button class="btn btn-outline-primary btn-sm" type="submit" :disabled="busy || !groupCount || !planCue" data-testid="sim-plan-btn">
-            Add movements
-          </button>
         </div>
       </div>
     </form>

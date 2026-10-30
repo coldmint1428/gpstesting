@@ -1,6 +1,6 @@
 <script setup>
 // The event's People page: everyone in the event with their role, group and IC tag. Controls appear only for what MY
-// role may do to each person (src/utils/permissions.js); the database checks every change again (031).
+// role may do to each person (src/utils/permissions.js); the database checks every change again (033).
 //   Root          : add people; make planners, group admins, members; marshal and IC (duties of a member) on / off; remove anyone
 //   Planner       : the same for people below planner
 //   Group admin   : add people to their own group; IC and removing members of their own group
@@ -8,7 +8,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { initials } from '../utils/people'
 import { ROLE_RANK, ROLE_LABEL, topRole, isMarshal, canManage, assignableRoles, canSetMarshal, canSetIC, canRemove } from '../utils/permissions'
-import { addEventMember, setMemberRole, setMarshal, setGroupIC, removeEventMember } from '../services/memberService'
+import { addEventMember, setMemberRole, setMarshal, setGroupIC, setArrivalTolerance, removeEventMember } from '../services/memberService'
 import { searchPeople } from '../services/eventService'
 import { askConfirm, toast } from '../composables/useNotify'
 import BenchAlert from './BenchAlert.vue'
@@ -86,7 +86,7 @@ const myAdminGroupName = computed(() => groupName(myAdminGroupId.value))
 
 const addName = ref('')
 const addGroupId = ref('') // '' = no group
-// Find people by name as you type (search_people, 032); each result shows its email, to tell apart two people
+// Find people by name as you type (search_people, 034); each result shows its email, to tell apart two people
 // with the same name. People already in the event are left out.
 const found = ref([])
 const searching = ref(false)
@@ -172,6 +172,21 @@ async function remove(m) {
   })
   if (!ok) return
   await run(() => removeEventMember(props.eventId, m.id), m.display_name + ' was removed from the event.')
+}
+
+// How close this IC's phone must be to a moment's point for the tick to close it (063). A planner sets it here; the IC
+// sets their own on their "My GPS details" page, and the database refuses anybody outside those three doors.
+async function changeTolerance(m, input) {
+  const metres = Math.round(Number(input.value))
+  if (!Number.isFinite(metres)) {
+    input.value = m.toleranceM // not a number: put the stored one back
+    return
+  }
+  const ok = await run(
+    () => setArrivalTolerance(props.eventId, m.id, metres),
+    m.display_name + ' now counts as arrived within ' + metres + ' m.',
+  )
+  if (!ok) input.value = m.toleranceM // refused: the list did not change, so put the field back by hand
 }
 </script>
 
@@ -318,6 +333,23 @@ async function remove(m) {
               />
               <label class="form-check-label small" :for="'ic-' + r.m.id">IC (shares GPS)</label>
             </div>
+            <!-- An IC's arrival radius: how close their phone must be for a moment to close itself (063). -->
+            <div v-if="r.actions.ic && r.m.isIC" class="d-flex align-items-center gap-1">
+              <label :for="'tol-' + r.m.id" class="small text-muted mb-0">Radius</label>
+              <input
+                :id="'tol-' + r.m.id"
+                type="number"
+                min="5"
+                max="100"
+                step="5"
+                class="form-control form-control-sm people-tol"
+                :value="r.m.toleranceM"
+                :disabled="busy"
+                :data-testid="'person-tolerance-' + r.m.username"
+                @change="changeTolerance(r.m, $event.target)"
+              />
+              <span class="small text-muted">m</span>
+            </div>
             <button
               v-if="r.actions.remove"
               type="button"
@@ -350,6 +382,10 @@ async function remove(m) {
 }
 .min-w-0 {
   min-width: 0;
+}
+/* the arrival radius is a number of metres, not a paragraph */
+.people-tol {
+  width: 5rem;
 }
 /* phone: the opened actions take the card's full width under the name */
 @media (max-width: 767.98px) {

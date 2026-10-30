@@ -8,11 +8,12 @@
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles (c) Singapore Land Authority - https://www.onemap.gov.sg
-import { computed, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
+import { setArrivalTolerance } from '../services/memberService'
 import { useLocationTracker } from '../composables/useLocationTracker'
 import SharingWarnings from '../components/SharingWarnings.vue'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
@@ -22,7 +23,7 @@ import { useEventData } from '../composables/useEventData'
 const props = defineProps({ id: { type: String, required: true } }) // event id from the URL
 const MAX_READINGS = 20
 
-const { event, loading, me, myGroup } = useEventData(props.id)
+const { event, loading, me, myGroup, load } = useEventData(props.id)
 
 const {
   isNative,
@@ -40,6 +41,39 @@ const {
 
 const canShare = computed(() => !!(me.value && me.value.isIC && myGroup.value))
 const sharingHere = computed(() => isTracking.value && sharingEventId.value === props.id)
+
+// ---------- My arrival radius (063) ----------
+// How close my phone has to be to a moment's drawn point for the tick to close that moment for my group. The zone the
+// point stands in already counts; this is the other half, because a phone in a pocket is not a polygon. Only an IC has
+// one, so this card is the IC's own -- a planner sets anybody's from the event's People page.
+const tolerance = ref(null)
+const tolSaving = ref(false)
+const tolMsg = ref('')
+const tolOk = ref(false)
+const tolDirty = computed(() => !!me.value && tolerance.value != null && Number(tolerance.value) !== me.value.toleranceM)
+
+watch(me, (m) => { if (m && m.toleranceM != null) tolerance.value = m.toleranceM }, { immediate: true })
+
+async function saveTolerance() {
+  const metres = Math.round(Number(tolerance.value))
+  if (!Number.isFinite(metres)) {
+    tolOk.value = false
+    tolMsg.value = 'Say how many metres.'
+    return
+  }
+  tolSaving.value = true
+  tolMsg.value = ''
+  const message = await setArrivalTolerance(props.id, null, metres)
+  tolSaving.value = false
+  if (message) {
+    tolOk.value = false
+    tolMsg.value = message
+    return
+  }
+  tolOk.value = true
+  tolMsg.value = 'Saved: ' + metres + ' m.'
+  await load() // the membership row is what the rest of the app reads
+}
 
 // ---------- Map objects (plain variables, not reactive) ----------
 let map = null
@@ -206,6 +240,47 @@ function updateMap(lat, lng, accuracy) {
             </dl>
           </div>
         </div>
+
+        <!-- My arrival radius: the IC's own number. The zone a moment stands in already counts; this is the rest. -->
+        <div v-if="canShare" class="card mt-3" data-testid="tolerance-card">
+          <div class="card-body">
+            <h2 class="h6 card-title">Arrival radius</h2>
+            <p class="small text-muted">
+              Your group counts as arrived at a moment when your phone is this close to its point — or anywhere inside
+              the zone it stands in.
+            </p>
+            <div class="d-flex align-items-center gap-2">
+              <label for="tolerance-input" class="visually-hidden">Arrival radius in metres</label>
+              <input
+                id="tolerance-input"
+                v-model.number="tolerance"
+                type="number"
+                min="5"
+                max="100"
+                step="5"
+                class="form-control form-control-sm tolerance-input"
+                data-testid="tolerance-input"
+              />
+              <span class="small text-muted">metres</span>
+              <button
+                class="btn btn-sm btn-primary ms-auto"
+                :disabled="tolSaving || !tolDirty"
+                data-testid="tolerance-save"
+                @click="saveTolerance"
+              >
+                Save
+              </button>
+            </div>
+            <p
+              v-if="tolMsg"
+              class="small mb-0 mt-2"
+              :class="tolOk ? 'text-success' : 'text-danger'"
+              data-testid="tolerance-msg"
+            >
+              {{ tolMsg }}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -242,5 +317,10 @@ function updateMap(lat, lng, accuracy) {
 .gps-map {
   height: 60vh;
   min-height: 300px;
+}
+
+/* The radius is a number of metres, not a paragraph */
+.tolerance-input {
+  width: 6rem;
 }
 </style>

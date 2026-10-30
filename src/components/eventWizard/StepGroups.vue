@@ -17,7 +17,7 @@ const editingKey = ref(null) // the group whose editor is open
 const filter = ref('')
 
 const byId = computed(() => Object.fromEntries(props.everyone.map((p) => [p.id, p])))
-// Planners run the whole event and are never in a group (034)
+// Planners run the whole event and are never in a group (036)
 const unassigned = computed(() => props.everyone.filter((p) => !wizard.groupOf[p.id] && p.role !== 'planner'))
 
 // Unassigned people matching the filter, for the open group's "Add" list

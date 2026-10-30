@@ -84,7 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
       profile.value = null
       return
     }
-    // '*' rather than naming first_name / last_name: those only exist once 031 is applied, and naming a missing
+    // '*' rather than naming first_name / last_name: those only exist once 033 is applied, and naming a missing
     // column fails the whole read (every account then looked logged out)
     const { data } = await supabase.from('profiles').select('*').eq('id', user.value.id).maybeSingle()
     profile.value = data
@@ -108,7 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (typeof free === 'string') return { error: free }
     if (!free) return { error: 'That username is taken' }
 
-    // username + names are saved into "profiles" by a database trigger (031)
+    // username + names are saved into "profiles" by a database trigger (033)
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -128,7 +128,7 @@ export const useAuthStore = defineStore('auth', () => {
     let email = identifier.trim()
     if (!email.includes('@')) {
       const { data, error } = await supabase.rpc('login_email', { p_username: email })
-      // 031 not applied yet: there is no username lookup
+      // 033 not applied yet: there is no username lookup
       if (error && error.code === 'PGRST202') return 'Signing in with a username is not available yet. Use your email.'
       if (error) return error.message
       if (!data) return WRONG

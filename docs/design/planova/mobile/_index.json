@@ -1,0 +1,240 @@
+[
+  {
+    "i": 0,
+    "name": "M-SignIn.dc.html",
+    "title": "Sign in",
+    "bytes": 236069,
+    "file": "docs\\design\\planova\\mobile\\M-SignIn.dc.html"
+  },
+  {
+    "i": 1,
+    "name": "M-Join.dc.html",
+    "title": "Join event",
+    "bytes": 237000,
+    "file": "docs\\design\\planova\\mobile\\M-Join.dc.html"
+  },
+  {
+    "i": 2,
+    "name": "M-MyEvents.dc.html",
+    "title": "My events",
+    "bytes": 245171,
+    "file": "docs\\design\\planova\\mobile\\M-MyEvents.dc.html"
+  },
+  {
+    "i": 3,
+    "name": "M-Create-Details.dc.html",
+    "title": "Create · interactive flow (start here)",
+    "bytes": 248937,
+    "file": "docs\\design\\planova\\mobile\\M-Create-Details.dc.html"
+  },
+  {
+    "i": 4,
+    "name": "M-Create-Errors.dc.html",
+    "title": "Create 1 · validation errors",
+    "bytes": 251190,
+    "file": "docs\\design\\planova\\mobile\\M-Create-Errors.dc.html"
+  },
+  {
+    "i": 5,
+    "name": "M-Create-Participants.dc.html",
+    "title": "Create 2 · CSV import preview",
+    "bytes": 257371,
+    "file": "docs\\design\\planova\\mobile\\M-Create-Participants.dc.html"
+  },
+  {
+    "i": 6,
+    "name": "M-Create-Groups.dc.html",
+    "title": "Create 3 · groups",
+    "bytes": 242232,
+    "file": "docs\\design\\planova\\mobile\\M-Create-Groups.dc.html"
+  },
+  {
+    "i": 7,
+    "name": "M-Create-Review.dc.html",
+    "title": "Create 4 · review",
+    "bytes": 246182,
+    "file": "docs\\design\\planova\\mobile\\M-Create-Review.dc.html"
+  },
+  {
+    "i": 8,
+    "name": "M-Root-Overview.dc.html",
+    "title": "Root · Event overview",
+    "bytes": 246695,
+    "file": "docs\\design\\planova\\mobile\\M-Root-Overview.dc.html"
+  },
+  {
+    "i": 9,
+    "name": "M-Root-Participants.dc.html",
+    "title": "Root · Participants",
+    "bytes": 245872,
+    "file": "docs\\design\\planova\\mobile\\M-Root-Participants.dc.html"
+  },
+  {
+    "i": 10,
+    "name": "M-Root-Invite.dc.html",
+    "title": "Root · Share invite link (sheet)",
+    "bytes": 239184,
+    "file": "docs\\design\\planova\\mobile\\M-Root-Invite.dc.html"
+  },
+  {
+    "i": 11,
+    "name": "M-Root-Groups.dc.html",
+    "title": "Root · Groups",
+    "bytes": 245163,
+    "file": "docs\\design\\planova\\mobile\\M-Root-Groups.dc.html"
+  },
+  {
+    "i": 12,
+    "name": "M-Root-AsParticipant.dc.html",
+    "title": "Root user as Participant",
+    "bytes": 268689,
+    "file": "docs\\design\\planova\\mobile\\M-Root-AsParticipant.dc.html"
+  },
+  {
+    "i": 13,
+    "name": "M-Planner-Zones.dc.html",
+    "title": "Planner · Venue zones",
+    "bytes": 249136,
+    "file": "docs\\design\\planova\\mobile\\M-Planner-Zones.dc.html"
+  },
+  {
+    "i": 14,
+    "name": "M-Planner-Timeline.dc.html",
+    "title": "Planner · Plan movements (drawing a path)",
+    "bytes": 324817,
+    "file": "docs\\design\\planova\\mobile\\M-Planner-Timeline.dc.html"
+  },
+  {
+    "i": 15,
+    "name": "M-Planner-Overview.dc.html",
+    "title": "Planner · All schedules",
+    "bytes": 341232,
+    "file": "docs\\design\\planova\\mobile\\M-Planner-Overview.dc.html"
+  },
+  {
+    "i": 16,
+    "name": "M-Planner-Live.dc.html",
+    "title": "Planner · Live monitor",
+    "bytes": 321255,
+    "file": "docs\\design\\planova\\mobile\\M-Planner-Live.dc.html"
+  },
+  {
+    "i": 17,
+    "name": "M-Planner-Live-Detail.dc.html",
+    "title": "Planner · Live monitor · At risk panel",
+    "bytes": 319621,
+    "file": "docs\\design\\planova\\mobile\\M-Planner-Live-Detail.dc.html"
+  },
+  {
+    "i": 18,
+    "name": "M-Planner-Playback.dc.html",
+    "title": "Planner · Playback",
+    "bytes": 318205,
+    "file": "docs\\design\\planova\\mobile\\M-Planner-Playback.dc.html"
+  },
+  {
+    "i": 19,
+    "name": "M-Stress-Plan.dc.html",
+    "title": "Stress · Plan, 30 nodes",
+    "bytes": 462170,
+    "file": "docs\\design\\planova\\mobile\\M-Stress-Plan.dc.html"
+  },
+  {
+    "i": 20,
+    "name": "M-Stress-Overview.dc.html",
+    "title": "Stress · All schedules",
+    "bytes": 433267,
+    "file": "docs\\design\\planova\\mobile\\M-Stress-Overview.dc.html"
+  },
+  {
+    "i": 21,
+    "name": "M-Stress-Live.dc.html",
+    "title": "Stress · Live monitor",
+    "bytes": 491788,
+    "file": "docs\\design\\planova\\mobile\\M-Stress-Live.dc.html"
+  },
+  {
+    "i": 22,
+    "name": "M-Stress-Playback.dc.html",
+    "title": "Stress · Playback",
+    "bytes": 389076,
+    "file": "docs\\design\\planova\\mobile\\M-Stress-Playback.dc.html"
+  },
+  {
+    "i": 23,
+    "name": "M-Admin-Group.dc.html",
+    "title": "Group Admin + IC · route sheet",
+    "bytes": 278466,
+    "file": "docs\\design\\planova\\mobile\\M-Admin-Group.dc.html"
+  },
+  {
+    "i": 24,
+    "name": "M-Admin-Attendance.dc.html",
+    "title": "Group attendance · Not marked filter",
+    "bytes": 253520,
+    "file": "docs\\design\\planova\\mobile\\M-Admin-Attendance.dc.html"
+  },
+  {
+    "i": 25,
+    "name": "M-Attendance-Late.dc.html",
+    "title": "Group attendance · Late with notes",
+    "bytes": 251778,
+    "file": "docs\\design\\planova\\mobile\\M-Attendance-Late.dc.html"
+  },
+  {
+    "i": 26,
+    "name": "M-IC-Now.dc.html",
+    "title": "IC · schedule",
+    "bytes": 268159,
+    "file": "docs\\design\\planova\\mobile\\M-IC-Now.dc.html"
+  },
+  {
+    "i": 27,
+    "name": "M-IC-Attendance.dc.html",
+    "title": "IC · take attendance",
+    "bytes": 284622,
+    "file": "docs\\design\\planova\\mobile\\M-IC-Attendance.dc.html"
+  },
+  {
+    "i": 28,
+    "name": "M-IC-Location-Off.dc.html",
+    "title": "IC · location sharing off",
+    "bytes": 268804,
+    "file": "docs\\design\\planova\\mobile\\M-IC-Location-Off.dc.html"
+  },
+  {
+    "i": 29,
+    "name": "M-Participant-Home.dc.html",
+    "title": "Participant · route sheet",
+    "bytes": 275024,
+    "file": "docs\\design\\planova\\mobile\\M-Participant-Home.dc.html"
+  },
+  {
+    "i": 30,
+    "name": "M-Participant-Checkin.dc.html",
+    "title": "Participant · mark myself Absent (error)",
+    "bytes": 271027,
+    "file": "docs\\design\\planova\\mobile\\M-Participant-Checkin.dc.html"
+  },
+  {
+    "i": 31,
+    "name": "M-Admin-Members.dc.html",
+    "title": "Group Admin · Members (search to add)",
+    "bytes": 263939,
+    "file": "docs\\design\\planova\\mobile\\M-Admin-Members.dc.html"
+  },
+  {
+    "i": 32,
+    "name": "M-Admin-Members-Error.dc.html",
+    "title": "Group Admin · Add member error",
+    "bytes": 264715,
+    "file": "docs\\design\\planova\\mobile\\M-Admin-Members-Error.dc.html"
+  },
+  {
+    "i": 33,
+    "name": "M-Participant-Attendance.dc.html",
+    "title": "Participant · group attendance (Not marked)",
+    "bytes": 253055,
+    "file": "docs\\design\\planova\\mobile\\M-Participant-Attendance.dc.html"
+  }
+]

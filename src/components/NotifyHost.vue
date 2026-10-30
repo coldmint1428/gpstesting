@@ -39,10 +39,21 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
             <h2 id="confirm-title" class="modal-title h5">{{ confirmState.title }}</h2>
             <button type="button" class="btn-close" aria-label="Close" @click="answerConfirm(false)"></button>
           </div>
-          <div v-if="confirmState.message" class="modal-body pt-2">{{ confirmState.message }}</div>
+          <div v-if="confirmState.message || (confirmState.lines && confirmState.lines.length)" class="modal-body pt-2">
+            <p v-if="confirmState.message" class="mb-2">{{ confirmState.message }}</p>
+            <ul v-if="confirmState.lines && confirmState.lines.length" class="mb-0 ps-3" data-testid="confirm-lines">
+              <li v-for="(line, i) in confirmState.lines" :key="i">{{ line }}</li>
+            </ul>
+          </div>
           <div class="modal-footer border-0 pt-0">
-            <button type="button" class="btn btn-outline-secondary" data-testid="confirm-cancel" @click="answerConfirm(false)">
-              Cancel
+            <button
+              v-if="confirmState.cancelText"
+              type="button"
+              class="btn btn-outline-secondary"
+              data-testid="confirm-cancel"
+              @click="answerConfirm(false)"
+            >
+              {{ confirmState.cancelText }}
             </button>
             <button
               ref="confirmButton"

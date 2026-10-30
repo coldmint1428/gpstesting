@@ -1,4 +1,4 @@
-// Event membership and role changes (031_people_and_roles.sql). Each call returns an error message, or '' on success;
+// Event membership and role changes (033_people_and_roles.sql). Each call returns an error message, or '' on success;
 // the database checks every rule again and its messages are written to be shown as they are.
 import { supabase } from '../lib/supabase'
 
@@ -12,7 +12,7 @@ async function call(fn, params) {
 // Beyond the course (CLAUDE.md asks for Axios + an Express REST API): this project's backend is Supabase, so these
 // call its database functions with supabase.rpc. Each still returns '' or the error's message, as the course's
 // try...catch examples show it.
-// An existing account, picked from searchPeople (032); groupId null = no group yet (group admins: their own group only)
+// An existing account, picked from searchPeople (034); groupId null = no group yet (group admins: their own group only)
 export const addEventMember = (eventId, userId, groupId) =>
   call('add_event_member', { p_event_id: eventId, p_user_id: userId, p_group_id: groupId })
 
@@ -25,12 +25,26 @@ export const setMarshal = (eventId, userId, isMarshal) =>
 
 export const setGroupIC = (groupId, userId, isIC) => call('set_group_ic', { p_group_id: groupId, p_user_id: userId, p_is_ic: isIC })
 
+// How close this IC's phone must be to a moment's point for the tick to close it automatically (063). `userId` null
+// means "me", which is what the IC's own page sends. The database admits the person themself, root/planner, and the
+// group's admin, and refuses anybody who is not an IC -- its message is shown as it is.
+export const setArrivalTolerance = async (eventId, userId, metres) => {
+  const { error } = await supabase.rpc('set_arrival_tolerance', {
+    p_event: eventId,
+    p_metres: metres,
+    p_user: userId || null,
+  })
+  if (error) return error.message
+  forgetMembership(eventId) // the radius is part of my membership; re-read it rather than trust the old copy
+  return ''
+}
+
 export const removeEventMember = (eventId, userId) => call('remove_event_member', { p_event_id: eventId, p_user_id: userId })
 
 // Leaving yourself
 export const leaveEvent = (eventId, myUserId) => call('remove_member', { p_event_id: eventId, p_user_id: myUserId })
 
-// { name, description, venue, startsAt, endsAt } (times: Date or ISO text, or both null) - 033_event_details.sql
+// { name, description, venue, startsAt, endsAt } (times: Date or ISO text, or both null) - 035_event_details.sql
 export const updateEventDetails = (eventId, d) =>
   call('update_event_details', {
     p_event_id: eventId,

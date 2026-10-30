@@ -1,0 +1,268 @@
+[
+  {
+    "i": 0,
+    "name": "Main.dc.html",
+    "title": "Sign in",
+    "bytes": 241613,
+    "file": "docs\\design\\planova\\desktop\\Main.dc.html"
+  },
+  {
+    "i": 1,
+    "name": "D-Join.dc.html",
+    "title": "Join event from invite link",
+    "bytes": 240468,
+    "file": "docs\\design\\planova\\desktop\\D-Join.dc.html"
+  },
+  {
+    "i": 2,
+    "name": "D-MyEvents.dc.html",
+    "title": "My events (role per event)",
+    "bytes": 253661,
+    "file": "docs\\design\\planova\\desktop\\D-MyEvents.dc.html"
+  },
+  {
+    "i": 3,
+    "name": "D-Create-Wizard.dc.html",
+    "title": "Create event · interactive flow (start here)",
+    "bytes": 225449,
+    "file": "docs\\design\\planova\\desktop\\D-Create-Wizard.dc.html"
+  },
+  {
+    "i": 4,
+    "name": "D-Create-Details.dc.html",
+    "title": "Step 1 · validation errors",
+    "bytes": 251088,
+    "file": "docs\\design\\planova\\desktop\\D-Create-Details.dc.html"
+  },
+  {
+    "i": 5,
+    "name": "D-Create-Participants.dc.html",
+    "title": "Step 2 · add by name (search)",
+    "bytes": 257788,
+    "file": "docs\\design\\planova\\desktop\\D-Create-Participants.dc.html"
+  },
+  {
+    "i": 6,
+    "name": "D-Create-Invite.dc.html",
+    "title": "Step 2 · invite by email (duplicate error)",
+    "bytes": 254615,
+    "file": "docs\\design\\planova\\desktop\\D-Create-Invite.dc.html"
+  },
+  {
+    "i": 7,
+    "name": "D-Create-CSV.dc.html",
+    "title": "Step 2 · CSV import preview",
+    "bytes": 257219,
+    "file": "docs\\design\\planova\\desktop\\D-Create-CSV.dc.html"
+  },
+  {
+    "i": 8,
+    "name": "D-Create-Groups.dc.html",
+    "title": "Step 3 · edit group and group roles",
+    "bytes": 249154,
+    "file": "docs\\design\\planova\\desktop\\D-Create-Groups.dc.html"
+  },
+  {
+    "i": 9,
+    "name": "D-Create-Review.dc.html",
+    "title": "Step 4 · review",
+    "bytes": 246066,
+    "file": "docs\\design\\planova\\desktop\\D-Create-Review.dc.html"
+  },
+  {
+    "i": 10,
+    "name": "D-Create-Done.dc.html",
+    "title": "Event created",
+    "bytes": 236194,
+    "file": "docs\\design\\planova\\desktop\\D-Create-Done.dc.html"
+  },
+  {
+    "i": 11,
+    "name": "D-Root-Overview.dc.html",
+    "title": "Root · Event overview",
+    "bytes": 264620,
+    "file": "docs\\design\\planova\\desktop\\D-Root-Overview.dc.html"
+  },
+  {
+    "i": 12,
+    "name": "D-Root-Participants.dc.html",
+    "title": "Root · Participants and roles",
+    "bytes": 200728,
+    "file": "docs\\design\\planova\\desktop\\D-Root-Participants.dc.html"
+  },
+  {
+    "i": 13,
+    "name": "D-Root-Groups.dc.html",
+    "title": "Root · Groups",
+    "bytes": 196424,
+    "file": "docs\\design\\planova\\desktop\\D-Root-Groups.dc.html"
+  },
+  {
+    "i": 14,
+    "name": "D-Root-AsParticipant.dc.html",
+    "title": "Root user switched to Participant (multiple roles)",
+    "bytes": 268565,
+    "file": "docs\\design\\planova\\desktop\\D-Root-AsParticipant.dc.html"
+  },
+  {
+    "i": 15,
+    "name": "D-Planner-Zones.dc.html",
+    "title": "Planner · Venue zones",
+    "bytes": 200156,
+    "file": "docs\\design\\planova\\desktop\\D-Planner-Zones.dc.html"
+  },
+  {
+    "i": 16,
+    "name": "D-Planner-Timeline.dc.html",
+    "title": "Planner · Plan movements (start here: tabs switch views)",
+    "bytes": 341459,
+    "file": "docs\\design\\planova\\desktop\\D-Planner-Timeline.dc.html"
+  },
+  {
+    "i": 17,
+    "name": "D-Planner-Timeline-Errors.dc.html",
+    "title": "Planner · New activity with validation errors",
+    "bytes": 311863,
+    "file": "docs\\design\\planova\\desktop\\D-Planner-Timeline-Errors.dc.html"
+  },
+  {
+    "i": 18,
+    "name": "D-Planner-Overview.dc.html",
+    "title": "Planner · All schedules (same lists groups see)",
+    "bytes": 341170,
+    "file": "docs\\design\\planova\\desktop\\D-Planner-Overview.dc.html"
+  },
+  {
+    "i": 19,
+    "name": "D-Planner-Live.dc.html",
+    "title": "Planner · Live monitor · Needs attention, combined planned vs actual",
+    "bytes": 321193,
+    "file": "docs\\design\\planova\\desktop\\D-Planner-Live.dc.html"
+  },
+  {
+    "i": 20,
+    "name": "D-Planner-Live-NoSignal.dc.html",
+    "title": "Planner · Live monitor · No signal panel",
+    "bytes": 319500,
+    "file": "docs\\design\\planova\\desktop\\D-Planner-Live-NoSignal.dc.html"
+  },
+  {
+    "i": 21,
+    "name": "D-Planner-Playback.dc.html",
+    "title": "Planner · Playback · planned vs actual routes",
+    "bytes": 318143,
+    "file": "docs\\design\\planova\\desktop\\D-Planner-Playback.dc.html"
+  },
+  {
+    "i": 22,
+    "name": "D-Stress-Plan.dc.html",
+    "title": "Stress · Plan movements, 30 groups as 30 nodes",
+    "bytes": 462119,
+    "file": "docs\\design\\planova\\desktop\\D-Stress-Plan.dc.html"
+  },
+  {
+    "i": 23,
+    "name": "D-Stress-Overview.dc.html",
+    "title": "Stress · All schedules, 30 groups",
+    "bytes": 433216,
+    "file": "docs\\design\\planova\\desktop\\D-Stress-Overview.dc.html"
+  },
+  {
+    "i": 24,
+    "name": "D-Stress-Live.dc.html",
+    "title": "Stress · Live monitor · Needs attention",
+    "bytes": 491726,
+    "file": "docs\\design\\planova\\desktop\\D-Stress-Live.dc.html"
+  },
+  {
+    "i": 25,
+    "name": "D-Stress-Live-Late.dc.html",
+    "title": "Stress · Live monitor · Late panel",
+    "bytes": 488607,
+    "file": "docs\\design\\planova\\desktop\\D-Stress-Live-Late.dc.html"
+  },
+  {
+    "i": 26,
+    "name": "D-Stress-Playback.dc.html",
+    "title": "Stress · Playback · 30 time points, pins",
+    "bytes": 389014,
+    "file": "docs\\design\\planova\\desktop\\D-Stress-Playback.dc.html"
+  },
+  {
+    "i": 27,
+    "name": "D-Admin-Group.dc.html",
+    "title": "Group Admin + IC · schedule, attendance on every activity",
+    "bytes": 245023,
+    "file": "docs\\design\\planova\\desktop\\D-Admin-Group.dc.html"
+  },
+  {
+    "i": 28,
+    "name": "D-Admin-Route.dc.html",
+    "title": "Group Admin · route sheet for an activity",
+    "bytes": 279458,
+    "file": "docs\\design\\planova\\desktop\\D-Admin-Route.dc.html"
+  },
+  {
+    "i": 29,
+    "name": "D-Admin-Attendance.dc.html",
+    "title": "Group attendance · open check (All)",
+    "bytes": 284524,
+    "file": "docs\\design\\planova\\desktop\\D-Admin-Attendance.dc.html"
+  },
+  {
+    "i": 30,
+    "name": "D-Admin-Attendance-Absent.dc.html",
+    "title": "Group attendance · Absent filter with notes",
+    "bytes": 252565,
+    "file": "docs\\design\\planova\\desktop\\D-Admin-Attendance-Absent.dc.html"
+  },
+  {
+    "i": 31,
+    "name": "D-Admin-Attendance-Present.dc.html",
+    "title": "Group attendance · Present filter",
+    "bytes": 275680,
+    "file": "docs\\design\\planova\\desktop\\D-Admin-Attendance-Present.dc.html"
+  },
+  {
+    "i": 32,
+    "name": "D-IC-Now.dc.html",
+    "title": "IC · schedule (schedule first)",
+    "bytes": 266957,
+    "file": "docs\\design\\planova\\desktop\\D-IC-Now.dc.html"
+  },
+  {
+    "i": 33,
+    "name": "D-Participant-Home.dc.html",
+    "title": "Participant · schedule (schedule first)",
+    "bytes": 266690,
+    "file": "docs\\design\\planova\\desktop\\D-Participant-Home.dc.html"
+  },
+  {
+    "i": 34,
+    "name": "D-Participant-Mark.dc.html",
+    "title": "Participant · mark myself Late with a note",
+    "bytes": 271203,
+    "file": "docs\\design\\planova\\desktop\\D-Participant-Mark.dc.html"
+  },
+  {
+    "i": 35,
+    "name": "D-Admin-Members.dc.html",
+    "title": "Group Admin · Members (add, remove, IC promote/demote)",
+    "bytes": 221382,
+    "file": "docs\\design\\planova\\desktop\\D-Admin-Members.dc.html"
+  },
+  {
+    "i": 36,
+    "name": "D-Admin-Members-Blocked.dc.html",
+    "title": "Group Admin · Can’t remove the last IC",
+    "bytes": 264574,
+    "file": "docs\\design\\planova\\desktop\\D-Admin-Members-Blocked.dc.html"
+  },
+  {
+    "i": 37,
+    "name": "D-Participant-Attendance.dc.html",
+    "title": "Participant · takes group attendance",
+    "bytes": 284042,
+    "file": "docs\\design\\planova\\desktop\\D-Participant-Attendance.dc.html"
+  }
+]

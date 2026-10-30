@@ -1,9 +1,9 @@
-// Who may see and do what in an event. The database decides (031_people_and_roles.sql); these mirror its rules so
+// Who may see and do what in an event. The database decides (033_people_and_roles.sql); these mirror its rules so
 // the pages only show what the server would allow. Keep every list here, so it is one file to change.
 //
 // Top role (one per person, highest first): root > planner > admin (group admin) > member.
-// Marshal and IC are duties on top of that, not ranks: a marshal (event_roles row) sees every group, the run sheet
-// and the ops view; an IC (group flag) shares GPS. "View role" 'marshal' / 'ic' is a member with that duty.
+// Marshal and IC are duties on top of that, not ranks: a marshal (event_roles row) sees every group and the plan's
+// ops board; an IC (group flag) shares GPS. "View role" 'marshal' / 'ic' is a member with that duty.
 
 export const ROLE_RANK = { root: 4, planner: 3, admin: 2, member: 1 }
 export const ROLE_LABEL = { root: 'Root', planner: 'Planner', marshal: 'Marshal', admin: 'Group admin', member: 'Member', ic: 'IC' }
@@ -96,7 +96,7 @@ export const EDIT_ACCESS = {
 // Not pages, but shown by role the same way
 export const FEATURE_ACCESS = {
   invite: ['root', 'planner'], // the invite code / QR on the overview
-  wholeEvent: ['root', 'planner', 'marshal'], // see every group (run sheet, ops view)
+  wholeEvent: ['root', 'planner', 'marshal'], // see every group (the ops board, the map)
 }
 
 export const canView = (page, role) => PAGE_ACCESS[page]?.includes(role) ?? false
@@ -104,10 +104,13 @@ export const canEdit = (page, role) => EDIT_ACCESS[page]?.includes(role) ?? fals
 export const can = (feature, role) => FEATURE_ACCESS[feature]?.includes(role) ?? false
 export const pageMode = (page, role) => (canEdit(page, role) ? 'edit' : 'view')
 
-// Where an event opens: planning for root / planners, groups for admins, the live view (if live) for everyone else
+// Where an event opens: the plan board for root / planners, groups for admins, the live view for marshals, ICs and
+// members while the event is on. Out of a live event a marshal opens the timetable (they read every group's moments)
+// and members and ICs the overview.
 export function defaultPage(role, isLive) {
   if (role === 'root' || role === 'planner') return 'timeline'
   if (role === 'admin') return 'groups'
-  if (role === 'marshal') return isLive ? 'live' : 'timeline'
-  return isLive ? 'live' : 'timeline'
+  if (isLive) return 'live'
+  if (role === 'marshal') return 'timeline'
+  return 'overview'
 }

@@ -1,11 +1,14 @@
 <script setup>
 // BroadcastPanel - "Message everyone" for root and planners (032): one message to everyone, every group, all ICs, the
 // staff, one sector or one category, with a push and a banner that stays until each person presses Got it. Quick
-// messages cover the moments a show cannot wait for (lightning, hold, evacuate); "Shelter" and "Hold" can also hold
-// the show, "Resume" can resume it. Under the form: the last day's messages, how many have read each, and who has not
-// (with their group's radio channel), so the radio is used only for those.
+// messages cover the moments an event cannot wait for (lightning, evacuate). Under the form: the last day's messages,
+// how many have read each, and who has not (with their group's radio channel), so the radio is used only for those.
 //
-// Website: a card on the Live map page. Phone: a button on the Ops tab that opens the same form in a bottom sheet.
+// It used to offer "also hold / resume the show" with a lightning or hold message: that was the run-sheet engine's
+// GO button reached from a message, and step 25 deleted the engine. A plan session is held by publishing a new
+// version, not by pausing a clock.
+//
+// Website: a card on the Live page. Phone: a button that opens the same form in a bottom sheet.
 import { computed, onUnmounted, ref, watch } from 'vue'
 import BottomSheet from './BottomSheet.vue'
 import { AUDIENCES, audienceText } from '../composables/useBroadcasts'
@@ -15,17 +18,15 @@ import { formatTimeSeconds } from '../utils/time'
 const props = defineProps({
   broadcasts: { type: Object, required: true }, // useBroadcasts()
   groups: { type: Array, default: () => [] },
-  show: { type: Object, default: null }, // useShow(), to hold / resume with the message
-  canRun: { type: Boolean, default: false },
   native: { type: Boolean, default: false },
 })
 
 const QUICK = [
-  { key: 'shelter', label: '⚡ Lightning: shelter', urgent: true, also: 'hold', body: 'Lightning alert: take shelter now and stay there until we say it is safe.' },
-  { key: 'hold', label: 'Hold in place', urgent: true, also: 'hold', body: 'Hold in place. Do not move until the next message.' },
-  { key: 'resume', label: 'All clear: resume', urgent: false, also: 'resume', body: 'All clear. Go to your next position now: check your next move in the app.' },
-  { key: 'rain', label: 'Wet weather plan', urgent: false, body: 'The wet weather plan is now in effect. Your next move in the app is updated.' },
-  { key: 'late', label: 'Show running late', urgent: false, body: 'The show is running about 5 minutes late. Your times in the app are updated.' },
+  { key: 'shelter', label: '⚡ Lightning: shelter', urgent: true, body: 'Lightning alert: take shelter now and stay there until we say it is safe.' },
+  { key: 'hold', label: 'Hold in place', urgent: true, body: 'Hold in place. Do not move until the next message.' },
+  { key: 'resume', label: 'All clear: resume', urgent: false, body: 'All clear. Go to your next position now: check your next moment in the app.' },
+  { key: 'rain', label: 'Wet weather plan', urgent: false, body: 'The wet weather plan is now in effect. Your next moment in the app is updated.' },
+  { key: 'late', label: 'Running late', urgent: false, body: 'The event is running about 5 minutes late. Your times in the app are updated.' },
   { key: 'evacuate', label: 'Evacuate', urgent: true, body: 'Evacuate now: walk calmly to DISPERSAL and follow the marshals.' },
 ]
 
@@ -35,7 +36,6 @@ const value = ref('')
 const body = ref('')
 const urgent = ref(false)
 const quick = ref('')
-const alsoShow = ref(false)
 const sending = ref(false)
 const formError = ref('')
 
@@ -46,22 +46,10 @@ watch(audience, () => {
   value.value = values.value[0] || ''
 })
 
-// Hold / resume the show with the message (only while a show is running, and only what makes sense now)
-const held = computed(() => !!(props.show && props.show.board.value && props.show.board.value.state === 'held'))
-const running = computed(() => !!(props.show && props.show.board.value))
-const quickPick = computed(() => QUICK.find((q) => q.key === quick.value) || null)
-const alsoWhat = computed(() => {
-  if (!props.canRun || !running.value || !quickPick.value) return ''
-  if (quickPick.value.also === 'hold' && !held.value) return 'hold'
-  if (quickPick.value.also === 'resume' && held.value) return 'resume'
-  return ''
-})
-
 function useQuick(q) {
   quick.value = q.key
   body.value = q.body
   urgent.value = q.urgent
-  alsoShow.value = !!q.also
   formError.value = ''
 }
 
@@ -76,13 +64,11 @@ async function send() {
   sending.value = false
   if (dry.error) return (formError.value = dry.error)
   if (!dry.recipients) return (formError.value = 'Nobody would get this message: no one matches ' + audienceText(audience.value, value.value) + '.')
-  const doAlso = alsoShow.value ? alsoWhat.value : ''
   const ok = await askConfirm({
     title: 'Send to ' + dry.recipients + (dry.recipients === 1 ? ' person' : ' people') + '?',
     message:
       (urgent.value ? 'URGENT · ' : '') + '"' + text + '" goes to ' + audienceText(audience.value, value.value) +
-      ' as a push and a banner that stays until they press Got it.' +
-      (doAlso === 'hold' ? ' The show will be put on hold.' : doAlso === 'resume' ? ' The show will resume.' : ''),
+      ' as a push and a banner that stays until they press Got it.',
     confirmText: 'Send',
     danger: urgent.value,
   })
@@ -92,17 +78,9 @@ async function send() {
   sending.value = false
   if (res.error) return (formError.value = res.error)
   toast('Sent to ' + res.recipients + (res.recipients === 1 ? ' person.' : ' people.'), 'success', 4000)
-  if (doAlso === 'hold') {
-    const err = await props.show.hold()
-    if (err) toast('Message sent, but the show could not be held: ' + err, 'danger', 8000)
-  } else if (doAlso === 'resume') {
-    const err = await props.show.resume()
-    if (err) toast('Message sent, but the show could not resume: ' + err, 'danger', 8000)
-  }
   body.value = ''
   quick.value = ''
   urgent.value = false
-  alsoShow.value = false
   if (props.native) open.value = false
   watchStatus(res.id)
 }
@@ -211,10 +189,6 @@ async function clearOne(b) {
             <div class="form-check">
               <input id="bc-urgent" v-model="urgent" class="form-check-input" type="checkbox" data-testid="broadcast-urgent" />
               <label class="form-check-label" for="bc-urgent">Urgent (red)</label>
-            </div>
-            <div v-if="alsoWhat" class="form-check">
-              <input id="bc-also" v-model="alsoShow" class="form-check-input" type="checkbox" data-testid="broadcast-also" />
-              <label class="form-check-label" for="bc-also">{{ alsoWhat === 'hold' ? 'Also hold the show' : 'Also resume the show' }}</label>
             </div>
           </div>
           <div v-if="formError" class="small text-danger" role="alert" data-testid="broadcast-error">{{ formError }}</div>

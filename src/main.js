@@ -7,7 +7,6 @@ import router from './router'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 import './assets/map-markers.css' // person / group markers on the maps
-import './assets/ops-status.css' // movement statuses in the ops view (merger Stage 7)
 import './assets/event-shell.css' // the event workspace: header, side navigation, pages
 import './assets/native.css' // the phone app's own look (Android first), only under html.native-app
 import { isNativeApp } from './lib/platform'

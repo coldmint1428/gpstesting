@@ -38,7 +38,7 @@ const openGroup = computed(() => {
   if (id === 'none') return props.canManage ? { id: 'none', name: 'No group', colour: '#6c757d' } : null
   return shownGroups.value.find((g) => g.id === id) || null
 })
-// Planners run the whole event and are never in a group (034), so they are not "without a group" either
+// Planners run the whole event and are never in a group (036), so they are not "without a group" either
 const isPlanner = (m) => topRole(m) === 'planner'
 const membersOf = (groupId) =>
   props.members.filter((m) => (groupId === 'none' ? !m.groupId && !isPlanner(m) : m.groupId === groupId))
@@ -117,8 +117,8 @@ async function run(fnName, params) {
   return true
 }
 
-// ---------- Group details for the run sheet (merger Stage 4): code, category, sector, headcount ----------
-// A movement can be for a whole category ("every Contingent group"), so groups need one.
+// ---------- Group details (merger Stage 4): code, category, sector, headcount ----------
+// A message can go to a whole category ("every Contingent group") or sector (032), so groups need one.
 const showDetails = ref(false)
 const details = ref({}) // groupId -> { code, category, sector, headcount }
 const detailSaved = ref('') // groupId just saved
@@ -270,7 +270,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         <span class="text-muted text-nowrap">· {{ openCountText }}</span>
       </div>
 
-      <!-- Details (root / planner): used by the run sheet's category movements -->
+      <!-- Details (root / planner): code, category, sector, headcount -->
       <form
         v-if="canManage && details[openGroup.id]"
         class="card mb-3"
@@ -444,12 +444,12 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           {{ showDetails ? 'Hide group details' : 'Edit every group’s details (category, code…)' }}
         </button>
       </div>
-      <!-- Group details (root / planner): used by the run sheet's category movements -->
+      <!-- Group details (root / planner): category, code, sector, headcount -->
       <div v-if="canManage && showDetails && groups.length" class="card mb-3" data-testid="group-details">
         <div class="card-body">
           <p class="small text-muted mb-2">
-            A run sheet movement can be for a whole <strong>category</strong> (for example every "Contingent" group).
-            Code, sector and headcount are for reference.
+            A message can go to a whole <strong>category</strong> (for example every "Contingent" group) or a whole
+            sector. Code and headcount are for reference.
           </p>
           <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
           <div class="table-responsive">

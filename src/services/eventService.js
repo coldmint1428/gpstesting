@@ -25,7 +25,7 @@ function cleanSearchTerm(term) {
     .replace(/^@/, '')
 }
 
-// Find accounts by name (032_people_search_by_name.sql): the wizard's step 2 and the People page.
+// Find accounts by name (034_people_search_by_name.sql): the wizard's step 2 and the People page.
 // Returns [{ id, display_name, email }] (at most 10; never the caller; [] for under 2 characters)
 export async function searchPeople(term) {
   const clean = cleanSearchTerm(term)

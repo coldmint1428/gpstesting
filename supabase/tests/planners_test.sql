@@ -1,7 +1,7 @@
 -- ============================================================
--- Tests for 034_planners_not_in_groups.sql: planners are never in a group.
+-- Tests for 036_planners_not_in_groups.sql: planners are never in a group.
 --
--- Run in the Supabase SQL Editor AFTER 034, or locally with `node tools/pgtest.mjs`.
+-- Run in the Supabase SQL Editor AFTER 036, or locally with `node tools/pgtest.mjs`.
 -- One transaction that ends in ROLLBACK; each check raises 'FAIL n: ...'.
 -- ============================================================
 begin;

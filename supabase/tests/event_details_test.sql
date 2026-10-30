@@ -1,7 +1,7 @@
 -- ============================================================
--- Tests for 033_event_details.sql: update_event_details (root only, the wizard's rules).
+-- Tests for 035_event_details.sql: update_event_details (root only, the wizard's rules).
 --
--- Run in the Supabase SQL Editor AFTER 033, or locally with `node tools/pgtest.mjs`.
+-- Run in the Supabase SQL Editor AFTER 035, or locally with `node tools/pgtest.mjs`.
 -- One transaction that ends in ROLLBACK; each check raises 'FAIL n: ...'.
 -- ============================================================
 begin;

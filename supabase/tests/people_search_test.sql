@@ -1,7 +1,7 @@
 -- ============================================================
--- Tests for 032_people_search_by_name.sql: search_people by name (with email), add_event_member.
+-- Tests for 034_people_search_by_name.sql: search_people by name (with email), add_event_member.
 --
--- Run in the Supabase SQL Editor AFTER 032, or locally with `node tools/pgtest.mjs`.
+-- Run in the Supabase SQL Editor AFTER 034, or locally with `node tools/pgtest.mjs`.
 -- One transaction that ends in ROLLBACK; each check raises 'FAIL n: ...'.
 -- ============================================================
 begin;

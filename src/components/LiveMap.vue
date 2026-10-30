@@ -13,10 +13,19 @@
 // readings, or after Stop; a dot every 2 minutes). Tap the trail or a dot: when they were
 // there + the place name. The trail only covers the session that is live now.
 //
-// Ops view (merger Stage 7, root / planners / marshals during a show): zoomed out, groups gather into one bubble per
-// zone they are inside (else per sector) showing how many and the worst status; zoomed in, groups in trouble (and
-// the one picked in the queue) get a status ring and a dashed line along their route to the zone with "+0:28".
-// The summary bar's filters hide the other groups' markers.
+// Ops view (merger Stage 7) was here: zoomed out, groups gathered into one bubble per zone with the worst movement
+// status, and a dashed line along the group's route to its zone. It read `movement_status` through `useOps`, and step
+// 25 deleted that engine with the run sheet.
+//
+// THE PLAN UNDER THE PEOPLE (step 30). While the live session runs a plan, the walk the plan states is drawn under the
+// people: one dashed line per group in the group's colour, broken where the plan takes the group off site, and the leg
+// the clock is on redrawn bold and solid -- the one comparison this page exists for, "they should be between the gate
+// and the stage and they are still at the gate", in one picture instead of a row on one page and a line on another.
+// The rows are `session_timetable`'s, through `usePlanWalk` (the follower's map asks the same composable), and the
+// rules that turn them into a line are `planWalk`'s. There is no interpolated "should be here" mark between two
+// moments: a mark says what the plan states, and a plan states points at moments, not a pace between them (step 20
+// refused to invent an ETA for the same reason). The line is `interactive: false` on purpose -- a line across the venue
+// must not swallow the taps meant for the people under it, which are this screen's subject.
 //
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles + reverse geocoding (c) Singapore Land Authority
@@ -27,13 +36,13 @@ import { supabase } from '../lib/supabase'
 import { createSingaporeMap } from '../utils/onemap'
 import { newTrack, addReading, noteDelay, prune, advance, positionAt, trailUpTo } from '../utils/liveMotion'
 import { placeName } from '../composables/useReverseGeocode'
+import { usePlanWalk } from '../composables/usePlanWalk'
+import { walksOf, legNow } from '../utils/planWalk'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
 import { areaStyle } from '../utils/areaKinds'
-import { statusOf, statusLabel, PROBLEMS } from '../utils/opsStatus'
-import { mmss } from '../composables/useShow'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -52,9 +61,9 @@ const props = defineProps({
   zoneCounts: { type: Object, default: () => ({}) }, // zoneId -> { ics, groups }
   noGoOccupied: { type: Array, default: () => [] }, // No-Go zone ids somebody is inside
   groupPositions: { type: Object, default: () => ({}) }, // groupId -> { speedMps, icsSharing, lastSeen }
-  // From the movements engine (useOps, merger Stage 7): empty when no show runs or for members
-  opsActive: { type: Object, default: () => ({}) }, // groupId -> the group's active movement row
-  opsVisible: { type: Object, default: null }, // Set of group ids that pass the ops filters, or null (all)
+  // The live session, when it is running a plan: the walk the plan states is drawn under the people (step 30). Null
+  // while the event is not live, or is live without a plan -- and then nothing is drawn and nothing is asked for.
+  session: { type: Object, default: null },
 })
 
 const positions = computed(() => props.positions)
@@ -68,7 +77,9 @@ const personMarkers = {} // userId -> Leaflet marker
 const groupMarkers = {} // groupId -> Leaflet marker (groups with 2+ ICs on the map)
 const tracks = {} // userId -> recent readings + playhead (liveMotion.js)
 const places = {} // userId -> place name text (filled when a tooltip opens)
-let fittedOnce = false
+let framed = false // the camera has been set once
+let framedWithPlan = false // ...and the plan's walk was in that frame
+let userMoved = false // somebody dragged the map: the view is theirs now, not every read's
 
 // Follow mode: keep one person centred on the map while they move
 const followedId = ref(null) // userId being followed (null = not following)
@@ -222,7 +233,6 @@ function render() {
       personMarkers[userId].remove()
       delete personMarkers[userId]
       delete tracks[userId]
-      hiddenPeople.delete(userId)
       if (selectedId.value === userId) deselect()
     }
   }
@@ -263,13 +273,9 @@ function render() {
   }
 
   if (followedId.value && !personMarkers[followedId.value]) stopFollowing() // they're no longer on the map
-  applyVisibility()
 
-  // Zoom to everyone the first time we have data
-  if (!fittedOnce && people.value.length > 0) {
-    map.fitBounds(L.latLngBounds(people.value.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: 17 })
-    fittedOnce = true
-  }
+  // Zoom to everyone the first time we have data (with the plan's walk in the frame, when there is one: `frameOnce`).
+  frameOnce()
   startLoop()
 }
 
@@ -293,7 +299,7 @@ function frame(ts) {
 
   for (const userId of Object.keys(personMarkers)) {
     const track = tracks[userId]
-    if (!track || hiddenPeople.has(userId)) continue
+    if (!track) continue
     const pos = positionAt(track, advance(track, nowMs, elapsed))
     if (!pos) continue
     shown[userId] = pos
@@ -585,182 +591,6 @@ function stopFollowing() {
   followedId.value = null
 }
 
-// ---------- Ops view: filters, clusters, problem lines (merger Stage 7) ----------
-const CLUSTER_ZOOM = 16 // below this, groups are drawn as clusters (when the show has movements)
-const clustersOn = ref(true)
-const zoom = ref(0)
-const hasOps = computed(() => Object.keys(props.opsActive).length > 0)
-const clustering = computed(() => clustersOn.value && hasOps.value && zoom.value < CLUSTER_ZOOM)
-const hiddenPeople = new Set() // markers taken off the map (filtered out, or clustered)
-let clusterLayer = null
-let opsLayer = null
-const selectedGroup = ref(null) // picked in the queue: its line is drawn whatever its status
-
-function groupVisible(groupId) {
-  return !props.opsVisible || props.opsVisible.has(groupId)
-}
-
-// Markers on or off the map: filtered-out groups and, zoomed out, everyone (the clusters stand in for them)
-function applyVisibility() {
-  if (!map) return
-  const clustered = clustering.value
-  for (const [userId, marker] of Object.entries(personMarkers)) {
-    const p = positions.value[userId]
-    const show = !clustered && (!p || groupVisible(p.groupId))
-    if (show && hiddenPeople.has(userId)) {
-      hiddenPeople.delete(userId)
-      marker.addTo(map)
-    } else if (!show && !hiddenPeople.has(userId)) {
-      hiddenPeople.add(userId)
-      marker.remove()
-    }
-  }
-  for (const [groupId, marker] of Object.entries(groupMarkers)) {
-    const show = !clustered && groupVisible(groupId)
-    if (show && !map.hasLayer(marker)) marker.addTo(map)
-    else if (!show && map.hasLayer(marker)) marker.remove()
-  }
-}
-
-// Where a group is: the server's group position, else the midpoint of its ICs on the map
-function groupLatLng(groupId) {
-  const gp = props.groupPositions[groupId]
-  if (gp && gp.lat != null) return [gp.lat, gp.lng]
-  const ps = people.value.filter((p) => p.groupId === groupId && p.state !== 'stopped')
-  if (!ps.length) return null
-  return [ps.reduce((a, p) => a + p.lat, 0) / ps.length, ps.reduce((a, p) => a + p.lng, 0) / ps.length]
-}
-
-// The zone a group is inside (any of its ICs), from Stage 2 presence
-function groupZone(groupId) {
-  for (const p of people.value) {
-    if (p.groupId !== groupId) continue
-    const stay = (props.zoneStays[p.userId] || []).find((s) => s.zone.kind !== 'no_go')
-    if (stay) return stay.zone
-  }
-  return null
-}
-
-const SHORT = { late: 'late', at_risk: 'at risk', no_signal: 'no sig.' }
-
-function drawClusters() {
-  if (!map || !clusterLayer) return
-  clusterLayer.clearLayers()
-  if (!clustering.value) return
-  const clusters = new Map() // key -> { label, rows, points, zoneId }
-  for (const [groupId, row] of Object.entries(props.opsActive)) {
-    if (!groupVisible(groupId)) continue
-    const at = groupLatLng(groupId)
-    if (!at) continue
-    const zone = groupZone(groupId)
-    const g = groupOf(groupId)
-    const key = zone ? 'z:' + zone.id : 's:' + ((g && g.sector) || '')
-    if (!clusters.has(key)) clusters.set(key, { label: zone ? zone.code : (g && g.sector) || 'No sector', rows: [], points: [], zoneId: zone ? zone.id : null })
-    const c = clusters.get(key)
-    c.rows.push(row)
-    c.points.push(at)
-  }
-  for (const c of clusters.values()) {
-    const worst = c.rows.reduce((w, r) => (statusOf(r.status).rank > statusOf(w.status).rank ? r : w), c.rows[0])
-    const ws = statusOf(worst.status)
-    const n = c.rows.filter((r) => r.status === worst.status).length
-    const sub = PROBLEMS.includes(worst.status) ? n + ' ' + SHORT[worst.status] : c.label
-    const zoneEntry = c.zoneId && zoneShapes[c.zoneId]
-    const centre = zoneEntry
-      ? zoneEntry.shape.getBounds().getCenter()
-      : L.latLng(c.points.reduce((a, p) => a + p[0], 0) / c.points.length, c.points.reduce((a, p) => a + p[1], 0) / c.points.length)
-    const marker = L.marker(centre, {
-      icon: L.divIcon({
-        className: '',
-        html:
-          '<div class="ops-cluster ' + ws.cls + '" style="border-color:' + ws.colour + '">' + c.rows.length +
-          '<small class="' + ws.cls + '">' + escapeHtml(sub) + '</small></div>',
-        iconSize: [52, 52],
-        iconAnchor: [26, 26],
-      }),
-      zIndexOffset: 500,
-      title: c.label + ': ' + c.rows.length + ' groups, worst ' + ws.label.toLowerCase(),
-    }).addTo(clusterLayer)
-    marker.bindTooltip(
-      '<strong>' + escapeHtml(c.label) + '</strong> · ' + c.rows.length + (c.rows.length === 1 ? ' group' : ' groups') +
-        ['late', 'no_signal', 'at_risk', 'on_track']
-          .map((s) => {
-            const k = c.rows.filter((r) => r.status === s).length
-            return k ? '<br>' + statusOf(s).symbol + ' ' + k + ' ' + statusOf(s).label.toLowerCase() : ''
-          })
-          .join('') +
-        '<br><span class="text-muted">Tap to zoom in</span>',
-      { direction: 'top', offset: [0, -24] },
-    )
-    marker.on('click', () => {
-      const bounds = zoneEntry ? zoneEntry.shape.getBounds() : L.latLngBounds(c.points)
-      map.fitBounds(bounds.pad(0.4), { maxZoom: 18 })
-    })
-  }
-}
-
-// Zoomed in: groups in trouble (and the picked one) get a ring and a dashed line to their zone with "+0:28"
-function drawOpsLines() {
-  if (!map || !opsLayer) return
-  opsLayer.clearLayers()
-  if (clustering.value) return
-  for (const [groupId, row] of Object.entries(props.opsActive)) {
-    const picked = selectedGroup.value === groupId
-    if (!groupVisible(groupId) || row.state !== 'active' || !(PROBLEMS.includes(row.status) || picked)) continue
-    const at = groupLatLng(groupId)
-    if (!at) continue
-    const s = statusOf(row.status)
-    L.marker(at, {
-      icon: L.divIcon({ className: '', html: '<div class="ops-ring ' + s.cls + '"></div>', iconSize: [30, 30], iconAnchor: [15, 15] }),
-      interactive: false,
-      zIndexOffset: -50,
-    }).addTo(opsLayer)
-    let line = null
-    if (row.route && row.route.coordinates) {
-      // from the point of the route nearest the group, onwards
-      const pts = row.route.coordinates.map((c) => L.latLng(c[1], c[0]))
-      let best = 0
-      pts.forEach((p, i) => {
-        if (map.distance(p, at) < map.distance(pts[best], at)) best = i
-      })
-      line = [L.latLng(at), ...pts.slice(best)]
-    } else if (zoneShapes[row.zone_id]) {
-      line = [L.latLng(at), zoneShapes[row.zone_id].shape.getBounds().getCenter()]
-    }
-    if (line) L.polyline(line, { color: s.colour, weight: 3, dashArray: '4 7', opacity: 0.9, interactive: false }).addTo(opsLayer)
-    const g = groupOf(groupId)
-    const text =
-      (g ? g.name : '') + ' · ' + (row.status === 'late' ? '+' + mmss(row.late_s || 0) : row.status === 'at_risk' ? row.spare_s + ' s spare' : statusLabel(row))
-    L.tooltip({ permanent: true, direction: 'right', offset: [14, 0], className: 'ops-eta-label ' + s.cls, interactive: false })
-      .setLatLng(at)
-      .setContent(escapeHtml(text))
-      .addTo(opsLayer)
-  }
-}
-
-// One redraw for a burst of changes (group positions arrive every 400 ms during a simulation)
-let opsTimer = null
-function opsSoon() {
-  if (opsTimer) return
-  opsTimer = setTimeout(() => {
-    opsTimer = null
-    applyVisibility()
-    drawClusters()
-    drawOpsLines()
-  }, 300)
-}
-watch(() => [props.opsActive, props.opsVisible, props.zoneStays, props.groupPositions, clustersOn.value, selectedGroup.value], opsSoon)
-watch(clustering, opsSoon)
-
-// The queue picked a group: zoom to it (its line is drawn even when it is on time)
-function focusGroup(groupId) {
-  selectedGroup.value = groupId
-  const at = groupLatLng(groupId)
-  if (at && map) map.setView(at, Math.max(map.getZoom(), 17))
-  opsSoon()
-}
-defineExpose({ focusGroup })
-
 // ---------- Zones layer (merger Stage 1) ----------
 // The event's zones, drawn under the people: outlines in their kind's colour (the same colours as the
 // Zones tab), No-Go dashed red, with "Name · CODE" labels once zoomed in. Not clickable, so tapping a
@@ -794,7 +624,6 @@ async function loadZones() {
   zoneCount.value = (data || []).length
   refreshZoneState()
   placeZoneLabels()
-  opsSoon()
 }
 
 // "Formation 1 · FORM_A · 2 ICs (1 group)", and a No-Go zone with somebody inside drawn bold red.
@@ -845,21 +674,129 @@ function watchZones() {
     })
 }
 
+// ---------- The plan's walk under the people (step 30) ----------
+// The read is `session_timetable` (065) through usePlanWalk, which the follower's map asks too, and it is enabled only
+// while this is the page on show: the Live page is `v-show`n, so this panel is mounted on every page of the event and a
+// read from it would otherwise poll behind whatever the person is looking at (finding 72).
+const plan = usePlanWalk({
+  session: () => props.session,
+  enabled: () => props.active && !!props.session && !!props.session.planId,
+})
+const showPlan = ref(true) // a layer, not a preference: not remembered across a reload (the same as Zones)
+let planLayer = null
+
+const planWalks = computed(() => walksOf(plan.rows.value))
+const planRev = computed(() => {
+  const rows = plan.rows.value
+  return rows.length ? rows[0].plan_rev : props.session ? props.session.planRev : null
+})
+/** Whether there is a line at all: a group whose whole walk is one stated point draws a mark, not a road. */
+const planLine = computed(() => [...planWalks.value.values()].some((walk) => walk.runs.some((run) => run.length > 1)))
+/** The points the walk stands on, for framing the map when nobody is sharing yet. */
+const planPoints = computed(() => {
+  const out = []
+  for (const walk of planWalks.value.values()) for (const row of walk.points) out.push([row.lat, row.lng])
+  return out
+})
+/**
+ * Which two statements the clock is between, per group, as a string. The bold leg moves only when the clock crosses a
+ * moment, so this is what the redraw watches: the map ticks every second and the line must not be rebuilt every tick.
+ */
+const legKey = computed(() => {
+  const parts = []
+  for (const walk of planWalks.value.values()) {
+    const leg = legNow(walk.rows, props.now)
+    parts.push(walk.id + ':' + (leg ? leg[0].t_s + '-' + leg[1].t_s : '-'))
+  }
+  return parts.join('|')
+})
+
+/**
+ * Draw the walk, or clear it. A run is a dashed line in the group's colour at 55 %; the leg the clock is on is the same
+ * line again, bold and solid, over it -- the stretch the group is meant to be walking right now. Every path says which
+ * group and which revision it is, which is the only handle a browser check has on a Leaflet line.
+ */
+function drawPlan() {
+  if (!map || !planLayer) return
+  planLayer.clearLayers()
+  frameOnce() // the walk may be the first thing that arrived; the camera waits for it
+  if (!showPlan.value) return
+  for (const walk of planWalks.value.values()) {
+    const group = groupOf(walk.id)
+    const colour = group ? group.colour : '#244f3f'
+    for (const run of walk.runs) {
+      if (run.length < 2) continue
+      const line = L.polyline(run, {
+        color: colour,
+        weight: 2,
+        opacity: 0.55,
+        dashArray: '5 6',
+        interactive: false, // a line must not swallow the taps meant for the people under it
+      }).addTo(planLayer)
+      const element = line.getElement()
+      if (element) {
+        element.setAttribute('data-plan-line', walk.id)
+        if (planRev.value != null) element.setAttribute('data-plan-rev', String(planRev.value))
+      }
+    }
+    const leg = legNow(walk.rows, props.now)
+    if (!leg) continue
+    const [from, to] = leg
+    const bold = L.polyline(
+      [
+        [from.lat, from.lng],
+        [to.lat, to.lng],
+      ],
+      { color: colour, weight: 4, opacity: 0.95, interactive: false },
+    ).addTo(planLayer)
+    const element = bold.getElement()
+    if (element) {
+      element.setAttribute('data-plan-leg', walk.id)
+      element.setAttribute('data-leg-from', String(from.t_s))
+      element.setAttribute('data-leg-to', String(to.t_s))
+    }
+  }
+}
+
+// The walk is drawn from the read, the clock's leg and the toggle -- not on every tick, which is what `legKey` is for.
+watch([planWalks, legKey, showPlan, () => props.groups], drawPlan, { flush: 'post' })
+
+/**
+ * Frame the map once -- the people and the plan's walk together when there is a walk, because 80 m of line inside a
+ * 1.5 km viewport is a picture of a neighbourhood rather than of the venue. The people's answer may land first, so the
+ * camera is allowed one refit when the walk arrives; after somebody has dragged the map the view is theirs, not every
+ * read's.
+ */
+function frameOnce() {
+  if (!map || userMoved) return
+  const walk = planPoints.value
+  if (framed && (framedWithPlan || !walk.length)) return
+  const size = map.getSize()
+  if (!size.x || !size.y) return // measured while the page was hidden: the next draw frames it properly
+  const bounds = L.latLngBounds([])
+  for (const person of people.value) bounds.extend([person.lat, person.lng])
+  for (const point of walk) bounds.extend(point)
+  if (!bounds.isValid()) return
+  map.fitBounds(bounds.pad(walk.length ? 0.2 : 0.3), { maxZoom: walk.length ? 20 : 17, animate: false })
+  framed = true
+  if (walk.length) framedWithPlan = true
+}
+
 let unsubscribe = null
 let resizeObserver = null
 onMounted(() => {
   // Centre on Singapore with the OneMap basemap (shared setup in utils/onemap.js)
   map = createSingaporeMap(mapEl.value)
   zoneLayer = L.layerGroup().addTo(map) // under the trail and the markers
+  planLayer = L.layerGroup().addTo(map) // the plan's walk: over the zones, under the people and their trails
   trailLayer = L.layerGroup().addTo(map)
-  opsLayer = L.layerGroup().addTo(map)
-  clusterLayer = L.layerGroup().addTo(map)
-  zoom.value = map.getZoom()
   map.on('zoomend', placeZoneLabels)
-  map.on('zoomend', () => (zoom.value = map.getZoom()))
   watchZones()
-  // Dragging the map yourself means "let me look around": stop following
-  map.on('dragstart', stopFollowing)
+  // Dragging the map yourself means "let me look around": stop following, and keep the camera where it is put.
+  map.on('dragstart', () => {
+    userMoved = true
+    stopFollowing()
+  })
   // Tap empty map: hide the trail (the first tap only closes an open trail popup)
   map.on('click', () => {
     if (Date.now() - popupClosedAt < 400) return
@@ -867,7 +804,8 @@ onMounted(() => {
   })
   if (props.onReading) unsubscribe = props.onReading(onNewReading)
   document.addEventListener('visibilitychange', onVisibility)
-  // The map's box changes size when the run sheet panel opens beside it (Stage 6): Leaflet must be told
+  // The map's box changes size when the page it sits in is resized (a phone turning, the window changing shape): Leaflet
+  // must be told, or it keeps drawing for the box it was last measured in.
   if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => map && map.invalidateSize())
     resizeObserver.observe(mapEl.value)
@@ -879,7 +817,6 @@ onUnmounted(() => {
   if (unsubscribe) unsubscribe()
   if (resizeObserver) resizeObserver.disconnect()
   clearTimeout(zoneTimer)
-  clearTimeout(opsTimer)
   if (zoneChannel && supabase) supabase.removeChannel(zoneChannel)
   document.removeEventListener('visibilitychange', onVisibility)
   if (frameId) cancelAnimationFrame(frameId)
@@ -899,9 +836,6 @@ onUnmounted(() => {
         <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Reconnecting…
       </div>
       <!-- Shown while following someone (on top of the map) -->
-      <div v-if="clustering" class="cluster-pill shadow-sm small" data-testid="cluster-hint">
-        Zoomed out: number = groups · ring = worst status · tap a bubble to zoom in
-      </div>
       <div v-if="followedId" class="follow-bar shadow-sm" data-testid="follow-bar">
         <span class="text-truncate">Following <strong>{{ followedName }}</strong></span>
         <button class="btn btn-sm btn-outline-secondary py-0" data-testid="stop-follow-btn" @click="stopFollowing">Stop</button>
@@ -914,14 +848,23 @@ onUnmounted(() => {
       <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0d6efd"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
+      <!-- The plan under the people (step 30): what a dashed line is, and which one is loud. -->
+      <span v-if="planLine" data-testid="map-plan-legend">
+        <span class="plan-swatch" aria-hidden="true"></span>a group’s plan · the bold one is due now
+      </span>
       <span v-if="liveSince">Tap a marker to see their trail · tap the trail for times</span>
-      <label v-if="hasOps" class="form-check form-check-inline mb-0 ms-auto" title="Zoomed out, groups gather into one bubble per zone or sector" data-testid="clusters-toggle">
-        <input v-model="clustersOn" class="form-check-input" type="checkbox" />
-        <span class="form-check-label">Group clusters</span>
-      </label>
-      <label v-if="zoneCount" class="form-check form-check-inline mb-0" :class="{ 'ms-auto': !hasOps }" data-testid="zones-toggle">
+      <label v-if="zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
         <input v-model="showZones" class="form-check-input" type="checkbox" />
         <span class="form-check-label">Zones ({{ zoneCount }})</span>
+      </label>
+      <label
+        v-if="planLine"
+        class="form-check form-check-inline mb-0"
+        :class="{ 'ms-auto': !zoneCount }"
+        data-testid="plan-toggle"
+      >
+        <input v-model="showPlan" class="form-check-input" type="checkbox" />
+        <span class="form-check-label">Plan<template v-if="planRev != null"> (v{{ planRev }})</template></span>
       </label>
     </div>
 
@@ -970,16 +913,6 @@ onUnmounted(() => {
   border-radius: 999px;
   font-size: 0.875rem;
 }
-.cluster-pill {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 1000;
-  max-width: 60%;
-  padding: 0.25rem 0.6rem;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 8px;
-}
 .reconnect-pill {
   position: absolute;
   bottom: 10px;
@@ -1014,6 +947,15 @@ onUnmounted(() => {
 .dot-stopped {
   background-color: transparent !important;
   border: 2px dashed #6c757d;
+}
+/* The plan's line in the legend: the same dashed stroke the map draws it with. */
+.plan-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  margin-right: 0.25rem;
+  vertical-align: middle;
+  border-top: 2px dashed #244f3f;
 }
 :global(.trail-hover) {
   cursor: pointer;

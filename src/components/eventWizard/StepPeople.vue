@@ -42,7 +42,7 @@ onUnmounted(() => clearTimeout(timer))
 
 const isAdded = (id) => wizard.people.some((p) => p.id === id)
 
-// Planners are never in a group (034): a new planner leaves the group they were put in at step 3
+// Planners are never in a group (036): a new planner leaves the group they were put in at step 3
 function roleChanged(p) {
   if (p.role === 'planner') wizard.removeFromGroups(p.id)
 }
