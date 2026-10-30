@@ -16,6 +16,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { formatTime, formatDay, formatDayTime, formatDuration, toDateTimeLocal } from '../utils/time'
 import { remindIcsNow } from '../composables/usePushNotifications'
 import { askConfirm, toast } from '../composables/useNotify'
+import { supabase } from '../lib/supabase'
 
 const props = defineProps({
   sessions: { type: Object, required: true }, // from useEventSessions
@@ -54,6 +55,36 @@ function preselectEngine() {
     return
   }
   engineChoice.value = livePlans.value.length ? 'plan:' + livePlans.value[0].id : ''
+}
+
+// ---------- T+0: when the running plan's clock reads +0:00 ----------
+// QA 31 Oct: nothing set it, so every plan ran at its default 18:00 -- a walk-through started at 01:04 showed every
+// group "7 h late" from its first moment. "Now" starts the plan's clock with the event; a clock time is for a plan
+// written against the real night ("+0:00 is Doors Open at 16:00"). It is written to the plan, in Singapore's date and
+// time, just before the start, so start_event reads it the way it always has.
+const t0Mode = ref('now') // 'now' | 'clock'
+const t0Clock = ref('18:00')
+function singapore(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date)
+  const part = (type) => parts.find((x) => x.type === type).value
+  return { date: `${part('year')}-${part('month')}-${part('day')}`, time: `${part('hour')}:${part('minute')}` }
+}
+const t0Text = computed(() => (t0Mode.value === 'now' ? 'now' : formatClock(t0Clock.value)))
+function formatClock(hhmm) {
+  return formatTime(`2000-01-01T${hhmm || '00:00'}:00+08:00`) // the clock is Singapore's, like formatTime
+}
+async function writeT0(planId) {
+  const p = planList.value.find((x) => x.id === planId)
+  if (!p) return
+  const today = singapore(new Date())
+  const time = t0Mode.value === 'now' ? today.time : t0Clock.value
+  const { error } = await supabase.rpc('plan_save', {
+    p_event: props.eventId,
+    p_plan: { id: p.id, name: p.name, rev: p.rev, for_date: today.date, t0_time: time + ':00' },
+  })
+  if (error) throw error
 }
 
 const live = computed(() => props.sessions.liveSession.value)
@@ -212,6 +243,9 @@ async function saveForm() {
 function openStart() {
   if (!hasPlans.value) return startNow()
   preselectEngine()
+  const p = startPlan.value && planList.value.find((x) => x.id === startPlan.value)
+  t0Mode.value = 'now'
+  t0Clock.value = p && p.t0_time ? String(p.t0_time).slice(0, 5) : '18:00'
   formError.value = ''
   form.value = 'start'
 }
@@ -223,7 +257,7 @@ function whatRunsSuffix() {
 async function startNow() {
   const plan = startPlan.value
   const what = plan
-    ? 'Plan: "' + planName(plan) + '". '
+    ? 'Plan: "' + planName(plan) + '", its T+0 ' + (t0Mode.value === 'now' ? 'now' : 'at ' + t0Text.value) + '. '
     : hasPlans.value
       ? 'No plan: tracking only (no schedule). '
       : ''
@@ -237,7 +271,10 @@ async function startNow() {
   })
   if (!ok) return
   await run(
-    () => props.sessions.startEvent(plan),
+    async () => {
+      if (plan) await writeT0(plan)
+      return props.sessions.startEvent(plan)
+    },
     'Event started' + (plan ? ' on "' + planName(plan) + '"' : '') + '. ICs can share now.',
   )
   // The "Event started" push now, rather than at the next minute's server check (that check still
@@ -371,6 +408,21 @@ function remind() {
         <div class="small text-muted mt-1">
           A session runs a plan or nothing. The plan must be published first; the strip is its schedule.
         </div>
+        <fieldset v-if="startPlan" class="mt-2" data-testid="start-t0">
+          <legend class="time-label mb-1" style="font-size: inherit">When is T+0 (the plan's +0:00)?</legend>
+          <div class="d-flex flex-wrap align-items-center gap-3">
+            <label class="form-check mb-0">
+              <input v-model="t0Mode" class="form-check-input" type="radio" value="now" data-testid="start-t0-now" />
+              <span class="form-check-label">Now, as the event starts</span>
+            </label>
+            <label class="form-check mb-0 d-flex align-items-center gap-2">
+              <input v-model="t0Mode" class="form-check-input" type="radio" value="clock" data-testid="start-t0-clock" />
+              <span class="form-check-label">Today at</span>
+              <input v-model="t0Clock" type="time" class="form-control form-control-sm" style="width: 7.5rem" :disabled="t0Mode !== 'clock'" aria-label="T+0 time" data-testid="start-t0-time" />
+            </label>
+          </div>
+          <div class="small text-muted mt-1">Lateness is measured from T+0, so pick the moment the plan's first frame is meant to happen.</div>
+        </fieldset>
         <div class="d-flex justify-content-end gap-2 mt-2">
           <button class="btn btn-sm btn-outline-secondary" type="button" @click="form = ''">Cancel</button>
           <button class="btn btn-sm btn-success px-3" type="submit" :disabled="busy" data-testid="start-confirm-btn">Start event…</button>

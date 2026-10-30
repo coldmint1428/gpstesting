@@ -15,7 +15,8 @@
     "test:walk": "node tools/plan_walk_test.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npm run build && npx cap sync android && npx cap open android",
-    "test:unit": "vitest run"
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
     "@electric-sql/pglite": "^0.5.9",
+    "@playwright/test": "^1.56.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^29.1.1",

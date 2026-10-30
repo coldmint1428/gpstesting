@@ -189,7 +189,7 @@ const clock = computed(() => {
           <h2 class="hm-h3 text-white">Join an event</h2>
           <label for="home-code" class="small hm-on-dark">Type the 6-character code your planner sent you.</label>
           <div class="d-flex gap-2 flex-wrap">
-            <input id="home-code" :value="code" class="form-control hm-code-input" maxlength="6" autocomplete="off" placeholder="9Z8GGZ" data-testid="home-join-code" @input="onCode" @keydown.enter="join" />
+            <input id="home-code" :value="code" class="form-control hm-code-input" autocomplete="off" placeholder="9Z8GGZ" data-testid="home-join-code" @input="onCode" @keydown.enter="join" />
             <button type="button" class="btn" :class="codeFull ? 'btn-light' : 'btn-outline-light'" :disabled="!codeFull || joinBusy" data-testid="home-join-btn" @click="join">
               {{ joinBusy ? 'Joining…' : 'Join' }}
             </button>
@@ -216,7 +216,7 @@ const clock = computed(() => {
           <div class="d-flex gap-2 align-items-center flex-wrap">
             <div class="hm-boxes">
               <span v-for="(b, i) in boxes" :key="i" class="hm-box" :class="{ 'hm-box-filled': b.ch, 'hm-box-next': b.next }">{{ b.ch }}</span>
-              <input id="visitor-code" :value="code" class="hm-box-input" maxlength="6" autocomplete="off" aria-describedby="visitor-code-help" data-testid="visitor-join-code" @input="onCode" @keydown.enter="join" />
+              <input id="visitor-code" :value="code" class="hm-box-input" autocomplete="off" aria-describedby="visitor-code-help" data-testid="visitor-join-code" @input="onCode" @keydown.enter="join" />
             </div>
             <button type="button" class="btn" :class="codeFull ? 'btn-primary' : 'btn-outline-primary'" :disabled="!codeFull" @click="join">Join</button>
           </div>

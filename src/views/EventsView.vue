@@ -18,6 +18,11 @@ const events = ref([]) // [{ id, name, roles: ['root', ...], isAdmin, isIC }]
 const loading = ref(true)
 const simName = ref('') // merger Stage 3: a name-only test event for virtual groups
 const joinCode = ref('')
+// A pasted code keeps working with spaces or dashes in it ("9Z8-GGZ"): no maxlength, the six are counted after cleaning
+function onJoinInput(event) {
+  joinCode.value = (event.target.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+  event.target.value = joinCode.value
+}
 const errorMsg = ref('')
 
 async function loadEvents() {
@@ -228,10 +233,10 @@ function roleTone(label) {
       <form class="d-grid gap-3" @submit.prevent="joinEvent">
         <p class="text-muted mb-0">Type the 6-character code your planner sent you.</p>
         <input
-          v-model="joinCode"
+          :value="joinCode"
+          @input="onJoinInput"
           class="form-control pv-code"
           placeholder="K7Q2XM"
-          maxlength="6"
           autocapitalize="characters"
           autocomplete="off"
           spellcheck="false"
@@ -258,11 +263,11 @@ function roleTone(label) {
       <div class="pl-actions">
         <form class="d-flex gap-2" @submit.prevent="joinEvent">
           <input
-            v-model="joinCode"
+            :value="joinCode"
+            @input="onJoinInput"
             class="form-control text-uppercase"
             style="width: 8.5rem"
             placeholder="Event code"
-            maxlength="6"
             autocapitalize="characters"
             required
             aria-label="Event code"
