@@ -10,6 +10,9 @@
 // messages and No-Go warnings (kinds move / message / nogo, drawn by Android on the "moves" channel). Tapping one
 // opens the event at the group's next move (EventView handles ?next=1).
 //
+// The plan engine (057) sends its own kinds: plan_due ("be at X by ..."), plan_leave ("leave now") and plan_late
+// ("running late"). They are handled like the Stage 8 ones; ?next=1 now lands on the member's Schedule.
+//
 // Needs android/app/google-services.json from the Firebase console (see the checklist).
 // Without it the app still works, just without push reminders.
 //
@@ -21,6 +24,8 @@ import { toast } from './useNotify'
 
 const isNative = Capacitor.isNativePlatform()
 const MOVE_KINDS = ['move', 'message', 'nogo', 'show'] // Stage 8 pushes (send-reminders, push_queue); 'show' = on hold / resumed (029)
+const PLAN_KINDS = ['plan_due', 'plan_leave', 'plan_late'] // the plan engine's pushes (057_plan_pushes.sql)
+const OPENS_SCHEDULE = [...MOVE_KINDS, ...PLAN_KINDS]
 export const pushReady = ref(false) // this phone has a push token saved for the logged-in user
 
 let pluginModule = null
@@ -74,7 +79,7 @@ export async function enablePush(router) {
         const data = action.notification.data || {}
         if (data.kind === 'event-start' && data.eventId) {
           router.push({ name: 'event', params: { id: data.eventId }, query: { share: '1' } })
-        } else if (MOVE_KINDS.includes(data.kind) && data.eventId) {
+        } else if (OPENS_SCHEDULE.includes(data.kind) && data.eventId) {
           router.push({ name: 'event', params: { id: data.eventId }, query: { next: '1' } })
         }
       })
@@ -115,7 +120,7 @@ function showWhileOpen(notification) {
   const data = notification.data || {}
   if (data.kind === 'event-start') {
     toast((data.title || 'Event started') + '. ' + (data.body || 'Tap Start sharing.'), 'warning', 8000)
-  } else if (data.kind === 'move' || data.kind === 'show') {
+  } else if (data.kind === 'move' || data.kind === 'show' || PLAN_KINDS.includes(data.kind)) {
     // (a planner's message and a No-Go entry already show as toast + banner on the event page; the phone also draws the
     // notification itself while the app is open: ReminderMessagingService.java)
     const title = data.title || notification.title || ''

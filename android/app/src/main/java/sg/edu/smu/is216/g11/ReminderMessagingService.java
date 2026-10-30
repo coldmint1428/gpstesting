@@ -43,8 +43,10 @@ public class ReminderMessagingService extends MessagingService {
         super.onMessageReceived(message); // app open: JavaScript also gets it (shows a toast)
     }
 
+    // Stage 8 kinds, and the plan engine's (057_plan_pushes.sql): be there by / leave now / running late
     private static boolean isMoveKind(String kind) {
-        return "move".equals(kind) || "message".equals(kind) || "nogo".equals(kind) || "show".equals(kind);
+        return "move".equals(kind) || "message".equals(kind) || "nogo".equals(kind) || "show".equals(kind)
+            || "plan_due".equals(kind) || "plan_leave".equals(kind) || "plan_late".equals(kind);
     }
 
     private void showMove(RemoteMessage message, Map<String, String> data) {
