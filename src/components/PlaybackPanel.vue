@@ -263,7 +263,7 @@ onUnmounted(() => clearInterval(liveTimer))
               <span v-if="busyKey === item.key" class="small text-muted">{{ progress }}</span>
               <button
                 class="btn btn-sm"
-                :class="item.live ? 'btn-outline-danger' : 'btn-primary'"
+                :class="item.live ? 'btn-outline-primary' : 'btn-primary'"
                 :disabled="busyKey !== null || item.readings === 0"
                 data-testid="play-recording-btn"
                 @click="play(item)"

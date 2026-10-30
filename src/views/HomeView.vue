@@ -141,7 +141,7 @@ const clock = computed(() => {
       <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
       <!-- Live first: one card, the live colour, ONE main action -->
-      <section v-for="ev in liveEvents" :key="ev.id" class="hm-live" aria-label="Live now" data-testid="home-live">
+      <section v-for="ev in liveEvents.slice(0, 1)" :key="ev.id" class="hm-live" aria-label="Live now" data-testid="home-live">
         <div class="hm-live-main">
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <span class="ev-chip ev-chip-live">LIVE</span>
@@ -151,6 +151,19 @@ const clock = computed(() => {
           <p class="hm-muted mb-0">Open the event for the live map, the plan and who is sharing.</p>
         </div>
         <RouterLink :to="{ name: 'event', params: { id: ev.id, page: 'live' } }" class="btn btn-live btn-lg">Open live map →</RouterLink>
+      </section>
+
+      <!-- More than one live at once: the first gets the big card, the rest a compact list (one loud thing per screen) -->
+      <section v-if="liveEvents.length > 1" class="hm-card hm-also" aria-label="Also live" data-testid="home-also-live">
+        <h2 class="hm-h3 mb-1">Also live · {{ liveEvents.length - 1 }}</h2>
+        <RouterLink v-for="ev in liveEvents.slice(1)" :key="ev.id" :to="{ name: 'event', params: { id: ev.id, page: 'live' } }" class="hm-row">
+          <span class="ev-chip ev-chip-live">LIVE</span>
+          <span class="flex-grow-1" style="min-width: 0">
+            <strong class="d-block text-truncate">{{ ev.name }}</strong>
+            <span class="hm-muted small">{{ [ev.venue, roleLabel(ev)].filter(Boolean).join(' · ') }}</span>
+          </span>
+          <span class="small fw-semibold" style="color: var(--brand-primary)">Open →</span>
+        </RouterLink>
       </section>
 
       <div class="hm-cols">
@@ -337,6 +350,7 @@ const clock = computed(() => {
 .hm-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding: 40px 0 24px; }
 .hm-live { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; background: var(--bg-surface); border: 2px solid var(--signal); border-radius: 24px; padding: 24px 28px; margin-bottom: 20px; box-shadow: 0 12px 36px -8px rgba(242, 165, 65, 0.28); }
 .hm-live-main { flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.hm-also { margin-bottom: 20px; }
 .hm-cols { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; padding-bottom: 64px; }
 .hm-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 20px; padding: 22px 24px; }
 .hm-grow { flex: 999 1 520px; min-width: 0; }

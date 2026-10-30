@@ -274,3 +274,32 @@ html .form-select:focus {
 html .form-switch .form-check-input:focus:not(:checked) {
   --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%232e8a7a'/%3e%3c/svg%3e");
 }
+
+/* My events (website): "Live now" is the live pill; Simulation is information, not a warning */
+html .pl-badge--live {
+  background: #14201b;
+  color: #ffffff;
+  border-color: #14201b;
+}
+html .pl-badge--live .pl-badge__dot {
+  background: var(--signal);
+  animation: planova-live-pulse 1.6s ease-in-out infinite;
+}
+html .pl-badge--info {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+  border-color: var(--status-info-border);
+}
+html .pl-live {
+  border-color: var(--signal);
+}
+
+/* Side rail "LIVE" (was red) and the plan board's "live" tag (was green): marigold with ink text */
+html .ev-nav-badge-live {
+  background: var(--signal);
+  color: #14201b;
+}
+html .pv .pv-badge.is-live {
+  background: #14201b;
+  color: #ffffff;
+}

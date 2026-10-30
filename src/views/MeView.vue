@@ -63,7 +63,7 @@ async function logout() {
       <span aria-hidden="true" class="me-chev">›</span>
     </RouterLink>
 
-    <button type="button" class="btn btn-outline-danger w-100 mt-2" data-testid="me-logout" @click="logout">Log out</button>
+    <button type="button" class="btn btn-outline-secondary w-100 mt-2" data-testid="me-logout" @click="logout">Log out</button>
   </main>
 </template>
 

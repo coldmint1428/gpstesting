@@ -265,7 +265,7 @@ function roleTone(label) {
       class="pl-live"
       :data-testid="'live-' + ev.id"
     >
-      <span class="pl-badge pl-badge--success"><span class="pl-badge__dot"></span>Live now</span>
+      <span class="pl-badge pl-badge--live"><span class="pl-badge__dot"></span>Live now</span>
       <span class="pl-live__text">
         <span class="pl-live__name d-block">{{ ev.name }}</span>
         <span class="pl-meta d-block">
@@ -321,7 +321,7 @@ function roleTone(label) {
             </span>
           </span>
           <span class="pl-row__trail">
-            <span v-if="ev.isSimulation" class="pl-badge pl-badge--warning">Simulation</span>
+            <span v-if="ev.isSimulation" class="pl-badge pl-badge--info">Simulation</span>
             <span class="pl-role" :class="roleClass(ev)" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
             <svg class="pl-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
           </span>
