@@ -359,3 +359,9 @@ html.native-app .pv-also-chev {
   font-size: 24px;
   color: var(--text-tertiary);
 }
+
+/* Phone tab bar: the dot on Ops means "live", so it is marigold, not red */
+html.native-app .pv-tab-dot {
+  background: var(--signal);
+  box-shadow: 0 0 0 2px #ffffff;
+}

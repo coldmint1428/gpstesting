@@ -45,6 +45,18 @@ const pending = computed(() =>
 )
 const current = computed(() => pending.value[0] || null)
 const stepNumber = computed(() => (current.value ? steps.value.indexOf(current.value.key) + 1 : steps.value.length))
+// Line icons in place of the steps' emoji (the rest of the app draws icons, it never uses emoji)
+const STEP_ICONS = {
+  '📍': 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
+  '🎯': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01',
+  '🛰️': 'M13 7l4-4 4 4-4 4zM3 17l4-4 4 4-4 4zM9 9l6 6M16 13a5 5 0 0 1-5 5',
+  '🔔': 'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
+  '🔋': 'M3 7h15a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zM22 11v2M6 10v4M10 10v4',
+  '⚡': 'M13 2 4 14h7l-1 8 9-12h-7z',
+}
+const stepIcon = computed(() => (current.value && STEP_ICONS[current.value.icon]) || STEP_ICONS['📍'])
+// The bar counts the step you are on as started, so it never sits at an empty 0% (a head start keeps people going)
+const progressPct = computed(() => Math.min(100, ((stepNumber.value - 0.5) / Math.max(1, steps.value.length)) * 100))
 const requiredOk = computed(() => items.value.every((i) => !i.required || i.ok))
 const done = computed(() => loaded.value && !current.value)
 const skippedItems = computed(() => items.value.filter((i) => !i.ok && skipped.value.has(i.key)))
@@ -135,10 +147,10 @@ onUnmounted(() => {
         <button class="btn btn-link btn-sm text-muted p-0" data-testid="check-back" @click="leave">Not now</button>
       </div>
       <div class="progress mb-4" role="progressbar" :aria-valuenow="stepNumber - 1" :aria-valuemax="steps.length" style="height: 6px">
-        <div class="progress-bar bg-success" :style="{ width: ((stepNumber - 1) / steps.length) * 100 + '%' }"></div>
+        <div class="progress-bar" :style="{ width: progressPct + '%', background: 'var(--brand-primary)' }"></div>
       </div>
 
-      <div class="step-icon mb-3" aria-hidden="true">{{ current.icon }}</div>
+      <div class="step-icon mb-3" aria-hidden="true"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path :d="stepIcon" /></svg></div>
       <h1 class="h4 mb-2">{{ current.title }}</h1>
       <p class="text-muted mb-1">{{ current.body }}</p>
       <p v-if="!current.required" class="small text-muted mb-3">Recommended</p>
@@ -213,6 +225,7 @@ onUnmounted(() => {
 .step-icon {
   font-size: 3.5rem;
   line-height: 1;
+  color: var(--brand-primary);
 }
 .done-toast {
   position: fixed;
