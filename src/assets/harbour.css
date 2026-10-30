@@ -303,3 +303,59 @@ html .pv .pv-badge.is-live {
   background: #14201b;
   color: #ffffff;
 }
+
+/* Phone, My events: the LIVE pill on the dark live card turns light, or its edge disappears (ink on harbour 900 is 1.4:1) */
+html.native-app .pv-live .pv-chip-live {
+  background: #f7f6f2 !important;
+  color: #14201b !important;
+}
+html.native-app .pv-live .pv-chip-live::before {
+  box-sizing: border-box;
+  border: 2px solid #14201b;
+  width: 12px;
+  height: 12px;
+}
+/* The other live events, as compact rows under the one big card */
+html.native-app .pv-also-live {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 6px 14px;
+  margin-bottom: 16px;
+}
+html.native-app .pv-also-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 10px 2px 4px;
+  color: var(--text-secondary);
+}
+html.native-app .pv-also-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 2px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+html.native-app .pv-also-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+html.native-app .pv-also-text strong {
+  font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html.native-app .pv-also-text span {
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+html.native-app .pv-also-chev {
+  font-size: 24px;
+  color: var(--text-tertiary);
+}

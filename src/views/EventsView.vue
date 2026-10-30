@@ -153,7 +153,7 @@ function roleTone(label) {
 
     <!-- Live now: straight into the live view -->
     <RouterLink
-      v-for="ev in liveEvents"
+      v-for="ev in liveEvents.slice(0, 1)"
       :key="'live-' + ev.id"
       :to="{ name: 'event', params: { id: ev.id } }"
       class="pv-live"
@@ -167,6 +167,25 @@ function roleTone(label) {
       </span>
       <span class="pv-live-open">Open live view</span>
     </RouterLink>
+
+    <!-- More than one live at once: the first keeps the big card, the rest are compact rows (one loud thing per screen) -->
+    <section v-if="liveEvents.length > 1" class="pv-also-live" aria-label="Also live" data-testid="also-live">
+      <h2 class="pv-also-title">Also live · {{ liveEvents.length - 1 }}</h2>
+      <RouterLink
+        v-for="ev in liveEvents.slice(1)"
+        :key="'also-' + ev.id"
+        :to="{ name: 'event', params: { id: ev.id } }"
+        class="pv-also-row"
+        :data-testid="'live-' + ev.id"
+      >
+        <span class="pv-chip pv-chip-live">LIVE</span>
+        <span class="pv-also-text">
+          <strong>{{ ev.name }}</strong>
+          <span>{{ ev.venue || 'Live now' }} · {{ roleLabel(ev) }}</span>
+        </span>
+        <span aria-hidden="true" class="pv-also-chev">›</span>
+      </RouterLink>
+    </section>
 
     <p v-if="loading" class="text-muted px-1">Loading…</p>
     <div v-else-if="events.length === 0" class="pv-empty" data-testid="no-events">
