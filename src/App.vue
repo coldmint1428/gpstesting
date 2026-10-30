@@ -76,7 +76,8 @@ async function logout() {
       <div id="mainNav" class="collapse navbar-collapse">
         <ul class="navbar-nav ms-auto align-items-sm-center">
           <li class="nav-item"><RouterLink class="nav-link" to="/">Home</RouterLink></li>
-          <li class="nav-item"><RouterLink class="nav-link" to="/events">Events</RouterLink></li>
+          <!-- Events needs an account: a visitor would only be sent to Log in -->
+          <li v-if="auth.isLoggedIn" class="nav-item"><RouterLink class="nav-link" to="/events">Events</RouterLink></li>
           <li v-if="tracker.isTracking.value && tracker.sharingEventId.value" class="nav-item">
             <!-- Visible on every page while sharing, so users always know -->
             <RouterLink
