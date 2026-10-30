@@ -53,6 +53,6 @@ export async function makeQaEvent(label = 'Functional', { startsAt = new Date(Da
 export async function deleteQaEvents() {
   const { sb, user } = await clientFor('root')
   const { data } = await sb.from('events').select('id, name').eq('created_by', user.id).like('name', QA_EVENT_PREFIX + '%')
-  for (const ev of data || []) await sb.from('events').delete().eq('id', ev.id)
+  for (const ev of data || []) await sb.rpc('delete_event', { p_event_id: ev.id })
   return (data || []).length
 }

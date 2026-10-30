@@ -591,7 +591,7 @@ async function removeEvent() {
                   <template v-else> sharing opens when a planner starts the event.</template>
                 </span>
               </span>
-              <button v-if="sharingHere" class="btn btn-sm btn-danger" data-testid="stop-share-btn" @click="tracker.stop()">
+              <button v-if="sharingHere" class="btn btn-sm btn-outline-secondary" data-testid="stop-share-btn" @click="tracker.stop()">
                 Stop sharing
               </button>
               <button v-else-if="isLive" class="btn btn-sm btn-success" data-testid="share-btn" @click="startSharing">

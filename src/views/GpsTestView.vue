@@ -182,7 +182,7 @@ function updateMap(lat, lng, accuracy) {
       >
         Start sharing
       </button>
-      <button v-else class="btn btn-danger" data-testid="stop-btn" @click="stop">Stop sharing</button>
+      <button v-else class="btn btn-outline-secondary" data-testid="stop-btn" @click="stop">Stop sharing</button>
     </div>
 
     <div v-if="!loading && !canShare" class="alert alert-warning py-2" role="alert" data-testid="not-ic-msg">

@@ -49,7 +49,7 @@ async function logout() {
         <p class="mb-3 d-flex align-items-center gap-2"><span class="me-dot" aria-hidden="true"></span><strong>Sharing now</strong> · every 10 s</p>
         <div class="d-flex gap-2">
           <RouterLink :to="{ name: 'event', params: { id: tracker.sharingEventId.value } }" class="btn btn-outline-primary flex-grow-1">Open event</RouterLink>
-          <button type="button" class="btn btn-outline-danger flex-grow-1" data-testid="me-stop" @click="stopSharing">Stop sharing</button>
+          <button type="button" class="btn btn-outline-secondary flex-grow-1" data-testid="me-stop" @click="stopSharing">Stop sharing</button>
         </div>
       </template>
       <p v-else class="mb-0 text-muted">Not sharing. An IC shares from the event's Now tab once a planner starts the event.</p>

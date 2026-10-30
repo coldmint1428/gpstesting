@@ -41,9 +41,16 @@ export async function sessionFor(name) {
     session = data.session
   }
   if (!session) {
-    const { data, error } = await sb.auth.signInWithPassword({ email: qa(name).email, password: ACCOUNTS.password })
-    if (error) throw new Error(`QA sign-in for ${name} failed: ${error.message}`)
-    session = data.session
+    // Auth allows a burst of about 30 sign-ins per address; a test run waits its turn rather than failing on a 429
+    for (let attempt = 0; ; attempt++) {
+      const { data, error } = await sb.auth.signInWithPassword({ email: qa(name).email, password: ACCOUNTS.password })
+      if (!error) {
+        session = data.session
+        break
+      }
+      if (error.status !== 429 || attempt >= 20) throw new Error(`QA sign-in for ${name} failed: ${error.message}`)
+      await new Promise((r) => setTimeout(r, 3000))
+    }
   }
   fs.writeFileSync(CACHE, JSON.stringify({ ...readCache(), [name]: session }))
   return session

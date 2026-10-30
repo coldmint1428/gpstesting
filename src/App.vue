@@ -8,6 +8,7 @@ import { enablePush } from './composables/usePushNotifications'
 import NotifyHost from './components/NotifyHost.vue'
 import PhoneTabBar from './components/PhoneTabBar.vue'
 import { isNativeApp } from './lib/platform'
+import { pendingNavigation } from './router' // QA-09: the bar while a page change waits on the server
 import logoOnDark from './assets/brand/planova-logo-on-dark.svg' // the approved logo for dark backgrounds (the top bar is dark chrome)
 
 const auth = useAuthStore()
@@ -105,6 +106,9 @@ async function logout() {
   <!-- One page per event: going straight from one event to another (a "Start sharing" push for event B tapped
        while event A is open) used to reuse A's page -- the address said B, the page showed and acted on A. Keyed
        by the route and its id, so only a different event rebuilds the page, not a query change like ?share=1. -->
+  <div v-if="pendingNavigation" class="nav-loading" role="status" aria-live="polite" data-testid="nav-loading">
+    <span class="nav-loading-bar"></span><span class="nav-loading-text">Loading…</span>
+  </div>
   <RouterView v-slot="{ Component, route }">
     <component :is="Component" :key="String(route.name) + ':' + (route.params.id || '')" />
   </RouterView>

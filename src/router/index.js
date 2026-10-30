@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import PolygonTestView from '../views/PolygonTestView.vue'
@@ -76,6 +77,22 @@ const router = createRouter({
 })
 
 // Send logged-out users to the login page, then back to where they were going
+// QA-09: a page change that waits on the server (the event guard below reads the membership first) used to show
+// nothing at all; under a slow server that read as a crash. App.vue shows a bar while this is true, half a second
+// in. Set here, in the first guard, because a guard registered later does not run until this one has finished.
+export const pendingNavigation = ref(false)
+let pendingTimer = null
+const settle = () => {
+  clearTimeout(pendingTimer)
+  pendingNavigation.value = false
+}
+router.beforeEach(() => {
+  clearTimeout(pendingTimer)
+  pendingTimer = setTimeout(() => (pendingNavigation.value = true), 500)
+})
+router.afterEach(settle)
+router.onError(settle)
+
 router.beforeEach(async (to, from) => {
   const auth = useAuthStore()
   if (to.meta.guestOnly) {
@@ -98,7 +115,9 @@ async function eventPageGuard(to, from) {
   let membership
   try {
     // fresh when arriving from outside the event (I may have been added or removed since)
-    membership = await fetchMembership(id, { fresh: from.name !== 'event' || from.params.id !== id })
+    // QA-09: a server that does not answer held the page blank for 90 s; after 10 s the page opens and says so itself
+    const slow = new Promise((_, reject) => setTimeout(() => reject(new Error('slow')), 10000))
+    membership = await Promise.race([fetchMembership(id, { fresh: from.name !== 'event' || from.params.id !== id }), slow])
   } catch {
     return true // offline or the server failed: the page shows its own error
   }
