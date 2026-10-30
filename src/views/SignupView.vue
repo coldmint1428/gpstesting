@@ -55,7 +55,7 @@ async function submit() {
     router.push({ name: 'login', query: { confirm: '1', ...(route.query.redirect ? { redirect: route.query.redirect } : {}) } })
     return
   }
-  router.push(route.query.redirect || '/events')
+  router.push(route.query.redirect || '/') // the website's Home; the phone app's / goes on to My events
 }
 </script>
 

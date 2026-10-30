@@ -72,7 +72,7 @@ export function usePlan(eventId) {
   async function loadGroups() {
     const { data } = await supabase
       .from('groups')
-      .select('id, name, code')
+      .select('id, name, code, colour')
       .eq('event_id', eventId)
       .order('name')
     groups.value = data || []

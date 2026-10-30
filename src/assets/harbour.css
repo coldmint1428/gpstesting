@@ -1,0 +1,276 @@
+/* harbour.css - Planova 2 colour scheme "Harbour & Signal" (design canvas: Planova 2 redesign).
+   Loaded after planova-theme.css and before native.css (src/main.js): it re-points the Planova tokens, Bootstrap and the
+   plan board's own variables at one palette, so every screen changes together.
+   The rules the palette keeps:
+     harbour (muted teal-green)  the brand and every calm action
+     marigold                    "live" and the action that starts or keeps sharing -- nothing else
+     amber                       late / warning, always with an icon and a word
+     red                         danger only (No-Go, missed, end event)
+   Every text pair here is >= 4.5:1, every stroke that carries meaning >= 3:1 (WCAG 2.2). */
+
+:root {
+  --bg-canvas: #f7f6f2;
+  --bg-surface: #ffffff;
+  --bg-surface-raised: #ffffff;
+  --bg-inset: #efede6;
+  --bg-muted: #efede6;
+  --text-primary: #14201b;
+  --text-secondary: #43504a;
+  --text-tertiary: #5f6b65;
+  --text-disabled: #8a8f8b;
+  --text-link: #0f5c50;
+  --text-inverse: #ffffff;
+  --border-subtle: #e2dfd6;
+  --border-default: #c9c5b9;
+  --border-strong: #0f5c50;
+  --border-focus: #2e8a7a;
+  --brand-primary: #0f5c50;
+  --brand-primary-hover: #0b3d35;
+  --brand-primary-pressed: #082c26;
+  --brand-primary-subtle: #eef7f4;
+  --interactive-hover-overlay: #eef7f4;
+  --interactive-selected: #dcefea;
+  --selection-bg: #bfe0d8;
+  --bg-chrome: #0b3d35;
+  --text-on-chrome: #ffffff;
+  --text-on-chrome-muted: #b9d4cc;
+  --chrome-hover: #0f5c50;
+  --chrome-selected: #0f5c50;
+  --chrome-indicator: #8fd3bf;
+  --chrome-border: #0f5c50;
+  --focus-on-chrome: #8fd3bf;
+  --timeline-active: #2e8a7a;
+  --timeline-indicator: #0f5c50;
+  --status-success-fg: #1f7a4d;
+  --status-success-bg: #e3f3ea;
+  --status-success-border: #1f7a4d;
+  --status-warning-fg: #9a5200;
+  --status-warning-bg: #fdefd9;
+  --status-warning-border: #9a5200;
+  --status-error-fg: #c4321f;
+  --status-error-bg: #fbe5e1;
+  --status-error-border: #c4321f;
+  --status-info-fg: #3d5a99;
+  --status-info-bg: #e6ecf7;
+  --status-info-border: #3d5a99;
+  --danger-solid: #c4321f;
+  --danger-solid-hover: #a32918;
+  --media-fill: #0b3d35;
+  --media-fill-hover: #0f5c50;
+  /* new in Planova 2 */
+  --signal: #f2a541; /* live fills, ink text on top */
+  --signal-stroke: #b06400; /* live rings, arcs, progress on light grounds (>= 3:1) */
+  --signal-text: #8a4f00; /* live as text */
+  --signal-tint: #fdf0dc; /* behind live things only */
+  --mint: #8fd3bf; /* links and accents on dark chrome */
+  --attention-ring: #14201b; /* "needs attention", the same on every map and list */
+  --font-ui: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage Grotesque', Inter, system-ui, sans-serif;
+  --font-brand: 'Bricolage Grotesque', Inter, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* The phone app reads at arm's length, walking, in sunlight: Atkinson Hyperlegible */
+html.native-app {
+  --font-ui: 'Atkinson Hyperlegible', system-ui, Roboto, sans-serif;
+  --font-display: 'Atkinson Hyperlegible', system-ui, Roboto, sans-serif;
+}
+
+/* :root, not html -- Bootstrap sets these on :root (and [data-bs-theme=light]), which outranks a plain html rule, so
+   before Planova 2 links, primary and body colours silently stayed Bootstrap blue */
+:root,
+[data-bs-theme='light'] {
+  --bs-body-color: #14201b;
+  --bs-body-color-rgb: 20, 32, 27;
+  --bs-body-bg: #f7f6f2;
+  --bs-body-bg-rgb: 247, 246, 242;
+  --bs-emphasis-color: #14201b;
+  --bs-secondary-color: rgba(20, 32, 27, 0.72);
+  --bs-tertiary-bg: #efede6;
+  --bs-border-color: #e2dfd6;
+  --bs-primary-text-emphasis: #0b3d35;
+  --bs-primary-bg-subtle: #eef7f4;
+  --bs-primary-border-subtle: #bfe0d8;
+  --bs-primary: #0f5c50;
+  --bs-primary-rgb: 15, 92, 80;
+  --bs-success: #1f7a4d;
+  --bs-success-rgb: 31, 122, 77;
+  --bs-danger: #c4321f;
+  --bs-danger-rgb: 196, 50, 31;
+  --bs-warning: #9a5200;
+  --bs-warning-rgb: 154, 82, 0;
+  --bs-info: #3d5a99;
+  --bs-info-rgb: 61, 90, 153;
+  --bs-link-color: #0f5c50;
+  --bs-link-color-rgb: 15, 92, 80;
+  --bs-link-hover-color: #0b3d35;
+  --bs-link-hover-color-rgb: 11, 61, 53;
+  --bs-focus-ring-color: rgba(46, 138, 122, 0.4);
+}
+html .btn {
+  --bs-btn-focus-shadow-rgb: 46, 138, 122;
+}
+html .btn-danger {
+  --bs-btn-bg: var(--danger-solid);
+  --bs-btn-border-color: var(--danger-solid);
+  --bs-btn-hover-bg: var(--danger-solid-hover);
+  --bs-btn-hover-border-color: var(--danger-solid-hover);
+}
+/* Amber means late / warning. Buttons that only remind people are calm actions, not warnings. */
+html .btn-outline-warning {
+  --bs-btn-color: var(--brand-primary);
+  --bs-btn-border-color: #bfe0d8;
+  --bs-btn-hover-color: #ffffff;
+  --bs-btn-hover-bg: var(--brand-primary);
+  --bs-btn-hover-border-color: var(--brand-primary);
+}
+
+/* Website headlines: Bricolage Grotesque. The plan board (.pv) keeps its own type. */
+html:not(.native-app) h1,
+html:not(.native-app) .h1,
+html:not(.native-app) .ev-title,
+html:not(.native-app) .pl-h-page {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+.ev {
+  font-family: var(--font-ui);
+}
+.mono,
+.show-num,
+.ops-num {
+  font-family: var(--font-mono);
+}
+
+/* LIVE: an ink pill with a marigold dot -- the one thing on screen that moves */
+@keyframes planova-live-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(242, 165, 65, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(242, 165, 65, 0);
+  }
+}
+html .ev-chip-live,
+.pv-chip-live {
+  background: #14201b !important;
+  color: #ffffff !important;
+  border-color: #14201b !important;
+}
+html .ev-chip-live::before,
+.pv-chip-live::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--signal);
+  vertical-align: 1px;
+  animation: planova-live-pulse 1.6s ease-in-out infinite;
+}
+/* On the phone's dark header the pill turns light, or it disappears (ink on harbour 900 was 1.4:1) */
+html.native-app .pv-head .pv-chip-live {
+  background: #f7f6f2 !important;
+  color: #14201b !important;
+}
+html.native-app .pv-head .pv-chip-live::before {
+  box-sizing: border-box;
+  border: 2px solid #14201b;
+  width: 12px;
+  height: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html .ev-chip-live::before,
+  .pv-chip-live::before {
+    animation: none;
+  }
+}
+
+/* Map markers: "needs attention" is an ink ring, never a colour */
+.pm-selected {
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px var(--attention-ring), 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* The plan board's own variables, pointed at the same palette */
+html .pv {
+  --pv-primary: #0f5c50;
+  --pv-primary-deep: #0b3d35;
+  --pv-chrome: #0b3d35;
+  --pv-canvas: #f7f6f2;
+  --pv-surface: #ffffff;
+  --pv-ink: #14201b;
+  --pv-ink-soft: #43504a;
+  --pv-ink-faint: #5f6b65;
+  --pv-line: #e2dfd6;
+  --pv-line-strong: #c9c5b9;
+  --pv-danger: #c4321f;
+  --pv-danger-soft: #fbe5e1;
+  --pv-warn: #9a5200;
+  --pv-ok: #1f7a4d;
+}
+
+/* The phone shell's own variables */
+html.native-app {
+  --pv-accent: var(--signal);
+  --pv-accent-dull: var(--signal-stroke);
+  --pv-warning: var(--status-warning-fg);
+}
+
+/* "Live" badges and the playback "Back to live" button: the live pill and the marigold action, never red */
+html .badge-live {
+  background: #14201b;
+  color: #ffffff;
+}
+html .badge-live::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 999px;
+  background: var(--signal);
+  vertical-align: 1px;
+  animation: planova-live-pulse 1.6s ease-in-out infinite;
+}
+html .btn-live {
+  --bs-btn-bg: var(--signal);
+  --bs-btn-border-color: var(--signal);
+  --bs-btn-color: #14201b;
+  --bs-btn-hover-bg: #e8963a;
+  --bs-btn-hover-border-color: #e8963a;
+  --bs-btn-hover-color: #14201b;
+  --bs-btn-active-bg: #d98a33;
+  --bs-btn-active-color: #14201b;
+}
+/* Simulation is information, not a warning */
+html .ev-chip-sim {
+  background: var(--status-info-bg);
+  color: var(--status-info-fg);
+  border-color: var(--status-info-border);
+}
+
+/* Bootstrap hard-codes its blue (#0d6efd) in a few controls: sliders, checkboxes, switches, focus rings */
+html .form-range::-webkit-slider-thumb {
+  background-color: var(--brand-primary);
+}
+html .form-range::-moz-range-thumb {
+  background-color: var(--brand-primary);
+}
+html .form-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px #fff, 0 0 0 0.25rem rgba(46, 138, 122, 0.4);
+}
+html .form-check-input:checked {
+  background-color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+html .form-check-input:focus,
+html .form-control:focus,
+html .form-select:focus {
+  border-color: #2e8a7a;
+  box-shadow: 0 0 0 0.25rem rgba(46, 138, 122, 0.3);
+}
+html .form-switch .form-check-input:focus:not(:checked) {
+  --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%232e8a7a'/%3e%3c/svg%3e");
+}

@@ -13,6 +13,7 @@ import { initials } from '../utils/people'
 import { ROLE_LABEL, topRole, isMarshal } from '../utils/permissions'
 import BenchAlert from './BenchAlert.vue'
 import { askConfirm, toast } from '../composables/useNotify'
+import { nextGroupColour, textOn } from '../utils/groupColours'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -93,7 +94,7 @@ const errorMsg = ref('')
 const busy = ref(false)
 
 const newGroupName = ref('')
-const newGroupColour = ref('#0d6efd')
+const newGroupColour = ref(nextGroupColour(props.groups))
 
 // Group I am admin of (null if none)
 const myAdminGroupId = computed(() => (props.me && props.me.isAdmin ? props.me.groupId : null))
@@ -204,7 +205,10 @@ async function createGroup() {
     p_name: newGroupName.value,
     p_colour: newGroupColour.value,
   })
-  if (ok) newGroupName.value = ''
+  if (ok) {
+    newGroupName.value = ''
+    newGroupColour.value = nextGroupColour([...props.groups, {}]) // the next hue for the next group
+  }
 }
 
 function assignGroup(member, groupId) {
@@ -330,7 +334,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
             <div class="card h-100" :data-testid="'member-' + m.username">
               <div class="card-body py-2">
                 <div class="d-flex align-items-center gap-2 mb-1">
-                  <span class="avatar" :style="{ backgroundColor: groupColour(m.groupId) }">
+                  <span class="avatar" :style="{ backgroundColor: groupColour(m.groupId), color: textOn(groupColour(m.groupId)) }">
                     {{ initials(m.display_name) }}
                   </span>
                   <div class="flex-grow-1 text-truncate">

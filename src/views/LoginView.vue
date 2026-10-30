@@ -26,7 +26,7 @@ async function submit() {
     errorMsg.value = message
     return
   }
-  router.push(route.query.redirect || '/events')
+  router.push(route.query.redirect || '/') // the website's Home; the phone app's / goes on to My events
 }
 </script>
 

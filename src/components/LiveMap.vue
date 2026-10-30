@@ -43,6 +43,7 @@ import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
 import { areaStyle } from '../utils/areaKinds'
+import { textOn } from '../utils/groupColours'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -183,7 +184,7 @@ function personIcon(person) {
   return L.divIcon({
     className: '', // no default white square
     html:
-      '<div class="pm pm-' + person.state + me + selected + '" style="background:' + person.colour + '">' +
+      '<div class="pm pm-' + person.state + me + selected + '" style="background:' + person.colour + ';color:' + textOn(person.colour) + (textOn(person.colour) === '#FFFFFF' ? '' : ';text-shadow:none') + '">' +
       escapeHtml(initials(person.name)) + '</div>',
     iconSize: [34, 34],
     iconAnchor: [17, 17],
@@ -408,7 +409,7 @@ async function loadTrail(userId) {
 function selectedColour() {
   const p = positions.value[selectedId.value]
   const g = p ? groupOf(p.groupId) : null
-  return g ? g.colour : '#0d6efd'
+  return g ? g.colour : '#0072B2'
 }
 
 // Called every frame for the selected person: the trail ends exactly at the marker
@@ -844,8 +845,8 @@ onUnmounted(() => {
 
     <!-- What the marker styles mean -->
     <div class="d-flex flex-wrap gap-3 small text-muted mb-3" data-testid="map-legend">
-      <span><span class="dot d-inline-block align-middle me-1" style="background-color: #0d6efd"></span>Live</span>
-      <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0d6efd"></span>No update for 2–10 min</span>
+      <span><span class="dot d-inline-block align-middle me-1" style="background-color: #0072B2"></span>Live</span>
+      <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0072B2"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
       <!-- The plan under the people (step 30): what a dashed line is, and which one is loud. -->

@@ -80,7 +80,7 @@ router.beforeEach(async (to, from) => {
   const auth = useAuthStore()
   if (to.meta.guestOnly) {
     await auth.init()
-    return auth.isLoggedIn ? to.query.redirect || '/events' : true
+    return auth.isLoggedIn ? to.query.redirect || '/' : true
   }
   if (!to.meta.requiresAuth) return true
 

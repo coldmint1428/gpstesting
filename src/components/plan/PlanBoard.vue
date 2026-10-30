@@ -55,6 +55,7 @@ import {
 } from '../../utils/planFrames'
 import { readSheet, sheetFileName, sheetGaps, sheetText } from '../../utils/planSheet'
 import '../../assets/planova.css'
+import { GROUP_PALETTE } from '../../utils/groupColours'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -70,7 +71,9 @@ const props = defineProps({
   api: { type: Object, default: null },
 })
 
-const GROUP_COLORS = ['#244f3f', '#3d6ea8', '#a9721c', '#7a3f8f', '#2f7d6b', '#a63a2f', '#5c6b2f']
+// A group's own colour (the one the live map uses), so the board and the map tell the same story; the palette only
+// fills in for a group that has none
+const GROUP_COLORS = GROUP_PALETTE
 
 const api = props.api || usePlan(props.eventId)
 const { plans, plan, frames, groups, zones, loading, busy, errorMsg, livePlan } = api
@@ -274,7 +277,7 @@ const readablePlan = computed(() => {
 })
 const colorOf = computed(() => {
   const map = new Map()
-  groups.value.forEach((g, i) => map.set(g.id, GROUP_COLORS[i % GROUP_COLORS.length]))
+  groups.value.forEach((g, i) => map.set(g.id, g.colour || GROUP_COLORS[i % GROUP_COLORS.length]))
   return map
 })
 

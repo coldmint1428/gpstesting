@@ -1,16 +1,27 @@
 <script setup>
 // Draws the in-app confirm dialog and toast messages (see composables/useNotify.js).
 // Bootstrap modal + toast styles, opened by Vue (no Bootstrap JavaScript needed).
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { confirmState, answerConfirm, toasts, closeToast } from '../composables/useNotify'
 
 const confirmButton = ref(null)
+const typeInput = ref(null)
+const typed = ref('')
+// A dialog that asks for a typed word only confirms once it matches (any case)
+const typedOk = computed(
+  () => !confirmState.value || !confirmState.value.requireText || typed.value.trim().toUpperCase() === confirmState.value.requireText.toUpperCase(),
+)
+function confirmIfAllowed() {
+  if (typedOk.value) answerConfirm(true)
+}
 
-// Put the keyboard focus on the main button when the dialog opens (Enter confirms)
+// Put the keyboard focus on the main button when the dialog opens (Enter confirms) -- or on the word to type
 watch(confirmState, async (state) => {
+  typed.value = ''
   if (state) {
     await nextTick()
-    if (confirmButton.value) confirmButton.value.focus()
+    if (state.requireText && typeInput.value) typeInput.value.focus()
+    else if (confirmButton.value) confirmButton.value.focus()
   }
 })
 
@@ -45,6 +56,19 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
               <li v-for="(line, i) in confirmState.lines" :key="i">{{ line }}</li>
             </ul>
           </div>
+          <div v-if="confirmState.requireText" class="modal-body pt-0">
+            <label for="confirm-type" class="form-label small">Type <strong>{{ confirmState.requireText }}</strong> to confirm</label>
+            <input
+              id="confirm-type"
+              ref="typeInput"
+              v-model="typed"
+              class="form-control"
+              autocomplete="off"
+              autocapitalize="characters"
+              data-testid="confirm-type"
+              @keydown.enter.prevent="confirmIfAllowed"
+            />
+          </div>
           <div class="modal-footer border-0 pt-0">
             <button
               v-if="confirmState.cancelText"
@@ -59,11 +83,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
               ref="confirmButton"
               type="button"
               class="btn"
-              :class="confirmState.danger ? 'btn-danger' : 'btn-primary'"
+              :class="!typedOk ? 'btn-outline-secondary' : confirmState.danger ? 'btn-danger' : 'btn-primary'"
+              :disabled="!typedOk"
               data-testid="confirm-ok"
-              @click="answerConfirm(true)"
+              @click="confirmIfAllowed"
             >
-              {{ confirmState.confirmText }}
+              {{ typedOk ? confirmState.confirmText : 'Type ' + confirmState.requireText + ' to enable' }}
             </button>
           </div>
         </div>

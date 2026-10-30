@@ -159,7 +159,7 @@ function roleTone(label) {
       class="pv-live"
       :data-testid="'live-' + ev.id"
     >
-      <span class="pv-chip pv-chip-live">● LIVE</span>
+      <span class="pv-chip pv-chip-live">LIVE</span>
       <strong class="pv-live-name">{{ ev.name }}</strong>
       <span class="pv-live-meta">{{ ev.venue || 'Live now' }} · {{ roleLabel(ev) }}</span>
       <span v-if="tracker.isTracking.value && tracker.sharingEventId.value === ev.id" class="pv-live-share">

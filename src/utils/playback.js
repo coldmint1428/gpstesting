@@ -5,13 +5,14 @@
 import { STALE_AFTER_MS, OFFLINE_AFTER_MS, freshness } from './people'
 import { sgtIso } from './time'
 import { saveFile } from '../lib/saveFile'
+import { GROUP_PALETTE } from './groupColours'
 
 // Two readings further apart than this are a GAP (tunnel, battery saver, phone off):
 // the marker does not slide between them, and trails draw that part dashed
 export const GAP_MS = STALE_AFTER_MS // 2 min (phones send every 30 s)
 export const TRAIL_MS = 10 * 60 * 1000 // "Show trails" = everyone's last 10 min
 
-const FALLBACK_COLOURS = ['#0d6efd', '#dc3545', '#198754', '#fd7e14', '#6f42c1', '#20c997', '#d63384', '#0dcaf0']
+const FALLBACK_COLOURS = GROUP_PALETTE
 
 // ---------- Building a recording ----------
 

@@ -247,7 +247,7 @@ onUnmounted(() => clearInterval(liveTimer))
         <li v-for="item in items" :key="item.key" class="list-group-item" :data-testid="'recording-' + item.kind">
           <div class="d-flex flex-wrap align-items-center gap-2">
             <div class="flex-grow-1">
-              <span v-if="item.live" class="badge text-bg-danger me-1">● Live</span>
+              <span v-if="item.live" class="badge badge-live me-1">Live</span>
               <strong>{{ item.title }}</strong>
               <div class="small text-muted">
                 <template v-if="item.expired">Deleted after {{ untilText(item) }}. Replay it from your CSV file.</template>

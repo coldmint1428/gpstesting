@@ -514,7 +514,7 @@ async function removeEvent() {
           {{ ROLE_LABEL[topRole(me)] || 'Member' }}<template v-if="isMarshal(me)"> · Marshal</template><template v-if="myGroup"> · {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</template>
         </p>
       </div>
-      <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">● LIVE</span>
+      <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">LIVE</span>
       <span v-else-if="event.is_simulation" class="pv-chip pv-chip-sim" data-testid="sim-badge">SIM</span>
     </header>
 
@@ -525,7 +525,7 @@ async function removeEvent() {
           <RouterLink to="/events" class="ev-back" data-testid="back-to-events">← My events</RouterLink>
           <h1 class="ev-title" data-testid="event-name">{{ event.name }}</h1>
           <div class="ev-meta mt-1">
-            <span v-if="isLive" class="ev-chip ev-chip-live" data-testid="head-live">● LIVE</span>
+            <span v-if="isLive" class="ev-chip ev-chip-live" data-testid="head-live">LIVE</span>
             <span v-else-if="scheduledStart" class="ev-chip ev-chip-sched">Starts {{ formatDayTime(scheduledStart) }}</span>
             <span v-else class="ev-chip ev-chip-off">Not live</span>
             <span v-if="event.is_simulation" class="ev-chip ev-chip-sim" data-testid="sim-badge">SIMULATION</span>

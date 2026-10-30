@@ -7,6 +7,7 @@
 // planner or marshal. Inside a group a person can be Admin and/or IC. The creator is root.
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { GROUP_PALETTE } from '../utils/groupColours'
 
 export const ROLE_OPTIONS = [
   { value: 'participant', label: 'Member' },
@@ -15,7 +16,8 @@ export const ROLE_OPTIONS = [
 ]
 
 // Colours the next new group gets (it can be changed)
-const GROUP_COLOURS = ['#0d6efd', '#d63384', '#198754', '#fd7e14', '#6f42c1', '#0dcaf0', '#b02a37', '#20c997']
+// Cool hues only (src/utils/groupColours.js): warm colours mean live, late and danger
+const GROUP_COLOURS = GROUP_PALETTE
 
 function emptyDetails() {
   return { name: '', description: '', venue: '', startsAt: '', endsAt: '' } // times: <input type="datetime-local"> values

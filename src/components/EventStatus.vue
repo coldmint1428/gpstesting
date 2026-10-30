@@ -254,6 +254,7 @@ async function endNow() {
       'This recording stays in Playback for 7 days.',
     confirmText: 'End event now',
     danger: true,
+    requireText: 'END', // ending stops everyone's sharing: a typed word, so a stray click can't do it
   })
   if (ok) run(props.sessions.endEvent, (stopped) =>
     'Event ended.' + (stopped ? ' Stopped sharing for ' + stopped + (stopped === 1 ? ' person.' : ' people.') : ''),
@@ -300,7 +301,7 @@ function remind() {
     <div class="card-body py-2">
       <div class="d-flex flex-wrap align-items-center gap-2">
         <!-- Status -->
-        <span v-if="live" class="badge text-bg-danger" data-testid="status-live">● Live</span>
+        <span v-if="live" class="badge badge-live" data-testid="status-live">Live</span>
         <span v-else-if="scheduledStart" class="badge text-bg-warning" data-testid="status-scheduled">Scheduled</span>
         <span v-else class="badge text-bg-secondary" data-testid="status-not-started">Not live</span>
 

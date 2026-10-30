@@ -376,7 +376,7 @@ onUnmounted(() => {
       <button v-if="canDownload" class="btn btn-sm btn-outline-primary" data-testid="player-download" @click="emit('download')">
         Download CSV
       </button>
-      <button v-if="live" class="btn btn-sm btn-danger" data-testid="go-live-btn" @click="emit('go-live')">● Live</button>
+      <button v-if="live" class="btn btn-sm btn-live" data-testid="go-live-btn" @click="emit('go-live')">Back to live</button>
     </div>
     <div v-if="fileName" class="alert alert-info py-2 small" role="status" data-testid="file-banner">
       Replaying from file: <strong>{{ fileName }}</strong> (not the live record). The file stays on this computer.
@@ -489,8 +489,8 @@ onUnmounted(() => {
     </div>
 
     <div class="d-flex flex-wrap gap-3 small text-muted mb-2">
-      <span><span class="dot me-1" style="background-color: #0d6efd"></span>Sharing</span>
-      <span><span class="dot dot-stale me-1" style="background-color: #0d6efd"></span>No update for 2–10 min</span>
+      <span><span class="dot me-1" style="background-color: #0072B2"></span>Sharing</span>
+      <span><span class="dot dot-stale me-1" style="background-color: #0072B2"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped me-1"></span>Stopped sharing</span>
       <span>Dashed trail = no readings (e.g. tunnel)</span>
