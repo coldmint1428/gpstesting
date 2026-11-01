@@ -1,8 +1,9 @@
 <script setup>
 // The event's Groups page: a card per group with its summary (people, ICs, admins, details); a card opens the
 // group in full (?group=<id>, or ?group=none for people without a group). Which controls appear depends on MY role:
-//   Root / planner : create groups, group details, assign groups, marshal sectors
-//   Group admin    : put people in / take them out of their own group
+//   Root / planner : create groups, rename / recolour them, group details, assign groups, marshal sectors
+//   Group admin    : put people in / take them out of their own group, IC for its members
+// IC and marshal switches follow the People page's rules (src/utils/permissions.js).
 //   Everyone else  : read-only (ICs and members: their own group only, onlyGroupId)
 // Adding people, roles, IC and removing people from the event are on the People page (PeoplePanel.vue).
 // The database checks every action again (see 002_users_events_groups.sql).
@@ -10,7 +11,8 @@ import { ref, computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { initials } from '../utils/people'
-import { ROLE_LABEL, topRole, isMarshal } from '../utils/permissions'
+import { ROLE_LABEL, topRole, isMarshal, canSetIC, canSetMarshal } from '../utils/permissions'
+import { setGroupIC, setMarshal } from '../services/memberService'
 import BenchAlert from './BenchAlert.vue'
 import { askConfirm, toast } from '../composables/useNotify'
 import { nextGroupColour, textOn } from '../utils/groupColours'
@@ -76,19 +78,90 @@ const unassignedText = computed(() => peopleText(unassigned.value.length))
 const openCountText = computed(() => peopleText(openMembers.value.length))
 const openLine = computed(() => (openGroup.value && openGroup.value.id !== 'none' ? detailLine(openGroup.value) : ''))
 
-// Root / planners, or this group's admin, may put people without a group into it
+// Root / planners, or this group's admin, may put people into it: root / planners anyone not in it (moving them from
+// another group), the group's admin only people without a group (assign_group, 002)
 const canFillOpenGroup = computed(
   () => !!openGroup.value && openGroup.value.id !== 'none' && (props.canManage || openGroup.value.id === myAdminGroupId.value),
 )
+const addCandidates = computed(() => {
+  if (!canFillOpenGroup.value) return []
+  const list = props.canManage
+    ? props.members.filter((m) => !isPlanner(m) && m.groupId !== openGroup.value.id)
+    : unassigned.value
+  // people without a group first
+  return [...list].sort((a, b) => !!a.groupId - !!b.groupId || a.display_name.localeCompare(b.display_name))
+})
+const groupNameOf = (id) => (props.groups.find((g) => g.id === id) || { name: 'No group' }).name
 const addToGroupId = ref('')
 async function addToOpenGroup() {
   const m = props.members.find((x) => x.id === addToGroupId.value)
   if (!m) return
+  if (m.groupId) {
+    const ok = await askConfirm({
+      title: 'Move ' + m.display_name + ' to ' + openGroup.value.name + '?',
+      message: 'They leave ' + groupNameOf(m.groupId) + '.' + (m.isIC || m.isAdmin ? ' They are no longer its IC or admin.' : ''),
+      confirmText: 'Move',
+    })
+    if (!ok) return
+  }
   if (await assignGroup(m, openGroup.value.id)) {
     toast(m.display_name + ' is now in ' + openGroup.value.name + '.', 'success', 3000)
     addToGroupId.value = ''
   }
 }
+
+// ---------- IC and marshal on / off (031): the same calls as the People page ----------
+async function toggleIC(m, box) {
+  const isIC = box.checked
+  const name = groupNameOf(m.groupId)
+  errorMsg.value = ''
+  busy.value = true
+  const message = await setGroupIC(m.groupId, m.id, isIC)
+  busy.value = false
+  if (message) {
+    errorMsg.value = message
+    box.checked = !isIC
+  } else toast(m.display_name + (isIC ? ' is now an IC of ' : ' is no longer an IC of ') + name + '.', 'success', 3000)
+  emit('changed')
+}
+async function toggleMarshal(m, box) {
+  const on = box.checked
+  errorMsg.value = ''
+  busy.value = true
+  const message = await setMarshal(props.eventId, m.id, on)
+  busy.value = false
+  if (message) {
+    errorMsg.value = message
+    box.checked = !on
+  } else toast(m.display_name + (on ? ' is now a marshal.' : ' is no longer a marshal.'), 'success', 3000)
+  emit('changed')
+}
+
+// ---------- Rename / recolour the open group (root / planners, update_group 035) ----------
+const editingGroup = ref(false)
+const editName = ref('')
+const editColour = ref('#0d6efd')
+function startEditGroup() {
+  editName.value = openGroup.value.name
+  editColour.value = openGroup.value.colour
+  editingGroup.value = true
+}
+const groupEdited = computed(
+  () =>
+    !!openGroup.value &&
+    (editName.value.trim() !== openGroup.value.name || editColour.value.toLowerCase() !== openGroup.value.colour.toLowerCase()),
+)
+async function saveGroup() {
+  if (await run('update_group', { p_group: openGroup.value.id, p_name: editName.value, p_colour: editColour.value })) {
+    toast('Saved ' + editName.value.trim() + '.', 'success', 3000)
+    editingGroup.value = false
+  }
+}
+// Another group opened (or back to the list): close the form
+watch(
+  () => openGroup.value && openGroup.value.id,
+  () => (editingGroup.value = false),
+)
 
 const errorMsg = ref('')
 const busy = ref(false)
@@ -120,8 +193,9 @@ async function run(fnName, params) {
 
 // ---------- Group details (merger Stage 4): code, category, sector, headcount ----------
 // A message can go to a whole category ("every Contingent group") or sector (032), so groups need one.
+// Headcount is not typed in: the database keeps it at the number of people in the group (070).
 const showDetails = ref(false)
-const details = ref({}) // groupId -> { code, category, sector, headcount }
+const details = ref({}) // groupId -> { code, category, sector, radio }
 const detailSaved = ref('') // groupId just saved
 const justSaved = new Set() // rows to refresh from the next reload
 function detailsOf(g) {
@@ -129,7 +203,6 @@ function detailsOf(g) {
     code: g.code || '',
     category: g.category || '',
     sector: g.sector || '',
-    headcount: g.headcount == null ? '' : String(g.headcount),
     radio: g.radio || '',
   }
 }
@@ -172,23 +245,17 @@ function detailsChanged(g) {
     d.code !== (g.code || '') ||
     d.category !== (g.category || '') ||
     d.sector !== (g.sector || '') ||
-    d.headcount !== (g.headcount == null ? '' : String(g.headcount)) ||
     d.radio !== (g.radio || '')
   )
 }
 async function saveDetails(g) {
   const d = details.value[g.id]
-  const head = String(d.headcount).trim()
-  if (head !== '' && !/^\d+$/.test(head)) {
-    errorMsg.value = 'Headcount for ' + g.name + ' must be a whole number.'
-    return
-  }
   const ok = await run('update_group_details', {
     p_group: g.id,
     p_code: d.code,
     p_category: d.category,
     p_sector: d.sector,
-    p_headcount: head === '' ? null : Number(head),
+    p_headcount: null, // the database counts it (036)
   })
   // the radio channel / call sign (029) has its own call
   const okRadio = ok && d.radio !== (g.radio || '') ? await run('set_group_radio', { p_group: g.id, p_radio: d.radio }) : ok
@@ -221,7 +288,7 @@ const sectorChoices = computed(() => [...new Set(props.groups.map((g) => g.secto
 async function setSector(member, value) {
   if ((value || '') === (member.sector || '')) return
   if (await run('set_marshal_sector', { p_event: props.eventId, p_user: member.id, p_sector: value })) {
-    toast(member.display_name + (value.trim() ? ' marshals sector ' + value.trim() + '.' : ' marshals every sector.'), 'success', 3000)
+    toast(member.display_name + (value.trim() ? ' now marshals sector ' + value.trim() + '.' : ' now marshals all sectors.'), 'success', 3000)
   }
 }
 
@@ -231,7 +298,7 @@ async function setSector(member, value) {
 async function stopSharing(member) {
   const ok = await askConfirm({
     title: 'Stop ' + member.display_name + "'s location sharing?",
-    message: 'Their phone stops uploading and the map shows "Stopped sharing".',
+    message: 'Their phone stops sending its location. The map shows "Stopped sharing".',
     confirmText: 'Stop sharing',
     danger: true,
   })
@@ -245,7 +312,7 @@ async function stopSharing(member) {
   busy.value = false
   if (error) errorMsg.value = error.message
   else if (wasSharing) toast('Stopped ' + member.display_name + "'s location sharing.")
-  else toast(member.display_name + ' was not sharing from the phone app.', 'warning')
+  else toast(member.display_name + ' was not sharing from the app.', 'warning')
 }
 
 
@@ -268,10 +335,42 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
     <!-- ========== One group in full (?group=) ========== -->
     <template v-if="openGroup">
       <RouterLink :to="{ query: {} }" class="btn btn-sm btn-link px-0 mb-2" data-testid="group-back">‹ All groups</RouterLink>
-      <div class="d-flex align-items-center gap-2 mb-3" :data-testid="'group-view-' + openGroup.name">
+      <!-- Name and colour (root / planner) -->
+      <form v-if="editingGroup" class="card mb-3" data-testid="group-edit" @submit.prevent="saveGroup">
+        <div class="card-body">
+          <h2 class="h6">Name and colour</h2>
+          <div class="input-group">
+            <input
+              v-model="editColour"
+              type="color"
+              class="form-control form-control-color flex-grow-0"
+              title="Group colour"
+              aria-label="Group colour"
+              data-testid="group-edit-colour"
+            />
+            <input v-model="editName" class="form-control" maxlength="50" required aria-label="Group name" data-testid="group-edit-name" />
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-sm btn-primary" :disabled="busy || !editName.trim() || !groupEdited" data-testid="group-edit-save">
+              Save
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="editingGroup = false">Cancel</button>
+          </div>
+        </div>
+      </form>
+      <div v-else class="d-flex align-items-center gap-2 mb-3" :data-testid="'group-view-' + openGroup.name">
         <span class="dot" :style="{ backgroundColor: openGroup.colour }" aria-hidden="true"></span>
         <h2 class="h5 mb-0 text-truncate">{{ openGroup.name }}</h2>
         <span class="text-muted text-nowrap">· {{ openCountText }}</span>
+        <button
+          v-if="canManage && openGroup.id !== 'none'"
+          type="button"
+          class="btn btn-sm btn-outline-secondary ms-auto flex-shrink-0"
+          data-testid="group-edit-btn"
+          @click="startEditGroup"
+        >
+          Edit name and colour
+        </button>
       </div>
 
       <!-- Details (root / planner): code, category, sector, headcount -->
@@ -298,10 +397,6 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
               <input id="gv-sector" v-model="details[openGroup.id].sector" class="form-control form-control-sm" maxlength="50" />
             </div>
             <div class="col-6 col-md">
-              <label class="form-label small mb-0" for="gv-headcount">Headcount</label>
-              <input id="gv-headcount" v-model="details[openGroup.id].headcount" class="form-control form-control-sm" inputmode="numeric" />
-            </div>
-            <div class="col-12 col-md">
               <label class="form-label small mb-0" for="gv-radio">Radio</label>
               <input id="gv-radio" v-model="details[openGroup.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" />
             </div>
@@ -314,14 +409,16 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
       </form>
       <p v-else-if="openLine" class="small text-muted">{{ openLine }}</p>
 
-      <!-- Put someone without a group in (root / planners, this group's admin) -->
-      <form v-if="canFillOpenGroup && unassigned.length" class="card mb-3" @submit.prevent="addToOpenGroup">
+      <!-- Put someone in (root / planners: anyone not in it; this group's admin: people without a group) -->
+      <form v-if="addCandidates.length" class="card mb-3" @submit.prevent="addToOpenGroup">
         <div class="card-body">
-          <label class="h6 d-block" for="gv-add">Add someone without a group</label>
+          <label class="h6 d-block" for="gv-add">{{ canManage ? 'Add a person to this group' : 'Add someone without a group' }}</label>
           <div class="input-group">
             <select id="gv-add" v-model="addToGroupId" class="form-select" data-testid="group-view-add">
               <option value="" disabled>Choose a person</option>
-              <option v-for="m in unassigned" :key="m.id" :value="m.id">{{ m.display_name }}</option>
+              <option v-for="m in addCandidates" :key="m.id" :value="m.id">
+                {{ m.display_name }}{{ m.groupId ? ' (now in ' + groupNameOf(m.groupId) + ')' : '' }}
+              </option>
             </select>
             <button class="btn btn-primary" type="submit" :disabled="busy || !addToGroupId">Add</button>
           </div>
@@ -378,9 +475,37 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                   Remove from my group
                 </button>
 
+                <!-- IC (shares GPS) and marshal duties -->
+                <div v-if="canSetIC(me, m) || canSetMarshal(me, m)" class="d-flex flex-wrap gap-3 mb-2">
+                  <div v-if="canSetIC(me, m)" class="form-check form-switch mb-0">
+                    <input
+                      :id="'gv-ic-' + m.id"
+                      class="form-check-input"
+                      type="checkbox"
+                      :checked="m.isIC"
+                      :disabled="busy"
+                      :data-testid="'group-ic-toggle-' + m.username"
+                      @change="toggleIC(m, $event.target)"
+                    />
+                    <label class="form-check-label small" :for="'gv-ic-' + m.id">IC (shares GPS)</label>
+                  </div>
+                  <div v-if="canSetMarshal(me, m)" class="form-check form-switch mb-0">
+                    <input
+                      :id="'gv-marshal-' + m.id"
+                      class="form-check-input"
+                      type="checkbox"
+                      :checked="isMarshal(m)"
+                      :disabled="busy"
+                      :data-testid="'group-marshal-toggle-' + m.username"
+                      @change="toggleMarshal(m, $event.target)"
+                    />
+                    <label class="form-check-label small" :for="'gv-marshal-' + m.id">Marshal</label>
+                  </div>
+                </div>
+
                 <!-- A marshal's sector (root / planners): the ops view opens filtered to it -->
                 <div v-if="canManage && m.roles.includes('marshal')" class="input-group input-group-sm mt-2 sector-input">
-                  <span class="input-group-text">Marshals sector</span>
+                  <span class="input-group-text">Sector</span>
                   <input
                     class="form-control"
                     :value="m.sector || ''"
@@ -388,12 +513,12 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                     maxlength="50"
                     placeholder="All sectors"
                     :disabled="busy"
-                    :aria-label="'Sector ' + m.display_name + ' marshals'"
+                    :aria-label="'Sector that ' + m.display_name + ' marshals'"
                     :data-testid="'sector-' + m.username"
                     @change="setSector(m, $event.target.value)"
                   />
                 </div>
-                <div v-else-if="m.roles.includes('marshal') && m.sector" class="small text-muted mt-1">Marshals sector {{ m.sector }}</div>
+                <div v-else-if="m.roles.includes('marshal') && m.sector" class="small text-muted mt-1">Sector: {{ m.sector }}</div>
 
                 <button
                   v-if="canStopSharing(m)"
@@ -439,13 +564,13 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
       </form>
 
       <p v-if="onlyGroupId === 'none'" class="text-muted" data-testid="no-group">
-        You are not in a group yet. Ask the root, a planner or a group admin to add you.
+        You are not in a group. Ask a planner or a group admin to add you.
       </p>
       <p v-else-if="!shownGroups.length" class="text-muted">No groups yet.</p>
 
       <div v-if="canManage && groups.length" class="text-end mb-2">
         <button class="btn btn-sm btn-link" data-testid="group-details-btn" @click="openDetails">
-          {{ showDetails ? 'Hide group details' : 'Edit every group’s details (category, code…)' }}
+          {{ showDetails ? 'Hide group details' : 'Edit all group details' }}
         </button>
       </div>
       <!-- Group details (root / planner): category, code, sector, headcount -->
@@ -453,7 +578,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         <div class="card-body">
           <p class="small text-muted mb-2">
             A message can go to a whole <strong>category</strong> (for example every "Contingent" group) or a whole
-            sector. Code and headcount are for reference.
+            sector. Code is for reference. Headcount is counted automatically.
           </p>
           <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
           <div class="table-responsive">
@@ -475,7 +600,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                   <td data-label="Category"><input v-model="details[g.id].category" class="form-control form-control-sm" list="group-categories" maxlength="50" :aria-label="'Category of ' + g.name" data-testid="gd-category" /></td>
                   <td data-label="Code"><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
                   <td data-label="Sector"><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
-                  <td data-label="Headcount" class="headcount-cell"><input v-model="details[g.id].headcount" class="form-control form-control-sm" inputmode="numeric" :aria-label="'Headcount of ' + g.name" data-testid="gd-headcount" /></td>
+                  <td data-label="Headcount" class="headcount-cell" data-testid="gd-headcount">{{ membersOf(g.id).length }}</td>
                   <td data-label="Radio"><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
                   <td class="text-nowrap">
                     <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
@@ -507,10 +632,6 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                 <dd class="text-truncate">{{ c.icNames }}</dd>
                 <dt>Admin</dt>
                 <dd class="text-truncate">{{ c.adminNames }}</dd>
-                <template v-if="c.g.headcount != null">
-                  <dt>Headcount</dt>
-                  <dd>{{ c.g.headcount }}</dd>
-                </template>
               </dl>
               <div class="d-flex align-items-center gap-1">
                 <span
@@ -536,7 +657,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                 <strong class="me-auto">No group</strong>
                 <span class="badge text-bg-light border">{{ unassignedText }}</span>
               </div>
-              <p class="small text-muted mb-0 mt-1">People in the event who are not in a group yet. Open to put them in one.</p>
+              <p class="small text-muted mb-0 mt-1">People in the event without a group. Open this to add them to a group.</p>
             </div>
           </RouterLink>
         </div>

@@ -105,11 +105,16 @@ test.describe('the pages show each role what it may do', () => {
 
   test('a group admin can make someone in their own group an IC', async ({ browser, baseURL }) => {
     const page = await (await contextAs(browser, 'admin', baseURL)).newPage()
+    // IC and Marshal are switched on the Groups page, in the group's own member list (moved there on 1 Nov, Ern's
+    // event_creation_ern merge); the People page shows them as badges only.
     await page.goto(`/events/${ev.eventId}/people`)
-    await expect(page.locator('[data-testid="person-ic-toggle-qa_member"]:visible')).toBeVisible() // inline on a laptop
-    await expect(page.locator('[data-testid="person-ic-toggle-qa_planner"]')).toHaveCount(0) // not in their group
+    await expect(page.locator('[data-testid^="person-ic-toggle-"]')).toHaveCount(0)
     await expect(page.locator('[data-testid="person-role-select-qa_member"]')).toHaveCount(0) // ranks are root's and planners'
     await shot(page, 'roles-04-admin-people', { fullPage: true })
+    await page.goto(`/events/${ev.eventId}/groups?group=${ev.groups.Alpha}`)
+    await expect(page.locator('[data-testid="group-ic-toggle-qa_member"]:visible')).toBeVisible()
+    await expect(page.locator('[data-testid="group-ic-toggle-qa_planner"]')).toHaveCount(0) // not in their group
+    await shot(page, 'roles-04b-admin-group-ic', { fullPage: true })
   })
 
   test('the IC who is not sharing shows as not sharing to the planner', async ({ browser, baseURL }) => {

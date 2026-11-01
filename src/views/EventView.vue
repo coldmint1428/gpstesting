@@ -1,6 +1,6 @@
 <script setup>
-// One event: status (live or not) and its pages (/events/:id/<page>): overview, timeline, map, people, groups, live,
-// playback, simulator. Which pages and controls you get depends on your role (src/utils/permissions.js).
+// One event: status (live or not) and its pages (/events/:id/<page>): overview, live, timeline, map, groups, people,
+// attendance, playback, simulator. Which pages and controls you get depends on your role (src/utils/permissions.js).
 // The run-sheet half of this page -- the classic editor, the live show's bar and panel, the ops queue, the member's
 // next-move card and the group message -- was deleted in step 25 with the engine that fed it.
 import { ref, computed, watch, nextTick } from 'vue'
@@ -44,6 +44,11 @@ import { usePlan } from '../composables/usePlan'
 import { useBroadcasts } from '../composables/useBroadcasts'
 import BroadcastBanner from '../components/BroadcastBanner.vue'
 import BroadcastPanel from '../components/BroadcastPanel.vue'
+import AttendancePanel from '../components/AttendancePanel.vue'
+import { useAttendance } from '../composables/useAttendance'
+import SosDialog from '../components/SosDialog.vue'
+import SosBanner from '../components/SosBanner.vue'
+import { useSos } from '../composables/useSos'
 import PhoneTabBar from '../components/PhoneTabBar.vue'
 import BottomSheet from '../components/BottomSheet.vue'
 
@@ -144,6 +149,124 @@ function flushNoGoToasts() {
 // The map, for "the group I picked is over there". The ops queue that used to call this is gone with the run sheet
 // engine (step 25); the ref stays because the Live page owns the map.
 const liveMap = ref(null)
+// Attendance (071): roll calls taken by the IC by hand, or (QR mode, chosen by the organisers) by everyone scanning
+// a QR on the IC's screen that changes every 5 s. A QR roll call opening for my group shows a banner (and a toast)
+// until I have scanned. The Attendance page emits what was asked; it is done here.
+const amGroupRunner = computed(() => !!(me.value && (me.value.isIC || me.value.isAdmin)))
+const attendance = useAttendance(
+  computed(() => props.id),
+  {
+    myUserIdRef: computed(() => (auth.user ? auth.user.id : null)),
+    myGroupIdRef: computed(() => (myGroup.value ? myGroup.value.id : null)),
+    onOpened(r) {
+      if (amGroupRunner.value || r.mode !== 'qr') return // they run it / the IC marks by hand: nothing for me to do
+      toast('Roll call open: ' + r.title + '. Scan the QR code on your IC’s screen.', 'info', 10000)
+    },
+  },
+)
+const attError = ref('')
+const scanMessage = ref('')
+// The banner: a QR roll call for my group I have not scanned yet (not for its ICs and admins), off the Attendance page
+const showAttendanceBanner = computed(
+  () =>
+    !!attendance.myOpen.value &&
+    attendance.myOpen.value.mode === 'qr' &&
+    !attendance.myCheckin.value &&
+    !amGroupRunner.value &&
+    tab.value !== 'attendance',
+)
+async function onAttSetMode(mode) {
+  attError.value = await attendance.setMode(mode)
+  if (!attError.value) toast(mode === 'qr' ? 'New roll calls use a QR code.' : 'New roll calls are marked by hand.', 'success', 4000)
+}
+async function onAttOpen({ groupId, title, minutes }) {
+  attError.value = await attendance.open(groupId, title, minutes)
+  if (!attError.value) {
+    toast(attendance.mode.value === 'qr' ? 'Roll call started. Show the QR code to your group.' : 'Roll call started. Tick who is there.', 'success', 4000)
+  }
+}
+async function onAttClose(id) {
+  const ok = await askConfirm({
+    title: 'Close this roll call?',
+    message: 'No one can check in after this. Anyone not marked is absent.',
+    confirmText: 'Close roll call',
+  })
+  if (ok) attError.value = await attendance.close(id)
+}
+async function onAttMark({ id, userId, status }) {
+  attError.value = await attendance.mark(id, userId, status)
+}
+async function onAttScan(text) {
+  scanMessage.value = ''
+  const result = await attendance.scan(text)
+  if (result.ok) toast('You are marked present for ' + result.title + '.', 'success', 4000)
+  else scanMessage.value = result.message
+}
+
+// SOS (072): anyone in the event can call for help. Everyone sees it as a banner on every page and on the map, with a
+// toast (and a vibration on phones) when it arrives. The banner and dialog emit what was pressed; it is done here.
+const sos = useSos(
+  computed(() => props.id),
+  {
+    myUserIdRef: computed(() => (auth.user ? auth.user.id : null)),
+    onNew(a) {
+      const who = members.value.find((m) => m.id === a.userId)
+      toast('SOS: ' + (who ? who.display_name : 'Someone') + ' needs help.' + (a.note ? ' "' + a.note + '"' : ''), 'danger', 15000)
+      if (navigator.vibrate) navigator.vibrate([400, 150, 400])
+    },
+  },
+)
+const sosDialogOpen = ref(false)
+async function onSosSend(note) {
+  const message = await sos.raise(note)
+  if (message) {
+    toast('The SOS was not sent: ' + message, 'danger', 10000)
+    return
+  }
+  sosDialogOpen.value = false
+  toast('SOS sent. Everyone in this event has been alerted.', 'danger', 6000)
+}
+async function onSosHelp(id) {
+  const message = await sos.help(id)
+  if (message) toast(message, 'danger')
+  else toast('They have been told you are on the way.', 'success', 4000)
+}
+async function onSosResolve(id) {
+  const own = sos.mine.value && sos.mine.value.id === id
+  const ok = await askConfirm(
+    own
+      ? { title: 'End your SOS?', message: 'Your location stops being sent. Everyone sees that you are safe.', confirmText: "I'm safe" }
+      : { title: 'Mark this SOS handled?', message: 'The SOS ends for everyone.', confirmText: 'Mark handled' },
+  )
+  if (!ok) return
+  const message = await sos.resolve(id)
+  if (message) toast(message, 'danger')
+}
+// The SOSs the map draws (the ones with a location)
+const sosOnMap = computed(() =>
+  sos.alerts.value
+    .filter((a) => a.lat != null)
+    .map((a) => {
+      const who = members.value.find((m) => m.id === a.userId)
+      return { id: a.id, lat: a.lat, lng: a.lng, accuracy: a.accuracy, note: a.note, raisedAt: a.raisedAt, name: who ? who.display_name : 'Someone' }
+    }),
+)
+// "Show on map": the live map, zoomed to the SOS
+function showSos(id) {
+  openPage('live')
+  setTimeout(() => liveMap.value && liveMap.value.focusSos(id), 300)
+}
+// Opened from an SOS notification (?sos=<id>): show it once it has loaded
+watch(
+  [() => route.query.sos, () => sosOnMap.value.length],
+  ([id]) => {
+    if (id && sosOnMap.value.some((s) => String(s.id) === String(id))) {
+      showSos(Number(id))
+      router.replace({ query: { ...route.query, sos: undefined } })
+    }
+  },
+)
+
 
 // "Message everyone" (032): planners send one message to many groups at once; whoever it reaches sees a banner until
 // they press Got it (and a toast as it arrives).
@@ -306,11 +429,19 @@ const sharingStatus = computed(() => {
 const icCount = computed(() => Object.keys(sharingStatus.value).length)
 const sharingCount = computed(() => Object.values(sharingStatus.value).filter(Boolean).length)
 
+// The status card (Start / Schedule / End, and an IC's Share): website, for the root and planners on the pages they
+// run the event from, and for ICs on the overview and live pages; phone, on Ops (and on Now for ICs)
+const showStatusCard = computed(() => {
+  if (native) return tab.value === 'ops' || (tab.value === 'now' && isIC.value)
+  if (canManage.value) return ['overview', 'live', 'timeline'].includes(tab.value)
+  return isIC.value && ['overview', 'live'].includes(tab.value)
+})
+
 // Text under the title explaining what this person sees on the map
 const viewText = computed(() => {
   if (seesWholeEvent.value) return 'You can see every group in this event.'
   if (myGroup.value) return 'You can see your group: ' + myGroup.value.name + '.'
-  return 'You are not in a group yet. Ask the root, a planner or a group admin to add you.'
+  return 'You are not in a group. Ask a planner or a group admin to add you.'
 })
 
 function goLive() {
@@ -328,6 +459,7 @@ const ICONS = {
   live: ['M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z', 'M12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z'],
   playback: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M10 8l6 4-6 4z'],
   simulator: ['M9 3h6', 'M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3'],
+  attendance: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'],
 }
 const PAGE_INFO = computed(() => ({
   overview: {
@@ -369,6 +501,12 @@ const PAGE_INFO = computed(() => ({
   },
   playback: { hint: 'Replay a session', about: 'Replay a past session of this event, or export it.' },
   simulator: { hint: 'Virtual groups', about: 'Virtual groups that the server moves, to test zones, alerts and the plan at scale.' },
+  attendance: {
+    hint: 'Roll calls',
+    badge: showAttendanceBanner.value ? 'OPEN' : '',
+    badgeLive: true,
+    about: 'Take attendance by group. The IC ticks who is there, or everyone scans a QR code on the IC’s screen.',
+  },
 }))
 const pages = computed(() => visiblePages.value.map((key) => ({ key, label: pageLabel(key), ...PAGE_INFO.value[key] })))
 const currentPage = computed(() => pages.value.find((p) => p.key === tab.value) || { label: event.value ? event.value.name : '' })
@@ -399,6 +537,7 @@ const MORE_HINT = computed(() => ({
   map: canManage.value ? 'Areas, doors and No-Go areas' : 'Your route on the plan',
   people: 'Who is in it, roles',
   groups: 'Groups and their ICs',
+  attendance: 'Roll calls',
   playback: 'Replay a past session',
   simulator: 'Virtual groups',
 }))
@@ -516,6 +655,7 @@ async function removeEvent() {
       </div>
       <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">LIVE</span>
       <span v-else-if="event.is_simulation" class="pv-chip pv-chip-sim" data-testid="sim-badge">SIM</span>
+      <button type="button" class="btn btn-danger btn-sm sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </header>
 
     <!-- Header: which event, when, its state, my role -->
@@ -543,6 +683,9 @@ async function removeEvent() {
           </div>
           <p v-if="event.description" class="ev-desc">{{ event.description }}</p>
         </div>
+        <button type="button" class="btn btn-danger sos-btn align-self-center" data-testid="sos-btn" @click="sosDialogOpen = true">
+          SOS
+        </button>
       </div>
     </header>
 
@@ -572,6 +715,22 @@ async function removeEvent() {
       </nav>
 
       <section class="ev-main" :class="{ 'pv-has-tabs': native }" :aria-label="currentPage.label">
+        <!-- SOS (072): first, on every page -->
+        <SosBanner
+          :alerts="sos.alerts.value"
+          :mine="sos.mine.value"
+          :gps="sos.gps.value"
+          :members="members"
+          :groups="groups"
+          :me="me"
+          :sees-whole-event="seesWholeEvent"
+          :now="live.now.value"
+          :busy="sos.busy.value"
+          @help="onSosHelp"
+          @resolve="onSosResolve"
+          @show="showSos"
+        />
+
         <!-- The event's state and the Start / Schedule / End / Share controls: on every page (phone: on Ops, and on Now for ICs) -->
         <EventStatus v-if="!native || tab === 'ops' || (tab === 'now' && isIC)" :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount"
           :plans="seesWholeEvent ? startPlans.plans.value : []"
@@ -605,13 +764,13 @@ async function removeEvent() {
           </template>
         </EventStatus>
 
-        <div v-if="event.is_simulation && (!native || tab === 'ops')" class="alert alert-warning py-2 small mb-0" data-testid="sim-banner">
-          <strong>Simulation event.</strong> Groups named SIM-… and their ICs are virtual: the server moves them every 10 s
-          to test zones and alerts at scale. Nothing here is a real person.
+        <div v-if="event.is_simulation && (native ? tab === 'ops' : tab === 'overview' || tab === 'live')" class="alert alert-warning py-2 small mb-0" data-testid="sim-banner">
+          <strong>Simulation event.</strong> Groups named SIM-… and their ICs are not real people. The server moves them
+          every 10 seconds to test zones and alerts with many groups.
         </div>
 
         <div v-if="isIC && scheduledStart && tracker.isNative && !exactAllowed" class="alert alert-light border py-2 small mb-0">
-          We'll remind you to share at the start time. For an on-time reminder, allow alarms for this app.
+          We will remind you to share at the start time. To get the reminder on time, allow alarms for this app.
           <button class="btn btn-sm btn-outline-primary ms-1" @click="allowExact">Allow alarms</button>
         </div>
 
@@ -626,6 +785,14 @@ async function removeEvent() {
         <!-- A message from the planners to my group used to sit here. It was written by the ops board's
              `message_group`, which step 25 deleted with the run sheet engine and which nothing else wrote, so the
              banner that could never receive a message went with it. "Message everyone" (032) is the one left. -->
+        <!-- A QR roll call is open for my group and I have not scanned in (071) -->
+        <div v-if="showAttendanceBanner" class="alert alert-info py-2 d-flex align-items-center gap-2 mb-0" role="alert" data-testid="attendance-banner">
+          <span class="flex-grow-1">
+            <strong>Roll call open: {{ attendance.myOpen.value.title }}.</strong> Scan the QR code on your IC's screen.
+          </span>
+          <button type="button" class="btn btn-sm btn-primary flex-shrink-0" @click="openPage('attendance')">Scan</button>
+        </div>
+
 
         <SharingWarnings v-if="sharingHere" />
         <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
@@ -666,6 +833,7 @@ async function removeEvent() {
                   :zone-counts="zoneActivity.countsByZone.value"
                   :no-go-occupied="zoneActivity.noGoOccupied.value"
                   :group-positions="zoneActivity.groupPositions.value"
+                  :sos-alerts="sosOnMap"
                 />
               </div>
             </div>
@@ -728,6 +896,31 @@ async function removeEvent() {
           :only-group-id="role === 'ic' || role === 'member' ? (myGroup ? myGroup.id : 'none') : null"
           :sharing-status="sharingStatus"
           @changed="load"
+        />
+
+        <AttendancePanel
+          v-if="tab === 'attendance'"
+          :groups="groups"
+          :members="members"
+          :me="me"
+          :can-manage="canManage"
+          :sees-whole-event="seesWholeEvent"
+          :mode="attendance.mode.value"
+          :rollcalls="attendance.rollcalls.value"
+          :checkins="attendance.checkins.value"
+          :qr="attendance.qr.value"
+          :now="attendance.now.value"
+          :busy="attendance.busy.value"
+          :error-msg="attError"
+          :scan-message="scanMessage"
+          @set-mode="onAttSetMode"
+          @open="onAttOpen"
+          @close="onAttClose"
+          @mark="onAttMark"
+          @scan="onAttScan"
+          @show-qr="attendance.showQr"
+          @hide-qr="attendance.hideQr"
+          @dismiss-error="attError = ''"
         />
 
         <PeoplePanel
@@ -794,6 +987,8 @@ async function removeEvent() {
         <SimulatorPanel v-if="event.is_simulation && isRoot && tab === 'simulator'" :event-id="id" @changed="load" />
       </section>
     </div>
+
+    <SosDialog :open="sosDialogOpen" :busy="sos.busy.value" @send="onSosSend" @close="sosDialogOpen = false" />
 
     <!-- Phone app: bottom tabs that follow the role, and the More sheet for the rest -->
     <PhoneTabBar v-if="native" :items="nativeTabs" :active="activeTab" @select="selectTab" />

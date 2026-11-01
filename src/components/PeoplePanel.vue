@@ -1,14 +1,16 @@
 <script setup>
 // The event's People page: everyone in the event with their role, group and IC tag. Controls appear only for what MY
 // role may do to each person (src/utils/permissions.js); the database checks every change again (033).
-//   Root          : add people; make planners, group admins, members; marshal and IC (duties of a member) on / off; remove anyone
+//   Root          : add people; make planners, group admins, members; remove anyone
 //   Planner       : the same for people below planner
-//   Group admin   : add people to their own group; IC and removing members of their own group
+//   Group admin   : add people to their own group; removing members of their own group
 //   Everyone else : the list only
+// Marshal and IC (duties of a member) are switched on the Groups page (MembersPanel.vue); here they are badges only.
+// An IC's arrival radius (063) stays here, beside the IC it belongs to.
 import { ref, computed, watch } from 'vue'
 import { initials } from '../utils/people'
-import { ROLE_RANK, ROLE_LABEL, topRole, isMarshal, canManage, assignableRoles, canSetMarshal, canSetIC, canRemove } from '../utils/permissions'
-import { addEventMember, setMemberRole, setMarshal, setGroupIC, setArrivalTolerance, removeEventMember } from '../services/memberService'
+import { ROLE_RANK, ROLE_LABEL, topRole, isMarshal, canManage, assignableRoles, canSetIC, canRemove } from '../utils/permissions'
+import { addEventMember, setMemberRole, setArrivalTolerance, removeEventMember } from '../services/memberService'
 import { findPersonByEmail, looksLikeEmail } from '../services/eventService'
 import { askConfirm, toast } from '../composables/useNotify'
 import BenchAlert from './BenchAlert.vue'
@@ -47,10 +49,8 @@ const rows = computed(() => {
       const edit = props.mode === 'edit'
       const actions = {
         role: edit && !isMe && canManage(myRole.value, role),
-        marshal: edit && canSetMarshal(props.me, m),
-        ic: edit && canSetIC(props.me, m),
-        // root / planners: show IC greyed out for someone with no group (IC belongs to a group)
-        icNeedsGroup: edit && !m.groupId && canSetIC(props.me, { ...m, groupId: 'any' }),
+        // the IC's arrival radius: whoever may set the IC may set how close they must be
+        radius: edit && m.isIC && canSetIC(props.me, m),
         remove: edit && canRemove(props.me, m),
       }
       return { m, role, isMe, actions, any: Object.values(actions).some(Boolean) }
@@ -61,10 +61,10 @@ const rows = computed(() => {
 // What I can do here, in one line
 const myScope = computed(() => {
   if (props.mode !== 'edit') return 'You can see everyone in this event.'
-  if (myRole.value === 'root') return 'You can change anyone’s role, make marshals and ICs, and remove people.'
-  if (myRole.value === 'planner') return 'You can manage group admins and members: roles, marshals, ICs and removing them.'
-  if (myRole.value === 'admin' && props.me.groupId) return 'You can set ICs and remove members in ' + groupName(props.me.groupId) + '.'
-  return 'Group admins manage their own group. You are not in a group, so there is no one to manage.'
+  if (myRole.value === 'root') return 'You can change roles and remove people. Set marshals and ICs on the Groups page.'
+  if (myRole.value === 'planner') return 'You can change the roles of group admins and members, and remove them. Set marshals and ICs on the Groups page.'
+  if (myRole.value === 'admin' && props.me.groupId) return 'You can remove members of ' + groupName(props.me.groupId) + '. Set ICs on the Groups page.'
+  return 'You are not in a group, so you have no one to manage.'
 })
 
 async function run(call, success) {
@@ -142,24 +142,6 @@ async function changeRole(m, select) {
   }
   const ok = await run(() => setMemberRole(props.eventId, m.id, role), m.display_name + ' is now ' + ROLE_LABEL[role].toLowerCase() + '.')
   if (!ok) select.value = was // refused: the list did not change, so put the menu back by hand
-}
-
-async function toggleMarshal(m, box) {
-  const on = box.checked
-  const ok = await run(
-    () => setMarshal(props.eventId, m.id, on),
-    m.display_name + (on ? ' is now a marshal.' : ' is no longer a marshal.'),
-  )
-  if (!ok) box.checked = !on
-}
-
-async function toggleIC(m, box) {
-  const isIC = box.checked
-  const ok = await run(
-    () => setGroupIC(m.groupId, m.id, isIC),
-    m.display_name + (isIC ? ' is now an IC of ' : ' is no longer an IC of ') + groupName(m.groupId) + '.',
-  )
-  if (!ok) box.checked = !isIC
 }
 
 async function remove(m) {
@@ -299,38 +281,8 @@ async function changeTolerance(m, input) {
                 </option>
               </select>
             </div>
-            <div v-if="r.actions.marshal" class="form-check form-switch mb-0">
-              <input
-                :id="'marshal-' + r.m.id"
-                class="form-check-input"
-                type="checkbox"
-                :checked="isMarshal(r.m)"
-                :disabled="busy"
-                :data-testid="'person-marshal-toggle-' + r.m.username"
-                @change="toggleMarshal(r.m, $event.target)"
-              />
-              <label class="form-check-label small" :for="'marshal-' + r.m.id">Marshal</label>
-            </div>
-            <div v-if="r.actions.icNeedsGroup" class="form-check form-switch mb-0">
-              <input :id="'ic-' + r.m.id" class="form-check-input" type="checkbox" disabled :aria-describedby="'ic-help-' + r.m.id" />
-              <label class="form-check-label small text-muted" :for="'ic-' + r.m.id">
-                IC <span :id="'ic-help-' + r.m.id">(needs a group)</span>
-              </label>
-            </div>
-            <div v-if="r.actions.ic" class="form-check form-switch mb-0">
-              <input
-                :id="'ic-' + r.m.id"
-                class="form-check-input"
-                type="checkbox"
-                :checked="r.m.isIC"
-                :disabled="busy"
-                :data-testid="'person-ic-toggle-' + r.m.username"
-                @change="toggleIC(r.m, $event.target)"
-              />
-              <label class="form-check-label small" :for="'ic-' + r.m.id">IC (shares GPS)</label>
-            </div>
             <!-- An IC's arrival radius: how close their phone must be for a moment to close itself (063). -->
-            <div v-if="r.actions.ic && r.m.isIC" class="d-flex align-items-center gap-1">
+            <div v-if="r.actions.radius" class="d-flex align-items-center gap-1">
               <label :for="'tol-' + r.m.id" class="small text-muted mb-0">Radius</label>
               <input
                 :id="'tol-' + r.m.id"

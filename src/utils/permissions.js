@@ -60,26 +60,31 @@ export function canRemove(actor, target) {
 }
 
 // ---------- Event pages ----------
-// Page keys are the URL: /events/:id/<page>
-export const PAGES = ['overview', 'timeline', 'map', 'people', 'groups', 'live', 'playback', 'simulator']
+// Page keys are the URL: /events/:id/<page>. In the order of the side menu: what everyone uses first, planning
+// pages next, then people, then the planners' tools.
+export const PAGES = ['overview', 'live', 'timeline', 'map', 'groups', 'people', 'attendance', 'playback', 'simulator']
 export const PAGE_LABEL = {
   overview: 'Overview',
   timeline: 'Timeline',
   map: 'Map',
   groups: 'Groups',
   people: 'People',
+  attendance: 'Attendance',
   live: 'Live',
   playback: 'Playback',
   simulator: 'Simulator',
 }
 
 const EVERYONE = ['root', 'planner', 'marshal', 'admin', 'ic', 'member']
+// Everyone opens Timeline and Map: members, ICs and admins see their own group's timetable and map (the planning
+// stage, 040 and later); only root and planners edit them (EDIT_ACCESS).
 export const PAGE_ACCESS = {
   overview: EVERYONE,
   timeline: EVERYONE,
   map: EVERYONE,
   groups: EVERYONE,
   people: EVERYONE,
+  attendance: EVERYONE, // checking in; ICs, admins and planners also run roll calls (071)
   live: EVERYONE,
   playback: ['root', 'planner'],
   simulator: ['root'], // and only in a simulation event

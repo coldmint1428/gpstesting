@@ -81,6 +81,8 @@
 	<string>Planova shares your group's location with event planners, even when your phone is locked.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Planova shows your position and shares it with event planners.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Planova scans your IC's QR code to take your attendance.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Motion detection saves battery by pausing GPS while you are standing still.</string>
 </dict>
