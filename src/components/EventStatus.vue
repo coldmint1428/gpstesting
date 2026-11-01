@@ -334,7 +334,7 @@ function remind() {
 </script>
 
 <template>
-  <div v-if="sessions.loaded.value" class="card mb-3" data-testid="event-status">
+  <div v-if="sessions.loaded.value" class="card mb-3" data-testid="event-status" :aria-busy="busy ? 'true' : null">
     <div class="card-body py-2">
       <div class="d-flex flex-wrap align-items-center gap-2">
         <!-- Status -->

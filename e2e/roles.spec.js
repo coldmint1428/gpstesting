@@ -98,7 +98,9 @@ test.describe('the pages show each role what it may do', () => {
     await page.goto(`/events/${ev.eventId}/playback`)
     await expect(page).toHaveURL(/\/overview$/)
     await page.goto(`/events/${ev.eventId}/people`)
-    await expect(page.getByTestId('person-card').or(page.getByTestId('people-list')).first()).toBeVisible()
+    // The People page's list, not the Live map's hidden "people on the map" list, which shares its test id and stays
+    // in the page (hidden) once Live has been opened
+    await expect(page.locator('.ev-main [data-testid="people-list"]:visible')).toBeVisible()
     await expect(page.locator('[data-testid^="person-menu-"]')).toHaveCount(0)
     await shot(page, 'roles-03-member-people', { fullPage: true })
   })

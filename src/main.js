@@ -12,6 +12,7 @@ import './assets/event-shell.css' // the event workspace: header, side navigatio
 import './assets/planova-theme.css' // Planova theme for the website: Bootstrap, the event workspace and the redrawn screens (after event-shell.css)
 import './assets/harbour.css' // Planova 2 colours "Harbour & Signal": tokens, Bootstrap, the plan board and the live pill (after the theme)
 import './assets/controls.css' // one size system for fields, dropdowns and buttons (after the theme, before native.css)
+import './assets/motion.css' // hover, press, page and tab transitions, skeletons while loading
 import './assets/native.css' // the phone app's own look (Android first), only under html.native-app
 import { isNativeApp } from './lib/platform'
 import { installFormErrors } from './lib/formErrors'
@@ -21,6 +22,8 @@ if (isNativeApp) document.documentElement.classList.add('native-app')
 
 // Form problems (a required field left empty...) in the site's own style, not the browser's grey bubble
 installFormErrors()
+// iPhone browsers only apply :active (the press-in effect in motion.css) once the page listens for touches at all
+document.addEventListener('touchstart', () => {}, { passive: true })
 
 // Pinia must be installed before the router, because the router guard uses the auth store
 createApp(App).use(createPinia()).use(router).mount('#app')

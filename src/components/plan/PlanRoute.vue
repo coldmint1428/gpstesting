@@ -40,6 +40,8 @@ import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { usePlanWalk } from '../../composables/usePlanWalk'
 import { supabase } from '../../lib/supabase'
 import '../../assets/planova.css'
+import SkeletonLoader from '../SkeletonLoader.vue'
+import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -59,6 +61,8 @@ const props = defineProps({
 const TICK_MS = 1000
 
 const { rows, loaded, errorMsg, readAt } = usePlanWalk({ session: () => props.session })
+// Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
+useLoadGate(() => !loaded.value)
 const zones = ref([])
 const now = ref(Date.now())
 const mapEl = ref(null)
@@ -413,7 +417,7 @@ watch(
         </button>
       </div>
 
-      <p v-if="!loaded" class="pv-route-note" data-testid="route-loading">Reading your route…</p>
+      <SkeletonLoader v-if="!loaded" variant="lines" :rows="4" label="Reading your route…" data-testid="route-loading" />
 
       <div v-else-if="!rows.length" class="pv-route-empty" data-testid="route-empty">
         <template v-if="phase === 'none'">

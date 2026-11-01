@@ -325,7 +325,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
 </script>
 
 <template>
-  <div>
+  <div :aria-busy="busy ? 'true' : null">
     <BenchAlert v-if="errorMsg" data-testid="members-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
     <datalist :id="'sectors-' + eventId">

@@ -282,9 +282,7 @@ html .app-nav .nav-link.router-link-exact-active,
 html .app-nav .navbar-text:hover {
   color: var(--text-on-chrome);
 }
-html .app-nav .nav-link.router-link-exact-active {
-  box-shadow: inset 0 -2px 0 var(--chrome-indicator);
-}
+/* The current page's underline is drawn by motion.css (it grows in); a shadow here as well drew a double line. */
 html .app-nav :focus-visible {
   outline-color: var(--focus-on-chrome);
 }

@@ -56,6 +56,7 @@ import {
 import { readSheet, sheetFileName, sheetGaps, sheetText } from '../../utils/planSheet'
 import '../../assets/planova.css'
 import { GROUP_PALETTE } from '../../utils/groupColours'
+import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -77,6 +78,10 @@ const GROUP_COLORS = GROUP_PALETTE
 
 const api = props.api || usePlan(props.eventId)
 const { plans, plan, frames, groups, zones, loading, busy, errorMsg, livePlan } = api
+// Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
+// (the groups, zones and plans read at mount, then the first plan opened: `boardReady` below)
+const boardReady = ref(false)
+useLoadGate(() => !boardReady.value)
 const edits = usePlanUndo({ plan, frames, api })
 const { canUndo, canRedo } = edits
 
@@ -2014,6 +2019,7 @@ onMounted(async () => {
   drawZones()
   const first = readablePlan.value
   if (first) await choosePlan(first.id)
+  boardReady.value = true
   // Redraw with the plan in place, then frame once more now that the board has its settled height: the inspector
   // only fills once a frame is open, and a camera framed for a mid-layout map opens the plan too far out. Since
   // `openFirstFrame` already waits a tick, this second fit is usually the same fit — it is the guarantee, not a
@@ -2149,7 +2155,7 @@ watch(
       </div>
     </div>
 
-    <div v-else class="pv-board">
+    <div v-else class="pv-board" :aria-busy="busy || loading ? 'true' : null">
       <header class="pv-board-head">
       <div class="pv-toolbar">
         <select v-if="!props.onlyGroupId" class="pv-select pv-name-field" :value="plan ? plan.id : ''" @change="choosePlan($event.target.value)">

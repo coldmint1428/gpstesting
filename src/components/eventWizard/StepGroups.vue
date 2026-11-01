@@ -3,6 +3,7 @@
 import { ref, computed } from 'vue'
 import { useEventWizardStore } from '../../stores/eventWizard'
 import { askConfirm } from '../../composables/useNotify'
+import ExpandTransition from '../ExpandTransition.vue'
 
 const props = defineProps({
   errors: { type: Object, default: () => ({}) },
@@ -106,66 +107,70 @@ async function removeGroup(group) {
           <p v-if="errors['group-' + g.key]" class="text-danger small mb-0 mt-2">{{ errors['group-' + g.key] }}</p>
 
           <!-- Editor -->
-          <div v-if="editingKey === g.key" class="mt-3">
-            <div class="row g-2 align-items-end mb-3">
-              <div class="col">
-                <label :for="'group-name-' + g.key" class="form-label small">Name</label>
-                <input :id="'group-name-' + g.key" v-model="g.name" class="form-control form-control-sm" maxlength="50" />
-              </div>
-              <div class="col-auto">
-                <label :for="'group-colour-' + g.key" class="form-label small">Colour</label>
-                <input :id="'group-colour-' + g.key" v-model="g.colour" type="color" class="form-control form-control-sm form-control-color" />
-              </div>
-              <div class="col-auto">
-                <button type="button" class="btn btn-sm btn-outline-danger" @click="removeGroup(g)">Delete group</button>
+          <ExpandTransition>
+            <div v-if="editingKey === g.key">
+              <div class="pt-3">
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col">
+                    <label :for="'group-name-' + g.key" class="form-label small">Name</label>
+                    <input :id="'group-name-' + g.key" v-model="g.name" class="form-control form-control-sm" maxlength="50" />
+                  </div>
+                  <div class="col-auto">
+                    <label :for="'group-colour-' + g.key" class="form-label small">Colour</label>
+                    <input :id="'group-colour-' + g.key" v-model="g.colour" type="color" class="form-control form-control-sm form-control-color" />
+                  </div>
+                  <div class="col-auto">
+                    <button type="button" class="btn btn-sm btn-outline-danger" @click="removeGroup(g)">Delete group</button>
+                  </div>
+                </div>
+
+                <p v-if="g.members.length === 0" class="text-muted small">No one in this group yet.</p>
+                <ul v-else class="list-group list-group-flush mb-3">
+                  <li v-for="m in g.members" :key="m.userId" class="list-group-item px-0 d-flex flex-wrap align-items-center gap-2">
+                    <span class="me-auto text-truncate">
+                      {{ byId[m.userId].display_name }}
+                      <span v-if="byId[m.userId].email" class="text-muted small">{{ byId[m.userId].email }}</span>
+                    </span>
+                    <div class="form-check form-check-inline m-0">
+                      <input :id="'ic-' + m.userId" v-model="m.isIC" class="form-check-input" type="checkbox" />
+                      <label class="form-check-label small" :for="'ic-' + m.userId">IC</label>
+                    </div>
+                    <div class="form-check form-check-inline m-0">
+                      <input :id="'admin-' + m.userId" v-model="m.isAdmin" class="form-check-input" type="checkbox" />
+                      <label class="form-check-label small" :for="'admin-' + m.userId">Admin</label>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @click="wizard.removeFromGroups(m.userId)">Remove</button>
+                  </li>
+                </ul>
+
+                <label :for="'group-filter-' + g.key" class="form-label small">Add people without a group</label>
+                <input
+                  :id="'group-filter-' + g.key"
+                  v-model="filter"
+                  type="search"
+                  class="form-control form-control-sm mb-2"
+                  placeholder="Filter by name"
+                  autocomplete="off"
+                />
+                <p v-if="unassigned.length === 0" class="text-muted small mb-0">Everyone is in a group. Add more people in step 2.</p>
+                <template v-else>
+                  <ul class="list-group addable mb-2">
+                    <li v-for="p in addable" :key="p.id" class="list-group-item d-flex align-items-center gap-2 py-1">
+                      <span class="me-auto text-truncate small">
+                        {{ p.display_name }} <span v-if="p.email" class="text-muted">{{ p.email }}</span>
+                        <span v-if="p.role === 'root'" class="badge text-bg-dark ms-1">You</span>
+                      </span>
+                      <button type="button" class="btn btn-sm btn-primary" @click="wizard.addToGroup(g.key, p.id)">Add</button>
+                    </li>
+                    <li v-if="addable.length === 0" class="list-group-item text-muted small">No match.</li>
+                  </ul>
+                  <button v-if="addable.length > 1" type="button" class="btn btn-sm btn-outline-primary" @click="addAllUnassigned(g.key)">
+                    Add all {{ addable.length }} shown
+                  </button>
+                </template>
               </div>
             </div>
-
-            <p v-if="g.members.length === 0" class="text-muted small">No one in this group yet.</p>
-            <ul v-else class="list-group list-group-flush mb-3">
-              <li v-for="m in g.members" :key="m.userId" class="list-group-item px-0 d-flex flex-wrap align-items-center gap-2">
-                <span class="me-auto text-truncate">
-                  {{ byId[m.userId].display_name }}
-                  <span v-if="byId[m.userId].email" class="text-muted small">{{ byId[m.userId].email }}</span>
-                </span>
-                <div class="form-check form-check-inline m-0">
-                  <input :id="'ic-' + m.userId" v-model="m.isIC" class="form-check-input" type="checkbox" />
-                  <label class="form-check-label small" :for="'ic-' + m.userId">IC</label>
-                </div>
-                <div class="form-check form-check-inline m-0">
-                  <input :id="'admin-' + m.userId" v-model="m.isAdmin" class="form-check-input" type="checkbox" />
-                  <label class="form-check-label small" :for="'admin-' + m.userId">Admin</label>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" @click="wizard.removeFromGroups(m.userId)">Remove</button>
-              </li>
-            </ul>
-
-            <label :for="'group-filter-' + g.key" class="form-label small">Add people without a group</label>
-            <input
-              :id="'group-filter-' + g.key"
-              v-model="filter"
-              type="search"
-              class="form-control form-control-sm mb-2"
-              placeholder="Filter by name"
-              autocomplete="off"
-            />
-            <p v-if="unassigned.length === 0" class="text-muted small mb-0">Everyone is in a group. Add more people in step 2.</p>
-            <template v-else>
-              <ul class="list-group addable mb-2">
-                <li v-for="p in addable" :key="p.id" class="list-group-item d-flex align-items-center gap-2 py-1">
-                  <span class="me-auto text-truncate small">
-                    {{ p.display_name }} <span v-if="p.email" class="text-muted">{{ p.email }}</span>
-                    <span v-if="p.role === 'root'" class="badge text-bg-dark ms-1">You</span>
-                  </span>
-                  <button type="button" class="btn btn-sm btn-primary" @click="wizard.addToGroup(g.key, p.id)">Add</button>
-                </li>
-                <li v-if="addable.length === 0" class="list-group-item text-muted small">No match.</li>
-              </ul>
-              <button v-if="addable.length > 1" type="button" class="btn btn-sm btn-outline-primary" @click="addAllUnassigned(g.key)">
-                Add all {{ addable.length }} shown
-              </button>
-            </template>
-          </div>
+          </ExpandTransition>
         </div>
       </li>
     </ul>

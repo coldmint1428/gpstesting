@@ -51,6 +51,8 @@ import SosBanner from '../components/SosBanner.vue'
 import { useSos } from '../composables/useSos'
 import PhoneTabBar from '../components/PhoneTabBar.vue'
 import BottomSheet from '../components/BottomSheet.vue'
+import SkeletonLoader from '../components/SkeletonLoader.vue'
+import { providePageReady } from '../composables/usePageReady'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -94,6 +96,20 @@ watch(
   },
   { immediate: true },
 )
+// One skeleton until the whole page has its data (usePageReady): the event, its sessions, the plans list and every
+// panel on screen. The page is built out of sight meanwhile, then fades in once instead of panel by panel.
+const pageGate = providePageReady()
+const pageReady = pageGate.ready
+pageGate.watch(() => !sessions.loaded.value)
+pageGate.watch(() => seesWholeEvent.value && !plansReady.value)
+watch(
+  loading,
+  (isLoading) => {
+    if (!isLoading) nextTick(() => pageGate.arm())
+  },
+  { immediate: true },
+)
+
 // Zones during the live session (merger Stage 2): who is inside which zone, group positions, No-Go alerts.
 // A No-Go entry is told to the event's root / planners / marshals (toast) and to the IC who entered it.
 const zoneActivity = useZoneActivity(props.id, computed(() => (liveSession.value ? liveSession.value.id : null)), {
@@ -575,6 +591,37 @@ watch(
 watch([homeTab, loading], ([home, isLoading]) => {
   if (!isLoading && phoneTab.value && phoneTab.value !== home) phoneTab.value = home
 })
+// Changing page from the side menu (or a phone tab): the new page's content rises into place instead of
+// appearing at once. The pages are siblings in one section, and the live map stays mounted (v-show), so rather than
+// rebuilding the section this animates whatever is on screen from the page's heading down. The event's state bar
+// above the heading is the same on every page and stays still.
+const mainEl = ref(null)
+const reduceMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+watch(
+  tab,
+  (now, before) => {
+    if (!before || now === before || reduceMotion) return
+    nextTick(() => {
+      const main = mainEl.value
+      if (!main || typeof main.animate !== 'function') return
+      const kids = [...main.children]
+      const head = main.querySelector(':scope > .ev-page-head')
+      const from = head ? kids.indexOf(head) : 0
+      kids.slice(from).forEach((el, i) => {
+        if (!el.getClientRects().length) return // a page hidden by v-show
+        el.animate(
+          // The phone app fades only: its tab bar, sheets and button are fixed to the screen inside this section,
+          // and moving their parent would carry them along for a moment.
+          native ? [{ opacity: 0 }, { opacity: 1 }] : [
+            { opacity: 0, transform: 'translateY(8px)' },
+            { opacity: 1, transform: 'none' },
+          ],
+          { duration: 220, delay: Math.min(i, 3) * 30, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'backwards' },
+        )
+      })
+    })
+  },
+)
 // On a phone the pages are one scrolling row: keep the open one in view (centred, without moving the page itself)
 function showCurrentInNav() {
   nextTick(() => {
@@ -633,15 +680,16 @@ async function removeEvent() {
 </script>
 
 <template>
-  <p v-if="loading" class="container py-3 text-muted">Loading...</p>
-  <div v-else-if="!event" class="container py-3">
+  <SkeletonLoader v-if="loading || (event && !pageReady)" variant="event" label="Loading the event…" />
+  <div v-if="!loading && !event" class="container py-3">
     <div class="alert alert-danger" role="alert">
       {{ errorMsg || 'Event not found.' }}
       <div class="mt-2"><RouterLink to="/events">Back to my events</RouterLink></div>
     </div>
   </div>
 
-  <div v-else class="ev" :class="{ 'ev-native': native }">
+  <!-- Built while the skeleton shows (so every panel can fetch its data), shown in one go when all of it is in -->
+  <div v-if="!loading && event" class="ev" :class="{ 'ev-native': native, 'is-gathering': !pageReady, 'data-in': pageReady }" :aria-hidden="pageReady ? null : 'true'">
     <!-- Phone app: a compact header; the pages are in the bottom tabs -->
     <header v-if="native" class="pv-head" data-testid="phone-event-head">
       <RouterLink to="/events" class="pv-back" aria-label="Back to my events" data-testid="back-to-events">
@@ -714,7 +762,7 @@ async function removeEvent() {
         </ul>
       </nav>
 
-      <section class="ev-main" :class="{ 'pv-has-tabs': native }" :aria-label="currentPage.label">
+      <section ref="mainEl" class="ev-main" :class="{ 'pv-has-tabs': native }" :aria-label="currentPage.label">
         <!-- SOS (072): first, on every page -->
         <SosBanner
           :alerts="sos.alerts.value"

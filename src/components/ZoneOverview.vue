@@ -9,11 +9,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { areaKind } from '../utils/areaKinds'
+import { useLoadGate } from '../composables/usePageReady'
 
 const props = defineProps({ eventId: { type: String, required: true } })
 
 const zones = ref([])
 const loaded = ref(false)
+// Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
+useLoadGate(() => !loaded.value)
 
 async function load() {
   const z = await supabase.from('zones').select('id, code, name, kind').eq('event_id', props.eventId).order('code')

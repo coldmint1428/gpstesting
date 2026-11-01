@@ -42,6 +42,8 @@ import { planErrorMessage } from '../../composables/usePlan'
 import { formatDuration, formatTime } from '../../utils/time'
 import { formatOffset } from '../../utils/planFrames'
 import '../../assets/planova.css'
+import SkeletonLoader from '../SkeletonLoader.vue'
+import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
   // The live session on a plan: { id, planId, t0At, planRev } from useEventSessions. Null while there is none.
@@ -58,6 +60,8 @@ const rows = ref([]) // the read, exactly as it answered
 const handover = ref([]) // the hand-back chain, newest first (057)
 const log = ref([]) // what was sent to the plan's groups, and what the plan changed (058)
 const loaded = ref(false) // one answer has arrived (an empty read is still an answer)
+// Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
+useLoadGate(() => !loaded.value)
 const errorMsg = ref('')
 const errorSticky = ref(false) // a write's error: a successful poll must not wipe it (step 28)
 const readAt = ref(null)
@@ -460,7 +464,7 @@ watch(
 </script>
 
 <template>
-  <div class="pv">
+  <div class="pv" :aria-busy="busy || sending ? 'true' : null">
     <section class="pv-ops" data-testid="plan-ops">
       <header class="pv-ops-head">
         <div class="pv-ops-id">
@@ -486,7 +490,7 @@ watch(
         <button type="button" class="pv-ops-error-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError">×</button>
       </p>
 
-      <p v-if="!loaded" class="pv-ops-empty" data-testid="ops-loading">Reading the ops board…</p>
+      <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the ops board…" data-testid="ops-loading" />
       <p v-else-if="!groups.length" class="pv-ops-empty" data-testid="ops-empty">
         This plan has no moments in it yet, so there is nothing for anyone to be doing.
       </p>

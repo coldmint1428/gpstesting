@@ -9,7 +9,7 @@ import { makeQaEvent } from './support/fixture.js'
 import { shot } from './support/shots.js'
 
 test.describe.configure({ mode: 'serial' })
-test.setTimeout(120_000)
+test.setTimeout(240_000) // the root visits ten pages in one test; page transitions (968009b, e1c0ba1) add to each
 
 const A = { lat: 1.290315, lng: 103.851806 }
 const B = { lat: 1.291476, lng: 103.85232 }
@@ -94,7 +94,8 @@ async function visit(page, path, { heading, shows = [], name, full = true }) {
   const before = problems.length
   await page.goto(path)
   if (heading) await expect(page.getByRole('heading', { name: heading }).first()).toBeVisible({ timeout: 30_000 })
-  for (const text of shows) await expect(page.getByText(text).first()).toBeVisible({ timeout: 30_000 })
+  // Visible matches only: the Live page stays in the page (hidden) once opened, with group names of its own
+  for (const text of shows) await expect(page.getByText(text).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0, { timeout: 30_000 })
   await page.waitForTimeout(1200) // let the map tiles and the realtime first read land before the picture
   await shot(page, 'tour-' + name, { fullPage: full })

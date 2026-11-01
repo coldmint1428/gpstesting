@@ -1,0 +1,736 @@
+/* Motion: how things move when they are pressed, hovered, opened, switched and loaded.
+ *
+ * One set of timings for the whole site, so every animation feels like the same product:
+ *   fast   120ms  colour and press feedback
+ *   base   200ms  hover, underlines, things opening and closing
+ *   slow   260ms  pages, dialogs
+ * Anything that loops (the LIVE dot, skeletons, the busy shine, the loading bar) moves only with transform and
+ * opacity, which the graphics card handles on its own: animating a shadow or a background position repaints the
+ * page on every frame, and that is what made the screen stutter.
+ * Everything here is switched off for people who asked their device for less motion (the block at the end).
+ * Loaded after controls.css and before native.css.
+ */
+
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 260ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --lift-shadow: 0 6px 18px rgba(20, 32, 27, 0.1), 0 2px 4px rgba(20, 32, 27, 0.06);
+  /* The skeleton's grey, and the lighter band that sweeps across it. */
+  --skeleton-base: #ebe8e1;
+  --skeleton-shine: rgba(255, 255, 255, 0.65);
+  /* Lets a height animate to and from "auto" (opening sections), where the browser supports it. */
+  interpolate-size: allow-keywords;
+}
+
+/* ---------- Hover and press ---------- */
+
+/* Every button, field and nav link eases between its states instead of snapping. */
+html .btn,
+html .pv-btn,
+html .nav-link,
+html .navbar-text,
+html .ev-nav-btn,
+html .form-control,
+html .form-select,
+html .form-check-input,
+html .pl-tab,
+html .pv-tab,
+html .pl-wz-step__mk,
+html .pl-wz-step__txt,
+html .list-group-item-action,
+html .dropdown-item,
+html .page-link,
+html a {
+  transition:
+    color var(--motion-fast) var(--ease-out),
+    background-color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+/* Solid buttons rise a pixel under the pointer and press in when clicked. */
+@media (hover: hover) {
+  html .btn:not(:disabled):not(.disabled):not(.btn-link):not(.btn-close):hover,
+  html .pv-btn:not(:disabled):not(.is-quiet):hover {
+    transform: translateY(-1px);
+  }
+}
+@media (hover: hover) {
+  html .btn-primary:not(:disabled):hover,
+  html .btn-success:not(:disabled):hover,
+  html .btn-danger:not(:disabled):hover,
+  html .btn-live:not(:disabled):hover,
+  html .pv-btn.is-primary:not(:disabled):hover {
+    box-shadow: 0 4px 12px rgba(15, 92, 80, 0.22);
+  }
+}
+html .btn:not(:disabled):not(.disabled):active,
+html .pv-btn:not(:disabled):active,
+html .ev-nav-btn:active,
+html .pl-tab:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 60ms;
+}
+html .btn-close {
+  transition: opacity var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  html .btn-close:hover {
+    transform: rotate(90deg);
+  }
+}
+
+/* A card that opens something on its own lifts towards the pointer. */
+html a.card,
+html .pl-live {
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  html a.card:hover,
+  html .pl-live:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--lift-shadow);
+  }
+}
+html a.card:active,
+html .pl-live:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 60ms;
+}
+
+/* Rows in a list never lift: the row's own lines would move with it and the list's edge would cut it off.
+   They take a soft tint instead, which spreads a little past the row's text so it reads as one block. */
+html a.hm-row {
+  position: relative;
+  isolation: isolate;
+}
+html a.hm-row::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 2px -12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--interactive-hover-overlay, #f2f6f4);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  html a.hm-row:hover::before {
+    opacity: 1;
+  }
+}
+html .pl-row,
+html .pv-row,
+html .pv-also-row,
+html .area-row-pickable,
+html .plan-row {
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  html .area-row-pickable:hover,
+  html .plan-row:hover {
+    background-color: var(--interactive-hover-overlay, #f2f6f4);
+  }
+}
+html .pv-row:active,
+html .pv-also-row:active {
+  transform: scale(0.985);
+}
+
+/* On a touch screen the browser flashes a grey box over whatever is tapped; the press effect replaces it. */
+html a,
+html button,
+html .btn,
+html .pv-tab,
+html .ev-nav-btn,
+html .pl-tab,
+html summary,
+html label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A field coming into focus: the ring grows in rather than appearing. */
+html .form-control:focus,
+html .form-select:focus,
+html .pv-input:focus,
+html .pv-select:focus {
+  transition-duration: var(--motion-base);
+}
+
+/* ---------- Navigation bars ----------
+ * Every bar follows one rule: pointing at an item brings in a faint marker, and the chosen item's marker grows to
+ * full size. The marker is the underline on the top bar and the Events tabs, the bar beside the row in the event's
+ * side menu, the pill on the phone's tab bar, and the bar over each step when creating an event. */
+
+/* Top bar. One underline, drawn here: the theme's inset shadow under the current link is switched off in
+   planova-theme.css, because the two together drew a double line. */
+html .app-nav .nav-link,
+html .app-nav .navbar-text {
+  position: relative;
+}
+html .app-nav .nav-link::after,
+html .app-nav .navbar-text::after {
+  content: '';
+  position: absolute;
+  left: var(--bs-navbar-nav-link-padding-x, 0.5rem);
+  right: var(--bs-navbar-nav-link-padding-x, 0.5rem);
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--chrome-indicator, #8fd3bf);
+  opacity: 0;
+  transform: scaleX(0.3);
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+  pointer-events: none;
+}
+html .app-nav .navbar-text::after {
+  left: 0;
+  right: 0;
+  bottom: -6px;
+}
+@media (hover: hover) {
+  html .app-nav .nav-link:hover::after,
+  html .app-nav .navbar-text:hover::after {
+    opacity: 0.55;
+    transform: scaleX(0.6);
+  }
+}
+html .app-nav .nav-link.router-link-exact-active::after,
+html .app-nav .navbar-text.router-link-exact-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+/* Events page tabs: the same underline. */
+html .pl-tab::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--brand-primary);
+  opacity: 0;
+  transform: scaleX(0.3);
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  html .pl-tab:hover::after {
+    opacity: 0.35;
+    transform: scaleX(0.6);
+  }
+}
+html .pl-tab[aria-selected='true']::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+/* With the sliding underline (EventsView sets it up), the chosen tab's own underline steps aside for it. */
+html .pl-tabs.has-ink {
+  position: relative;
+}
+html .pl-tabs.has-ink .pl-tab[aria-selected='true']::after {
+  opacity: 0;
+}
+html .pl-tabs-ink {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100px; /* scaled to the tab's width by the script */
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--brand-primary);
+  transform-origin: left center;
+  pointer-events: none;
+}
+html .pl-tabs-ink.is-ready {
+  transition: transform var(--motion-slow) var(--ease-out);
+}
+/* The list under the tabs slides out one way and the next one in from the side its tab is on. */
+.tabswap-enter-active {
+  transition:
+    opacity var(--motion-base) var(--ease-out) 60ms,
+    transform var(--motion-base) var(--ease-out) 60ms;
+}
+/* The old list leaves on top of the new one, so the page below never jumps up while neither is there. */
+.pl-tabswap {
+  position: relative;
+}
+.tabswap-leave-active {
+  position: absolute;
+  inset: 0 0 auto;
+  pointer-events: none;
+  transition:
+    opacity 90ms var(--ease-in),
+    transform 90ms var(--ease-in);
+}
+/* --tab-shift is +16px when moving to a tab on the right, -16px to the left (set by EventsView). */
+.tabswap-enter-from {
+  opacity: 0;
+  transform: translateX(var(--tab-shift, 16px));
+}
+.tabswap-leave-to {
+  opacity: 0;
+  transform: translateX(calc(var(--tab-shift, 16px) * -1));
+}
+
+/* Event side menu: the row's colour eases over, the bar beside the chosen row grows in from its middle, and
+   the icon nudges towards the pointer. */
+html .ev-nav-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--chrome-indicator);
+  opacity: 0;
+  transform: scaleY(0.3);
+  transition:
+    transform var(--motion-base) var(--ease-spring),
+    opacity var(--motion-fast) var(--ease-out);
+}
+@media (hover: hover) {
+  html .ev-nav-btn:hover::before {
+    opacity: 0.45;
+    transform: scaleY(0.5);
+  }
+}
+html .ev-nav-btn[aria-current='page']::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+html .ev-nav-btn svg {
+  transition: transform var(--motion-base) var(--ease-out);
+}
+@media (hover: hover) {
+  html .ev-nav-btn:hover svg {
+    transform: translateX(2px);
+  }
+}
+
+/* Phone tab bar: the pill behind the chosen tab's icon widens in from the middle; a tap presses the pill. */
+html .pv-tab-pill {
+  isolation: isolate;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+html .pv-tab-pill::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(36, 79, 63, 0.12);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition:
+    transform var(--motion-base) var(--ease-spring),
+    opacity var(--motion-fast) var(--ease-out);
+}
+html .pv-tab[aria-current='page'] .pv-tab-pill {
+  background: transparent;
+}
+html .pv-tab[aria-current='page'] .pv-tab-pill::before {
+  opacity: 1;
+  transform: scaleX(1);
+}
+html .pv-tab:active .pv-tab-pill {
+  transform: scale(0.92);
+  transition-duration: 60ms;
+}
+
+/* Create-an-event steps: each step's bar fills from the left when you reach it. */
+html .pl-wz-step__bar {
+  position: relative;
+  overflow: hidden;
+}
+html .pl-wz-step.is-done .pl-wz-step__bar,
+html .pl-wz-step.is-current .pl-wz-step__bar {
+  background: var(--bg-muted);
+}
+html .pl-wz-step__bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--brand-primary);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--motion-slow) var(--ease-out);
+}
+html .pl-wz-step.is-done .pl-wz-step__bar::after,
+html .pl-wz-step.is-current .pl-wz-step__bar::after {
+  transform: scaleX(1);
+}
+@media (hover: hover) {
+  html .pl-wz-step:not(:disabled):hover .pl-wz-step__mk {
+    transform: scale(1.08);
+  }
+}
+
+/* ---------- Changing pages (top navigation, App.vue) ---------- */
+
+.page-enter-active {
+  transition:
+    opacity var(--motion-slow) var(--ease-out),
+    transform var(--motion-slow) var(--ease-out);
+}
+/* The old page leaves quickly, so the new one is never kept waiting. */
+.page-leave-active {
+  transition: opacity 90ms var(--ease-in);
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-leave-to {
+  opacity: 0;
+}
+/* The phone app fades only (its tab bar and sheets are fixed to the screen and would ride along with the page). */
+html.native-app .page-enter-from {
+  transform: none;
+}
+
+/* ---------- Content arriving: a loaded page replacing its skeleton ---------- */
+
+/* A page being built behind its skeleton (usePageReady): laid out so its maps size themselves and its panels fetch,
+   but taking no space and invisible, its fixed bars included, until everything is in. */
+.is-gathering {
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Opacity only, never a transform: a transform would move the fixed bars and sheets inside it for a moment. */
+.data-in {
+  animation: data-in var(--motion-slow) var(--ease-out) both;
+}
+@keyframes data-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- Opening and closing: dropdowns, sections, the phone menu ----------
+ * One movement for everything that opens: it fades in while unfolding downwards over 200ms, and folds back up
+ * when it closes. ExpandTransition.vue does this for sections Vue shows and hides; the rules below do it for the
+ * dropdown lists, <details> and Bootstrap's collapsing menu. */
+
+/* Dropdown lists (the styled <select> list from controls.css). */
+@supports (appearance: base-select) {
+  html select.form-select::picker(select),
+  html select.pv-select::picker(select),
+  html select.pv-log-select::picker(select) {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.96);
+    transform-origin: top center;
+    transition:
+      opacity var(--motion-base) var(--ease-out),
+      transform var(--motion-base) var(--ease-out),
+      overlay var(--motion-base) allow-discrete,
+      display var(--motion-base) allow-discrete;
+  }
+  html select.form-select:open::picker(select),
+  html select.pv-select:open::picker(select),
+  html select.pv-log-select:open::picker(select) {
+    opacity: 1;
+    transform: none;
+  }
+  @starting-style {
+    html select.form-select:open::picker(select),
+    html select.pv-select:open::picker(select),
+    html select.pv-log-select:open::picker(select) {
+      opacity: 0;
+      transform: translateY(-4px) scaleY(0.96);
+    }
+  }
+}
+
+/* <details>: the content unfolds, and the little arrow turns. */
+html details::details-content {
+  block-size: 0;
+  overflow: clip;
+  opacity: 0;
+  transition:
+    block-size var(--motion-base) var(--ease-out),
+    opacity var(--motion-base) var(--ease-out),
+    content-visibility var(--motion-base) allow-discrete;
+}
+html details[open]::details-content {
+  block-size: auto;
+  opacity: 1;
+}
+html details > summary {
+  cursor: pointer;
+}
+
+/* A show/hide button with an arrow ("Create a simulation event"): the arrow turns as its section opens and closes. */
+html .pl-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+html .pl-disclosure svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--motion-base) var(--ease-out);
+}
+html .pl-disclosure[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+@media (hover: hover) {
+  html .pl-disclosure:hover {
+    color: var(--text-primary);
+  }
+}
+
+/* The phone-width menu under the top bar's ☰ button (Bootstrap's own height animation, on our timing). */
+html .collapsing {
+  transition: height var(--motion-base) var(--ease-out);
+}
+
+/* ExpandTransition.vue: the height is set by script; these give it the shared timing. */
+.expand-enter-active,
+.expand-leave-active {
+  overflow: hidden;
+  transition:
+    height var(--motion-base) var(--ease-out),
+    opacity var(--motion-base) var(--ease-out);
+}
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+}
+
+/* Something shown by a class change rather than added (the phone's "Manage" row on People). */
+.reveal-in {
+  transition:
+    opacity var(--motion-base) var(--ease-out),
+    transform var(--motion-base) var(--ease-out);
+}
+@starting-style {
+  .reveal-in {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ---------- Dialogs, sheets and toasts ---------- */
+
+.dialog-enter-active {
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+.dialog-enter-active .modal-dialog {
+  transition: transform var(--motion-slow) var(--ease-spring);
+}
+.dialog-leave-active {
+  transition: opacity var(--motion-fast) var(--ease-in);
+}
+.dialog-leave-active .modal-dialog {
+  transition: transform var(--motion-fast) var(--ease-in);
+}
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+.dialog-enter-from .modal-dialog {
+  transform: translateY(12px) scale(0.96);
+}
+.dialog-leave-to .modal-dialog {
+  transform: scale(0.98);
+}
+.backdrop-enter-active,
+.backdrop-leave-active {
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+.backdrop-enter-from,
+.backdrop-leave-to {
+  opacity: 0 !important;
+}
+
+/* The phone's bottom sheet (BottomSheet.vue): rises in and sinks back out. */
+.sheet-enter-active {
+  transition: transform var(--motion-slow) cubic-bezier(0.2, 0, 0, 1);
+}
+.sheet-leave-active {
+  transition: transform var(--motion-base) var(--ease-in);
+}
+.sheet-enter-from,
+.sheet-leave-to {
+  transform: translateY(100%);
+}
+
+.toast-enter-active {
+  transition:
+    opacity var(--motion-base) var(--ease-out),
+    transform var(--motion-slow) var(--ease-spring);
+}
+.toast-leave-active {
+  transition:
+    opacity var(--motion-fast) var(--ease-in),
+    transform var(--motion-fast) var(--ease-in);
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(24px);
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(12px) scale(0.98);
+}
+.toast-move {
+  transition: transform var(--motion-base) var(--ease-out);
+}
+
+/* ---------- Skeletons: the grey shape of a page that is still loading (SkeletonLoader.vue) ----------
+ * The grey block stays still; a lighter band slides across it. Sliding the band (a transform) costs nothing per
+ * frame, where moving a background repaints every block on every frame. */
+
+.skeleton {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md, 8px);
+  background: var(--skeleton-base);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, var(--skeleton-shine) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+}
+.skeleton-line.is-title {
+  height: 22px;
+  border-radius: 8px;
+}
+.skeleton-pill {
+  height: 22px;
+  border-radius: 999px;
+}
+.skeleton-circle {
+  border-radius: 50%;
+}
+.skeleton-on-dark {
+  --skeleton-base: rgba(255, 255, 255, 0.08);
+  --skeleton-shine: rgba(255, 255, 255, 0.12);
+}
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+/* A skeleton fades in after a short pause, so a fast answer never flashes grey boxes. */
+.skeleton-wrap {
+  animation: skeleton-appear var(--motion-base) var(--ease-out) 150ms both;
+}
+@keyframes skeleton-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- Busy: an area waiting for a save or a read ----------
+ * Any element with aria-busy="true" greys out softly and a light band sweeps across it. It only appears if the
+ * wait lasts longer than a quarter of a second, it never blocks the pointer (the buttons that started the wait
+ * are already disabled), and it fades away when the answer lands. The veil and the band are separate layers so
+ * the band can slide (a transform) instead of repainting. */
+html [aria-busy='true'] {
+  position: relative;
+  overflow: clip;
+}
+html [aria-busy='true']::after,
+html [aria-busy='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  animation: busy-appear var(--motion-base) var(--ease-out) 250ms both;
+}
+html [aria-busy='true']::after {
+  border-radius: inherit;
+  background: rgba(222, 218, 209, 0.38);
+}
+html [aria-busy='true']::before {
+  z-index: 6;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.7) 50%, transparent 80%);
+  animation:
+    busy-appear var(--motion-base) var(--ease-out) 250ms both,
+    skeleton-shimmer 1.2s ease-in-out 250ms infinite backwards;
+}
+@keyframes busy-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- Less motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html *,
+  html *::before,
+  html *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  html .btn:hover,
+  html .pv-btn:hover,
+  html a.card:hover,
+  html .pl-live:hover {
+    transform: none !important;
+  }
+  .skeleton::after,
+  html [aria-busy='true']::before {
+    display: none;
+  }
+}

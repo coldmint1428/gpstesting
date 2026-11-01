@@ -1,6 +1,6 @@
 <script setup>
 // My events + create an event + join one with a code
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getMyEvents, createQuickEvent, joinEventByCode, getLiveEventIds } from '../services/eventService'
@@ -10,12 +10,18 @@ import { isNativeApp } from '../lib/platform'
 import { useLocationTracker } from '../composables/useLocationTracker'
 import { formatDayTime } from '../utils/time'
 import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
+import SkeletonLoader from '../components/SkeletonLoader.vue'
+import ExpandTransition from '../components/ExpandTransition.vue'
+import { cachedMyEvents, saveMyEvents } from '../lib/myEventsCache'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-const events = ref([]) // [{ id, name, roles: ['root', ...], isAdmin, isIC }]
-const loading = ref(true)
+// Opens with the list from the last visit (myEventsCache) and reads a fresh one quietly; the skeleton is only for the
+// first load.
+const cached = cachedMyEvents(auth.user && auth.user.id)
+const events = ref(cached ? cached.events : []) // [{ id, name, roles: ['root', ...], isAdmin, isIC }]
+const loading = ref(!cached)
 const simName = ref('') // merger Stage 3: a name-only test event for virtual groups
 const joinCode = ref('')
 // A pasted code keeps working with spaces or dashes in it ("9Z8-GGZ"): no maxlength, the six are counted after cleaning
@@ -26,10 +32,15 @@ function onJoinInput(event) {
 const errorMsg = ref('')
 
 async function loadEvents() {
-  loading.value = true
+  if (!cached) loading.value = true
   try {
-    events.value = await getMyEvents(auth.user.id)
-    liveIds.value = await getLiveEventIds(events.value.map((e) => e.id)).catch(() => [])
+    // Both answers first, then the page: the events alone would draw the list while the skeleton is still up, and the
+    // list would then jump when the skeleton went away a moment later.
+    const mine = await getMyEvents(auth.user.id)
+    const live = await getLiveEventIds(mine.map((e) => e.id)).catch(() => [])
+    events.value = mine
+    liveIds.value = live
+    saveMyEvents(auth.user.id, mine, live)
   } catch (error) {
     errorMsg.value = error.message
   } finally {
@@ -67,7 +78,7 @@ onMounted(loadEvents)
 // ---------- Phone app (Figma screens 2 and 3): live events first, then the rest; Join is a sheet ----------
 const native = isNativeApp
 const tracker = useLocationTracker()
-const liveIds = ref([])
+const liveIds = ref(cached ? cached.liveIds : [])
 const liveEvents = computed(() => events.value.filter((e) => liveIds.value.includes(e.id)))
 // Soonest upcoming first, then past events (latest first), then the ones without a date
 const otherEvents = computed(() => {
@@ -132,6 +143,44 @@ const WEB_TABS = [
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'past', label: 'Past' },
 ]
+// Switching tabs: one underline slides from the old tab to the new one, and the list slides out the way the tabs
+// moved (Past is to the right of Upcoming, so its list comes in from the right). The underline is a single element
+// moved with a transform, measured from the chosen tab, so it also follows the counts changing a tab's width.
+const tabsEl = ref(null)
+const ink = ref({ x: 0, w: 0, ready: false })
+const tabDir = ref('right')
+function placeInk() {
+  const bar = tabsEl.value
+  const btn = bar && bar.querySelector('[aria-selected="true"]')
+  if (!btn) return
+  ink.value = { x: btn.offsetLeft, w: btn.offsetWidth, ready: ink.value.ready }
+  if (!ink.value.ready) requestAnimationFrame(() => (ink.value = { ...ink.value, ready: true })) // no slide on first draw
+  // On a narrow screen the tabs scroll sideways: bring the chosen one into view
+  if (bar.scrollWidth > bar.clientWidth) btn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+}
+function pickTab(key) {
+  const order = WEB_TABS.map((t) => t.key)
+  tabDir.value = order.indexOf(key) >= order.indexOf(activeTab.value) ? 'right' : 'left'
+  tab.value = key
+}
+watch(
+  () => [activeTab.value, tabLists.value.ongoing.length, tabLists.value.upcoming.length, tabLists.value.past.length],
+  () => nextTick(placeInk),
+)
+let tabsResize = null
+watch(tabsEl, (el) => {
+  if (tabsResize) tabsResize.disconnect()
+  if (!el || typeof ResizeObserver === 'undefined') return
+  tabsResize = new ResizeObserver(() => placeInk())
+  tabsResize.observe(el)
+  nextTick(placeInk)
+})
+onBeforeUnmount(() => tabsResize && tabsResize.disconnect())
+const inkStyle = computed(() => ({ transform: `translateX(${ink.value.x}px) scaleX(${ink.value.w / 100})` }))
+
+// "Create a simulation event": opens and closes with the shared unfold (ExpandTransition)
+const simOpen = ref(false)
+
 function roleClass(ev) {
   const label = roleLabel(ev)
   return label === 'Root' ? 'pl-role--root' : label === 'Planner' ? 'pl-role--planner' : label === 'Marshal' ? 'pl-role--marshal' : label === 'IC' ? 'pl-role--ic' : ''
@@ -161,7 +210,7 @@ function roleTone(label) {
       v-for="ev in liveEvents.slice(0, 1)"
       :key="'live-' + ev.id"
       :to="{ name: 'event', params: { id: ev.id } }"
-      class="pv-live"
+      class="pv-live data-in"
       :data-testid="'live-' + ev.id"
     >
       <span class="pv-chip pv-chip-live">LIVE</span>
@@ -174,7 +223,7 @@ function roleTone(label) {
     </RouterLink>
 
     <!-- More than one live at once: the first keeps the big card, the rest are compact rows (one loud thing per screen) -->
-    <section v-if="liveEvents.length > 1" class="pv-also-live" aria-label="Also live" data-testid="also-live">
+    <section v-if="liveEvents.length > 1" class="pv-also-live data-in" aria-label="Also live" data-testid="also-live">
       <h2 class="pv-also-title">Also live · {{ liveEvents.length - 1 }}</h2>
       <RouterLink
         v-for="ev in liveEvents.slice(1)"
@@ -192,18 +241,18 @@ function roleTone(label) {
       </RouterLink>
     </section>
 
-    <p v-if="loading" class="text-muted px-1">Loading…</p>
-    <div v-else-if="events.length === 0" class="pv-empty" data-testid="no-events">
+    <SkeletonLoader v-if="loading" :rows="4" label="Loading your events…" class="px-1" />
+    <div v-else-if="events.length === 0" class="pv-empty data-in" data-testid="no-events">
       <strong>No events yet</strong>
       <span>Join one with the code your planner sent, or create your own.</span>
     </div>
     <template v-else-if="otherEvents.length">
-      <h2 class="pv-label px-1 mb-0">{{ liveEvents.length ? 'Your other events' : 'Your events' }}</h2>
+      <h2 class="pv-label px-1 mb-0 data-in">{{ liveEvents.length ? 'Your other events' : 'Your events' }}</h2>
       <RouterLink
         v-for="ev in otherEvents"
         :key="ev.id"
         :to="{ name: 'event', params: { id: ev.id } }"
-        class="pv-row"
+        class="pv-row data-in"
         data-testid="event-row"
       >
         <span class="pv-date" aria-hidden="true">
@@ -286,7 +335,7 @@ function roleTone(label) {
       v-for="ev in tabLists.ongoing.slice(0, 1)"
       :key="'live-' + ev.id"
       :to="{ name: 'event', params: { id: ev.id } }"
-      class="pl-live"
+      class="pl-live data-in"
       :data-testid="'live-' + ev.id"
     >
       <span class="pl-badge pl-badge--live"><span class="pl-badge__dot"></span>Live now</span>
@@ -301,7 +350,7 @@ function roleTone(label) {
     </RouterLink>
 
     <div class="pl-page__head">
-      <div class="pl-tabs" role="tablist" aria-label="Event list">
+      <div ref="tabsEl" class="pl-tabs has-ink" role="tablist" aria-label="Event list">
         <button
           v-for="t in WEB_TABS"
           :key="t.key"
@@ -310,10 +359,11 @@ function roleTone(label) {
           role="tab"
           :aria-selected="activeTab === t.key"
           :data-testid="'events-tab-' + t.key"
-          @click="tab = t.key"
+          @click="pickTab(t.key)"
         >
           {{ t.label }}<span v-if="tabLists[t.key].length" class="pl-count">{{ tabLists[t.key].length }}</span>
         </button>
+        <span class="pl-tabs-ink" :class="{ 'is-ready': ink.ready }" :style="inkStyle" aria-hidden="true"></span>
       </div>
       <div class="pl-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 1 1 16 0" /></svg>
@@ -321,46 +371,61 @@ function roleTone(label) {
       </div>
     </div>
 
-    <p v-if="loading" class="pl-meta">Loading...</p>
-    <div v-else-if="events.length === 0" class="pl-empty" data-testid="no-events">
+    <SkeletonLoader v-if="loading" :rows="5" label="Loading your events…" />
+    <div v-else-if="events.length === 0" class="pl-empty data-in" data-testid="no-events">
       <strong>No events yet</strong>
       <span class="pl-meta">Join one with a code, or create your own.</span>
       <RouterLink :to="{ name: 'event-new' }" class="btn btn-primary mt-2">Create event</RouterLink>
     </div>
-    <div v-else-if="shownEvents.length === 0" class="pl-empty">
-      <strong>{{ search ? 'No events match your search' : 'Nothing here yet' }}</strong>
-      <span class="pl-meta">{{ search ? 'Try a different name or venue.' : 'Events in this tab will show up here.' }}</span>
+    <!-- Each tab's list slides in from the side the tab is on; typing in the search does not re-run it. The direction
+         is a CSS variable on the wrapper, so the list that is leaving reads the new direction too. -->
+    <div v-else class="pl-tabswap data-in" :style="{ '--tab-shift': tabDir === 'right' ? '16px' : '-16px' }">
+      <Transition name="tabswap">
+        <div :key="activeTab" role="tabpanel">
+          <div v-if="shownEvents.length === 0" class="pl-empty">
+            <strong>{{ search ? 'No events match your search' : 'Nothing here yet' }}</strong>
+            <span class="pl-meta">{{ search ? 'Try a different name or venue.' : 'Events in this tab will show up here.' }}</span>
+          </div>
+          <ul v-else class="pl-list" data-testid="event-list">
+            <li v-for="ev in shownEvents" :key="ev.id">
+              <RouterLink :to="{ name: 'event', params: { id: ev.id } }" class="pl-row">
+                <span class="pl-row__lead">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v16H4V5m3-3v6m10-6v6M4 10h16" /></svg>
+                </span>
+                <span class="pl-row__body">
+                  <span class="pl-row__title">{{ ev.name }}</span>
+                  <span class="pl-row__meta" data-testid="event-list-when">
+                    <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
+                    <template v-if="!ev.startsAt && !ev.venue">No date yet</template>
+                  </span>
+                </span>
+                <span class="pl-row__trail">
+                  <span v-if="ev.isSimulation" class="pl-badge pl-badge--info">Simulation</span>
+                  <span class="pl-role" :class="roleClass(ev)" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
+                  <svg class="pl-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                </span>
+              </RouterLink>
+            </li>
+          </ul>
+        </div>
+      </Transition>
     </div>
-    <ul v-else class="pl-list" data-testid="event-list">
-      <li v-for="ev in shownEvents" :key="ev.id">
-        <RouterLink :to="{ name: 'event', params: { id: ev.id } }" class="pl-row">
-          <span class="pl-row__lead">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v16H4V5m3-3v6m10-6v6M4 10h16" /></svg>
-          </span>
-          <span class="pl-row__body">
-            <span class="pl-row__title">{{ ev.name }}</span>
-            <span class="pl-row__meta" data-testid="event-list-when">
-              <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
-              <template v-if="!ev.startsAt && !ev.venue">No date yet</template>
-            </span>
-          </span>
-          <span class="pl-row__trail">
-            <span v-if="ev.isSimulation" class="pl-badge pl-badge--info">Simulation</span>
-            <span class="pl-role" :class="roleClass(ev)" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
-            <svg class="pl-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-          </span>
-        </RouterLink>
-      </li>
-    </ul>
 
     <!-- A name-only test event for virtual groups (Stage 3) -->
-    <details class="pl-meta">
-      <summary>Create a simulation event (virtual groups for testing)</summary>
-      <form class="mt-2 d-flex gap-2" style="max-width: 28rem" @submit.prevent="createSimulation">
-        <label for="sim-name" class="visually-hidden">Simulation name</label>
-        <input id="sim-name" v-model="simName" class="form-control" placeholder="Simulation name" maxlength="80" required data-testid="sim-event-name" />
-        <button class="btn btn-outline-secondary" type="submit" data-testid="create-sim-btn">Create</button>
-      </form>
-    </details>
+    <div class="pl-meta">
+      <button type="button" class="pl-disclosure" :aria-expanded="simOpen ? 'true' : 'false'" aria-controls="sim-form" @click="simOpen = !simOpen">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+        Create a simulation event (virtual groups for testing)
+      </button>
+      <ExpandTransition>
+        <div v-if="simOpen" id="sim-form">
+          <form class="d-flex gap-2 pt-2" style="max-width: 28rem" @submit.prevent="createSimulation">
+            <label for="sim-name" class="visually-hidden">Simulation name</label>
+            <input id="sim-name" v-model="simName" class="form-control" placeholder="Simulation name" maxlength="80" required data-testid="sim-event-name" />
+            <button class="btn btn-outline-secondary" type="submit" data-testid="create-sim-btn">Create</button>
+          </form>
+        </div>
+      </ExpandTransition>
+    </div>
   </main>
 </template>

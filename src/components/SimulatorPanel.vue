@@ -130,7 +130,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="d-grid gap-3" data-testid="simulator-panel">
+  <div class="d-grid gap-3" data-testid="simulator-panel" :aria-busy="busy ? 'true' : null">
     <div class="card">
       <div class="card-body d-flex flex-wrap align-items-center gap-3">
         <span

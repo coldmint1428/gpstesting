@@ -14,6 +14,7 @@ import BottomSheet from './BottomSheet.vue'
 import { AUDIENCES, audienceText } from '../composables/useBroadcasts'
 import { askConfirm, toast } from '../composables/useNotify'
 import { formatTimeSeconds } from '../utils/time'
+import ExpandTransition from './ExpandTransition.vue'
 
 const props = defineProps({
   broadcasts: { type: Object, required: true }, // useBroadcasts()
@@ -119,7 +120,7 @@ async function clearOne(b) {
 </script>
 
 <template>
-  <section class="card bc-panel" data-testid="broadcast-panel">
+  <section class="card bc-panel" data-testid="broadcast-panel" :aria-busy="sending ? 'true' : null">
     <div class="card-body d-grid gap-2">
       <div class="d-flex flex-wrap align-items-center gap-2">
         <h3 class="h6 mb-0 flex-grow-1">Message everyone</h3>
@@ -139,63 +140,65 @@ async function clearOne(b) {
 
       <!-- The form: inline on the website, in a bottom sheet on the phone -->
       <component :is="native ? BottomSheet : 'div'" v-bind="native ? { open, title: 'Message everyone' } : {}" @close="open = false">
-        <form v-if="native || open" class="d-grid gap-2" data-testid="broadcast-form" @submit.prevent="send">
-          <div>
-            <div class="small fw-semibold mb-1">Quick messages</div>
-            <div class="d-flex flex-wrap gap-1" role="group" aria-label="Quick messages">
-              <button
-                v-for="q in QUICK"
-                :key="q.key"
-                type="button"
-                class="btn btn-sm rounded-pill"
-                :class="quick === q.key ? (q.urgent ? 'btn-danger' : 'btn-dark') : q.urgent ? 'btn-outline-danger' : 'btn-outline-secondary'"
-                :data-testid="'broadcast-quick-' + q.key"
-                @click="useQuick(q)"
-              >
-                {{ q.label }}
-              </button>
+        <ExpandTransition>
+          <form v-if="native || open" class="d-grid gap-2" data-testid="broadcast-form" @submit.prevent="send">
+            <div>
+              <div class="small fw-semibold mb-1">Quick messages</div>
+              <div class="d-flex flex-wrap gap-1" role="group" aria-label="Quick messages">
+                <button
+                  v-for="q in QUICK"
+                  :key="q.key"
+                  type="button"
+                  class="btn btn-sm rounded-pill"
+                  :class="quick === q.key ? (q.urgent ? 'btn-danger' : 'btn-dark') : q.urgent ? 'btn-outline-danger' : 'btn-outline-secondary'"
+                  :data-testid="'broadcast-quick-' + q.key"
+                  @click="useQuick(q)"
+                >
+                  {{ q.label }}
+                </button>
+              </div>
             </div>
-          </div>
-          <div class="row g-2">
-            <div :class="values.length || audience === 'sector' || audience === 'category' ? 'col-12 col-sm-6' : 'col-12'">
-              <label class="form-label small fw-semibold mb-1" for="bc-audience">Who gets it</label>
-              <select id="bc-audience" v-model="audience" class="form-select" data-testid="broadcast-audience">
-                <option v-for="a in AUDIENCES" :key="a.value" :value="a.value">{{ a.label }}</option>
-              </select>
+            <div class="row g-2">
+              <div :class="values.length || audience === 'sector' || audience === 'category' ? 'col-12 col-sm-6' : 'col-12'">
+                <label class="form-label small fw-semibold mb-1" for="bc-audience">Who gets it</label>
+                <select id="bc-audience" v-model="audience" class="form-select" data-testid="broadcast-audience">
+                  <option v-for="a in AUDIENCES" :key="a.value" :value="a.value">{{ a.label }}</option>
+                </select>
+              </div>
+              <div v-if="audience === 'sector' || audience === 'category'" class="col-12 col-sm-6">
+                <label class="form-label small fw-semibold mb-1" for="bc-value">{{ audience === 'sector' ? 'Sector' : 'Category' }}</label>
+                <select id="bc-value" v-model="value" class="form-select" :disabled="!values.length" data-testid="broadcast-value">
+                  <option v-if="!values.length" value="">None set in Group details</option>
+                  <option v-for="v in values" :key="v" :value="v">{{ v }}</option>
+                </select>
+              </div>
             </div>
-            <div v-if="audience === 'sector' || audience === 'category'" class="col-12 col-sm-6">
-              <label class="form-label small fw-semibold mb-1" for="bc-value">{{ audience === 'sector' ? 'Sector' : 'Category' }}</label>
-              <select id="bc-value" v-model="value" class="form-select" :disabled="!values.length" data-testid="broadcast-value">
-                <option v-if="!values.length" value="">None set in Group details</option>
-                <option v-for="v in values" :key="v" :value="v">{{ v }}</option>
-              </select>
+            <div>
+              <label class="form-label small fw-semibold mb-1" for="bc-body">Message</label>
+              <textarea
+                id="bc-body"
+                v-model="body"
+                class="form-control"
+                rows="3"
+                maxlength="300"
+                placeholder="e.g. Lightning alert: take shelter now."
+                data-testid="broadcast-body-input"
+                @input="quick = ''"
+              ></textarea>
+              <div class="form-text text-end">{{ body.length }} / 300</div>
             </div>
-          </div>
-          <div>
-            <label class="form-label small fw-semibold mb-1" for="bc-body">Message</label>
-            <textarea
-              id="bc-body"
-              v-model="body"
-              class="form-control"
-              rows="3"
-              maxlength="300"
-              placeholder="e.g. Lightning alert: take shelter now."
-              data-testid="broadcast-body-input"
-              @input="quick = ''"
-            ></textarea>
-            <div class="form-text text-end">{{ body.length }} / 300</div>
-          </div>
-          <div class="d-flex flex-wrap gap-3">
-            <div class="form-check">
-              <input id="bc-urgent" v-model="urgent" class="form-check-input" type="checkbox" data-testid="broadcast-urgent" />
-              <label class="form-check-label" for="bc-urgent">Urgent (red)</label>
+            <div class="d-flex flex-wrap gap-3">
+              <div class="form-check">
+                <input id="bc-urgent" v-model="urgent" class="form-check-input" type="checkbox" data-testid="broadcast-urgent" />
+                <label class="form-check-label" for="bc-urgent">Urgent (red)</label>
+              </div>
             </div>
-          </div>
-          <div v-if="formError" class="small text-danger" role="alert" data-testid="broadcast-error">{{ formError }}</div>
-          <button type="submit" class="btn" :class="urgent ? 'btn-danger' : 'btn-primary'" :disabled="sending || broadcasts.busy.value" data-testid="broadcast-send">
-            {{ sending ? 'Checking…' : 'Send' }}
-          </button>
-        </form>
+            <div v-if="formError" class="small text-danger" role="alert" data-testid="broadcast-error">{{ formError }}</div>
+            <button type="submit" class="btn" :class="urgent ? 'btn-danger' : 'btn-primary'" :disabled="sending || broadcasts.busy.value" data-testid="broadcast-send">
+              {{ sending ? 'Checking…' : 'Send' }}
+            </button>
+          </form>
+        </ExpandTransition>
       </component>
 
       <!-- The last day's messages: who has read them -->
@@ -225,13 +228,17 @@ async function clearOne(b) {
               Take down
             </button>
           </div>
-          <ul v-if="expanded === b.id && statuses[b.id]" class="small mb-0 mt-1 ps-3" data-testid="broadcast-waiting">
-            <li v-for="(w, i) in statuses[b.id].waiting" :key="i">
-              {{ w.name }}<span v-if="w.group" class="text-muted"> · {{ w.group }}{{ w.ic ? ' (IC)' : '' }}</span>
-              <span v-if="w.radio" class="text-muted"> · radio {{ w.radio }}</span>
-              <span class="text-muted"> · {{ w.seen ? 'seen, not confirmed' : 'not seen' }}</span>
-            </li>
-          </ul>
+          <ExpandTransition>
+            <div v-if="expanded === b.id && statuses[b.id]">
+              <ul class="small mb-0 pt-1 ps-3" data-testid="broadcast-waiting">
+                <li v-for="(w, i) in statuses[b.id].waiting" :key="i">
+                  {{ w.name }}<span v-if="w.group" class="text-muted"> · {{ w.group }}{{ w.ic ? ' (IC)' : '' }}</span>
+                  <span v-if="w.radio" class="text-muted"> · radio {{ w.radio }}</span>
+                  <span class="text-muted"> · {{ w.seen ? 'seen, not confirmed' : 'not seen' }}</span>
+                </li>
+              </ul>
+            </div>
+          </ExpandTransition>
         </li>
       </ul>
     </div>

@@ -109,8 +109,14 @@ async function logout() {
   <div v-if="pendingNavigation" class="nav-loading" role="status" aria-live="polite" data-testid="nav-loading">
     <span class="nav-loading-bar"></span><span class="nav-loading-text">Loading…</span>
   </div>
+  <!-- A page change from the top navigation fades the old page out and slides the new one up (motion.css). The
+       wrapper gives the transition one element to animate, whatever the page's own template looks like. -->
   <RouterView v-slot="{ Component, route }">
-    <component :is="Component" :key="String(route.name) + ':' + (route.params.id || '')" />
+    <Transition name="page" mode="out-in">
+      <div :key="String(route.name) + ':' + (route.params.id || '')" class="page-shell">
+        <component :is="Component" />
+      </div>
+    </Transition>
   </RouterView>
   <PhoneTabBar v-if="isNativeApp && auth.isLoggedIn && appTab" :items="APP_TABS" :active="appTab" />
   <NotifyHost />

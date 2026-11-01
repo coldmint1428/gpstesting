@@ -104,7 +104,7 @@ async function startOver() {
 </script>
 
 <template>
-  <main class="container py-3 wizard">
+  <main class="container py-3 wizard" :aria-busy="saving ? 'true' : null">
     <div class="d-flex align-items-center gap-2 mb-3">
       <h1 class="h4 mb-0 me-auto">Create an event</h1>
       <button type="button" class="btn btn-sm btn-link text-danger" @click="startOver">Start over</button>

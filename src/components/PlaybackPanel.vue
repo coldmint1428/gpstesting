@@ -13,6 +13,8 @@ import { addRows, recordingToCsv, csvToRecording, csvFileName, downloadText } fr
 import { formatTime, formatDay, formatDayTime, sgtParts } from '../utils/time'
 import { askConfirm, toast } from '../composables/useNotify'
 import PlaybackPlayer from './PlaybackPlayer.vue'
+import SkeletonLoader from './SkeletonLoader.vue'
+import { useLoadGate } from '../composables/usePageReady'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -27,6 +29,8 @@ const DAY_MS = 24 * 3600 * 1000
 
 const items = ref([])
 const loadingList = ref(false)
+// Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
+useLoadGate(() => loadingList.value)
 const errorMsg = ref('')
 const infoMsg = ref('')
 const busyKey = ref(null) // which item is loading
@@ -238,7 +242,7 @@ onUnmounted(() => clearInterval(liveTimer))
       <p class="small text-muted">
         Recordings stay online until 11:59 pm, 7 days after the day they ended. Download a CSV to keep one longer.
       </p>
-      <p v-if="loadingList && !items.length" class="text-muted small">Loading...</p>
+      <SkeletonLoader v-if="loadingList && !items.length" :rows="3" label="Loading recordings…" />
       <p v-else-if="!items.length" class="text-muted small" data-testid="no-recordings">
         No recordings yet. They appear here once the event has been started and ICs share their location.
       </p>
