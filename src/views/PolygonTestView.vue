@@ -805,9 +805,8 @@ onUnmounted(() => {
     <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
       <div>
         <h1 v-if="!embedded" class="h4 mb-1">Polygon bench</h1>
-        <p v-else class="small text-muted mb-1" data-testid="zones-intro">
-          Every area drawn here is one of this event's zones, with a code the plan and the radio use.
-          <template v-if="!canEdit"> Only the event's root and planners can change them.</template>
+        <p v-else-if="!canEdit" class="small text-muted mb-1" data-testid="zones-intro">
+          <template v-if="!canEdit">Only the root and planners can edit zones.</template>
         </p>
         <!-- Who else is on the bench. A planner working alone sees nothing here at all, which is
              the point: collaboration chrome on an empty bench is noise. A planner's own other

@@ -415,10 +415,10 @@ watch(
       </header>
 
       <p v-if="phase === 'scheduled'" class="pv-sched-line" data-testid="sched-scheduled">
-        The event starts {{ formatDayTime(session.startsAt) }}. These are the plan's times, all still to come.
+        Starts {{ formatDayTime(session.startsAt) }}.
       </p>
       <p v-if="phase === 'ended'" class="pv-sched-line" data-testid="sched-ended">
-        The event ended {{ formatTime(endedAt) }}. This is the timetable as it stood when it closed.
+        Ended {{ formatTime(endedAt) }}.
       </p>
 
       <!-- A read that failed says so and keeps the last answer: a schedule that blanks itself is worse than an old one. -->
@@ -463,13 +463,13 @@ watch(
 
       <div v-else-if="!rows.length" class="pv-sched-empty" data-testid="sched-empty">
         <template v-if="phase === 'none'">
-          No schedule yet. It appears here when a planner starts the event on a plan.
+          No schedule yet.
         </template>
         <template v-else-if="!session.planId">
-          This event is running without a plan, so there is no timetable to follow.
+          This event is running without a plan.
         </template>
         <template v-else-if="!whole && !groupName">
-          You are not in a group yet. Ask the root, a planner or a group admin to add you, and your moments appear here.
+          You are not in a group yet.
         </template>
         <template v-else-if="whole">This plan has no moments in it yet.</template>
         <template v-else>This plan has no moments for {{ groupName }} yet.</template>
@@ -526,15 +526,6 @@ watch(
           </div>
         </li>
       </ol>
-
-      <p v-if="rows.length" class="pv-sched-foot">
-        Times are the plan's own clock, T+0 at {{ t0Text }}. A moment marked <em>not required</em> means
-        {{ whole ? 'the group is' : 'your group is' }} off site then, so there is nothing to arrive at.<span
-          v-if="canPress"
-          class="pv-sched-foot-more"
-        ><strong>We’re here</strong> records the moment the clock is on; a moment also closes itself when your phone is
-        close enough to its point.</span>
-      </p>
     </section>
   </div>
 </template>

@@ -56,59 +56,33 @@ const myGpsText = computed(() => {
 </script>
 
 <template>
-  <div v-if="mine || others.length" class="d-grid gap-2" data-testid="sos-banners">
+  <div v-if="mine || others.length" class="kp-stack" style="gap: 8px" data-testid="sos-banners">
     <!-- My SOS -->
-    <div v-if="mine" class="alert alert-danger mb-0 py-2 sos-banner" role="alert" aria-live="assertive" data-testid="sos-mine">
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="flex-grow-1">
-          <strong>SOS sent.</strong> Everyone in this event can see it. {{ myGpsText }}
-          <span class="d-block small">
-            <template v-if="myHelpers"><strong>On the way:</strong> {{ myHelpers }}</template>
-            <template v-else>No one has said they are on the way yet.</template>
-          </span>
-        </span>
-        <button type="button" class="btn btn-sm btn-light" :disabled="busy" data-testid="sos-safe" @click="$emit('resolve', mine.id)">I'm safe</button>
+    <div v-if="mine" class="kp-banner kp-banner-danger" role="alert" aria-live="assertive" data-testid="sos-mine">
+      <div class="kp-banner-text">
+        <strong>SOS sent.</strong> {{ myGpsText }}
+        <small>
+          <template v-if="myHelpers"><strong>On the way:</strong> {{ myHelpers }}</template>
+          <template v-else>No one has said they are on the way yet.</template>
+        </small>
       </div>
+      <button type="button" class="btn btn-sm btn-danger" :disabled="busy" data-testid="sos-safe" @click="$emit('resolve', mine.id)">I'm safe</button>
     </div>
 
     <!-- Other people's SOS -->
-    <div
-      v-for="o in others"
-      :key="o.a.id"
-      class="alert alert-danger mb-0 py-2 sos-banner"
-      role="alert"
-      aria-live="assertive"
-      :data-testid="'sos-' + o.a.id"
-    >
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="flex-grow-1 min-w-0">
-          <strong>SOS: {{ o.name }} needs help</strong><span v-if="o.group"> · {{ o.group }}</span>
-          <span class="small"> · {{ o.ago }}</span>
-          <span v-if="o.a.note" class="d-block">"{{ o.a.note }}"</span>
-          <span class="d-block small">
-            {{ o.where }}<template v-if="o.helpers"> · On the way: {{ o.helpers }}</template>
-          </span>
-        </span>
-        <div class="d-flex flex-wrap gap-2">
-          <button v-if="o.a.lat != null" type="button" class="btn btn-sm btn-light" data-testid="sos-show" @click="$emit('show', o.a.id)">Show on map</button>
-          <button v-if="!o.iAmHelping" type="button" class="btn btn-sm btn-danger" :disabled="busy" data-testid="sos-help" @click="$emit('help', o.a.id)">
-            I'm on my way
-          </button>
-          <span v-else class="badge text-bg-light align-self-center">You are on the way</span>
-          <button v-if="o.canResolve" type="button" class="btn btn-sm btn-outline-dark" :disabled="busy" data-testid="sos-resolve" @click="$emit('resolve', o.a.id)">
-            Mark handled
-          </button>
-        </div>
+    <div v-for="o in others" :key="o.a.id" class="kp-banner kp-banner-danger" role="alert" aria-live="assertive" :data-testid="'sos-' + o.a.id">
+      <div class="kp-banner-text">
+        <strong>SOS: {{ o.name }} needs help</strong><span v-if="o.group"> · {{ o.group }}</span>
+        <span class="small"> · {{ o.ago }}</span>
+        <div v-if="o.a.note">"{{ o.a.note }}"</div>
+        <small>{{ o.where }}<template v-if="o.helpers"> · On the way: {{ o.helpers }}</template></small>
+      </div>
+      <div class="kp-actions">
+        <button v-if="o.a.lat != null" type="button" class="btn btn-sm btn-outline-secondary" data-testid="sos-show" @click="$emit('show', o.a.id)">Show on map</button>
+        <button v-if="!o.iAmHelping" type="button" class="btn btn-sm btn-danger" :disabled="busy" data-testid="sos-help" @click="$emit('help', o.a.id)">I'm on my way</button>
+        <span v-else class="kp-chip">You are on the way</span>
+        <button v-if="o.canResolve" type="button" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="sos-resolve" @click="$emit('resolve', o.a.id)">Mark handled</button>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.sos-banner {
-  border-left: 0.35rem solid var(--danger-strong);
-}
-.min-w-0 {
-  min-width: 0;
-}
-</style>
