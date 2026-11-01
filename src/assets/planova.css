@@ -1948,3 +1948,12 @@
     height: 28px;
   }
 }
+
+/* On a phone the credits line under the map wraps to two lines, and the hint sat on top of it (QA 1 Nov). */
+@media (max-width: 640px) {
+  .pv-hint {
+    bottom: 44px;
+    right: 12px;
+    max-width: none;
+  }
+}
