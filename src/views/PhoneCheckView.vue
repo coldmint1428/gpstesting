@@ -130,112 +130,71 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="container py-3 setup pv-has-tabs" data-testid="phone-check">
+  <main class="kp-page kp-page-sm pv-has-tabs" data-testid="phone-check">
     <!-- Not the phone app: nothing to set up here -->
-    <template v-if="!readiness.isNative">
-      <h1 class="h4">Set up sharing</h1>
-      <p class="text-muted">These steps are for the phone app. In a browser, just allow location when asked.</p>
-      <button class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to the event</button>
-    </template>
+    <div v-if="!readiness.isNative" class="kp-card kp-setup">
+      <h1>Set up sharing</h1>
+      <p class="kp-sub mb-3">This is for the phone app. In a browser, just allow location when asked.</p>
+      <button class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to event</button>
+    </div>
 
-    <p v-else-if="!loaded" class="text-muted text-center mt-5">Checking your phone…</p>
+    <p v-else-if="!loaded" class="kp-empty">Checking your phone…</p>
 
     <!-- One step -->
-    <section v-else-if="current" class="text-center" :data-testid="'step-' + current.key">
-      <div class="d-flex justify-content-between align-items-center small text-muted mb-2">
-        <span data-testid="step-count">Step {{ stepNumber }} of {{ steps.length }}</span>
-        <button class="btn btn-link btn-sm text-muted p-0" data-testid="check-back" @click="leave">Not now</button>
+    <section v-else-if="current" class="kp-card kp-setup" :data-testid="'step-' + current.key">
+      <div class="kp-inline mb-2" style="justify-content: space-between">
+        <span class="small text-muted" data-testid="step-count">Step {{ stepNumber }} of {{ steps.length }}</span>
+        <button class="btn btn-sm btn-ghost" data-testid="check-back" @click="leave">Not now</button>
       </div>
-      <div class="progress mb-4" role="progressbar" :aria-valuenow="stepNumber - 1" :aria-valuemax="steps.length" style="height: 6px">
-        <div class="progress-bar" :style="{ width: progressPct + '%', background: 'var(--brand-primary)' }"></div>
-      </div>
+      <div class="kp-progress" role="progressbar" :aria-valuenow="stepNumber - 1" :aria-valuemax="steps.length"><span :style="{ width: progressPct + '%' }"></span></div>
 
-      <div class="step-icon mb-3" aria-hidden="true"><svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path :d="stepIcon" /></svg></div>
-      <h1 class="h4 mb-2">{{ current.title }}</h1>
-      <p class="text-muted mb-1">{{ current.body }}</p>
-      <p v-if="!current.required" class="small text-muted mb-3">Recommended</p>
+      <div class="kp-setup-icon" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path :d="stepIcon" /></svg></div>
+      <h1>{{ current.title }}</h1>
+      <p class="kp-sub">{{ current.body }}</p>
+      <span v-if="!current.required" class="kp-chip mt-2">Recommended</span>
 
-      <div
-        v-if="tried.has(current.key)"
-        class="alert alert-info small text-start mt-3"
-        role="status"
-        data-testid="step-hint"
-      >
+      <div v-if="tried.has(current.key)" class="alert alert-info small text-start mt-3" role="status" data-testid="step-hint">
         <strong>Not set yet.</strong> {{ current.tapHint }}
       </div>
-      <p v-else class="small text-muted mt-3">{{ current.tapHint }}</p>
+      <p v-else class="kp-note mt-3">{{ current.tapHint }}</p>
 
       <div class="d-grid gap-2 mt-3">
-        <button
-          v-if="current.action"
-          class="btn btn-primary btn-lg"
-          :disabled="busy"
-          data-testid="step-action"
-          @click="doStep(current)"
-        >
+        <button v-if="current.action" class="btn btn-primary btn-lg" :disabled="busy" data-testid="step-action" @click="doStep(current)">
           {{ current.action }}
         </button>
-        <button
-          v-if="!current.required"
-          class="btn btn-link text-muted"
-          data-testid="step-skip"
-          @click="skip(current)"
-        >
-          Skip for now
-        </button>
+        <button v-if="!current.required" class="btn btn-ghost" data-testid="step-skip" @click="skip(current)">Skip for now</button>
       </div>
     </section>
 
     <!-- All steps done (or skipped) -->
-    <section v-else class="text-center mt-4" data-testid="setup-done">
-      <div class="step-icon mb-3 text-success" aria-hidden="true">✓</div>
+    <section v-else class="kp-card kp-setup" data-testid="setup-done">
+      <div class="kp-setup-icon" aria-hidden="true">✓</div>
       <template v-if="wantsToShare">
-        <h1 class="h4 mb-2">You're ready</h1>
-        <p v-if="!startError" class="text-muted" data-testid="setup-starting">Starting to share your location…</p>
+        <h1>You're ready</h1>
+        <p v-if="!startError" class="kp-sub" data-testid="setup-starting">Starting to share your location…</p>
         <div v-else class="alert alert-danger small text-start" role="alert">{{ startError }}</div>
       </template>
       <template v-else>
-        <h1 class="h4 mb-2">{{ steps.length ? "You're all set" : 'Your phone is ready' }}</h1>
-        <p class="text-muted">When the event starts, tap <strong>Share my location</strong> (or Start sharing in the notification).</p>
+        <h1>{{ steps.length ? "You're all set" : 'Your phone is ready' }}</h1>
+        <p class="kp-sub">Tap <strong>Share my location</strong> when the event starts.</p>
       </template>
 
-      <ul class="list-unstyled small text-start d-inline-block mt-2" data-testid="setup-summary">
-        <li v-for="item in items" :key="item.key" :data-testid="'summary-' + item.key">
+      <ul class="kp-list text-start mt-3" data-testid="setup-summary">
+        <li v-for="item in items" :key="item.key" class="kp-row py-2" :data-testid="'summary-' + item.key">
           <span :class="item.ok ? 'text-success' : 'text-warning'">{{ item.ok ? '✓' : '!' }}</span>
-          {{ item.label }}<span v-if="!item.ok" class="text-muted"> (skipped)</span>
+          <span class="me-auto">{{ item.label }}</span>
+          <span v-if="!item.ok" class="small text-muted">Skipped</span>
         </li>
       </ul>
-      <p v-if="skippedItems.length" class="small text-muted">Skipped items make sharing less reliable. They will be asked again next time.</p>
+      <p v-if="skippedItems.length" class="kp-note">Skipped items make sharing less reliable.</p>
 
-      <div class="d-grid gap-2 mt-2">
+      <div class="d-grid gap-2 mt-3">
         <button v-if="wantsToShare && startError" class="btn btn-success btn-lg" @click="startSharing">Try again</button>
-        <button v-if="!wantsToShare || startError" class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to the event</button>
+        <button v-if="!wantsToShare || startError" class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to event</button>
       </div>
     </section>
 
     <!-- A step just ticked -->
-    <div v-if="justDone" class="done-toast" role="status" data-testid="step-done">✓ Done</div>
+    <div v-if="justDone" class="kp-done-toast" role="status" data-testid="step-done">✓ Done</div>
   </main>
 </template>
-
-<style scoped>
-.setup {
-  max-width: 480px;
-}
-.step-icon {
-  font-size: 3.5rem;
-  line-height: 1;
-  color: var(--brand-primary);
-}
-.done-toast {
-  position: fixed;
-  left: 50%;
-  bottom: 2rem;
-  transform: translateX(-50%);
-  background: var(--status-success-fg);
-  color: #fff;
-  padding: 0.4rem 1rem;
-  border-radius: 999px;
-  font-weight: 600;
-}
-</style>

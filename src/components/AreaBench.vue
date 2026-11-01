@@ -2748,12 +2748,12 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 <template>
   <div class="row g-3">
     <!-- ============ The map ============ -->
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-xl-7">
       <div
         class="bench-wrap position-relative"
         :class="{ 'bench-drawing': mode === 'polygons' }"
       >
-        <div ref="mapEl" class="bench-map rounded border" data-testid="bench-map"></div>
+        <div ref="mapEl" class="bench-map" data-testid="bench-map"></div>
 
         <!-- Undo and redo are NOT here. They act on the whole document, not on the map, so they
              live on the page next to the other document-wide controls -- see
@@ -2850,10 +2850,9 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
     </div>
 
     <!-- ============ Controls ============ -->
-    <div class="col-12 col-lg-6">
-      <!-- The controls take the right half of a large screen, split in two: the areas being
-           drawn, and the pictures they are drawn over. Below lg the split collapses and
-           everything stacks in this order. -->
+    <div class="col-12 col-xl-5">
+      <!-- Under the map on a tablet and a small laptop, split in two: the areas being drawn, and the pictures they are
+           drawn over. Beside the map from xl, where they stack; on a phone they stack too. -->
       <div class="row g-3">
         <!-- Looking, not editing: the map moves, nothing else does. -->
         <div v-if="!canEdit" class="col-12">
@@ -2875,7 +2874,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 
         <!-- The areas come first: drawing them is what the bench is for, and the list of them
              is what the planner keeps coming back to. -->
-        <div class="col-12" :class="{ 'col-lg-6': canEdit }">
+        <div class="col-12" :class="{ 'col-md-6 col-xl-12': canEdit }">
           <!-- Drawing -->
           <div v-if="canEdit" class="card mb-3">
             <div class="card-body">
@@ -2973,7 +2972,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 
         <!-- Floor plans. One card each, because each one has its own name, its own show/hide
              and its own placement. -->
-        <div v-if="canEdit" class="col-12 col-lg-6">
+        <div v-if="canEdit" class="col-12 col-md-6 col-xl-12">
           <div class="card">
             <div class="card-body">
               <!-- How full the bench is, against the 4 MB the database enforces, as a ring. This is

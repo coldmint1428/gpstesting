@@ -29,9 +29,7 @@ watch(
               <button type="button" class="btn-close btn-close-white" aria-label="Close" :disabled="busy" @click="emit('close')"></button>
             </div>
             <div class="modal-body">
-              <p class="mb-2">
-                Everyone in this event gets an alert. Your location is turned on and shown on the map until the SOS ends.
-              </p>
+              <p class="mb-2">Everyone in this event is alerted and sees your location until the SOS ends.</p>
               <label for="sos-note" class="form-label small mb-1">What happened? (optional)</label>
               <input
                 id="sos-note"

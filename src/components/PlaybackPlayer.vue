@@ -371,15 +371,15 @@ onUnmounted(() => {
   <div data-testid="playback-player">
     <!-- Header -->
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-      <button class="btn btn-sm btn-outline-secondary" data-testid="playback-back" @click="emit('close')">← All recordings</button>
-      <h2 class="h6 mb-0 flex-grow-1">{{ title }}</h2>
-      <button v-if="canDownload" class="btn btn-sm btn-outline-primary" data-testid="player-download" @click="emit('download')">
-        Download CSV
+      <button class="btn btn-sm btn-ghost" data-testid="playback-back" @click="emit('close')">‹ Recordings</button>
+      <h2 class="kp-title">{{ title }}</h2>
+      <button v-if="canDownload" class="btn btn-sm btn-outline-secondary" data-testid="player-download" @click="emit('download')">
+        CSV
       </button>
       <button v-if="live" class="btn btn-sm btn-live" data-testid="go-live-btn" @click="emit('go-live')">Back to live</button>
     </div>
     <div v-if="fileName" class="alert alert-info py-2 small" role="status" data-testid="file-banner">
-      Replaying from file: <strong>{{ fileName }}</strong> (not the live record). The file stays on this computer.
+      From file: <strong>{{ fileName }}</strong>
     </div>
 
     <!-- Map + selected person's card -->
@@ -477,7 +477,7 @@ onUnmounted(() => {
           </div>
           <div class="form-check form-switch mb-0">
             <input id="show-trails" v-model="showTrails" class="form-check-input" type="checkbox" data-testid="trails-switch" />
-            <label class="form-check-label small" for="show-trails">Show trails (last 10 min)</label>
+            <label class="form-check-label small" for="show-trails">Trails</label>
           </div>
           <select v-model="groupFilter" class="form-select form-select-sm w-auto" aria-label="Group filter" data-testid="group-filter">
             <option value="">All groups</option>
@@ -493,11 +493,10 @@ onUnmounted(() => {
       <span><span class="dot dot-stale me-1" style="background-color: #0072B2"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped me-1"></span>Stopped sharing</span>
-      <span>Dashed trail = no readings (e.g. tunnel)</span>
+      <span>Dashed = no readings</span>
     </div>
 
-    <p class="small text-muted mb-1">Tap a person to see their trail.</p>
-    <p v-if="peopleNow.length === 0" class="small text-muted" data-testid="playback-nobody">Nobody is sharing at this moment.</p>
+        <p v-if="peopleNow.length === 0" class="small text-muted" data-testid="playback-nobody">Nobody is sharing at this moment.</p>
     <ul v-else class="list-group small" data-testid="playback-people">
       <li
         v-for="p in peopleNow"

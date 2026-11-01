@@ -62,75 +62,54 @@ async function removeGroup(group) {
 
 <template>
   <section>
-    <h2 class="h5 mb-1">Create groups &amp; assign people</h2>
-    <p class="text-muted small mb-3">
-      Each person can be in one group. Every group with people needs at least one <strong>IC</strong>
-      (the phone that shares the group's location). An <strong>Admin</strong> manages their group's members.
-    </p>
+    <div class="kp-card-head">
+      <h2 class="kp-title">Groups</h2>
+      <span class="kp-chip">{{ unassigned.length }} without a group</span>
+    </div>
+    <p class="kp-sub mb-3">Each group with people needs at least one IC, the phone that shares its location.</p>
 
-    <form class="row g-2 align-items-end mb-3" @submit.prevent="addGroup">
-      <div class="col-12 col-sm">
-        <label for="new-group-name" class="form-label">New group</label>
-        <input
-          id="new-group-name"
-          v-model="newName"
-          class="form-control"
-          :class="{ 'is-invalid': addError }"
-          maxlength="50"
-          placeholder="e.g. Scouts"
-          data-testid="wiz-group-name"
-        />
-        <div v-if="addError" class="invalid-feedback">{{ addError }}</div>
+    <form class="mb-3" @submit.prevent="addGroup">
+      <label for="new-group-name" class="form-label">New group</label>
+      <div class="kp-inline">
+        <input id="new-group-colour" v-model="newColour" type="color" class="form-control form-control-color kp-colour" aria-label="Colour" />
+        <input id="new-group-name" v-model="newName" class="form-control" :class="{ 'is-invalid': addError }" maxlength="50" placeholder="e.g. Scouts" data-testid="wiz-group-name" />
+        <button type="submit" class="btn btn-success" data-testid="wiz-add-group">Add</button>
       </div>
-      <div class="col-auto">
-        <label for="new-group-colour" class="form-label">Colour</label>
-        <input id="new-group-colour" v-model="newColour" type="color" class="form-control form-control-color" />
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-success" data-testid="wiz-add-group">Add group</button>
-      </div>
+      <div v-if="addError" class="text-danger small mt-1">{{ addError }}</div>
     </form>
 
-    <p v-if="wizard.groups.length === 0" class="text-muted small">No groups yet. You can also add them later.</p>
+    <p v-if="wizard.groups.length === 0" class="kp-empty">No groups yet. You can add them later.</p>
 
-    <ul class="list-unstyled d-grid gap-2 mb-3" data-testid="wiz-groups">
-      <li v-for="g in wizard.groups" :key="g.key" class="card" :class="{ 'border-danger': errors['group-' + g.key] }">
-        <div class="card-body p-2 p-sm-3">
-          <div class="d-flex align-items-center gap-2">
-            <span class="group-dot flex-shrink-0" :style="{ background: g.colour }" aria-hidden="true"></span>
-            <strong class="me-auto text-truncate">{{ g.name || '(no name)' }}</strong>
-            <span class="text-muted small flex-shrink-0">{{ g.members.length }} {{ g.members.length === 1 ? 'person' : 'people' }}</span>
-            <button type="button" class="btn btn-sm btn-outline-primary" :aria-expanded="editingKey === g.key" @click="toggleEdit(g.key)">
-              {{ editingKey === g.key ? 'Done' : 'Edit' }}
-            </button>
-          </div>
-          <p v-if="errors['group-' + g.key]" class="text-danger small mb-0 mt-2">{{ errors['group-' + g.key] }}</p>
+    <ul class="kp-list" data-testid="wiz-groups">
+      <li v-for="g in wizard.groups" :key="g.key" class="kp-group-row">
+        <div class="kp-inline">
+          <span class="kp-dot" :style="{ background: g.colour }" aria-hidden="true"></span>
+          <strong class="me-auto text-truncate">{{ g.name || '(no name)' }}</strong>
+          <span class="kp-chip">{{ g.members.length }}</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary" :aria-expanded="editingKey === g.key" @click="toggleEdit(g.key)">
+            {{ editingKey === g.key ? 'Done' : 'Edit' }}
+          </button>
+        </div>
+        <p v-if="errors['group-' + g.key]" class="text-danger small mb-0 mt-2">{{ errors['group-' + g.key] }}</p>
 
-          <!-- Editor -->
-          <ExpandTransition>
-            <div v-if="editingKey === g.key">
-              <div class="pt-3">
-                <div class="row g-2 align-items-end mb-3">
-                  <div class="col">
-                    <label :for="'group-name-' + g.key" class="form-label small">Name</label>
-                    <input :id="'group-name-' + g.key" v-model="g.name" class="form-control form-control-sm" maxlength="50" />
-                  </div>
-                  <div class="col-auto">
-                    <label :for="'group-colour-' + g.key" class="form-label small">Colour</label>
-                    <input :id="'group-colour-' + g.key" v-model="g.colour" type="color" class="form-control form-control-sm form-control-color" />
-                  </div>
-                  <div class="col-auto">
-                    <button type="button" class="btn btn-sm btn-outline-danger" @click="removeGroup(g)">Delete group</button>
-                  </div>
-                </div>
+        <ExpandTransition>
+          <div v-if="editingKey === g.key">
+            <div class="pt-3">
+              <label :for="'group-name-' + g.key" class="form-label">Name</label>
+              <div class="kp-inline mb-3">
+                <input :id="'group-colour-' + g.key" v-model="g.colour" type="color" class="form-control form-control-color kp-colour" aria-label="Colour" />
+                <input :id="'group-name-' + g.key" v-model="g.name" class="form-control" maxlength="50" />
+                <button type="button" class="btn btn-sm btn-ghost-danger" @click="removeGroup(g)">Delete</button>
+              </div>
 
-                <p v-if="g.members.length === 0" class="text-muted small">No one in this group yet.</p>
-                <ul v-else class="list-group list-group-flush mb-3">
-                  <li v-for="m in g.members" :key="m.userId" class="list-group-item px-0 d-flex flex-wrap align-items-center gap-2">
-                    <span class="me-auto text-truncate">
-                      {{ byId[m.userId].display_name }}
-                      <span v-if="byId[m.userId].email" class="text-muted small">{{ byId[m.userId].email }}</span>
-                    </span>
+              <p v-if="g.members.length === 0" class="kp-note mb-3">No one in this group yet.</p>
+              <ul v-else class="kp-list mb-3">
+                <li v-for="m in g.members" :key="m.userId" class="kp-row">
+                  <div class="kp-row-main">
+                    <strong>{{ byId[m.userId].display_name }}</strong>
+                    <span v-if="byId[m.userId].email">{{ byId[m.userId].email }}</span>
+                  </div>
+                  <div class="kp-row-actions">
                     <div class="form-check form-check-inline m-0">
                       <input :id="'ic-' + m.userId" v-model="m.isIC" class="form-check-input" type="checkbox" />
                       <label class="form-check-label small" :for="'ic-' + m.userId">IC</label>
@@ -139,58 +118,37 @@ async function removeGroup(group) {
                       <input :id="'admin-' + m.userId" v-model="m.isAdmin" class="form-check-input" type="checkbox" />
                       <label class="form-check-label small" :for="'admin-' + m.userId">Admin</label>
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" @click="wizard.removeFromGroups(m.userId)">Remove</button>
-                  </li>
-                </ul>
+                    <button type="button" class="btn btn-sm btn-ghost" @click="wizard.removeFromGroups(m.userId)">Remove</button>
+                  </div>
+                </li>
+              </ul>
 
-                <label :for="'group-filter-' + g.key" class="form-label small">Add people without a group</label>
-                <input
-                  :id="'group-filter-' + g.key"
-                  v-model="filter"
-                  type="search"
-                  class="form-control form-control-sm mb-2"
-                  placeholder="Filter by name"
-                  autocomplete="off"
-                />
-                <p v-if="unassigned.length === 0" class="text-muted small mb-0">Everyone is in a group. Add more people in step 2.</p>
-                <template v-else>
-                  <ul class="list-group addable mb-2">
-                    <li v-for="p in addable" :key="p.id" class="list-group-item d-flex align-items-center gap-2 py-1">
-                      <span class="me-auto text-truncate small">
-                        {{ p.display_name }} <span v-if="p.email" class="text-muted">{{ p.email }}</span>
-                        <span v-if="p.role === 'root'" class="badge text-bg-dark ms-1">You</span>
-                      </span>
-                      <button type="button" class="btn btn-sm btn-primary" @click="wizard.addToGroup(g.key, p.id)">Add</button>
-                    </li>
-                    <li v-if="addable.length === 0" class="list-group-item text-muted small">No match.</li>
-                  </ul>
-                  <button v-if="addable.length > 1" type="button" class="btn btn-sm btn-outline-primary" @click="addAllUnassigned(g.key)">
-                    Add all {{ addable.length }} shown
-                  </button>
-                </template>
-              </div>
+              <label :for="'group-filter-' + g.key" class="form-label">Add people</label>
+              <input :id="'group-filter-' + g.key" v-model="filter" type="search" class="form-control mb-2" placeholder="Filter by name" autocomplete="off" />
+              <p v-if="unassigned.length === 0" class="kp-note mb-0">Everyone has a group.</p>
+              <template v-else>
+                <ul class="kp-list kp-pick mb-2">
+                  <li v-for="p in addable" :key="p.id" class="kp-row py-2">
+                    <span class="me-auto text-truncate small">
+                      {{ p.display_name }} <span v-if="p.email" class="text-muted">{{ p.email }}</span>
+                      <span v-if="p.role === 'root'" class="kp-chip kp-chip-ink ms-1">You</span>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-primary" @click="wizard.addToGroup(g.key, p.id)">Add</button>
+                  </li>
+                  <li v-if="addable.length === 0" class="kp-row small text-muted">No match.</li>
+                </ul>
+                <button v-if="addable.length > 1" type="button" class="btn btn-sm btn-outline-secondary" @click="addAllUnassigned(g.key)">
+                  Add all {{ addable.length }} shown
+                </button>
+              </template>
             </div>
-          </ExpandTransition>
-        </div>
+          </div>
+        </ExpandTransition>
       </li>
     </ul>
 
-    <h3 class="h6">Not in a group ({{ unassigned.length }})</h3>
-    <p v-if="unassigned.length === 0" class="text-muted small">Everyone has a group.</p>
-    <p v-else class="small text-muted mb-0" data-testid="wiz-unassigned">
-      {{ unassigned.map((p) => p.display_name).join(', ') }}
+    <p v-if="unassigned.length" class="kp-note" data-testid="wiz-unassigned">
+      Not in a group: {{ unassigned.map((p) => p.display_name).join(', ') }}
     </p>
   </section>
 </template>
-
-<style scoped>
-.group-dot {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-}
-.addable {
-  max-height: 14rem;
-  overflow-y: auto;
-}
-</style>

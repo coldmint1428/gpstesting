@@ -83,118 +83,79 @@ function saveDetails() {
 </script>
 
 <template>
-  <div data-testid="overview" :data-mode="mode">
-    <div class="row g-3">
-      <div class="col-12 col-lg-6">
-        <!-- Root: edit the details -->
-        <form v-if="editing" class="card h-100" data-testid="overview-edit" @submit.prevent="saveDetails">
-          <div class="card-body">
-            <h2 class="h6">Edit event details</h2>
-            <div class="mb-2">
-              <label for="ov-name" class="form-label small mb-1">Name <span class="text-danger">*</span></label>
-              <input
-                id="ov-name"
-                v-model.trim="form.name"
-                class="form-control"
-                :class="{ 'is-invalid': formErrors.name }"
-                maxlength="80"
-                required
-                data-testid="overview-name"
-              />
-              <div v-if="formErrors.name" class="invalid-feedback">{{ formErrors.name }}</div>
-            </div>
-            <div class="mb-2">
-              <label for="ov-description" class="form-label small mb-1">Description</label>
-              <textarea id="ov-description" v-model.trim="form.description" class="form-control" rows="3" maxlength="1000" data-testid="overview-description"></textarea>
-            </div>
-            <div class="mb-2">
-              <label for="ov-venue" class="form-label small mb-1">Venue</label>
-              <input id="ov-venue" v-model.trim="form.venue" class="form-control" maxlength="120" placeholder="e.g. Padang" data-testid="overview-venue" />
-            </div>
-            <div class="row g-2 mb-3">
-              <div class="col-12 col-sm-6">
-                <label for="ov-start" class="form-label small mb-1">Starts</label>
-                <input
-                  id="ov-start"
-                  v-model="form.startsAt"
-                  type="datetime-local"
-                  class="form-control"
-                  :class="{ 'is-invalid': formErrors.startsAt }"
-                  data-testid="overview-start"
-                />
-                <div v-if="formErrors.startsAt" class="invalid-feedback">{{ formErrors.startsAt }}</div>
-              </div>
-              <div class="col-12 col-sm-6">
-                <label for="ov-end" class="form-label small mb-1">Ends</label>
-                <input
-                  id="ov-end"
-                  v-model="form.endsAt"
-                  type="datetime-local"
-                  class="form-control"
-                  :class="{ 'is-invalid': formErrors.endsAt }"
-                  data-testid="overview-end"
-                />
-                <div v-if="formErrors.endsAt" class="invalid-feedback">{{ formErrors.endsAt }}</div>
-              </div>
-            </div>
-            <div class="d-flex gap-2">
-              <button class="btn btn-primary" type="submit" :disabled="busy || !changed" data-testid="overview-save">Save</button>
-              <button class="btn btn-outline-secondary" type="button" :disabled="busy" @click="editing = false">Cancel</button>
-            </div>
+  <div class="kp-stack" data-testid="overview" :data-mode="mode">
+    <div class="kp-overview">
+      <!-- Root: edit the details -->
+      <form v-if="editing" class="kp-card kp-fields" data-testid="overview-edit" @submit.prevent="saveDetails">
+        <h2 class="kp-title">Edit details</h2>
+        <div>
+          <label for="ov-name" class="form-label">Name <span class="text-danger">*</span></label>
+          <input id="ov-name" v-model.trim="form.name" class="form-control" :class="{ 'is-invalid': formErrors.name }" maxlength="80" required data-testid="overview-name" />
+          <div v-if="formErrors.name" class="invalid-feedback">{{ formErrors.name }}</div>
+        </div>
+        <div>
+          <label for="ov-description" class="form-label">Description</label>
+          <textarea id="ov-description" v-model.trim="form.description" class="form-control" rows="3" maxlength="1000" data-testid="overview-description"></textarea>
+        </div>
+        <div>
+          <label for="ov-venue" class="form-label">Venue</label>
+          <input id="ov-venue" v-model.trim="form.venue" class="form-control" maxlength="120" placeholder="e.g. Padang" data-testid="overview-venue" />
+        </div>
+        <div class="kp-fields-2">
+          <div>
+            <label for="ov-start" class="form-label">Starts</label>
+            <input id="ov-start" v-model="form.startsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': formErrors.startsAt }" data-testid="overview-start" />
+            <div v-if="formErrors.startsAt" class="invalid-feedback">{{ formErrors.startsAt }}</div>
           </div>
-        </form>
-
-        <div v-else class="card h-100">
-          <div class="card-body">
-            <div class="d-flex align-items-start gap-2 mb-2">
-              <h2 class="h6 me-auto mb-0">Event</h2>
-              <button v-if="mode === 'edit'" type="button" class="btn btn-sm btn-outline-primary" data-testid="overview-edit-btn" @click="startEditing">
-                Edit details
-              </button>
-            </div>
-            <p v-if="event.description" class="small mb-2 description" data-testid="overview-description-text">{{ event.description }}</p>
-            <dl class="row small mb-0">
-              <template v-if="event.starts_at">
-                <dt class="col-5">When</dt>
-                <dd class="col-7">{{ when }}</dd>
-              </template>
-              <template v-if="event.venue">
-                <dt class="col-5">Venue</dt>
-                <dd class="col-7">{{ event.venue }}</dd>
-              </template>
-              <dt class="col-5">Status</dt>
-              <dd class="col-7" data-testid="overview-status">{{ status }}</dd>
-              <dt class="col-5">Your role</dt>
-              <dd class="col-7">{{ ROLE_LABEL[role] }}</dd>
-              <!-- planners (and the root) run the whole event and are never in a group -->
-              <template v-if="role !== 'root' && role !== 'planner'">
-                <dt class="col-5">Your group</dt>
-                <dd class="col-7">{{ myGroup ? myGroup.name : 'None yet' }}</dd>
-              </template>
-              <dt class="col-5">People</dt>
-              <dd class="col-7">{{ members.length }} in {{ groupCount }}</dd>
-            </dl>
+          <div>
+            <label for="ov-end" class="form-label">Ends</label>
+            <input id="ov-end" v-model="form.endsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': formErrors.endsAt }" data-testid="overview-end" />
+            <div v-if="formErrors.endsAt" class="invalid-feedback">{{ formErrors.endsAt }}</div>
           </div>
         </div>
+        <div class="kp-actions">
+          <button class="btn btn-primary" type="submit" :disabled="busy || !changed" data-testid="overview-save">Save</button>
+          <button class="btn btn-ghost" type="button" :disabled="busy" @click="editing = false">Cancel</button>
+        </div>
+      </form>
+
+      <div v-else class="kp-card">
+        <div class="kp-card-head">
+          <h2 class="kp-title">Details</h2>
+          <button v-if="mode === 'edit'" type="button" class="btn btn-sm btn-outline-secondary" data-testid="overview-edit-btn" @click="startEditing">Edit</button>
+        </div>
+        <p v-if="event.description" class="kp-prewrap mb-2" data-testid="overview-description-text">{{ event.description }}</p>
+        <dl class="kp-dl">
+          <template v-if="event.starts_at">
+            <dt>When</dt>
+            <dd>{{ when }}</dd>
+          </template>
+          <template v-if="event.venue">
+            <dt>Venue</dt>
+            <dd>{{ event.venue }}</dd>
+          </template>
+          <dt>Status</dt>
+          <dd data-testid="overview-status">{{ status }}</dd>
+          <dt>Your role</dt>
+          <dd>{{ ROLE_LABEL[role] }}</dd>
+          <!-- planners (and the root) run the whole event and are never in a group -->
+          <template v-if="role !== 'root' && role !== 'planner'">
+            <dt>Your group</dt>
+            <dd>{{ myGroup ? myGroup.name : 'None yet' }}</dd>
+          </template>
+          <dt>People</dt>
+          <dd>{{ members.length }} in {{ groupCount }}</dd>
+        </dl>
       </div>
 
-      <div v-if="can('invite', role)" class="col-12 col-lg-6">
-        <InvitePanel :event-name="event.name" :join-code="event.join_code" />
-      </div>
+      <InvitePanel v-if="can('invite', role)" :event-name="event.name" :join-code="event.join_code" />
     </div>
 
-    <div class="mt-4">
-      <button v-if="mode === 'edit'" type="button" class="btn btn-outline-danger" :disabled="busy" data-testid="delete-event" @click="emit('delete')">
+    <div>
+      <button v-if="mode === 'edit'" type="button" class="btn btn-sm btn-ghost-danger" :disabled="busy" data-testid="delete-event" @click="emit('delete')">
         Delete event
       </button>
-      <button v-else type="button" class="btn btn-link text-danger px-0" data-testid="leave-event" @click="emit('leave')">Leave event</button>
+      <button v-else type="button" class="btn btn-sm btn-ghost-danger" data-testid="leave-event" @click="emit('leave')">Leave event</button>
     </div>
   </div>
 </template>
-
-<style scoped>
-/* keep the line breaks typed into the description */
-.description {
-  white-space: pre-line;
-}
-</style>

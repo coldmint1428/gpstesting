@@ -123,27 +123,24 @@ async function clearOne(b) {
   <section class="card bc-panel" data-testid="broadcast-panel" :aria-busy="sending ? 'true' : null">
     <div class="card-body d-grid gap-2">
       <div class="d-flex flex-wrap align-items-center gap-2">
-        <h3 class="h6 mb-0 flex-grow-1">Message everyone</h3>
+        <h3 class="kp-title" style="font-size: 16px">Message everyone</h3>
         <button
           type="button"
           class="btn btn-sm"
-          :class="open ? 'btn-outline-secondary' : 'btn-primary'"
+          :class="open ? 'btn-ghost' : 'btn-outline-secondary'"
           data-testid="broadcast-open"
           @click="open = !open"
         >
-          {{ open && !native ? 'Close' : 'Write a message' }}
+          {{ open && !native ? 'Close' : 'Write' }}
         </button>
       </div>
-      <p v-if="!recent.length && !open" class="small text-muted mb-0">
-        One message to every group, a sector or the staff at once: a push and a banner until they press Got it.
-      </p>
-
+      
       <!-- The form: inline on the website, in a bottom sheet on the phone -->
       <component :is="native ? BottomSheet : 'div'" v-bind="native ? { open, title: 'Message everyone' } : {}" @close="open = false">
         <ExpandTransition>
           <form v-if="native || open" class="d-grid gap-2" data-testid="broadcast-form" @submit.prevent="send">
             <div>
-              <div class="small fw-semibold mb-1">Quick messages</div>
+              <div class="small fw-semibold mb-1">Quick</div>
               <div class="d-flex flex-wrap gap-1" role="group" aria-label="Quick messages">
                 <button
                   v-for="q in QUICK"
@@ -160,7 +157,7 @@ async function clearOne(b) {
             </div>
             <div class="row g-2">
               <div :class="values.length || audience === 'sector' || audience === 'category' ? 'col-12 col-sm-6' : 'col-12'">
-                <label class="form-label small fw-semibold mb-1" for="bc-audience">Who gets it</label>
+                <label class="form-label small fw-semibold mb-1" for="bc-audience">To</label>
                 <select id="bc-audience" v-model="audience" class="form-select" data-testid="broadcast-audience">
                   <option v-for="a in AUDIENCES" :key="a.value" :value="a.value">{{ a.label }}</option>
                 </select>
@@ -190,7 +187,7 @@ async function clearOne(b) {
             <div class="d-flex flex-wrap gap-3">
               <div class="form-check">
                 <input id="bc-urgent" v-model="urgent" class="form-check-input" type="checkbox" data-testid="broadcast-urgent" />
-                <label class="form-check-label" for="bc-urgent">Urgent (red)</label>
+                <label class="form-check-label" for="bc-urgent">Urgent</label>
               </div>
             </div>
             <div v-if="formError" class="small text-danger" role="alert" data-testid="broadcast-error">{{ formError }}</div>

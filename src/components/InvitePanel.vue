@@ -61,43 +61,24 @@ async function copyLink() {
 </script>
 
 <template>
-  <div class="row g-3">
-    <div class="col-12 col-md-6">
-      <div class="card h-100 k-invite">
-        <div class="card-body">
-          <h2 class="h6">Event code</h2>
-          <p class="display-6 font-monospace mb-1" data-testid="join-code-display">{{ joinCode }}</p>
-          <p class="small text-muted">People enter this on the Events page after creating an account.</p>
+  <section class="kp-invite" aria-label="Invite people">
+    <div class="kp-minw0">
+      <h2 class="kp-label">Event code</h2>
+      <p class="kp-invite-code" data-testid="join-code-display">{{ joinCode }}</p>
 
-          <h2 class="h6 mt-3">Invite link</h2>
-          <div class="input-group mb-2">
-            <input class="form-control form-control-sm" :value="inviteLink" readonly aria-label="Invite link" data-testid="invite-link" />
-            <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyLink">
-              {{ copied ? 'Copied!' : 'Copy' }}
-            </button>
-          </div>
-          <div class="d-flex flex-wrap gap-2">
-            <a :href="whatsappUrl" target="_blank" rel="noopener" class="btn btn-success btn-sm" data-testid="share-whatsapp">
-              Share on WhatsApp
-            </a>
-            <a :href="telegramUrl" target="_blank" rel="noopener" class="btn btn-primary btn-sm" data-testid="share-telegram">
-              Share on Telegram
-            </a>
-          </div>
-          <p v-if="isLocalhost" class="small text-warning-emphasis mt-2 mb-0">
-            This link points to localhost, so it only works on this computer. Set VITE_PUBLIC_APP_URL to your
-            public https link (e.g. Vercel) to share it.
-          </p>
-        </div>
+      <h2 class="kp-label mt-3">Invite link</h2>
+      <div class="kp-invite-link">
+        <input :value="inviteLink" readonly aria-label="Invite link" data-testid="invite-link" />
+        <button class="btn btn-sm btn-lime" type="button" @click="copyLink">{{ copied ? 'Copied!' : 'Copy' }}</button>
       </div>
-    </div>
-    <div class="col-12 col-md-6">
-      <div class="card h-100">
-        <div class="card-body text-center">
-          <h2 class="h6">Scan to join</h2>
-          <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR code for the invite link" class="img-fluid" width="220" height="220" data-testid="invite-qr" />
-        </div>
+      <div class="kp-actions mt-3">
+        <a :href="whatsappUrl" target="_blank" rel="noopener" class="btn btn-sm btn-paper" data-testid="share-whatsapp">WhatsApp</a>
+        <a :href="telegramUrl" target="_blank" rel="noopener" class="btn btn-sm btn-paper" data-testid="share-telegram">Telegram</a>
       </div>
+      <p v-if="isLocalhost" class="kp-invite-warn mt-2">This link only works on this computer. Set VITE_PUBLIC_APP_URL to share it.</p>
     </div>
-  </div>
+    <div class="kp-invite-qr">
+      <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR code for the invite link" width="132" height="132" data-testid="invite-qr" />
+    </div>
+  </section>
 </template>

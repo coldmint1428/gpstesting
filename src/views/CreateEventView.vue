@@ -104,62 +104,50 @@ async function startOver() {
 </script>
 
 <template>
-  <main class="container py-3 wizard" :aria-busy="saving ? 'true' : null">
-    <div class="d-flex align-items-center gap-2 mb-3">
-      <h1 class="h4 mb-0 me-auto">Create an event</h1>
-      <button type="button" class="btn btn-sm btn-link text-danger" @click="startOver">Start over</button>
-      <RouterLink to="/events" class="btn btn-sm btn-outline-secondary">Cancel</RouterLink>
+  <main class="kp-page" :aria-busy="saving ? 'true' : null">
+    <div class="kp-head">
+      <h1>Create event</h1>
+      <button type="button" class="btn btn-sm btn-ghost-danger" @click="startOver">Start over</button>
+      <RouterLink to="/events" class="btn btn-sm btn-ghost">Cancel</RouterLink>
     </div>
 
-    <!-- Stepper -->
-    <nav aria-label="Steps" class="mb-4">
-      <ol class="stepper pl-wz-steps">
+    <nav aria-label="Steps">
+      <ol class="kp-steps">
         <li v-for="s in STEPS" :key="s.n">
           <button
             type="button"
-            class="pl-wz-step"
+            class="kp-step"
             :class="{ 'is-current': s.n === wizard.step, 'is-done': s.n < wizard.step }"
             :aria-current="s.n === wizard.step ? 'step' : undefined"
             :disabled="s.n > wizard.step"
             @click="goTo(s.n)"
           >
-            <span class="pl-wz-step__bar"></span>
-            <span class="pl-wz-step__row">
-              <span class="pl-wz-step__mk" aria-hidden="true">{{ s.n }}</span>
-              <span class="pl-wz-step__txt"><span class="d-none d-md-inline">{{ s.label }}</span><span class="d-md-none">{{ s.short }}</span></span>
-            </span>
+            <span class="kp-step-word"><span class="d-none d-md-inline">{{ s.label }}</span><span class="d-md-none">{{ s.short }}</span></span>
           </button>
         </li>
       </ol>
     </nav>
 
-    <StepDetails v-if="wizard.step === 1" :errors="errors" />
-    <StepPeople v-else-if="wizard.step === 2" />
-    <StepGroups v-else-if="wizard.step === 3" :errors="errors" :everyone="everyone" />
-    <StepPreview v-else :everyone="everyone" />
+    <div class="kp-card">
+      <StepDetails v-if="wizard.step === 1" :errors="errors" />
+      <StepPeople v-else-if="wizard.step === 2" />
+      <StepGroups v-else-if="wizard.step === 3" :errors="errors" :everyone="everyone" />
+      <StepPreview v-else :everyone="everyone" />
+    </div>
 
     <p v-if="Object.keys(errors).length" class="text-danger small mt-3 mb-0" role="alert" data-testid="wiz-errors">
-      Please fix the highlighted items before going on.
+      Fix the highlighted items to continue.
     </p>
     <BenchAlert v-if="saveError" class="mt-3" data-testid="wiz-save-error" @dismiss="saveError = ''">
       Could not create the event: {{ saveError }}
     </BenchAlert>
 
-    <div class="d-flex gap-2 mt-4">
+    <div class="kp-wizard-foot">
       <button v-if="wizard.step > 1" type="button" class="btn btn-outline-secondary" :disabled="saving" @click="back">Back</button>
-      <button v-if="wizard.step < 4" type="button" class="btn btn-primary ms-auto" data-testid="wiz-next" @click="next">Next</button>
-      <button v-else type="button" class="btn btn-success ms-auto" :disabled="saving" data-testid="wiz-confirm" @click="confirm">
-        {{ saving ? 'Creating...' : 'Confirm' }}
+      <button v-if="wizard.step < 4" type="button" class="btn btn-primary" data-testid="wiz-next" @click="next">Next</button>
+      <button v-else type="button" class="btn btn-success" :disabled="saving" data-testid="wiz-confirm" @click="confirm">
+        {{ saving ? 'Creating...' : 'Create event' }}
       </button>
     </div>
   </main>
 </template>
-
-<style scoped>
-.wizard {
-  max-width: 52rem;
-}
-.stepper .btn {
-  white-space: nowrap;
-}
-</style>

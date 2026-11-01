@@ -205,294 +205,190 @@ const history = computed(() =>
 </script>
 
 <template>
-  <div>
+  <div class="kp-stack">
     <BenchAlert v-if="errorMsg" data-testid="attendance-error" @dismiss="$emit('dismiss-error')">{{ errorMsg }}</BenchAlert>
 
     <!-- ========== How attendance is taken (root / planners) ========== -->
-    <section v-if="canManage" class="card mb-3" data-testid="attendance-mode">
-      <div class="card-body">
-        <h2 class="h6">How attendance is taken</h2>
-        <div class="form-check">
-          <input id="att-mode-manual" v-model="modeChoice" class="form-check-input" type="radio" value="manual" :disabled="busy" @change="$emit('set-mode', 'manual')" />
-          <label class="form-check-label" for="att-mode-manual">
-            <strong>By hand.</strong> <span class="text-muted small">The IC ticks who is there.</span>
-          </label>
-        </div>
-        <div class="form-check">
-          <input id="att-mode-qr" v-model="modeChoice" class="form-check-input" type="radio" value="qr" :disabled="busy" data-testid="attendance-mode-qr" @change="$emit('set-mode', 'qr')" />
-          <label class="form-check-label" for="att-mode-qr">
-            <strong>QR.</strong>
-            <span class="text-muted small">
-              Everyone scans the QR code on the IC's screen. The code changes every 5 seconds, so a copy sent to someone else
-              stops working. Only planners can mark people by hand.
-            </span>
-          </label>
-        </div>
-        <p class="form-text mb-0">Changes apply to new roll calls.</p>
+    <section v-if="canManage" class="kp-inline" style="flex-wrap: wrap" data-testid="attendance-mode">
+      <h2 class="kp-label mb-0">New roll calls</h2>
+      <div class="kp-seg" role="radiogroup" aria-label="How attendance is taken">
+        <input id="att-mode-manual" v-model="modeChoice" type="radio" value="manual" :disabled="busy" @change="$emit('set-mode', 'manual')" />
+        <label for="att-mode-manual">By hand</label>
+        <input id="att-mode-qr" v-model="modeChoice" type="radio" value="qr" :disabled="busy" data-testid="attendance-mode-qr" @change="$emit('set-mode', 'qr')" />
+        <label for="att-mode-qr">QR code</label>
       </div>
+      <span class="small text-muted">{{ modeChoice === 'qr' ? 'Everyone scans the IC’s screen. The code changes every 5 s.' : 'The IC ticks who is there.' }}</span>
     </section>
 
     <!-- ========== My group's roll call (anyone in a group who does not run it) ========== -->
-    <section v-if="myGroup && !runsMyGroup" class="card mb-3" data-testid="attendance-me">
-      <div class="card-body">
-        <h2 class="h6 mb-1">Roll call · {{ myGroup.name }}</h2>
-        <p v-if="!myOpen" class="text-muted small mb-0" data-testid="attendance-none-open">
-          No roll call is open for your group.
-        </p>
-        <p v-else-if="myCheckin" class="mb-0" :class="myCheckin.status === 'present' ? 'text-success' : 'text-secondary'" data-testid="attendance-done">
-          <strong>{{ myCheckin.status === 'present' ? '✓ You are marked present' : 'You are marked excused' }}</strong>
-          for {{ myOpen.title }} at {{ formatTime(myCheckin.at) }}.
-        </p>
-        <p v-else-if="myOpen.mode === 'manual'" class="small mb-0" data-testid="attendance-wait">
-          <strong>{{ myOpen.title }}</strong> is open · closes in {{ myOpenLeft }}. Your IC is marking attendance. Let them see
-          you.
-        </p>
-        <template v-else>
-          <p class="small mb-2">
-            <strong>{{ myOpen.title }}</strong> is open · closes in {{ myOpenLeft }}. Scan the QR code on your IC's screen.
-          </p>
-          <template v-if="scanning">
-            <QrScanner :paused="busy" @scan="$emit('scan', $event)" @error="onCameraError" />
-            <p v-if="busy" class="small text-center mt-2 mb-0">Checking…</p>
-            <p v-else-if="scanMessage" class="text-danger small text-center mt-2 mb-0" role="alert" data-testid="attendance-scan-error">{{ scanMessage }}</p>
-            <p v-else class="small text-muted text-center mt-2 mb-0">Point the camera at the QR code.</p>
-            <div class="text-center mt-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" @click="scanning = false">Cancel</button>
-            </div>
-          </template>
-          <template v-else>
-            <button type="button" class="btn btn-primary btn-lg w-100 scan-btn" data-testid="attendance-scan" @click="startScan">Scan QR code</button>
-            <p v-if="cameraError" class="text-danger small mt-2 mb-0" role="alert">{{ cameraError }}</p>
-            <p v-else class="form-text mb-0">If you cannot scan, tell your IC. A planner can mark you present.</p>
-          </template>
+    <section v-if="myGroup && !runsMyGroup" class="kp-card" data-testid="attendance-me">
+      <h2 class="kp-title mb-2">{{ myGroup.name }}</h2>
+      <p v-if="!myOpen" class="text-muted mb-0" data-testid="attendance-none-open">No roll call is open.</p>
+      <p v-else-if="myCheckin" class="mb-0" :class="myCheckin.status === 'present' ? 'text-success' : 'text-secondary'" data-testid="attendance-done">
+        <strong>{{ myCheckin.status === 'present' ? '✓ You are marked present' : 'You are marked excused' }}</strong>
+        for {{ myOpen.title }} at {{ formatTime(myCheckin.at) }}.
+      </p>
+      <p v-else-if="myOpen.mode === 'manual'" class="mb-0" data-testid="attendance-wait">
+        <strong>{{ myOpen.title }}</strong> · closes in {{ myOpenLeft }}. Your IC is marking attendance.
+      </p>
+      <template v-else>
+        <p class="mb-2"><strong>{{ myOpen.title }}</strong> · closes in {{ myOpenLeft }}</p>
+        <template v-if="scanning">
+          <QrScanner :paused="busy" @scan="$emit('scan', $event)" @error="onCameraError" />
+          <p v-if="busy" class="small text-center mt-2 mb-0">Checking…</p>
+          <p v-else-if="scanMessage" class="text-danger small text-center mt-2 mb-0" role="alert" data-testid="attendance-scan-error">{{ scanMessage }}</p>
+          <p v-else class="small text-muted text-center mt-2 mb-0">Point the camera at the QR code.</p>
+          <div class="text-center mt-2">
+            <button type="button" class="btn btn-sm btn-ghost" @click="scanning = false">Cancel</button>
+          </div>
         </template>
-      </div>
+        <template v-else>
+          <button type="button" class="btn btn-success btn-lg w-100" style="max-width: 22rem" data-testid="attendance-scan" @click="startScan">Scan QR code</button>
+          <p v-if="cameraError" class="text-danger small mt-2 mb-0" role="alert">{{ cameraError }}</p>
+          <p v-else class="kp-note mb-0">Can't scan? Tell your IC.</p>
+        </template>
+      </template>
     </section>
-    <p v-else-if="!myGroup && !runnable.length && !seesWholeEvent" class="text-muted">
-      You are not in a group. Roll calls are taken by group.
-    </p>
+    <p v-else-if="!myGroup && !runnable.length && !seesWholeEvent" class="kp-empty">Roll calls are taken by group, and you are not in one yet.</p>
 
     <!-- ========== Take attendance (root / planners, a group's IC or admin) ========== -->
-    <section v-if="runnable.length" class="card mb-3" data-testid="attendance-run">
-      <div class="card-body">
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-          <h2 class="h6 mb-0 me-auto">Take attendance</h2>
-          <select
-            v-if="runnable.length > 1"
-            v-model="selectedGroupId"
-            class="form-select form-select-sm w-auto"
-            aria-label="Group"
-            data-testid="attendance-group"
-          >
-            <option v-for="g in runnable" :key="g.id" :value="g.id">{{ g.name }}</option>
+    <section v-if="runnable.length" class="kp-card" data-testid="attendance-run">
+      <div class="kp-card-head">
+        <h2 class="kp-title">Take attendance</h2>
+        <select v-if="runnable.length > 1" v-model="selectedGroupId" class="form-select form-select-sm kp-stepped" aria-label="Group" data-testid="attendance-group">
+          <option v-for="g in runnable" :key="g.id" :value="g.id">{{ g.name }}</option>
+        </select>
+        <span v-else-if="selectedGroup" class="kp-chip">{{ selectedGroup.name }}</span>
+      </div>
+
+      <!-- Nothing open: start one -->
+      <form v-if="!running && selectedGroup" class="row g-2 align-items-end" @submit.prevent="start">
+        <div class="col-12 col-sm">
+          <label class="form-label" for="att-title">Name (optional)</label>
+          <input id="att-title" v-model.trim="newTitle" class="form-control" maxlength="60" placeholder="e.g. Morning muster" data-testid="attendance-title" />
+        </div>
+        <div class="col-6 col-sm-auto">
+          <label class="form-label" for="att-minutes">Open for</label>
+          <select id="att-minutes" v-model.number="newMinutes" class="form-select">
+            <option v-for="n in MINUTES" :key="n" :value="n">{{ n }} min</option>
           </select>
-          <span v-else-if="selectedGroup" class="text-muted small">{{ selectedGroup.name }}</span>
+        </div>
+        <div class="col-6 col-sm-auto">
+          <button type="submit" class="btn btn-success w-100" :disabled="busy" data-testid="attendance-start">Start</button>
+        </div>
+        <p class="kp-note col-12 mb-0">Mode: <strong>{{ MODE_LABEL[mode] }}</strong></p>
+      </form>
+
+      <!-- Running -->
+      <template v-else-if="running">
+        <div class="kp-inline mb-3" style="flex-wrap: wrap">
+          <span class="kp-chip kp-chip-ink"><span class="kp-dot kp-pulse"></span>{{ running.title }}</span>
+          <span class="small text-muted">{{ MODE_LABEL[running.mode] }} · closes in {{ runningLeft }}</span>
+          <span class="kp-spacer"></span>
+          <button v-if="!isQr" type="button" class="btn btn-sm btn-outline-danger" :disabled="busy" data-testid="attendance-close" @click="$emit('close', running.id)">Close roll call</button>
         </div>
 
-        <!-- Nothing open: start one -->
-        <form v-if="!running && selectedGroup" class="row g-2 align-items-end" @submit.prevent="start">
-          <div class="col-12 col-sm">
-            <label class="form-label small mb-0" for="att-title">Name (optional)</label>
-            <input id="att-title" v-model.trim="newTitle" class="form-control" maxlength="60" placeholder="e.g. Morning muster" data-testid="attendance-title" />
+        <!-- QR mode: the QR -->
+        <div v-if="isQr" class="kp-qr" :class="{ 'kp-qr-big': big }" data-testid="attendance-qr-box">
+          <div v-if="big" class="small text-muted">{{ running.title }} · {{ selectedGroup.name }}</div>
+          <img v-if="qrImage" :src="qrImage" alt="Attendance QR code: scan it with the app" class="kp-qr-img" data-testid="attendance-qr" />
+          <div v-else class="kp-qr-img kp-qr-wait">Loading…</div>
+          <div class="progress kp-qr-bar" role="progressbar" :aria-valuenow="qrShown ? qrShown.secondsLeft : 0" aria-valuemin="0" aria-valuemax="5" aria-label="Seconds until the QR code changes">
+            <div class="progress-bar" :style="{ width: qrBar + '%' }"></div>
           </div>
-          <div class="col-6 col-sm-auto">
-            <label class="form-label small mb-0" for="att-minutes">Stays open for</label>
-            <select id="att-minutes" v-model.number="newMinutes" class="form-select">
-              <option v-for="n in MINUTES" :key="n" :value="n">{{ n }} min</option>
-            </select>
+          <div class="small text-muted">{{ roster.present.length }} of {{ rosterTotal }} present</div>
+          <div class="kp-actions">
+            <button type="button" class="btn btn-sm btn-outline-secondary" @click="big = !big">{{ big ? 'Smaller' : 'Show big' }}</button>
+            <button v-if="!big" type="button" class="btn btn-sm btn-outline-danger" :disabled="busy" data-testid="attendance-close" @click="$emit('close', running.id)">Close roll call</button>
           </div>
-          <div class="col-6 col-sm-auto">
-            <button type="submit" class="btn btn-success w-100" :disabled="busy" data-testid="attendance-start">Start roll call</button>
-          </div>
-          <p class="form-text col-12 mb-0">
-            Mode: <strong>{{ MODE_LABEL[mode] }}</strong> (set by the planners).
-            {{ mode === 'qr' ? 'Your screen shows a QR code. Your group scans it.' : 'You tick who is there.' }}
-          </p>
-        </form>
+        </div>
 
-        <!-- Running -->
-        <template v-else-if="running">
-          <div class="small text-muted mb-2">
-            {{ running.title }} · {{ MODE_LABEL[running.mode] }} · closes in {{ runningLeft }}
+        <p class="mt-3 mb-0" data-testid="attendance-count">
+          <strong>{{ roster.present.length }} of {{ rosterTotal }}</strong> present<span v-if="roster.excused.length"> · {{ roster.excused.length }} excused</span>
+          · {{ roster.waiting.length }} not yet
+        </p>
+        <p v-if="isQr && !canMark" class="kp-note mb-0">Only planners can mark people by hand here.</p>
+        <div class="kp-roster">
+          <div>
+            <h3 class="kp-label">Not yet</h3>
+            <p v-if="!roster.waiting.length" class="small text-success">Everyone is marked.</p>
+            <ul class="kp-list">
+              <li v-for="w in roster.waiting" :key="w.m.id" class="kp-row py-2" :data-testid="'att-waiting-' + w.m.username">
+                <span class="me-auto text-truncate">{{ w.m.display_name }}</span>
+                <template v-if="canMark">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy" :data-testid="'att-mark-' + w.m.username" @click="mark(w.m, 'present')">Present</button>
+                  <button type="button" class="btn btn-sm btn-ghost" :disabled="busy" @click="mark(w.m, 'excused')">Excused</button>
+                </template>
+              </li>
+            </ul>
           </div>
-
-          <!-- QR mode: the QR -->
-          <div v-if="isQr" class="text-center qr-box" :class="{ 'qr-big': big }" data-testid="attendance-qr-box">
-            <div v-if="big" class="small text-muted mb-2">{{ running.title }} · {{ selectedGroup.name }}</div>
-            <img v-if="qrImage" :src="qrImage" alt="Attendance QR code: scan it with the app" class="qr-img" data-testid="attendance-qr" />
-            <div v-else class="qr-img qr-wait">Loading…</div>
-            <div class="progress qr-bar mx-auto mt-2" role="progressbar" :aria-valuenow="qrShown ? qrShown.secondsLeft : 0" aria-valuemin="0" aria-valuemax="5" aria-label="Seconds until the QR code changes">
-              <div class="progress-bar" :style="{ width: qrBar + '%' }"></div>
-            </div>
-            <div class="small text-muted mt-1">Changes every 5 seconds · {{ roster.present.length }} of {{ rosterTotal }} present</div>
-            <div class="d-flex justify-content-center gap-2 mt-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" @click="big = !big">{{ big ? 'Smaller' : 'Show big' }}</button>
-              <button v-if="!big" type="button" class="btn btn-sm btn-outline-danger" :disabled="busy" data-testid="attendance-close" @click="$emit('close', running.id)">
-                Close roll call
-              </button>
-            </div>
-          </div>
-          <div v-else class="d-flex justify-content-end">
-            <button type="button" class="btn btn-sm btn-outline-danger" :disabled="busy" data-testid="attendance-close" @click="$emit('close', running.id)">
-              Close roll call
-            </button>
-          </div>
-
-          <p class="mt-3 mb-2" data-testid="attendance-count">
-            <strong>{{ roster.present.length }} of {{ rosterTotal }}</strong> present<span v-if="roster.excused.length"> · {{ roster.excused.length }} excused</span>
-            · {{ roster.waiting.length }} not yet
-          </p>
-          <p v-if="isQr && !canMark" class="small text-muted">
-            Only planners can mark people by hand in a QR roll call. Anyone who cannot scan should tell a planner.
-          </p>
-          <div class="row g-3">
-            <div class="col-12 col-md-6">
-              <h3 class="h6 small text-uppercase text-muted">Not yet</h3>
-              <p v-if="!roster.waiting.length" class="small text-success">Everyone is marked.</p>
-              <ul class="list-group list-group-flush">
-                <li v-for="w in roster.waiting" :key="w.m.id" class="list-group-item px-0 d-flex align-items-center gap-2" :data-testid="'att-waiting-' + w.m.username">
-                  <span class="me-auto text-truncate">{{ w.m.display_name }}</span>
-                  <template v-if="canMark">
-                    <button type="button" class="btn btn-sm btn-outline-success" :disabled="busy" :data-testid="'att-mark-' + w.m.username" @click="mark(w.m, 'present')">Present</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="mark(w.m, 'excused')">Excused</button>
-                  </template>
+          <div>
+            <h3 class="kp-label">Present</h3>
+            <ul class="kp-list">
+              <li v-for="p in roster.present" :key="p.m.id" class="kp-row py-2" :data-testid="'att-present-' + p.m.username">
+                <span class="text-success" aria-hidden="true">✓</span>
+                <span class="me-auto text-truncate">{{ p.m.display_name }}</span>
+                <span class="small text-muted text-nowrap">{{ p.at }} · {{ p.how }}</span>
+                <button v-if="canMark" type="button" class="btn btn-sm btn-ghost" :disabled="busy" @click="mark(p.m, null)">Undo</button>
+              </li>
+            </ul>
+            <template v-if="roster.excused.length">
+              <h3 class="kp-label mt-3">Excused</h3>
+              <ul class="kp-list">
+                <li v-for="x in roster.excused" :key="x.m.id" class="kp-row py-2">
+                  <span class="me-auto text-truncate">{{ x.m.display_name }}</span>
+                  <button v-if="canMark" type="button" class="btn btn-sm btn-ghost" :disabled="busy" @click="mark(x.m, null)">Undo</button>
                 </li>
               </ul>
-            </div>
-            <div class="col-12 col-md-6">
-              <h3 class="h6 small text-uppercase text-muted">Present</h3>
-              <ul class="list-group list-group-flush">
-                <li v-for="p in roster.present" :key="p.m.id" class="list-group-item px-0 d-flex align-items-center gap-2" :data-testid="'att-present-' + p.m.username">
-                  <span class="text-success" aria-hidden="true">✓</span>
-                  <span class="me-auto text-truncate">{{ p.m.display_name }}</span>
-                  <span class="small text-muted text-nowrap">{{ p.at }} · {{ p.how }}</span>
-                  <button v-if="canMark" type="button" class="btn btn-sm btn-link text-muted p-0" :disabled="busy" @click="mark(p.m, null)">Undo</button>
-                </li>
-              </ul>
-              <template v-if="roster.excused.length">
-                <h3 class="h6 small text-uppercase text-muted mt-3">Excused</h3>
-                <ul class="list-group list-group-flush">
-                  <li v-for="x in roster.excused" :key="x.m.id" class="list-group-item px-0 d-flex align-items-center gap-2">
-                    <span class="me-auto text-truncate">{{ x.m.display_name }}</span>
-                    <button v-if="canMark" type="button" class="btn btn-sm btn-link text-muted p-0" :disabled="busy" @click="mark(x.m, null)">Undo</button>
-                  </li>
-                </ul>
-              </template>
-            </div>
+            </template>
           </div>
-        </template>
-      </div>
+        </div>
+      </template>
     </section>
 
     <!-- ========== Every group's open roll calls (root, planners, marshals) ========== -->
-    <section v-if="seesWholeEvent" class="card mb-3" data-testid="attendance-open-all">
-      <div class="card-body">
-        <h2 class="h6">Open now</h2>
-        <p v-if="!openAll.length" class="text-muted small mb-0">No roll call is open in any group.</p>
-        <ul v-else class="list-group list-group-flush">
-          <li v-for="x in openAll" :key="x.r.id" class="list-group-item px-0 d-flex flex-wrap align-items-center gap-2">
-            <span class="dot" :style="{ backgroundColor: x.group.colour }" aria-hidden="true"></span>
-            <span class="me-auto">
-              <strong>{{ x.group.name }}</strong> · {{ x.r.title }}
-              <span class="small text-muted d-block">{{ x.r.mode === 'qr' ? 'QR' : 'By hand' }} · closes in {{ x.left }}</span>
-            </span>
-            <span class="badge text-bg-light border">{{ x.counts.present }}/{{ x.counts.total }} present</span>
-            <span v-if="x.r.mode === 'qr' && x.counts.byHand" class="badge text-bg-warning" title="Marked by hand, not scanned">{{ x.counts.byHand }} by hand</span>
-            <button v-if="canManage && x.r.groupId !== selectedGroupId" type="button" class="btn btn-sm btn-outline-primary" @click="selectedGroupId = x.r.groupId">
-              Open
-            </button>
-          </li>
-        </ul>
-      </div>
+    <section v-if="seesWholeEvent" class="kp-card" data-testid="attendance-open-all">
+      <h2 class="kp-title mb-2">Open now</h2>
+      <p v-if="!openAll.length" class="text-muted mb-0">None open.</p>
+      <ul v-else class="kp-list">
+        <li v-for="x in openAll" :key="x.r.id" class="kp-row">
+          <span class="kp-dot" :style="{ backgroundColor: x.group.colour }" aria-hidden="true"></span>
+          <div class="kp-row-main">
+            <strong>{{ x.group.name }} · {{ x.r.title }}</strong>
+            <span>{{ x.r.mode === 'qr' ? 'QR' : 'By hand' }} · closes in {{ x.left }}</span>
+          </div>
+          <span class="kp-chip">{{ x.counts.present }}/{{ x.counts.total }} present</span>
+          <span v-if="x.r.mode === 'qr' && x.counts.byHand" class="kp-chip kp-chip-warn" title="Marked by hand, not scanned">{{ x.counts.byHand }} by hand</span>
+          <button v-if="canManage && x.r.groupId !== selectedGroupId" type="button" class="btn btn-sm btn-outline-secondary" @click="selectedGroupId = x.r.groupId">Open</button>
+        </li>
+      </ul>
     </section>
 
     <!-- ========== History ========== -->
-    <section class="card" data-testid="attendance-history">
-      <div class="card-body">
-        <h2 class="h6">Past roll calls</h2>
-        <p v-if="!history.length" class="text-muted small mb-0">None yet.</p>
-        <ul v-else class="list-group list-group-flush">
-          <li v-for="h in history" :key="h.r.id" class="list-group-item px-0">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-              <span class="dot" :style="{ backgroundColor: h.group.colour }" aria-hidden="true"></span>
-              <span class="me-auto">
-                <strong>{{ h.r.title }}</strong> · {{ h.group.name }}
-                <span class="small text-muted d-block">{{ h.when }} · {{ h.r.mode === 'qr' ? 'QR' : 'by hand' }}</span>
-              </span>
-              <template v-if="h.all">
-                <span class="badge text-bg-success">{{ h.counts.present }} present</span>
-                <span v-if="h.counts.excused" class="badge text-bg-secondary">{{ h.counts.excused }} excused</span>
-                <span class="badge" :class="h.counts.absent ? 'text-bg-danger' : 'text-bg-light border'">{{ h.counts.absent }} absent</span>
-              </template>
-              <span v-else class="badge" :class="h.mine === 'Present' ? 'text-bg-success' : h.mine === 'Excused' ? 'text-bg-secondary' : 'text-bg-danger'">
-                {{ h.mine }}
-              </span>
-            </div>
-            <details v-if="h.all && h.absentNames.length" class="small mt-1">
-              <summary>Who was absent</summary>
-              {{ h.absentNames.join(', ') }}
-            </details>
-          </li>
-        </ul>
-        <p class="form-text mb-0 mt-2">Absent: people in the group now who were not marked.</p>
-      </div>
+    <section class="kp-card" data-testid="attendance-history">
+      <h2 class="kp-title mb-2">Past roll calls</h2>
+      <p v-if="!history.length" class="text-muted mb-0">None yet.</p>
+      <ul v-else class="kp-list">
+        <li v-for="h in history" :key="h.r.id" class="kp-row">
+          <span class="kp-dot" :style="{ backgroundColor: h.group.colour }" aria-hidden="true"></span>
+          <div class="kp-row-main">
+            <strong>{{ h.r.title }} · {{ h.group.name }}</strong>
+            <span>{{ h.when }} · {{ h.r.mode === 'qr' ? 'QR' : 'by hand' }}</span>
+          </div>
+          <div class="kp-chips">
+            <template v-if="h.all">
+              <span class="kp-chip kp-chip-mint">{{ h.counts.present }} present</span>
+              <span v-if="h.counts.excused" class="kp-chip">{{ h.counts.excused }} excused</span>
+              <span class="kp-chip" :class="{ 'kp-chip-warn': h.counts.absent }">{{ h.counts.absent }} absent</span>
+            </template>
+            <span v-else class="kp-chip" :class="h.mine === 'Present' ? 'kp-chip-mint' : h.mine === 'Excused' ? '' : 'kp-chip-warn'">{{ h.mine }}</span>
+          </div>
+          <details v-if="h.all && h.absentNames.length" class="small" style="flex-basis: 100%">
+            <summary>Who was absent</summary>
+            {{ h.absentNames.join(', ') }}
+          </details>
+        </li>
+      </ul>
     </section>
   </div>
 </template>
-
-<style scoped>
-.scan-btn {
-  max-width: 22rem;
-}
-.qr-box {
-  border: 1px solid var(--bs-border-color);
-  border-radius: 0.75rem;
-  padding: 1rem;
-  background: #fff; /* a QR reads best dark on white, also in dark mode */
-  color: var(--ink);
-}
-.qr-img {
-  width: min(100%, 18rem);
-  aspect-ratio: 1;
-  image-rendering: pixelated;
-}
-.qr-wait {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-}
-.qr-bar {
-  height: 0.4rem;
-  max-width: 16rem;
-}
-.qr-bar .progress-bar {
-  transition: width 1s linear;
-}
-/* "Show big": the QR fills the screen, easier to scan from a few steps away */
-.qr-big {
-  position: fixed;
-  inset: 0;
-  z-index: 1080;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  border-radius: 0;
-}
-.qr-big .qr-img {
-  width: min(90vw, 70vh);
-}
-.qr-big .qr-bar {
-  width: min(90vw, 70vh);
-  max-width: none;
-  height: 0.75rem;
-}
-.dot {
-  display: inline-block;
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-</style>

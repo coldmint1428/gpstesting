@@ -44,74 +44,14 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <div class="zo-card" data-testid="zone-overview">
-    <div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
-      <span class="zo-label">This event's zones</span>
-      <span v-if="zones.length" class="small text-muted">{{ zones.length }} in all · {{ summary.join(' · ') }}</span>
-    </div>
-    <p v-if="loaded && !zones.length" class="small text-muted mb-2" data-testid="zone-overview-empty">
-      No zones yet. Press <strong>Draw areas</strong> below and draw the formations, holding areas and doors groups must
-      reach, and any No-Go areas.
-    </p>
-    <ul v-else class="zo-list list-unstyled mb-2">
-      <li v-for="z in zones" :key="z.id" class="zo-item" :data-testid="'zone-' + z.code">
-        <span class="zo-swatch" :style="{ background: areaKind(z.kind).colour }" aria-hidden="true"></span>
-        <span class="zo-text">
-          <strong class="text-truncate">{{ z.name }}</strong>
-          <span class="small"><span class="mono">{{ z.code }}</span> · {{ areaKind(z.kind).label }}</span>
-          <span class="small" :class="z.kind === 'no_go' ? 'text-danger' : 'text-muted'">
-            {{ z.kind === 'no_go' ? 'Groups are warned inside it' : 'A place groups are sent to' }}
-          </span>
-        </span>
+  <div data-testid="zone-overview">
+    <p v-if="loaded && !zones.length" class="kp-note mt-0" data-testid="zone-overview-empty">No zones yet. Press <strong>Draw areas</strong> to add one.</p>
+    <ul v-else class="kp-zones" :aria-label="zones.length + ' zones: ' + summary.join(', ')">
+      <li v-for="z in zones" :key="z.id" class="kp-zone" :data-testid="'zone-' + z.code" :title="areaKind(z.kind).label">
+        <span class="kp-zone-sw" :style="{ background: areaKind(z.kind).colour }" aria-hidden="true"></span>
+        <span :class="{ 'text-danger': z.kind === 'no_go' }">{{ z.name }}</span>
+        <code>{{ z.code }}</code>
       </li>
     </ul>
-    <p class="small text-muted mb-0">
-      Draw, move or rename areas on the map below. The code (e.g. <span class="mono">FORMATION_1</span>) is how a place
-      is named in the plan and on the radio.
-    </p>
   </div>
 </template>
-
-<style scoped>
-/* The event workspace this card was built for is gone, so it carries its own surface: the same values the shell's
-   .ev .ev-surface and .ev-label used, to keep the look it had. */
-.zo-card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px;
-}
-.zo-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.zo-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
-}
-.zo-item {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 8px 10px;
-  min-width: 0;
-}
-.zo-swatch {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  margin-top: 4px;
-}
-.zo-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-</style>
