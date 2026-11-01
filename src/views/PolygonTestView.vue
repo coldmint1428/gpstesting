@@ -28,6 +28,8 @@ import { formatBytes } from '../utils/imageShrink'
 import AreaBench from '../components/AreaBench.vue'
 import AreaList from '../components/AreaList.vue'
 import BenchAlert from '../components/BenchAlert.vue'
+import SkeletonLoader from '../components/SkeletonLoader.vue'
+import { useLoadGate } from '../composables/usePageReady'
 
 // Who may change which shape (see composables/useBenchLocks.js). Created first, because the data layer
 // below reports a refusal through it: one strip of text, one source, whichever way the refusal arrived.
@@ -62,6 +64,8 @@ locks.watchBusy(bench.busy)
 locks.whenLost(() => bench.catchUp())
 
 const { data: layout, loading, errorMsg, saving, bytes, open, layoutId, myView, saveView, canEdit } = bench
+// Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
+useLoadGate(() => loading.value)
 
 // null | 'floorplan:<id>' | 'polygons' | 'area:<id>' -- what is being worked on, or nothing. It has
 // nothing to say about the view: the map pans and zooms in every one of these states, except while an
@@ -884,7 +888,7 @@ onUnmounted(() => {
       {{ errorMsg }}
     </BenchAlert>
 
-    <p v-if="loading" class="text-muted">Loading the bench...</p>
+    <SkeletonLoader v-if="loading" :rows="4" label="Loading the bench…" />
 
     <AreaBench
       v-else

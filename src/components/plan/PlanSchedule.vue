@@ -41,6 +41,8 @@ import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { formatOffset } from '../../utils/planFrames'
 import { planErrorMessage, usePlan } from '../../composables/usePlan'
 import '../../assets/planova.css'
+import SkeletonLoader from '../SkeletonLoader.vue'
+import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -68,6 +70,8 @@ const TICK_MS = 1000
 const rows = ref([]) // the read, exactly as it answered
 const logRows = ref([]) // what the plan's log says to this person (058)
 const loaded = ref(false) // one answer has arrived (an empty read is still an answer)
+// Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
+useLoadGate(() => !loaded.value)
 const errorMsg = ref('')
 const readAt = ref(null)
 const now = ref(Date.now())
@@ -455,7 +459,7 @@ watch(
         </article>
       </div>
 
-      <p v-if="!loaded" class="pv-sched-empty" data-testid="sched-loading">Reading the schedule…</p>
+      <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the schedule…" data-testid="sched-loading" />
 
       <div v-else-if="!rows.length" class="pv-sched-empty" data-testid="sched-empty">
         <template v-if="phase === 'none'">

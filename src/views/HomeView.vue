@@ -8,6 +8,8 @@ import { useAuthStore } from '../stores/auth'
 import { getMyEvents, getLiveEventIds, joinEventByCode } from '../services/eventService'
 import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
 import BenchAlert from '../components/BenchAlert.vue'
+import SkeletonLoader from '../components/SkeletonLoader.vue'
+import { cachedMyEvents, saveMyEvents } from '../lib/myEventsCache'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -45,16 +47,24 @@ async function join() {
 }
 
 // ---------- Signed in: my events, the live one first ----------
-const events = ref([])
-const liveIds = ref([])
-const loading = ref(false)
+// Opens with the list from the last visit (myEventsCache) and reads a fresh one quietly; the skeleton is only for the
+// first load. Signed in with no copy yet: loading from the first paint, or "not in any event yet" flashed first.
+const cached = cachedMyEvents(auth.user && auth.user.id)
+const events = ref(cached ? cached.events : [])
+const liveIds = ref(cached ? cached.liveIds : [])
+const loading = ref(auth.isLoggedIn && !cached)
 const errorMsg = ref('')
 async function load() {
   if (!auth.isLoggedIn) return
-  loading.value = true
+  if (!cached) loading.value = true
   try {
-    events.value = await getMyEvents(auth.user.id)
-    liveIds.value = await getLiveEventIds(events.value.map((e) => e.id)).catch(() => [])
+    // Both answers first, then the page: the events alone would draw the list while the skeleton is still up, and the
+    // list would then jump when the skeleton went away a moment later.
+    const mine = await getMyEvents(auth.user.id)
+    const live = await getLiveEventIds(mine.map((e) => e.id)).catch(() => [])
+    events.value = mine
+    liveIds.value = live
+    saveMyEvents(auth.user.id, mine, live)
   } catch (error) {
     errorMsg.value = error.message
   } finally {
@@ -129,7 +139,7 @@ const clock = computed(() => {
         <div>
           <h1 class="hm-h1">{{ greeting }}<template v-if="firstName">, {{ firstName }}</template></h1>
           <p class="hm-muted mb-0">
-            <template v-if="loading">Loading your events…</template>
+            <span v-if="loading" class="skeleton skeleton-line d-inline-block align-middle" style="width: 220px" aria-hidden="true"></span>
             <template v-else-if="liveEvents.length">{{ liveEvents.length === 1 ? 'One event is live.' : liveEvents.length + ' events are live.' }}</template>
             <template v-else-if="events.length">Nothing is live right now.</template>
             <template v-else>You are not in any event yet — create one or join with a code.</template>
@@ -141,7 +151,7 @@ const clock = computed(() => {
       <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
       <!-- Live first: one card, the live colour, ONE main action -->
-      <section v-for="ev in liveEvents.slice(0, 1)" :key="ev.id" class="hm-live" aria-label="Live now" data-testid="home-live">
+      <section v-for="ev in liveEvents.slice(0, 1)" :key="ev.id" class="hm-live data-in" aria-label="Live now" data-testid="home-live">
         <div class="hm-live-main">
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <span class="ev-chip ev-chip-live">LIVE</span>
@@ -154,7 +164,7 @@ const clock = computed(() => {
       </section>
 
       <!-- More than one live at once: the first gets the big card, the rest a compact list (one loud thing per screen) -->
-      <section v-if="liveEvents.length > 1" class="hm-card hm-also" aria-label="Also live" data-testid="home-also-live">
+      <section v-if="liveEvents.length > 1" class="hm-card hm-also data-in" aria-label="Also live" data-testid="home-also-live">
         <h2 class="hm-h3 mb-1">Also live · {{ liveEvents.length - 1 }}</h2>
         <RouterLink v-for="ev in liveEvents.slice(1)" :key="ev.id" :to="{ name: 'event', params: { id: ev.id, page: 'live' } }" class="hm-row">
           <span class="ev-chip ev-chip-live">LIVE</span>
@@ -172,17 +182,20 @@ const clock = computed(() => {
             <h2 class="hm-h3 mb-0">Coming up</h2>
             <RouterLink to="/events" class="small">All events →</RouterLink>
           </div>
-          <p v-if="!loading && !upcoming.length" class="hm-muted mb-0 py-2">No upcoming events. Events you create or join show here.</p>
-          <RouterLink v-for="ev in upcoming" :key="ev.id" :to="{ name: 'event', params: { id: ev.id } }" class="hm-row">
-            <span class="hm-tile">
-              <span>{{ tile(ev.startsAt).dow }}</span><strong>{{ tile(ev.startsAt).day }}</strong><span>{{ tile(ev.startsAt).mon }}</span>
-            </span>
-            <span class="flex-grow-1" style="min-width: 0">
-              <strong class="d-block text-truncate">{{ ev.name }}</strong>
-              <span class="hm-muted small">{{ [ev.venue, timeOf(ev.startsAt), roleLabel(ev)].filter(Boolean).join(' · ') }}</span>
-            </span>
-            <span v-if="ev.isSimulation" class="hm-chip hm-chip-info">Simulation</span>
-          </RouterLink>
+          <SkeletonLoader v-if="loading" :rows="3" label="Loading your events…" />
+          <p v-else-if="!upcoming.length" class="hm-muted mb-0 py-2 data-in">No upcoming events. Events you create or join show here.</p>
+          <template v-else>
+            <RouterLink v-for="ev in upcoming" :key="ev.id" :to="{ name: 'event', params: { id: ev.id } }" class="hm-row data-in">
+              <span class="hm-tile">
+                <span>{{ tile(ev.startsAt).dow }}</span><strong>{{ tile(ev.startsAt).day }}</strong><span>{{ tile(ev.startsAt).mon }}</span>
+              </span>
+              <span class="flex-grow-1" style="min-width: 0">
+                <strong class="d-block text-truncate">{{ ev.name }}</strong>
+                <span class="hm-muted small">{{ [ev.venue, timeOf(ev.startsAt), roleLabel(ev)].filter(Boolean).join(' · ') }}</span>
+              </span>
+              <span v-if="ev.isSimulation" class="hm-chip hm-chip-info">Simulation</span>
+            </RouterLink>
+          </template>
         </section>
 
         <section class="hm-join" aria-label="Join an event">

@@ -33,9 +33,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <!-- Confirm dialog -->
-  <template v-if="confirmState">
+  <!-- Confirm dialog: fades in while the box rises and settles; the dimmed page behind fades separately (motion.css) -->
+  <Transition name="dialog">
     <div
+      v-if="confirmState"
       class="modal d-block"
       tabindex="-1"
       role="dialog"
@@ -94,11 +95,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         </div>
       </div>
     </div>
-    <div class="modal-backdrop show"></div>
-  </template>
+  </Transition>
+  <Transition name="backdrop">
+    <div v-if="confirmState" class="modal-backdrop show"></div>
+  </Transition>
 
   <!-- Toasts: top right on a laptop, top of the screen on a phone -->
-  <div class="toast-container position-fixed top-0 end-0 p-3" aria-live="polite" data-testid="toasts">
+  <!-- Each toast slides in from the side and the others glide to make room -->
+  <TransitionGroup tag="div" name="toast" class="toast-container position-fixed top-0 end-0 p-3" aria-live="polite" data-testid="toasts">
     <div
       v-for="t in toasts"
       :key="t.id"
@@ -117,7 +121,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         ></button>
       </div>
     </div>
-  </div>
+  </TransitionGroup>
 </template>
 
 <style scoped>

@@ -191,7 +191,7 @@ async function changeTolerance(m, input) {
 </script>
 
 <template>
-  <div>
+  <div :aria-busy="busy ? 'true' : null">
     <p class="small text-muted mb-2" data-testid="people-scope">{{ myScope }}</p>
     <BenchAlert v-if="errorMsg" data-testid="people-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
@@ -285,7 +285,7 @@ async function changeTolerance(m, input) {
           <div
             v-if="r.any"
             :id="'actions-' + r.m.id"
-            class="actions align-items-center gap-3 flex-wrap"
+            class="actions align-items-center gap-3 flex-wrap reveal-in"
             :class="open === r.m.id ? 'd-flex' : 'd-none d-md-flex'"
           >
             <div v-if="r.actions.role">
