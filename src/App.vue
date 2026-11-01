@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useLocationTracker } from './composables/useLocationTracker'
@@ -9,7 +9,7 @@ import NotifyHost from './components/NotifyHost.vue'
 import PhoneTabBar from './components/PhoneTabBar.vue'
 import { isNativeApp } from './lib/platform'
 import { pendingNavigation } from './router' // QA-09: the bar while a page change waits on the server
-import logoOnDark from './assets/brand/planova-logo-on-dark.svg' // the approved logo for dark backgrounds (the top bar is dark chrome)
+import KLogo from './components/kinetic/KLogo.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -53,55 +53,69 @@ onMounted(async () => {
   )
 })
 
+// The top bar: which page it is on, and whether that page draws its own instead
+const routeName = computed(() => String(router.currentRoute.value.name || ''))
+const showTopBar = computed(() => {
+  const name = routeName.value
+  if (name === 'login' || name === 'signup') return false
+  return !(name === 'home' && !auth.isLoggedIn)
+})
+const initials = computed(() => {
+  const p = auth.profile || {}
+  const name = String(p.display_name || p.username || '')
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')
+})
+// The account menu closes when you click away
+const meOpen = ref(false)
+const meWrap = ref(null)
+function closeMe(event) {
+  if (meOpen.value && meWrap.value && !meWrap.value.contains(event.target)) meOpen.value = false
+}
+onMounted(() => document.addEventListener('pointerdown', closeMe))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMe))
+
 async function logout() {
+  meOpen.value = false
   await auth.signOut()
   router.push('/login')
 }
 </script>
 
 <template>
-  <nav v-if="!isNativeApp" class="navbar navbar-expand-sm navbar-dark app-nav">
-    <div class="container-fluid app-nav-inner">
-      <RouterLink class="navbar-brand" to="/" aria-label="Planova home"><img :src="logoOnDark" alt="Planova" /></RouterLink>
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#mainNav"
-        aria-controls="mainNav"
-        aria-expanded="false"
-        aria-label="Toggle navigation"
+  <!-- The site's top bar. The landing, log in and sign up pages draw their own, so it only hides there: it stays in the
+       page because a page can put its own controls in it (#k-nav-context, #k-nav-actions). -->
+  <div v-if="!isNativeApp" v-show="showTopBar" class="k kq k-topbar">
+    <header class="ke2-nav">
+      <RouterLink class="ks-brand" to="/" aria-label="Planova home"><KLogo /><span>planova</span></RouterLink>
+      <div id="k-nav-context" class="k-nav-context"></div>
+      <nav class="k-nav-tabs" aria-label="Main">
+        <RouterLink class="tab" to="/" :aria-current="routeName === 'home' ? 'page' : undefined">Home</RouterLink>
+        <!-- Events needs an account: a visitor would only be sent to Log in -->
+        <RouterLink v-if="auth.isLoggedIn" class="tab" to="/events" :aria-current="routeName === 'events' ? 'page' : undefined">Events</RouterLink>
+      </nav>
+      <span class="sp"></span>
+      <!-- Visible on every page while sharing, so users always know -->
+      <RouterLink
+        v-if="tracker.isTracking.value && tracker.sharingEventId.value"
+        :to="{ name: 'share', params: { id: tracker.sharingEventId.value } }"
+        class="chip chip-ink k-sharing"
+        data-testid="nav-sharing"
       >
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div id="mainNav" class="collapse navbar-collapse">
-        <ul class="navbar-nav ms-auto align-items-sm-center">
-          <li class="nav-item"><RouterLink class="nav-link" to="/">Home</RouterLink></li>
-          <!-- Events needs an account: a visitor would only be sent to Log in -->
-          <li v-if="auth.isLoggedIn" class="nav-item"><RouterLink class="nav-link" to="/events">Events</RouterLink></li>
-          <li v-if="tracker.isTracking.value && tracker.sharingEventId.value" class="nav-item">
-            <!-- Visible on every page while sharing, so users always know -->
-            <RouterLink
-              :to="{ name: 'share', params: { id: tracker.sharingEventId.value } }"
-              class="nav-link"
-              data-testid="nav-sharing"
-            >
-              <span class="badge text-bg-success">● Sharing location</span>
-            </RouterLink>
-          </li>
-          <li v-if="auth.isLoggedIn" class="nav-item ms-sm-2">
-            <RouterLink class="navbar-text small me-2 text-decoration-none" to="/profile" data-testid="nav-user">
-              @{{ auth.profile.username }}
-            </RouterLink>
-            <button class="btn btn-outline-light btn-sm" data-testid="logout-btn" @click="logout">Log out</button>
-          </li>
-          <li v-else class="nav-item">
-            <RouterLink class="nav-link" to="/login">Log in</RouterLink>
-          </li>
-        </ul>
+        <i class="dot pulse" style="background: var(--lime)"></i>Sharing location
+      </RouterLink>
+      <div id="k-nav-actions" class="k-nav-actions"></div>
+      <div v-if="auth.isLoggedIn" ref="meWrap" class="wrapm">
+        <button type="button" class="ks-av" aria-label="Account" :aria-expanded="meOpen ? 'true' : 'false'" data-testid="nav-account" @click="meOpen = !meOpen">{{ initials }}</button>
+        <div v-if="meOpen" class="menu r" role="menu">
+          <div class="k-me"><b>{{ auth.profile.username }}</b><div class="mut">Signed in</div></div>
+          <hr />
+          <RouterLink role="menuitem" class="k-menu-link" to="/profile" data-testid="nav-user" @click="meOpen = false">Profile</RouterLink>
+          <button type="button" role="menuitem" data-testid="logout-btn" @click="logout">Log out</button>
+        </div>
       </div>
-    </div>
-  </nav>
+      <RouterLink v-else class="kb kb-ghost" to="/login">Log in</RouterLink>
+    </header>
+  </div>
 
   <!-- One page per event: going straight from one event to another (a "Start sharing" push for event B tapped
        while event A is open) used to reuse A's page -- the address said B, the page showed and acted on A. Keyed

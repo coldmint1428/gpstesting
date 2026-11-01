@@ -106,7 +106,7 @@ const myGpsText = computed(() => {
 
 <style scoped>
 .sos-banner {
-  border-left: 0.35rem solid #b02a37;
+  border-left: 0.35rem solid var(--danger-strong);
 }
 .min-w-0 {
   min-width: 0;

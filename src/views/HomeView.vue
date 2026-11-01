@@ -2,25 +2,27 @@
 // The front door (Planova 2). Visitors: what Planova is, the two jobs people come for (create an event, join one with
 // a code) and why their location is safe -- a Z-pattern landing page. Signed in: "Home", with the live event first.
 // The phone app never shows this page (the router sends it to My events).
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getMyEvents, getLiveEventIds, joinEventByCode } from '../services/eventService'
 import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
 import BenchAlert from '../components/BenchAlert.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
+import KLogo from '../components/kinetic/KLogo.vue'
+import KVenueMap from '../components/kinetic/KVenueMap.vue'
 import { cachedMyEvents, saveMyEvents } from '../lib/myEventsCache'
+import { toast } from '../composables/useNotify'
 
 const auth = useAuthStore()
 const router = useRouter()
 const isDev = import.meta.env.DEV // the demo bench is only reachable on local dev
 
 // ---------- Join with a code (both views) ----------
-// Six boxes show how long a code is and which box is next; only letters and digits get in; paste fills all six.
+// Only letters and digits get in; paste keeps all six.
 const code = ref('')
 const joinBusy = ref(false)
 const joinError = ref('')
-const boxes = computed(() => Array.from({ length: 6 }, (_, i) => ({ ch: code.value[i] || '', next: i === Math.min(code.value.length, 5) && code.value.length < 6 })))
 const codeFull = computed(() => code.value.length === 6)
 function onCode(event) {
   code.value = (event.target.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
@@ -28,7 +30,11 @@ function onCode(event) {
   joinError.value = ''
 }
 async function join() {
-  if (!codeFull.value || joinBusy.value) return
+  if (!codeFull.value) {
+    if (!auth.isLoggedIn) toast('Codes have 6 letters or numbers', 'warning', 2400)
+    return
+  }
+  if (joinBusy.value) return
   // Not signed in: the join page needs an account, and sends you back here once you have one
   if (!auth.isLoggedIn) {
     router.push({ name: 'join', params: { code: code.value } })
@@ -100,332 +106,371 @@ const tile = (iso) =>
     : { dow: 'NO', day: '—', mon: 'DATE' }
 const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit', ...SG }) : '')
 
-// ---------- Visitor: the live plan preview (drag the clock, hover a dot) ----------
-// An illustration of the mental model (groups as dots, zones, one clock), not live data.
-const t = ref(46)
-const picked = ref('GC')
-const DEMO = [
-  { code: 'GC', name: 'Gate Crew · 12 people', colour: '#0072B2', ink: false, pts: [[18, 82], [38, 50], [78, 38]], next: 'Next: F1 Formation by 21:45', lateAfter: 2 },
-  { code: 'BS', name: 'Backstage · 8 people', colour: '#56B4E9', ink: true, pts: [[14, 22], [56, 30], [77, 39]], next: 'Next: F1 Formation by 21:50', lateAfter: 0.55 },
-  { code: 'SD', name: 'Sound · 5 people', colour: '#009E73', ink: true, pts: [[20, 86], [24, 62], [34, 52]], next: 'Next: H2 Holding by 21:40', lateAfter: 2 },
-  { code: 'MD', name: 'Medics · 6 people', colour: '#CC79A7', ink: true, pts: [[90, 88], [88, 80], [70, 76]], next: 'First moment 22:00 · Gate 3', lateAfter: 2 },
-]
-function along(pts, f) {
-  const n = pts.length - 1
-  const x = Math.min(n - 1e-6, f * n)
-  const i = Math.floor(x)
-  const k = x - i
-  return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k]
+// ---------- Visitor: the landing page's small demos (illustrations, not live data) ----------
+const navOpen = ref(false)
+
+// The hero map turns by itself; dragging takes over and it carries on from where it was let go.
+const spin = ref({ drag: false, angle: 0, since: Date.now() })
+let dragStart = null
+const spinStyle = computed(() => (spin.value.drag ? { '--a': spin.value.angle.toFixed(1) } : { animationDelay: '-' + ((spin.value.angle / 360) * 30).toFixed(2) + 's' }))
+function spinDown(e) {
+  try {
+    e.currentTarget.setPointerCapture(e.pointerId)
+  } catch {
+    // the pointer has already gone
+  }
+  const now = (spin.value.angle + ((Date.now() - spin.value.since) / 30000) * 360) % 360
+  dragStart = { x: e.clientX, angle: now }
+  spin.value = { drag: true, angle: now, since: 0 }
 }
-const dots = computed(() => {
-  const f = t.value / 100
-  return DEMO.map((g) => {
-    const [x, y] = along(g.pts, f)
-    return { ...g, x, y, late: f > g.lateAfter }
-  })
-})
-const card = computed(() => dots.value.find((d) => d.code === picked.value))
-const clock = computed(() => {
-  const mins = Math.round((t.value / 100) * 90)
-  return 21 + Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0')
-})
+function spinMove(e) {
+  if (!dragStart) return
+  let angle = (dragStart.angle + (e.clientX - dragStart.x) * 0.6) % 360
+  if (angle < 0) angle += 360
+  spin.value = { ...spin.value, angle }
+}
+function spinUp() {
+  if (!dragStart) return
+  dragStart = null
+  spin.value = { drag: false, angle: spin.value.angle, since: Date.now() }
+}
+onBeforeUnmount(() => (dragStart = null))
+
+const MARQUEE = ['PARADES', 'CAMPUS ORIENTATIONS', 'CONCERTS', 'FUN RUNS', 'FESTIVALS', 'NDP REHEARSALS', 'SCHOOL TRIPS']
+const RING = 'PLAN ✦ RUN ✦ REPLAY ✦ PLANOVA ✦ '.split('').map((ch, i, all) => ({ ch: ch === ' ' ? ' ' : ch, turn: (360 / all.length) * i }))
+
+const ROLE_TABS = [
+  { id: 'planner', label: 'Planner' },
+  { id: 'ic', label: 'In-Charge' },
+  { id: 'member', label: 'Member' },
+]
+const VIEWS = {
+  planner: { title: 'Planners & root', pts: ['Every group on one live map', 'Late or off-route groups rise to the top', 'Message everyone, or one group'], note: '' },
+  ic: { title: 'In-Charges', pts: ['One tap to start sharing', 'Your next move: where and by when', 'A nudge when it’s time to leave'], note: 'Location is shared only during the event. Stop anytime.' },
+  member: { title: 'Members', pts: ['Your group’s timetable', 'Where to be, on a simple map', 'Messages from planners'], note: 'Members are never tracked.' },
+}
+const role = ref('planner')
+
+// The timeline demo: 10:55 to 11:30, "+5 min" pushes everything after now
+const T0 = 655
+const T1 = 690
+const NOW = 662
+const pct = (m) => ((m - T0) / (T1 - T0)) * 100
+const shift = ref(0)
+const DEMO_PLAN = [
+  { name: 'Banana Gang', colour: '#facc15', segs: [[657, 661, 'Mother Ernqi'], [661, 665, 'Walk'], [665, 680, 'Komin Zone']] },
+  { name: 'Monkey Party', colour: '#d946ef', segs: [[657, 663, 'Mother Ernqi'], [663, 668, 'Walk'], [668, 682, 'Komin Zone']] },
+]
+const timeline = computed(() =>
+  DEMO_PLAN.map((g) => ({
+    name: g.name,
+    colour: g.colour,
+    bars: g.segs.map(([from, to, label], i) => {
+      let a = from
+      let b = to
+      if (a >= NOW) {
+        a += shift.value
+        b += shift.value
+      } else if (b > NOW) b += shift.value
+      const left = pct(a)
+      const background = i === 1 ? 'repeating-linear-gradient(45deg,#fff 0 6px,' + g.colour + '55 6px 10px)' : i === 2 ? g.colour : g.colour + '66'
+      return { label, style: { left: left.toFixed(2) + '%', width: Math.max(Math.min(pct(b), 100) - left, 0).toFixed(2) + '%', background } }
+    }),
+  })),
+)
+const TICKS = [655, 665, 675, 685].map((m) => ({ label: Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'), left: pct(m).toFixed(2) + '%' }))
+const nowLeft = pct(NOW).toFixed(2) + '%'
+function shiftPlan() {
+  shift.value = shift.value >= 10 ? 0 : shift.value + 5
+}
+
+const FAQ = [
+  ['Who is tracked?', 'Only In-Charges, and only while the event is live. They can stop sharing at any time. Members are never on the map.'],
+  ['How do people join?', 'Share the 6-character event code or the invite link. Planners can also add people by email or CSV.'],
+  ['Can I bring my existing run sheet?', 'Yes. Import a CSV and each row becomes a moment on the plan. You can adjust it on the map.'],
+  ['What happens after the event?', 'A replay is kept for 7 days. Scrub through it to compare planned and actual routes, or export it as CSV.'],
+]
+const faqOpen = ref(0)
+const year = new Date().getFullYear()
 </script>
 
 <template>
   <!-- ================= Signed in: Home ================= -->
-  <main v-if="auth.isLoggedIn" class="hm">
-    <div class="hm-wrap">
-      <div class="hm-head">
+  <div v-if="auth.isLoggedIn" class="k kq">
+    <main class="ke2-main hm-in">
+      <div class="ke2-greet">
         <div>
-          <h1 class="hm-h1">{{ greeting }}<template v-if="firstName">, {{ firstName }}</template></h1>
-          <p class="hm-muted mb-0">
+          <span class="ey">
             <span v-if="loading" class="skeleton skeleton-line d-inline-block align-middle" style="width: 220px" aria-hidden="true"></span>
-            <template v-else-if="liveEvents.length">{{ liveEvents.length === 1 ? 'One event is live.' : liveEvents.length + ' events are live.' }}</template>
-            <template v-else-if="events.length">Nothing is live right now.</template>
-            <template v-else>You are not in any event yet — create one or join with a code.</template>
-          </p>
+            <template v-else-if="liveEvents.length">{{ liveEvents.length === 1 ? 'One event is live' : liveEvents.length + ' events are live' }}</template>
+            <template v-else-if="events.length">Nothing is live right now</template>
+            <template v-else>You are not in any event yet</template>
+          </span>
+          <h1>{{ greeting }}<template v-if="firstName">, {{ firstName }}</template></h1>
         </div>
-        <RouterLink :to="{ name: 'event-new' }" class="btn btn-primary" data-testid="home-create-event">+ Create an event</RouterLink>
+        <span class="sp"></span>
+        <RouterLink :to="{ name: 'event-new' }" class="kb kb-ink" data-testid="home-create-event">
+          <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create event
+        </RouterLink>
       </div>
 
       <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-      <!-- Live first: one card, the live colour, ONE main action -->
-      <section v-for="ev in liveEvents.slice(0, 1)" :key="ev.id" class="hm-live data-in" aria-label="Live now" data-testid="home-live">
-        <div class="hm-live-main">
-          <div class="d-flex align-items-center gap-2 flex-wrap">
-            <span class="ev-chip ev-chip-live">LIVE</span>
-            <span class="hm-muted small">You: {{ roleLabel(ev) }}</span>
-          </div>
-          <h2 class="hm-h2">{{ ev.name }}<template v-if="ev.venue"> · {{ ev.venue }}</template></h2>
-          <p class="hm-muted mb-0">Open the event for the live map, the plan and who is sharing.</p>
+      <!-- Live first: one band, ONE main action -->
+      <section v-for="ev in liveEvents.slice(0, 1)" :key="ev.id" class="ke2-next hm-live data-in" aria-label="Live now" data-testid="home-live">
+        <div class="txt">
+          <span class="chip chip-lime"><i class="dot pulse" style="background: var(--ink)"></i>Live now</span>
+          <span class="ey hm-role" style="color: var(--lime)">You’re {{ roleLabel(ev) }}</span>
+          <h2>{{ ev.name }}</h2>
+          <div v-if="ev.venue" class="hm-where">{{ ev.venue }}</div>
+          <RouterLink :to="{ name: 'event', params: { id: ev.id, page: 'live' } }" class="kb kb-lime kb-lg hm-open">
+            Open live map <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg>
+          </RouterLink>
         </div>
-        <RouterLink :to="{ name: 'event', params: { id: ev.id, page: 'live' } }" class="btn btn-live btn-lg">Open live map →</RouterLink>
+        <div class="kl-stage kl-spin" aria-hidden="true"><KVenueMap /></div>
       </section>
 
-      <!-- More than one live at once: the first gets the big card, the rest a compact list (one loud thing per screen) -->
-      <section v-if="liveEvents.length > 1" class="hm-card hm-also data-in" aria-label="Also live" data-testid="home-also-live">
-        <h2 class="hm-h3 mb-1">Also live · {{ liveEvents.length - 1 }}</h2>
-        <RouterLink v-for="ev in liveEvents.slice(1)" :key="ev.id" :to="{ name: 'event', params: { id: ev.id, page: 'live' } }" class="hm-row">
-          <span class="ev-chip ev-chip-live">LIVE</span>
-          <span class="flex-grow-1" style="min-width: 0">
-            <strong class="d-block text-truncate">{{ ev.name }}</strong>
-            <span class="hm-muted small">{{ [ev.venue, roleLabel(ev)].filter(Boolean).join(' · ') }}</span>
-          </span>
-          <span class="small fw-semibold" style="color: var(--brand-primary)">Open →</span>
+      <!-- More than one live at once: the first gets the band, the rest a compact list (one loud thing per screen) -->
+      <section v-if="liveEvents.length > 1" class="ke2-list data-in" aria-label="Also live" data-testid="home-also-live">
+        <div class="ke2-lh"><h2>Also live · {{ liveEvents.length - 1 }}</h2></div>
+        <RouterLink v-for="ev in liveEvents.slice(1)" :key="ev.id" :to="{ name: 'event', params: { id: ev.id, page: 'live' } }" class="ke2-row hm-row">
+          <span class="ke2-dt"><b>On</b><span>LIVE</span></span>
+          <span style="min-width: 0"><span class="nm text-truncate">{{ ev.name }}</span><span class="mt">{{ [ev.venue, roleLabel(ev)].filter(Boolean).join(' · ') }}</span></span>
+          <span><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>
         </RouterLink>
       </section>
 
       <div class="hm-cols">
-        <section class="hm-card hm-grow" aria-label="Coming up">
-          <div class="d-flex justify-content-between align-items-baseline mb-1">
-            <h2 class="hm-h3 mb-0">Coming up</h2>
-            <RouterLink to="/events" class="small">All events →</RouterLink>
+        <section class="ke2-list hm-grow" aria-label="Coming up">
+          <div class="ke2-lh">
+            <h2>Coming up</h2>
+            <span class="sp"></span>
+            <RouterLink to="/events" class="link">All events</RouterLink>
           </div>
           <SkeletonLoader v-if="loading" :rows="3" label="Loading your events…" />
-          <p v-else-if="!upcoming.length" class="hm-muted mb-0 py-2 data-in">No upcoming events. Events you create or join show here.</p>
+          <p v-else-if="!upcoming.length" class="mut hm-empty data-in">No upcoming events. Events you create or join show here.</p>
           <template v-else>
-            <RouterLink v-for="ev in upcoming" :key="ev.id" :to="{ name: 'event', params: { id: ev.id } }" class="hm-row data-in">
-              <span class="hm-tile">
-                <span>{{ tile(ev.startsAt).dow }}</span><strong>{{ tile(ev.startsAt).day }}</strong><span>{{ tile(ev.startsAt).mon }}</span>
+            <RouterLink v-for="ev in upcoming" :key="ev.id" :to="{ name: 'event', params: { id: ev.id } }" class="ke2-row hm-row data-in">
+              <span class="ke2-dt" :class="{ tbc: !ev.startsAt }"><b>{{ ev.startsAt ? tile(ev.startsAt).day : 'TBC' }}</b><span>{{ ev.startsAt ? tile(ev.startsAt).mon : 'DATE' }}</span></span>
+              <span style="min-width: 0">
+                <span class="nm text-truncate">{{ ev.name }}</span>
+                <span class="mt">{{ [ev.venue, timeOf(ev.startsAt), roleLabel(ev)].filter(Boolean).join(' · ') }}</span>
               </span>
-              <span class="flex-grow-1" style="min-width: 0">
-                <strong class="d-block text-truncate">{{ ev.name }}</strong>
-                <span class="hm-muted small">{{ [ev.venue, timeOf(ev.startsAt), roleLabel(ev)].filter(Boolean).join(' · ') }}</span>
-              </span>
-              <span v-if="ev.isSimulation" class="hm-chip hm-chip-info">Simulation</span>
+              <span class="hm-trail"><span v-if="ev.isSimulation" class="chip rl-sim">Sim</span><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>
             </RouterLink>
           </template>
         </section>
 
-        <section class="hm-join" aria-label="Join an event">
-          <h2 class="hm-h3 text-white">Join an event</h2>
-          <label for="home-code" class="small hm-on-dark">Type the 6-character code your planner sent you.</label>
-          <div class="d-flex gap-2 flex-wrap">
-            <input id="home-code" :value="code" class="form-control hm-code-input" autocomplete="off" placeholder="9Z8GGZ" data-testid="home-join-code" @input="onCode" @keydown.enter="join" />
-            <button type="button" class="btn" :class="codeFull ? 'btn-light' : 'btn-outline-light'" :disabled="!codeFull || joinBusy" data-testid="home-join-btn" @click="join">
-              {{ joinBusy ? 'Joining…' : 'Join' }}
-            </button>
+        <section class="ke2-list hm-join" aria-label="Join an event">
+          <div class="ke2-lh"><h2>Join an event</h2></div>
+          <label for="home-code" class="lab">Event code</label>
+          <div class="row">
+            <input id="home-code" :value="code" class="kin hm-code" autocomplete="off" placeholder="e.g. 3MF5Y5" data-testid="home-join-code" @input="onCode" @keydown.enter="join" />
+            <button type="button" class="kb kb-ink" :disabled="!codeFull || joinBusy" data-testid="home-join-btn" @click="join">{{ joinBusy ? 'Joining…' : 'Join' }}</button>
           </div>
-          <span class="small hm-on-dark">{{ joinError || (codeFull ? 'Looks good — press Join.' : code ? 6 - code.length + ' more to go · letters and digits only' : 'Paste works.') }}</span>
+          <p class="hint" :class="{ 'hm-error': joinError }">{{ joinError || (codeFull ? 'Looks good. Press Join.' : code ? 6 - code.length + ' more to go · letters and digits only' : 'Type the 6-character code your planner sent you.') }}</p>
         </section>
       </div>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <!-- ================= Visitor: the landing page ================= -->
-  <main v-else class="hm">
-    <section class="hm-wrap hm-hero">
-      <div class="hm-hero-text">
-        <span class="hm-kicker"><span class="hm-kicker-badge">NEW</span>Plans now run on one clock — every group, every moment</span>
-        <h1 class="hm-display">Every group in the right place, right on time.</h1>
-        <p class="hm-lead">Planova turns your run sheet into a live plan. Planners see where every group is. ICs and members get one clear next move on their phone — and a nudge when it is time to go.</p>
-        <div class="d-flex gap-2 flex-wrap">
-          <RouterLink :to="{ name: 'signup' }" class="btn btn-primary btn-lg">Create an event →</RouterLink>
-          <RouterLink :to="{ name: 'login' }" class="btn btn-outline-primary btn-lg">Log in</RouterLink>
+  <div v-else class="k kq kl">
+    <div class="kl-in">
+      <header class="kl-nav2">
+        <RouterLink class="kl-brand" to="/" aria-label="Planova home"><KLogo /><span>planova</span></RouterLink>
+        <nav class="kl-links" :class="{ open: navOpen }" aria-label="Main">
+          <a href="#how" @click="navOpen = false">How it works</a><a href="#features" @click="navOpen = false">Features</a><a href="#faq" @click="navOpen = false">FAQ</a>
+        </nav>
+        <span class="sp"></span>
+        <RouterLink class="kb kb-ghost" :to="{ name: 'login' }">Log in</RouterLink>
+        <RouterLink class="kb kb-lime kb-sm" :to="{ name: 'signup' }">Create an event</RouterLink>
+        <button type="button" class="ib kl-burger" aria-label="Menu" :aria-expanded="navOpen ? 'true' : 'false'" @click="navOpen = !navOpen">
+          <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+        </button>
+      </header>
+
+      
+      <h1 class="kl-h1 U">Right place.<br /><span class="hl">Right time.</span></h1>
+
+      <section class="kl-hero">
+        <div class="kl-copy">
+          <p>Plan where every group should be. Run it live. Everyone sees their next move.</p>
+          <div>
+            <RouterLink class="kb kb-lime kb-lg" :to="{ name: 'signup' }">Create an event <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></RouterLink>
+          </div>
+          <div class="sp"></div>
+          <form class="kl-join" aria-label="Join with a code" @submit.prevent="join">
+            <input :value="code" placeholder="Have a code?" autocomplete="off" aria-label="Event code" data-testid="visitor-join-code" @input="onCode" @keydown.enter.prevent="join" />
+            <button class="ib" type="submit" aria-label="Join event" style="background: var(--ink); color: var(--lime)">
+              <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+            </button>
+          </form>
         </div>
-        <div class="hm-join-light">
-          <label for="visitor-code" class="fw-semibold">Got an event code from your planner?</label>
-          <div class="d-flex gap-2 align-items-center flex-wrap">
-            <div class="hm-boxes">
-              <span v-for="(b, i) in boxes" :key="i" class="hm-box" :class="{ 'hm-box-filled': b.ch, 'hm-box-next': b.next }">{{ b.ch }}</span>
-              <input id="visitor-code" :value="code" class="hm-box-input" autocomplete="off" aria-describedby="visitor-code-help" data-testid="visitor-join-code" @input="onCode" @keydown.enter="join" />
+        <div class="kl-stage kl-spin" :class="{ drag: spin.drag }" :style="spinStyle" aria-label="3D venue preview. Drag to turn." @pointerdown="spinDown" @pointermove="spinMove" @pointerup="spinUp" @pointercancel="spinUp">
+          <KVenueMap labels />
+          
+        </div>
+        <div class="kl-deckw" aria-label="What each person sees">
+          <span class="ey">What each person sees</span>
+          <div class="kl-deck">
+            <div class="kl-card"><span class="ey">Planner · big screen</span><b>2 of 2 groups on plan</b><p>Banana Gang reached Komin Zone</p><span class="chip chip-mint">● On plan</span></div>
+            <div class="kl-card"><span class="ey">In-Charge · phone</span><b>Leave now</b><p>Next: Komin Zone by 11:05 · 4 min walk</p><span class="chip chip-ink">Sharing location</span></div>
+            <div class="kl-card"><span class="ey">Member · phone</span><b>11:05 · Komin Zone</b><p>Stay with your In-Charge</p><span class="chip" style="background: #fff">You’re on time</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="kl-band" aria-label="Made for parades, orientations, concerts, fun runs and festivals">
+      <div>
+        <template v-for="pass in 2" :key="pass">
+          <template v-for="word in MARQUEE" :key="pass + word"><span>{{ word }}</span><i>✦</i></template>
+        </template>
+      </div>
+    </section>
+
+    <div class="kl-in">
+      <section id="how" class="kl-block">
+        <span class="ey">How it works</span>
+        <h2 class="kl-h2">Plan it once. Run it live.<br />Replay it after.</h2>
+        <div class="kl-steps">
+          <article class="kl-step"><div class="big">01</div><h3>Plan</h3><p>Draw zones, place every group on one timeline and publish. Bring your run sheet as a CSV.</p><div class="who"><span class="rlp" style="background: var(--mint)">Planner</span></div></article>
+          <article class="kl-step lime"><div class="big">02</div><h3>Run</h3><p>Press Start. In-Charges share location with one tap. Every member gets their next move and a “leave now” nudge.</p><div class="who"><span class="rlp" style="background: #fff">In-Charge</span><span class="rlp" style="background: #fff">Member</span></div></article>
+          <article class="kl-step dark"><div class="big">03</div><h3>Replay</h3><p>Scrub through the event, see who was late and why, and export it for the debrief.</p><div class="who"><span class="rlp" style="background: var(--lime); color: var(--ink)">Planner</span></div></article>
+        </div>
+
+        <div id="roles" class="kl-views">
+          <div>
+            <span class="ey" style="color: var(--lime); padding-right: 10px">One event, three views</span>
+            <div class="seg" role="tablist" aria-label="Role" style="margin-top: 16px">
+              <button v-for="r in ROLE_TABS" :key="r.id" type="button" role="tab" :aria-pressed="role === r.id ? 'true' : 'false'" :aria-selected="role === r.id ? 'true' : 'false'" @click="role = r.id">{{ r.label }}</button>
             </div>
-            <button type="button" class="btn" :class="codeFull ? 'btn-primary' : 'btn-outline-primary'" :disabled="!codeFull" @click="join">Join</button>
+            <h3>{{ VIEWS[role].title }}</h3>
+            <ul><li v-for="p in VIEWS[role].pts" :key="p">{{ p }}</li></ul>
+            <div v-if="VIEWS[role].note" class="kl-note"><i class="dot" style="background: var(--mint)"></i>{{ VIEWS[role].note }}</div>
           </div>
-          <span id="visitor-code-help" class="small hm-muted">{{ codeFull ? 'Looks good — you’ll sign in or make an account next.' : 'Paste works · only letters and digits · ' + (6 - code.length) + ' to go' }}</span>
-        </div>
-      </div>
-
-      <div class="hm-demo" aria-label="Example of a live plan">
-        <div class="hm-demo-head">
-          <span class="ev-chip ev-chip-live">LIVE · {{ clock }}</span>
-          <strong>Show night · example</strong>
-        </div>
-        <div class="hm-map">
-          <svg viewBox="0 0 600 360" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M0 280 C110 240 200 300 300 280 S500 220 600 240 V360 H0Z" fill="#CFE6EE" />
-            <path d="M50 0 L120 360 M0 110 L600 70 M260 0 L330 360 M450 0 L520 360 M0 200 L600 170" stroke="#FFFFFF" stroke-width="10" />
-            <rect x="390" y="84" width="130" height="86" rx="14" fill="#DCEFEA" stroke="#2E8A7A" stroke-width="2" stroke-dasharray="7 5" />
-            <rect x="150" y="150" width="110" height="74" rx="14" fill="#DCEFEA" stroke="#2E8A7A" stroke-width="2" stroke-dasharray="7 5" />
-            <rect x="490" y="214" width="90" height="56" rx="12" fill="#FBE5E1" stroke="#C4321F" stroke-width="2" stroke-dasharray="4 4" />
-            <path d="M108 295 C170 230 200 200 228 180 S380 140 470 136" stroke="#0072B2" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 10" fill="none" />
-            <path d="M84 80 C200 100 300 95 340 110 S430 140 466 140" stroke="#14201B" stroke-width="8" stroke-linecap="round" stroke-dasharray="1 10" fill="none" opacity=".55" />
-            <path d="M84 80 C200 100 300 95 340 110 S430 140 466 140" stroke="#56B4E9" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 10" fill="none" />
-          </svg>
-          <span class="hm-zone" style="left: 66%; top: 25%">F1 · Formation</span>
-          <span class="hm-zone" style="left: 26%; top: 43%">H2 · Holding</span>
-          <span class="hm-zone hm-zone-nogo" style="left: 82%; top: 61%">No-Go</span>
-          <button
-            v-for="d in dots"
-            :key="d.code"
-            type="button"
-            class="hm-dot"
-            :class="{ 'hm-dot-late': d.late }"
-            :style="{ left: d.x + '%', top: d.y + '%', background: d.colour, color: d.ink ? '#14201B' : '#FFFFFF' }"
-            :aria-label="d.name + (d.late ? ', late' : ', on time')"
-            @mouseenter="picked = d.code"
-            @focus="picked = d.code"
-            @click="picked = d.code"
-          >
-            {{ d.code }}
-          </button>
-          <div v-if="card" class="hm-pop" :style="{ left: Math.min(card.x + 4, 62) + '%', top: Math.min(card.y + 6, 62) + '%' }">
-            <strong>{{ card.name }}</strong>
-            <span class="hm-muted small">{{ card.next }}</span>
-            <span class="hm-chip" :class="card.late ? 'hm-chip-late' : 'hm-chip-ok'">{{ card.late ? '3 min late' : 'On time' }}</span>
+          <div class="kl-vis">
+            <div v-if="role === 'planner'" class="kl-board">
+              <div class="row" style="margin-bottom: 8px"><b class="U" style="font-size: 16px">Banana Party</b><span class="sp"></span><span class="chip chip-ink"><i class="dot pulse" style="background: var(--lime)"></i>Live 11:03</span></div>
+              <div class="kl-brow"><i class="dot" style="background: #facc15; width: 12px; height: 12px"></i><b style="flex: 1">Banana Gang</b><span class="mut">Komin Zone</span><span class="chip chip-mint">On plan</span></div>
+              <div class="kl-brow"><i class="dot" style="background: #d946ef; width: 12px; height: 12px"></i><b style="flex: 1">Monkey Party</b><span class="mut">Neil Rd</span><span class="chip chip-warn">3 min late</span></div>
+              <div class="kl-brow"><span class="mut" style="flex: 1">Next frame · +0:06</span><span class="kb kb-ink kb-sm" style="height: 32px">+5 min</span></div>
+            </div>
+            <div v-else-if="role === 'ic'" class="kl-phone">
+              <div class="notch"></div>
+              <span class="ey">Next move</span>
+              <div class="U" style="font-size: 30px; font-weight: 800; margin: 8px 0 4px">Leave now</div>
+              <div class="mut" style="font-size: 14px">Komin Zone by 11:05 · 4 min</div>
+              <div class="row" style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line)"><b style="flex: 1; font-size: 14px">Sharing location</b><span class="tog" aria-pressed="true" style="display: inline-block"></span></div>
+            </div>
+            <div v-else class="kl-phone" style="background: var(--lime)">
+              <div class="notch" style="background: rgba(10, 31, 23, 0.15)"></div>
+              <span class="ey">Banana Gang · today</span>
+              <div class="kl-sched" style="margin-top: 10px">
+                <div><b>10:57</b><span>Mother Ernqi</span><span>✓</span></div>
+                <div><b>11:05</b><span><b>Komin Zone</b></span><span class="chip chip-ink" style="height: 22px">Now</span></div>
+                <div><b>11:20</b><span>Free time</span><span></span></div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="hm-scrub">
-          <p v-if="card" class="hm-pop-line" aria-live="polite">
-            <strong>{{ card.name }}</strong> · {{ card.next }} · <span :class="card.late ? 'text-warning-emphasis' : 'text-success'">{{ card.late ? '3 min late' : 'On time' }}</span>
-          </p>
-          <label for="hm-scrub" class="small hm-muted">Drag the clock to replay the night</label>
-          <input id="hm-scrub" v-model.number="t" type="range" min="0" max="100" class="form-range" />
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="hm-band">
-      <div class="hm-wrap">
-        <span class="hm-eyebrow">HOW IT WORKS</span>
-        <h2 class="hm-h2b">Plan it once. Run it live. Replay it after.</h2>
-        <div class="hm-grid3">
-          <div class="hm-step"><span class="hm-num" style="background: #0f5c50">1</span><h3>Plan</h3><p>Draw your zones, place every group’s moments on one clock and publish. Import the run sheet you already have (Excel or CSV).</p></div>
-          <div class="hm-step"><span class="hm-num" style="background: #f2a541; color: #14201b">2</span><h3>Run</h3><p>Press Start. ICs share their location with one tap; everyone gets their next move, and a “leave now” push at the right time.</p></div>
-          <div class="hm-step"><span class="hm-num" style="background: #0b3d35">3</span><h3>Replay</h3><p>Scrub through the night, see who was late and why, and export it for the debrief.</p></div>
+      <section id="features" class="kl-block">
+        <div class="kl-feat">
+          <div>
+            <span class="ey">The live timeline</span>
+            <h2 class="kl-h2">Running late?<br />Shift once.</h2>
+            <p class="lead">Push the plan by a few minutes and every group’s times update on every phone. No group chats, no re-sending run sheets.</p>
+            <div class="kl-pts"><span><i>✓</i>New times reach each group instantly</span><span><i>✓</i>Late or off-route groups rise to the top</span><span><i>✓</i>Undo in one tap</span></div>
+          </div>
+          <div class="kl-tl" aria-label="Timeline demo">
+            <div class="kl-tl-ax"><span v-for="t in TICKS" :key="t.label" :style="{ left: t.left }">{{ t.label }}</span></div>
+            <div v-for="r in timeline" :key="r.name" class="kl-tl-row">
+              <b><i class="dot" :style="{ background: r.colour }"></i>{{ r.name }}</b>
+              <div class="kl-tl-tr"><span class="kl-now" :style="{ left: nowLeft }"></span><span v-for="b in r.bars" :key="b.label" class="kl-bar" :style="b.style">{{ b.label }}</span></div>
+            </div>
+            <div class="kl-tl-bot">
+              <button type="button" class="kb kb-ink" @click="shiftPlan">{{ shift >= 10 ? 'Undo' : '+5 min' }}</button>
+              <span v-if="shift > 0" class="kl-sent">✓ New times sent to 2 groups · +{{ shift }} min</span>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="hm-wrap hm-section">
-      <span class="hm-eyebrow">ONE EVENT, THREE VIEWS</span>
-      <h2 class="hm-h2b">Everyone sees exactly what they need — and nothing else.</h2>
-      <div class="hm-grid3">
-        <div class="hm-role hm-role-dark">
-          <span class="hm-eyebrow" style="color: #8fd3bf">CONTROL ROOM ON A BIG SCREEN</span>
-          <h3>Planners &amp; root</h3>
-          <ul><li>Every group on one live map</li><li>Late or off-route groups rise to the top</li><li>Message everyone, or one group</li></ul>
+      <section class="kl-block">
+        <div class="kl-feat kl-feat--rev">
+          <div class="kl-lmap" aria-label="Live map demo">
+            <svg viewBox="0 0 400 300" aria-hidden="true">
+              <rect width="400" height="300" fill="#f3f1ea"></rect>
+              <path d="M-10 214 C 90 196, 210 176, 410 140" stroke="#fff" stroke-width="16" fill="none"></path>
+              <path d="M168 -10 C 176 90, 182 190, 194 310" stroke="#fff" stroke-width="12" fill="none"></path>
+              <path d="M308 -10 C 302 100, 294 200, 282 310" stroke="#fff" stroke-width="13" fill="none"></path>
+              <polygon points="66,58 146,54 152,122 76,128" fill="#9be7c4" fill-opacity=".65" stroke="#0b3d2e" stroke-width="2"></polygon>
+              <polygon points="216,142 282,138 286,204 224,208" fill="#c6f36b" fill-opacity=".8" stroke="#0a1f17" stroke-width="2.5"></polygon>
+              <polygon points="276,38 352,44 346,92 282,88" fill="#ff8a65" fill-opacity=".35" stroke="#c2410c" stroke-width="2" stroke-dasharray="6 4"></polygon>
+              <path d="M100 92 C 140 120, 170 150, 248 172" stroke="#a16207" stroke-width="2.5" stroke-dasharray="2 7" stroke-linecap="round" fill="none"></path>
+              <path d="M124 110 C 160 150, 200 190, 258 186" stroke="#a21caf" stroke-width="2.5" stroke-dasharray="2 7" stroke-linecap="round" fill="none"></path>
+              <g font-family="Manrope, sans-serif" font-size="9" font-weight="800" fill="#0a1f17"><text x="74" y="70">HOLDING</text><text x="230" y="200">STAGE</text><text x="286" y="56" fill="#c2410c">NO-GO</text></g>
+            </svg>
+            <span class="kl-gd g1"><i></i><b>Banana Gang</b></span>
+            <span class="kl-gd g2"><i></i><b>Monkey Party</b></span>
+            <span class="kl-alert">Monkey Party is off route</span>
+            <div class="kl-tools"><span class="chip chip-mint">Zone</span><span class="chip chip-lime">Stage</span><span class="chip chip-warn">No-go</span></div>
+          </div>
+          <div>
+            <span class="ey">Zones &amp; live map</span>
+            <h2 class="kl-h2">Draw the venue.<br />Watch it move.</h2>
+            <p class="lead">Mark stages, holding areas and no-go zones right on the map. Once you’re live, every group moves on the same map in real time.</p>
+            <div class="kl-pts"><span><i>✓</i>Draw zones in a few taps, or add a floor plan</span><span><i>✓</i>Live positions from each group’s In-Charge</span><span><i>✓</i>Alerts when a group goes off route</span></div>
+          </div>
         </div>
-        <div class="hm-role">
-          <span class="hm-eyebrow">YOUR GROUP’S PHONE</span>
-          <h3>ICs (in-charge)</h3>
-          <ul><li>One tap to start sharing</li><li>Your next move: where, and by when</li><li>A push when it is time to leave</li></ul>
-        </div>
-        <div class="hm-role">
-          <span class="hm-eyebrow">JUST FOLLOW ALONG</span>
-          <h3>Members</h3>
-          <ul><li>Your group’s timetable</li><li>Where to be, on a simple map</li><li>Messages from planners</li></ul>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="hm-privacy">
-      <div class="hm-wrap hm-privacy-in">
-        <div style="flex: 1 1 280px">
-          <span class="hm-eyebrow">YOUR LOCATION, YOUR RULES</span>
-          <h2 class="hm-h2">Shared only while it matters.</h2>
+      <section id="faq" class="kl-block" style="border-bottom: 0">
+        <div class="kl-faq">
+          <div><span class="ey">FAQ</span><h2 class="kl-h2">Good to know</h2></div>
+          <div>
+            <div v-for="([q, a], i) in FAQ" :key="q" class="kl-q">
+              <button type="button" :aria-expanded="faqOpen === i ? 'true' : 'false'" @click="faqOpen = faqOpen === i ? -1 : i">{{ q }}<i>+</i></button>
+              <p v-if="faqOpen === i">{{ a }}</p>
+            </div>
+          </div>
         </div>
-        <div class="hm-grid3" style="flex: 3 1 560px">
-          <div><strong>Only during the event</strong><p>Sharing opens when the planner starts and stops by itself when it ends.</p></div>
-          <div><strong>Only with your people</strong><p>Your planners and your own group — no one else, no public map.</p></div>
-          <div><strong>Stop any time</strong><p>One tap ends sharing, and your planners see that you stopped.</p></div>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="hm-cta">
-      <div class="hm-wrap text-center">
-        <h2 class="hm-h2b text-white">Your next event, calmer.</h2>
-        <p class="hm-on-dark">Set up in about ten minutes. Bring the run sheet you already have.</p>
-        <div class="d-flex gap-2 justify-content-center flex-wrap">
-          <RouterLink :to="{ name: 'signup' }" class="btn btn-light btn-lg">Create an event</RouterLink>
-          <RouterLink :to="{ name: 'login' }" class="btn btn-outline-light btn-lg">Log in</RouterLink>
+      <section class="kl-cta2">
+        <h2>Plan your <br /> next event<br /></h2>
+        <div class="row" style="margin-top: 34px; flex-wrap: wrap">
+          <RouterLink class="kb kb-lime kb-lg" :to="{ name: 'signup' }">Create an event <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></RouterLink>
+          <RouterLink class="kb kb-lg" :to="{ name: 'login' }" style="color: #fff; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.5) inset">Log in</RouterLink>
         </div>
-        <p v-if="isDev" class="small mt-4 mb-0"><RouterLink to="/polygon" class="hm-on-dark">Demo bench (local dev only)</RouterLink></p>
-      </div>
-    </section>
-  </main>
+        <div class="kl-ring2" aria-hidden="true"><span v-for="(g, i) in RING" :key="i" :style="{ transform: 'rotate(' + g.turn + 'deg)' }">{{ g.ch }}</span></div>
+      </section>
+      <footer class="kl-foot2">
+        <span class="row"><KLogo /> © {{ year }} Planova</span>
+        <nav aria-label="Footer"><a href="#how">How it works</a><a href="#features">Features</a><a href="#faq">FAQ</a><RouterLink v-if="isDev" to="/polygon">Demo bench (local dev only)</RouterLink></nav>
+        <span>Map data © OneMap</span>
+      </footer>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.hm { background: var(--bg-canvas); color: var(--text-primary); }
-.hm-wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
-.hm-muted { color: var(--text-tertiary); }
-.hm-on-dark { color: #b9d4cc; }
-.hm-eyebrow { display: block; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; color: var(--brand-primary); margin-bottom: 8px; }
-.hm-h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(32px, 4vw, 44px); letter-spacing: -0.02em; margin: 0 0 4px; }
-.hm-h2 { font-family: var(--font-display); font-weight: 700; font-size: 28px; margin: 6px 0; }
-.hm-h2b { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 3.6vw, 44px); letter-spacing: -0.02em; margin: 0 0 32px; max-width: 820px; }
-.hm-h3 { font-size: 18px; font-weight: 600; }
-
-/* signed in */
-.hm-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding: 40px 0 24px; }
-.hm-live { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; background: var(--bg-surface); border: 2px solid var(--signal); border-radius: 24px; padding: 24px 28px; margin-bottom: 20px; box-shadow: 0 12px 36px -8px rgba(242, 165, 65, 0.28); }
-.hm-live-main { flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.hm-also { margin-bottom: 20px; }
-.hm-cols { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; padding-bottom: 64px; }
-.hm-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 20px; padding: 22px 24px; }
+/* The signed-in Home uses the Events page's blocks; these only cover what that page does not have */
+.hm-in { overflow: visible; max-width: 1440px; margin: 0 auto; padding-top: 22px; }
+.hm-live { margin-bottom: 16px; }
+.hm-role { display: block; margin-top: 16px; }
+.hm-where { color: var(--on-forest-body); font-size: 15px; }
+.hm-open { margin-top: 24px; }
+.hm-cols { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 .hm-grow { flex: 999 1 520px; min-width: 0; }
-.hm-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border-subtle); color: inherit; text-decoration: none; }
-.hm-row:hover strong { color: var(--brand-primary); }
-.hm-tile { width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 14px; background: var(--brand-primary-subtle); color: var(--brand-primary); font-size: 12px; font-weight: 600; }
-.hm-tile strong { font-family: var(--font-display); font-size: 24px; color: #0b3d35; line-height: 1.1; }
-.hm-join { flex: 1 1 320px; background: #0b3d35; border-radius: 20px; padding: 22px 24px; display: flex; flex-direction: column; gap: 10px; }
-.hm-code-input { flex: 1 1 150px; min-width: 0; background: rgba(255, 255, 255, 0.08); border: 1.5px solid #2e8a7a; color: #fff; font-family: var(--font-mono); font-size: 20px; letter-spacing: 0.3em; text-transform: uppercase; }
-.hm-code-input::placeholder { color: #7fa79c; }
-.hm-chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; align-self: flex-start; }
-.hm-chip-info { background: var(--status-info-bg); color: var(--status-info-fg); }
-.hm-chip-ok { background: var(--status-success-bg); color: var(--status-success-fg); }
-.hm-chip-late { background: var(--status-warning-bg); color: var(--status-warning-fg); }
-
-/* visitor */
-.hm-hero { display: flex; flex-wrap: wrap; gap: 48px; align-items: center; padding-top: 48px; padding-bottom: 80px; }
-.hm-hero-text { flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
-.hm-kicker { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; padding: 5px 14px 5px 5px; border-radius: 999px; background: var(--brand-primary-subtle); border: 1px solid #bfe0d8; font-size: 13px; font-weight: 500; color: #0b3d35; }
-.hm-kicker-badge { padding: 3px 10px; border-radius: 999px; background: var(--brand-primary); color: #fff; font-size: 12px; }
-.hm-display { font-family: var(--font-display); font-weight: 700; font-size: clamp(40px, 5.2vw, 66px); line-height: 1.03; letter-spacing: -0.03em; margin: 0; }
-.hm-lead { font-size: 18px; line-height: 1.55; color: var(--text-secondary); max-width: 520px; margin: 0; }
-.hm-join-light { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; }
-.hm-boxes { position: relative; display: flex; gap: 8px; }
-.hm-box { width: 46px; height: 54px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 26px; color: #0b3d35; background: #fff; box-shadow: inset 0 0 0 1px #bfe0d8; }
-.hm-box-filled { background: var(--brand-primary-subtle); }
-.hm-box-next { box-shadow: inset 0 0 0 2px var(--brand-primary); }
-.hm-box-input { position: absolute; inset: 0; opacity: 0; width: 100%; font-size: 16px; }
-.hm-box-input:focus-visible + * , .hm-boxes:focus-within { outline: 3px solid #2e8a7a; outline-offset: 4px; border-radius: 12px; }
-.hm-demo { flex: 1 1 520px; min-width: 0; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 28px; overflow: hidden; box-shadow: 0 24px 60px -12px rgba(11, 61, 53, 0.18); }
-.hm-demo-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; flex-wrap: wrap; }
-.hm-map { position: relative; aspect-ratio: 600 / 360; background: #efede6; }
-.hm-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.hm-zone { position: absolute; padding: 3px 8px; border-radius: 6px; background: #fff; font-size: 12px; font-weight: 600; color: var(--brand-primary); }
-.hm-zone-nogo { color: var(--status-error-fg); }
-.hm-dot { position: absolute; transform: translate(-50%, -50%); width: 36px; height: 36px; padding: 0; border-radius: 999px; border: 3px solid #fff; font-size: 11px; font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }
-.hm-dot-late { box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--attention-ring); }
-.hm-pop { position: absolute; background: #fff; border: 1px solid var(--border-subtle); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); min-width: 190px; pointer-events: none; }
-.hm-scrub { padding: 12px 20px 16px; }
-.hm-band { background: var(--bg-surface); padding: 80px 0; }
-.hm-section { padding-top: 80px; padding-bottom: 80px; }
-.hm-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
-.hm-step { background: var(--bg-canvas); border-radius: 22px; padding: 28px; }
-.hm-step h3, .hm-role h3 { font-family: var(--font-display); font-size: 26px; margin: 14px 0 10px; }
-.hm-step p { color: var(--text-secondary); margin: 0; line-height: 1.5; }
-.hm-num { width: 44px; height: 44px; border-radius: 999px; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; }
-.hm-role { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 22px; padding: 28px; }
-.hm-role ul { padding-left: 20px; margin: 0; color: var(--text-secondary); line-height: 1.7; }
-.hm-role-dark { background: #0b3d35; border-color: #0b3d35; color: #fff; }
-.hm-role-dark ul { color: #b9d4cc; }
-.hm-privacy { background: var(--brand-primary-subtle); padding: 56px 0; }
-.hm-privacy-in { display: flex; flex-wrap: wrap; gap: 32px; align-items: center; }
-.hm-privacy p { color: var(--text-secondary); margin: 4px 0 0; font-size: 15px; }
-.hm-privacy strong { color: #0b3d35; }
-.hm-cta { background: #0b3d35; padding: 80px 0; }
-.hm-cta .hm-h2b { margin: 0 auto 12px; }
-.hm-pop-line { display: none; margin: 0 0 8px; font-size: 14px; }
-/* Phone width: the six boxes and Join share one row, and the group card becomes a line under the map */
-@media (max-width: 600px) {
-  .hm-boxes { gap: 4px; }
-  .hm-box { width: 33px; height: 46px; font-size: 20px; }
-  .hm-pop { display: none; }
-  .hm-pop-line { display: block; }
-}
+.hm-join { flex: 1 1 320px; padding-bottom: 24px; }
+.hm-row { grid-template-columns: 72px minmax(0, 1fr) auto; }
+.hm-trail { display: flex; align-items: center; gap: 10px; }
+.hm-empty { padding: 20px 0; margin: 0; }
+.hm-code { font: 700 16px Unbounded, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; min-width: 0; }
+.hm-code::placeholder { font: 600 15px Manrope, sans-serif; letter-spacing: 0; text-transform: none; }
+.hm-error { color: var(--danger); font-weight: 700; }
 </style>

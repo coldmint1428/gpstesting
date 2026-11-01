@@ -706,36 +706,20 @@ async function removeEvent() {
       <button type="button" class="btn btn-danger btn-sm sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </header>
 
-    <!-- Header: which event, when, its state, my role -->
-    <header v-if="!native" class="ev-head">
-      <div class="ev-head-inner">
-        <div class="flex-grow-1" style="min-width: 0">
-          <RouterLink to="/events" class="ev-back" data-testid="back-to-events">← My events</RouterLink>
-          <h1 class="ev-title" data-testid="event-name">{{ event.name }}</h1>
-          <div class="ev-meta mt-1">
-            <span v-if="isLive" class="ev-chip ev-chip-live" data-testid="head-live">LIVE</span>
-            <span v-else-if="scheduledStart" class="ev-chip ev-chip-sched">Starts {{ formatDayTime(scheduledStart) }}</span>
-            <span v-else class="ev-chip ev-chip-off">Not live</span>
-            <span v-if="event.is_simulation" class="ev-chip ev-chip-sim" data-testid="sim-badge">SIMULATION</span>
-            <span v-if="event.starts_at || event.venue" data-testid="event-when">
-              <template v-if="event.starts_at">{{ formatDayTime(event.starts_at) }} – {{ formatDayTime(event.ends_at) }}</template>
-              <template v-if="event.starts_at && event.venue"> · </template>
-              <template v-if="event.venue">{{ event.venue }}</template>
-            </span>
-            <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
-            <span class="ev-chip ev-chip-role" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
-            <span v-if="isMarshal(me)" class="ev-chip ev-chip-role" data-testid="event-marshal-badge">Marshal</span>
-            <span v-if="myGroup" class="ev-chip ev-chip-role" data-testid="group-role-badge">
-              {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}
-            </span>
-          </div>
-          <p v-if="event.description" class="ev-desc">{{ event.description }}</p>
-        </div>
-        <button type="button" class="btn btn-danger sos-btn align-self-center" data-testid="sos-btn" @click="sosDialogOpen = true">
-          SOS
-        </button>
+    <!-- Which event and its state, in the site's top bar (one bar, as in the design) -->
+    <Teleport v-if="!native" to="#k-nav-context">
+      <div class="ks-ev">
+        <RouterLink to="/events" class="ks-crumb" data-testid="back-to-events"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Events</RouterLink>
+        <h1 class="k-ev-name text-truncate" data-testid="event-name">{{ event.name }}</h1>
+        <span v-if="isLive" class="chip chip-ink ks-hide-m" data-testid="head-live"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+        <span v-else-if="scheduledStart" class="chip chip-mint ks-hide-m">Starts {{ formatDayTime(scheduledStart) }}</span>
+        <span v-else class="chip chip-soft ks-hide-m">Not live</span>
+        <span v-if="event.is_simulation" class="chip rl-sim ks-hide-m" data-testid="sim-badge">Sim</span>
       </div>
-    </header>
+    </Teleport>
+    <Teleport v-if="!native" to="#k-nav-actions">
+      <button type="button" class="kb kb-sm k-sos sos-btn" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
+    </Teleport>
 
     <div class="ev-body">
       <!-- Every page of the event, always in view -->
@@ -752,14 +736,20 @@ async function removeEvent() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" />
               </svg>
-              <span class="ev-nav-text">
-                <span>{{ p.label }}</span>
-                <span class="ev-nav-hint">{{ p.hint }}</span>
-              </span>
+              <span class="ev-nav-text">{{ p.label }}</span>
               <span v-if="p.badge" class="ev-nav-badge" :class="{ 'ev-nav-badge-live': p.badgeLive }">{{ p.badge }}</span>
             </RouterLink>
           </li>
         </ul>
+        <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
+        <div class="ks-me k-you">
+          <span>You</span>
+          <div class="k-you-pills">
+            <span class="chip" :class="topRole(me) === 'root' ? 'rl-root' : topRole(me) === 'planner' ? 'rl-planner' : 'chip-soft'" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
+            <span v-if="isMarshal(me)" class="chip chip-soft" data-testid="event-marshal-badge">Marshal</span>
+            <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
+          </div>
+        </div>
       </nav>
 
       <section ref="mainEl" class="ev-main" :class="{ 'pv-has-tabs': native }" :aria-label="currentPage.label">
@@ -849,6 +839,11 @@ async function removeEvent() {
         <!-- The page's title and what it is for -->
         <div v-if="!native" class="ev-page-head">
           <h2>{{ currentPage.label }}</h2>
+          <p v-if="event.starts_at || event.venue" class="ev-when" data-testid="event-when">
+            <template v-if="event.starts_at">{{ formatDayTime(event.starts_at) }} → {{ formatDayTime(event.ends_at) }}</template>
+            <template v-if="event.starts_at && event.venue"> · </template>
+            <template v-if="event.venue">{{ event.venue }}</template>
+          </p>
           <p data-testid="view-scope">{{ currentPage.about }}</p>
         </div>
 

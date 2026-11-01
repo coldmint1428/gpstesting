@@ -548,10 +548,10 @@ onUnmounted(() => {
   transform: translateX(-1px);
 }
 .mark-start {
-  background: #198754;
+  background: var(--forest-2);
 }
 .mark-stop {
-  background: #6c757d;
+  background: var(--muted);
 }
 .dot {
   display: inline-block;
@@ -565,10 +565,10 @@ onUnmounted(() => {
   opacity: 0.5;
 }
 .dot-offline {
-  background-color: #adb5bd !important;
+  background-color: var(--stopped) !important;
 }
 .dot-stopped {
   background-color: transparent !important;
-  border: 2px dashed #6c757d;
+  border: 2px dashed var(--muted);
 }
 </style>

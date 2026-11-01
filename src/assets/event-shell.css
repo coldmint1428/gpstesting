@@ -3,17 +3,17 @@
    word and a symbol too), IBM Plex Sans with tabular Plex Mono for times. */
 
 .ev {
-  --ev-navy: #0f1b2d;
-  --ev-navy-2: #1c2b42;
-  --ev-ground: #eef1f5;
-  --ev-line: #cdd5e0;
-  --ev-line-soft: #e2e8f0;
-  --ev-muted: #475569;
-  --ev-head-muted: #b6c2d3;
-  --ev-teal: #0f766e;
-  --ev-amber: #b45309;
-  --ev-red: #b91c1c;
-  --ev-blue: #1d4ed8;
+  --ev-navy: var(--ink);
+  --ev-navy-2: var(--forest-2);
+  --ev-ground: var(--canvas);
+  --ev-line: var(--line);
+  --ev-line-soft: var(--line);
+  --ev-muted: var(--muted);
+  --ev-head-muted: var(--on-forest-muted);
+  --ev-teal: var(--forest-2);
+  --ev-amber: var(--danger);
+  --ev-red: var(--danger);
+  --ev-blue: var(--forest);
   font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--ev-navy);
   background: var(--ev-ground);
@@ -30,8 +30,8 @@
 
 /* ---------- The site's top bar (every page): same navy as an event's header ---------- */
 .app-nav {
-  background: #0f1b2d;
-  border-bottom: 1px solid #22344f;
+  background: var(--ink);
+  border-bottom: 1px solid var(--forest-2);
   font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 .app-nav-inner {
@@ -49,7 +49,7 @@
 /* ---------- Header ---------- */
 .ev-head {
   background: var(--ev-navy);
-  color: #f8fafc;
+  color: var(--canvas);
 }
 .ev-head-inner {
   max-width: 1680px;
@@ -95,27 +95,27 @@
   line-height: 1.5;
 }
 .ev-chip-live {
-  background: #dc2626;
+  background: var(--lost);
   color: #fff;
 }
 .ev-chip-sched {
-  background: #fef3c7;
-  color: #78350f;
+  background: var(--danger-bg);
+  color: var(--danger-strong);
 }
 .ev-chip-off {
   background: var(--ev-navy-2);
-  color: #cbd5e1;
+  color: var(--line);
 }
 .ev-chip-sim {
-  background: #fde68a;
-  color: #78350f;
+  background: var(--danger-bg);
+  color: var(--danger-strong);
 }
 .ev-chip-role {
-  background: #1e3a5f;
-  color: #e2e8f0;
+  background: var(--forest);
+  color: var(--line);
 }
 .ev-desc {
-  color: #cbd5e1;
+  color: var(--line);
   font-size: 13px;
   white-space: pre-line;
   margin: 4px 0 0;
@@ -166,7 +166,7 @@
   cursor: pointer;
 }
 .ev-nav-btn:hover {
-  background: #f1f5f9;
+  background: var(--canvas);
 }
 .ev-nav-btn:focus-visible {
   outline: 2px solid var(--ev-blue);
@@ -203,11 +203,11 @@
   font-weight: 700;
   border-radius: 999px;
   padding: 1px 8px;
-  background: #e2e8f0;
+  background: var(--line);
   color: var(--ev-navy);
 }
 .ev-nav-badge-live {
-  background: #dc2626;
+  background: var(--lost);
   color: #fff;
 }
 .ev-nav-foot {
@@ -354,5 +354,5 @@
   letter-spacing: 0.06em;
   min-width: 4.5rem;
   border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #dc3545;
+  box-shadow: 0 0 0 1px var(--danger);
 }

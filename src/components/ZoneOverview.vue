@@ -77,7 +77,7 @@ const summary = computed(() => {
    .ev .ev-surface and .ev-label used, to keep the look it had. */
 .zo-card {
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 16px;
 }
@@ -86,7 +86,7 @@ const summary = computed(() => {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--muted);
 }
 .zo-list {
   display: grid;

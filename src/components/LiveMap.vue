@@ -1004,11 +1004,11 @@ onUnmounted(() => {
   opacity: 0.5;
 }
 .dot-offline {
-  background-color: #adb5bd !important;
+  background-color: var(--stopped) !important;
 }
 .dot-stopped {
   background-color: transparent !important;
-  border: 2px dashed #6c757d;
+  border: 2px dashed var(--muted);
 }
 /* The plan's line in the legend: the same dashed stroke the map draws it with. */
 .plan-swatch {
@@ -1017,7 +1017,7 @@ onUnmounted(() => {
   height: 0;
   margin-right: 0.25rem;
   vertical-align: middle;
-  border-top: 2px dashed #244f3f;
+  border-top: 2px dashed var(--forest);
 }
 :global(.trail-hover) {
   cursor: pointer;
@@ -1028,7 +1028,7 @@ onUnmounted(() => {
   box-shadow: none;
   padding: 0 4px;
   font-size: 11px;
-  color: #212529;
+  color: var(--ink);
 }
 :global(.zone-label::before) {
   display: none;
