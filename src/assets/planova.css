@@ -74,6 +74,10 @@
     grid-template-areas:
       'stage inspector'
       'bar inspector';
+    /* A steady height (QA 1 Nov). The inspector spans both rows, so its content used to set the map's height: opening
+       a frame, a warning row, or letting the selection go (a scrub) grew or shrank the map, cut off its view and moved
+       the time bar out from under the pointer. Now the inspector scrolls and the map stays the size it was framed at. */
+    height: clamp(560px, calc(100vh - 230px), 860px);
   }
   .pv-stage {
     grid-area: stage;

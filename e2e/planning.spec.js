@@ -113,6 +113,9 @@ test('a dropped badge stays where it was dropped (no jump back while it saves)',
 test('dragging along the ruler shows any moment, and Resume plays on from it', async () => {
   const ruler = page.getByTestId('scrub-ruler')
   const dots = page.locator('.pv-frame')
+  // The map is framed once; letting the selection go (which a scrub does) must not resize it under the planner.
+  const mapHeight = async () => Math.round((await page.locator('.pv-map').boundingBox()).height)
+  const heightWithFrameOpen = await mapHeight()
   const a = await dots.nth(0).boundingBox()
   const b = await dots.nth(1).boundingBox()
   const rb = await ruler.boundingBox()
@@ -129,6 +132,7 @@ test('dragging along the ruler shows any moment, and Resume plays on from it', a
   await expect(page.getByTestId('board-hint')).toContainText('next +1:00')
   await expect(page.locator('.pv-marker.is-walking')).not.toHaveCount(0) // drawn between its two moments
   await expect(page.getByTestId('play')).toHaveText('Resume')
+  expect(await mapHeight()).toBe(heightWithFrameOpen)
   await shot(page, 'plan-04-scrubbed')
 
   await page.getByTestId('play').click()
