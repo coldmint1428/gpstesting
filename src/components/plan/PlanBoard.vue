@@ -1007,6 +1007,10 @@ function startScrub(event) {
  * that covers no ground is a click on empty bar, which clears the selection — that is how you put the plan down.
  */
 function startSweep(event) {
+  if (event.pointerType && event.pointerType !== 'mouse') {
+    startStripTouch(event)
+    return
+  }
   if (!props.canEdit || event.button !== 0) return
   const left = event.currentTarget.getBoundingClientRect().left
   const x0 = event.clientX - left
@@ -1014,13 +1018,14 @@ function startSweep(event) {
   const move = (e) => {
     if (sweep.value) sweep.value = { x0, x1: e.clientX - left }
   }
-  const up = () => {
+  const up = (e) => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     window.removeEventListener('pointercancel', up)
     const walked = sweep.value
     sweep.value = null
-    if (!walked) return
+    // A gesture the browser took over is not a sweep: nothing was chosen, so nothing is said.
+    if (!walked || e.type === 'pointercancel') return
     const lo = Math.min(walked.x0, walked.x1)
     const hi = Math.max(walked.x0, walked.x1)
     if (hi - lo < 4) {
@@ -1038,6 +1043,42 @@ function startSweep(event) {
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
   window.addEventListener('pointercancel', up)
+}
+
+/**
+ * A finger on the strip (QA 1 Nov, on an iPhone and an Android phone). A swipe there is the browser scrolling the
+ * strip, never a sweep: treating it as one drew a grey band, then said "No frame in that stretch" for every swipe.
+ * A tap (the finger came up where it went down) opens the frame nearest to it, within a finger's width -- a frame
+ * dot is 12 px tall, and a tap a few pixels off it used to land on the empty strip and clear the selection instead.
+ * A tap nowhere near a frame lets the selection go, as a click on empty bar does.
+ */
+const TAP_SLOP_PX = 10
+const TAP_REACH_PX = 28
+function startStripTouch(event) {
+  const x0 = event.clientX
+  const y0 = event.clientY
+  const left = event.currentTarget.getBoundingClientRect().left
+  const done = (e) => {
+    window.removeEventListener('pointerup', done)
+    window.removeEventListener('pointercancel', done)
+    if (e.type === 'pointercancel') return // the browser scrolled the strip
+    if (Math.hypot(e.clientX - x0, e.clientY - y0) > TAP_SLOP_PX) return
+    const x = x0 - left
+    let nearest = null
+    for (const frame of frames.value) {
+      const d = Math.abs(xOf(frame.t_s) - x)
+      if (d <= TAP_REACH_PX && (!nearest || d < nearest.d)) nearest = { frame, d }
+    }
+    if (nearest) {
+      selectFrame(nearest.frame.id)
+      return
+    }
+    if (!props.canEdit) return
+    selection.value = new Set()
+    selectedId.value = null
+  }
+  window.addEventListener('pointerup', done)
+  window.addEventListener('pointercancel', done)
 }
 
 function countLabel(n) {
@@ -2254,7 +2295,11 @@ watch(
             {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}<template v-if="props.canEdit"> — drag one to push the stretch.</template>
           </template>
           <template v-else-if="selected">Frame {{ formatOffset(selected.t_s) }} — <template v-if="props.canEdit"><template v-if="dragTargets.length > 1">drag any of the {{ dragTargets.length }} ticked groups; they move together.</template><template v-else>drag a badge to move a group.</template></template><template v-else>where your group is at this moment.</template></template>
-          <template v-else>Pick a frame on the time bar below.</template>
+          <!-- A plan with no moments has nothing on the bar to pick (QA 1 Nov): say what comes first instead. -->
+          <template v-else-if="!frames.length">
+            This plan has no moments yet.<template v-if="props.canEdit"> Press Add frame to make the first one (+0:00), then place each group on the map.</template>
+          </template>
+          <template v-else>Tap or click a dot on the time bar below to open that moment.</template>
         </div>
       </div>
 
@@ -2610,10 +2655,23 @@ watch(
           </template>
         </template>
 
+        <template v-else-if="!frames.length">
+          <h3>No moments yet</h3>
+          <p class="pv-note" data-testid="plan-no-frames">
+            A plan is a strip of moments on one clock. At each one you say where every group is, and the app works out
+            the walk in between.<template v-if="props.canEdit"> Start with the first moment at +0:00, then use Place on
+            map for each group.</template>
+          </p>
+          <div v-if="props.canEdit" class="pv-stack">
+            <button class="pv-btn is-primary" data-testid="frame-add-first" :disabled="busy" @click="addFrame">
+              Add the first frame
+            </button>
+          </div>
+        </template>
         <template v-else>
           <h3>Nothing selected</h3>
           <p class="pv-note">
-            Click a dot on the time bar to open that moment.<template v-if="props.canEdit"> Add a frame to place everyone somewhere new.</template>
+            Tap or click a dot on the time bar to open that moment.<template v-if="props.canEdit"> Add a frame to place everyone somewhere new.</template>
           </p>
         </template>
 

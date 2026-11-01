@@ -1932,8 +1932,10 @@
 /* A finger is wider than a 22 px dot: on a touch screen each frame takes a 36 px column, and the ruler is taller so the
    cursor can be grabbed without landing on a dot. */
 @media (pointer: coarse) {
+  /* The whole column under a dot is the button: the dot alone is 12 px tall, and a finger misses it. */
   .pv-frame {
     width: 36px;
+    bottom: 0;
   }
   .pv-ruler.is-scrubbable {
     height: 28px;

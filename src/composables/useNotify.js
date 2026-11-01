@@ -34,9 +34,18 @@ export function answerConfirm(yes) {
 let nextId = 1
 // type: 'success' | 'danger' | 'warning' | 'info'
 export function toast(text, type = 'success', ms = 5000) {
+  // The same sentence already on screen is not said twice (QA 1 Nov: one toast per swipe stacked eight deep). It
+  // stays up for the full time again instead, so a repeated action still gets its answer.
+  const shown = toasts.value.find((t) => t.text === text && t.type === type)
+  if (shown) {
+    clearTimeout(shown.timer)
+    shown.timer = setTimeout(() => closeToast(shown.id), ms)
+    return
+  }
   const id = nextId++
-  toasts.value.push({ id, text, type })
-  setTimeout(() => closeToast(id), ms)
+  const entry = { id, text, type, timer: null }
+  toasts.value.push(entry)
+  entry.timer = setTimeout(() => closeToast(id), ms)
 }
 
 export function closeToast(id) {
