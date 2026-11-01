@@ -560,6 +560,13 @@
   overflow-y: auto;
 }
 
+/* The inspector has a set height on a laptop and scrolls (QA 1 Nov). Its sections must keep their own height while it
+   does: as flex items they shrank instead, and the group list (an overflow box, so allowed to shrink to nothing)
+   vanished -- rows, Place on map and all -- once the content was taller than the panel. */
+.pv-inspector > * {
+  flex-shrink: 0;
+}
+
 .pv-group-row {
   display: flex;
   align-items: center;

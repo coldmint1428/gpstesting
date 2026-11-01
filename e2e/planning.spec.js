@@ -35,12 +35,13 @@ test.afterAll(async () => {
   await context?.close()
 })
 
-/** Where a group's badge is drawn on screen right now, or null. */
+/** Where a group's badge is drawn on the map right now (relative to the map, so a toolbar that wraps when a warning
+ *  appears and moves the whole board down is not mistaken for the badge moving), or null. */
 async function badgeAt(name) {
   const badge = page.locator('.pv-marker', { hasText: new RegExp('^' + name + '$') })
   if (!(await badge.count())) return null
-  const box = await badge.first().boundingBox()
-  return box && { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) }
+  const [box, map] = await Promise.all([badge.first().boundingBox(), page.locator('.pv-map').boundingBox()])
+  return box && map && { x: Math.round(box.x + box.width / 2 - map.x), y: Math.round(box.y + box.height / 2 - map.y) }
 }
 
 /** The positions a frame states, read from the database (not from the screen). */
@@ -88,9 +89,10 @@ test('a dropped badge stays where it was dropped (no jump back while it saves)',
   const from = await badgeAt('A')
   expect(from).not.toBeNull()
   const to = { x: from.x + 60, y: from.y - 40 }
-  await page.mouse.move(from.x, from.y)
+  const map = await page.locator('.pv-map').boundingBox() // the mouse works in page pixels
+  await page.mouse.move(map.x + from.x, map.y + from.y)
   await page.mouse.down()
-  for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + (6 * i), from.y - (4 * i))
+  for (let i = 1; i <= 10; i++) await page.mouse.move(map.x + from.x + 6 * i, map.y + from.y - 4 * i)
   await page.mouse.up()
 
   // Sample the badge every 50 ms for two seconds, through the write and the read-back: it must never be drawn
