@@ -109,7 +109,7 @@
 
 .pv-board-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -217,7 +217,7 @@
   padding: 7px 12px;
   background: #eef4ef;
   border-bottom: 1px solid var(--pv-line);
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-ink-soft);
 }
 
@@ -321,7 +321,7 @@
   box-shadow: 0 1px 4px rgba(15, 30, 22, 0.4);
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: #fff;
 }
@@ -379,7 +379,7 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--pv-ink-faint);
   white-space: nowrap;
 }
@@ -465,7 +465,7 @@
   position: absolute;
   top: 52px;
   height: 6px;
-  border-radius: 3px;
+  border-radius: 4px;
   background: rgba(166, 58, 47, 0.2);
   pointer-events: none;
 }
@@ -645,7 +645,7 @@
   background: var(--pv-surface);
   color: var(--pv-ink-faint);
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   padding: 4px 7px;
   border-radius: 999px;
@@ -810,7 +810,7 @@
 
 .pv-sched-title {
   margin: 0 0 3px;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 650;
   color: var(--pv-ink);
 }
@@ -821,7 +821,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-ink-soft);
 }
 
@@ -850,12 +850,12 @@
 }
 
 .pv-sched-t0 {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ink-soft);
 }
 
 .pv-sched-elapsed {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pv-primary);
 }
@@ -863,7 +863,7 @@
 .pv-sched-line {
   margin: 0;
   padding: 8px 14px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-ink-soft);
   background: #eef4ef;
   border-bottom: 1px solid var(--pv-line);
@@ -924,20 +924,20 @@
 }
 
 .pv-sched-at {
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 650;
   color: var(--pv-ink);
   font-variant-numeric: tabular-nums;
 }
 
 .pv-sched-offset {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ink-faint);
   font-variant-numeric: tabular-nums;
 }
 
 .pv-sched-note {
-  font-size: 11.5px;
+  font-size: 12px;
   font-style: italic;
   color: var(--pv-ink-soft);
 }
@@ -965,7 +965,7 @@
 .pv-sched-state {
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -987,7 +987,7 @@
 }
 
 .pv-sched-flag {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1050,7 +1050,7 @@
 .pv-sched-foot {
   margin: 0;
   padding: 9px 14px 11px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--pv-ink-faint);
   border-top: 1px solid var(--pv-line);
@@ -1108,7 +1108,7 @@
 
 .pv-ops-title {
   margin: 0 0 3px;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 650;
   color: var(--pv-ink);
 }
@@ -1119,7 +1119,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-ink-soft);
 }
 
@@ -1148,12 +1148,12 @@
 }
 
 .pv-ops-t0 {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ink-soft);
 }
 
 .pv-ops-elapsed {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pv-primary);
 }
@@ -1161,7 +1161,7 @@
 .pv-ops-error {
   margin: 0;
   padding: 8px 14px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-warn);
   background: #fdf4e4;
   border-bottom: 1px solid var(--pv-line);
@@ -1231,7 +1231,7 @@
 }
 
 .pv-ops-line.is-detail {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-ink-soft);
 }
 
@@ -1248,7 +1248,7 @@
   border: 1px solid var(--pv-line-strong);
   border-radius: 999px;
   background: #fff;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pv-ink-soft);
 }
@@ -1307,7 +1307,7 @@
   border: 1px solid var(--pv-line-strong);
   border-radius: 999px;
   background: #fff;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ink-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -1329,7 +1329,7 @@
   border-radius: 999px;
   background: #fff;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--pv-ink);
   cursor: pointer;
@@ -1373,7 +1373,7 @@
 .pv-ops-foot {
   margin: 0;
   padding: 8px 14px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--pv-ink-faint);
   background: #f7f9f7;
@@ -1462,7 +1462,7 @@
 
 .pv-log-note {
   flex: 1 1 260px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ink-faint);
 }
 
@@ -1514,7 +1514,7 @@
   padding: 1px 7px;
   border: 1px solid var(--pv-line-strong);
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1585,14 +1585,14 @@
 }
 
 .pv-sched-msg-at {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ink-faint);
   font-variant-numeric: tabular-nums;
 }
 
 .pv-sched-msg-done {
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ok);
 }
 
@@ -1658,7 +1658,7 @@
 
 .pv-route-title {
   margin: 0 0 3px;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 650;
   color: var(--pv-ink);
 }
@@ -1669,7 +1669,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-ink-soft);
 }
 
@@ -1689,7 +1689,7 @@
   padding: 9px 14px;
   border-bottom: 1px solid var(--pv-line);
   background: #f7f9f7;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--pv-ink-soft);
 }
 
@@ -1738,7 +1738,7 @@
 }
 
 .pv-route-next-kicker {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1746,7 +1746,7 @@
 }
 
 .pv-route-next-at {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -1765,7 +1765,7 @@
 .pv-route-note {
   margin: 0;
   padding: 12px 14px 14px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--pv-ink-soft);
 }
@@ -1773,7 +1773,7 @@
 .pv-route-empty {
   max-width: 64ch;
   padding: 22px 16px 26px;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.55;
   color: var(--pv-ink-soft);
 }
@@ -1782,7 +1782,7 @@
   margin: 0;
   padding: 10px 14px 12px;
   border-top: 1px solid var(--pv-line);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--pv-ink-faint);
 }
