@@ -131,6 +131,32 @@ const emit = defineEmits([
 // null | 'floorplan:<id>' | 'polygons' | 'area:<id>'
 const mode = defineModel('mode', { default: null })
 
+// A LOCKED shape (QA 1 Nov) is pinned where it is: `locked: true` is stored on the shape itself, so it is
+// locked for every planner and survives a reload. On the map it takes no press at all -- a press goes
+// through it to the map or to the shape underneath, which is what makes a small area drawn on top of a
+// big one (or on top of a floor plan) reachable -- and it cannot be opened, so no handle or dot of it
+// can be dragged by accident. The padlock beside its name in the list is the only way to unlock it.
+function isLockedMode(value) {
+  if (typeof value !== 'string') return false
+  if (value.startsWith('area:')) return Boolean(props.areas.find((a) => a.id === value.slice(5))?.locked)
+  if (value.startsWith('floorplan:')) {
+    return Boolean(props.plans.find((p) => p.id === value.slice('floorplan:'.length))?.locked)
+  }
+  return false
+}
+// Every road into a shape (its row, its Edit button, Paste, Undo) goes through `mode`, so this one guard
+// covers them all: a shape that is locked, or becomes locked while open, is put down.
+watch(
+  () => [mode.value, isLockedMode(mode.value)],
+  ([, locked]) => {
+    if (locked) mode.value = null
+  },
+)
+
+function togglePlanLock(plan) {
+  emit('plan-updated', { id: plan.id, patch: { locked: !plan.locked } })
+}
+
 const mapEl = ref(null)
 const fileInput = ref(null)
 const nameInput = ref(null)
@@ -548,7 +574,7 @@ function makePlanLayer(plan) {
       // exactly what is wanted: a drag that starts on the picture moves the picture, and a drag
       // that starts anywhere else moves the view. So it takes them whenever a click on it means
       // something, and never while an area is being drawn.
-      const grabbable = shapesClickable.value
+      const grabbable = shapesClickable.value && !p.locked
       img.style.pointerEvents = grabbable ? 'auto' : 'none'
       img.style.touchAction = grabbable ? 'none' : ''
       img.style.cursor = grabbable ? (mine ? 'move' : 'pointer') : ''
@@ -795,10 +821,11 @@ function render() {
   // drag that starts on the outline move the outline rather than the view -- so it is interactive
   // whenever a click on it means something, and never while an area is being drawn, where every
   // click on the map is a point.
-  const clickable = shapesClickable.value
   const seenAreas = new Set()
   for (const area of props.areas) {
     seenAreas.add(area.id)
+    // A locked area takes no press: it lets it through to whatever is under it.
+    const clickable = shapesClickable.value && !area.locked
     const key = areaKey(area)
     let layer = areaLayers[area.id]
     if (layer && layer.benchClickable !== clickable) {
@@ -3043,17 +3070,33 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                   v-for="(plan, index) in plans"
                   :key="plan.id"
                   class="card mb-2 plan-row"
-                  :class="{ 'border-primary': mode === 'floorplan:' + plan.id }"
+                  :class="{ 'border-primary': mode === 'floorplan:' + plan.id, 'is-locked': plan.locked }"
                   :data-testid="'plan-' + index"
-                  @click="pickPlanCard(plan, $event)"
+                  @click="!plan.locked && pickPlanCard(plan, $event)"
                 >
                   <div class="card-body p-2">
                     <div class="d-flex align-items-center gap-2">
+                      <!-- The padlock: a locked picture stays where it is and lets presses through. -->
+                      <button
+                        v-if="canEdit"
+                        type="button"
+                        class="btn btn-sm bench-lock-btn"
+                        :class="plan.locked ? 'btn-secondary' : 'btn-outline-secondary'"
+                        :aria-pressed="Boolean(plan.locked)"
+                        :aria-label="(plan.locked ? 'Unlock ' : 'Lock ') + planLabel(plan, index)"
+                        :title="plan.locked ? 'Locked: it cannot be moved. Press to unlock.' : 'Lock it where it is, so it cannot be dragged by accident'"
+                        :data-testid="'plan-lock-' + index"
+                        @click.stop="togglePlanLock(plan)"
+                      >
+                        <svg v-if="plan.locked" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                        <svg v-else viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 7V5a3 3 0 0 1 5.8-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                      </button>
                       <!-- The name is what the planner calls this level, and what identifies the
                            picture on the map. -->
                       <input
                         v-if="canEdit"
                         class="form-control form-control-sm"
+                        :disabled="Boolean(plan.locked)"
                         :value="planLabel(plan, index)"
                         :maxlength="PLAN_NAME_MAX"
                         :aria-label="'Name of ' + planLabel(plan, index)"
@@ -3084,6 +3127,8 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                         class="btn btn-sm"
                         :class="mode === 'floorplan:' + plan.id ? 'btn-primary' : 'btn-outline-primary'"
                         :data-testid="'plan-edit-' + index"
+                        :disabled="Boolean(plan.locked)"
+                        :title="plan.locked ? 'Unlock it first' : ''"
                         @click="mode = mode === 'floorplan:' + plan.id ? null : 'floorplan:' + plan.id"
                       >
                         {{ mode === 'floorplan:' + plan.id ? 'Done' : 'Edit' }}
@@ -3099,6 +3144,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                       <button
                         class="btn btn-sm btn-link text-danger ms-auto px-0"
                         :data-testid="'plan-delete-' + index"
+                        :disabled="Boolean(plan.locked)"
                         @click="deletePlan(plan)"
                       >
                         Delete
@@ -3136,6 +3182,21 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 .bench-map {
   height: 70vh;
   min-height: 360px;
+}
+
+/* The padlock beside a floor plan's name (and an area's, in AreaList.vue): square, so the two states
+   read as one control. A locked card is greyed a little, the way a disabled field is. */
+.bench-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  flex: none;
+}
+.plan-row.is-locked {
+  background: var(--bs-tertiary-bg, #f4f4f2);
 }
 
 /* The list of floor plans, capped. A bench with a dozen plans used to grow this column until

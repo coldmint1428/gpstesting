@@ -1869,3 +1869,69 @@
   outline: 2px solid var(--pv-ok);
   outline-offset: 2px;
 }
+
+/* ---------- scrubbing and placing (QA 1 Nov) ----------
+   The ruler is the cursor's handle: press anywhere on it and drag. The cursor itself can be grabbed too, with a hit
+   area wider than its 2 px line so a finger finds it. While a group waits to be placed the map takes a crosshair and
+   the hint turns the plan's green, so "the next tap writes a position" is never a surprise. */
+.pv-ruler.is-scrubbable {
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 2;
+}
+
+.pv-playhead {
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+  z-index: 3;
+}
+
+.pv-playhead::after {
+  content: "";
+  position: absolute;
+  top: -18px;
+  bottom: 0;
+  left: -10px;
+  width: 22px;
+}
+
+.pv-playhead.is-scrubbing::before {
+  transform: scale(1.3);
+}
+
+.pv-map.is-placing,
+.pv-map.is-placing .leaflet-grab {
+  cursor: crosshair;
+}
+
+.pv-hint.is-placing {
+  background: var(--pv-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pv-hint.is-placing .pv-btn {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.pv-place-btn {
+  align-self: flex-start;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+/* A finger is wider than a 22 px dot: on a touch screen each frame takes a 36 px column, and the ruler is taller so the
+   cursor can be grabbed without landing on a dot. */
+@media (pointer: coarse) {
+  .pv-frame {
+    width: 36px;
+  }
+  .pv-ruler.is-scrubbable {
+    height: 28px;
+  }
+}

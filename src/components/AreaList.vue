@@ -128,6 +128,12 @@ function recode(area, value) {
   emit('area-updated', { id: area.id, patch: { code } })
 }
 
+// The padlock (QA 1 Nov): a locked area is pinned for every planner -- the map lets presses through it
+// and the bench will not open it -- so its own fields are closed too, until it is unlocked here.
+function toggleLock(area) {
+  emit('area-updated', { id: area.id, patch: { locked: !area.locked } })
+}
+
 function copy(row) {
   emit('area-copied', row.area)
 }
@@ -184,12 +190,31 @@ function paste() {
               v-for="row in group.rows"
               :key="row.area.id"
               class="list-group-item py-2 area-row"
-              :class="{ 'area-row-active': selected === row.area.id, 'area-row-pickable': editable }"
+              :class="{
+                'area-row-active': selected === row.area.id,
+                'area-row-pickable': editable && !row.area.locked,
+                'area-row-locked': row.area.locked,
+              }"
               :style="otherMark(row.area.id)"
               :data-testid="'area-row-' + row.area.name"
-              @click="editable && emit('area-edit', row.area.id)"
+              @click="editable && !row.area.locked && emit('area-edit', row.area.id)"
             >
               <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button
+                  v-if="editable"
+                  type="button"
+                  class="btn btn-sm area-lock-btn"
+                  :class="row.area.locked ? 'btn-secondary' : 'btn-outline-secondary'"
+                  :disabled="Boolean(blocked(row.area.id))"
+                  :aria-pressed="Boolean(row.area.locked)"
+                  :aria-label="(row.area.locked ? 'Unlock ' : 'Lock ') + row.area.name"
+                  :title="row.area.locked ? 'Locked: it cannot be moved or edited. Press to unlock.' : 'Lock it where it is, so it cannot be dragged by accident'"
+                  :data-testid="'area-lock-' + row.area.name"
+                  @click.stop="toggleLock(row.area)"
+                >
+                  <svg v-if="row.area.locked" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                  <svg v-else viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 7V5a3 3 0 0 1 5.8-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                </button>
                 <!-- The drawn shape, drawn small. -->
                 <svg
                   v-if="row.outline"
@@ -236,7 +261,7 @@ function paste() {
                   v-if="editable"
                   class="form-control form-control-sm flex-grow-1 area-name-input"
                   :value="row.area.name"
-                  :disabled="Boolean(blocked(row.area.id))"
+                  :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
                   :maxlength="AREA_NAME_MAX"
                   :aria-label="'Name of ' + row.area.name"
                   :data-testid="'area-name-' + row.area.name"
@@ -251,7 +276,7 @@ function paste() {
                   v-if="showCode && editable"
                   class="form-control form-control-sm area-code-input"
                   :value="row.area.code || ''"
-                  :disabled="Boolean(blocked(row.area.id))"
+                  :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
                   maxlength="40"
                   placeholder="CODE"
                   :aria-label="'Zone code of ' + row.area.name"
@@ -265,7 +290,7 @@ function paste() {
                   v-if="editable"
                   class="form-select form-select-sm area-kind-select"
                   :value="row.area.kind"
-                  :disabled="Boolean(blocked(row.area.id))"
+                  :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
                   :aria-label="'Type of ' + row.area.name"
                   :data-testid="'area-kind-select-' + row.area.name"
                   @click.stop
@@ -290,7 +315,7 @@ function paste() {
                 <button
                   v-if="editable"
                   class="btn btn-sm btn-link text-danger px-1"
-                  :disabled="Boolean(blocked(row.area.id))"
+                  :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
                   :aria-label="'Delete ' + row.area.name"
                   :data-testid="'area-delete-' + row.area.name"
                   @click.stop="remove(row.area)"
@@ -310,6 +335,20 @@ function paste() {
 /* Same cap as the floor-plan list in AreaBench.vue: the rows scroll inside the card rather
    than stretching the column until the rest of the bench is off the screen. The two lists sit
    in one column, so they run out at the same height -- about seven rows. */
+/* The padlock: the same square control as a floor plan's (AreaBench.vue). A locked row is greyed. */
+.area-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  flex: none;
+}
+.area-row-locked {
+  background: var(--bs-tertiary-bg, #f4f4f2);
+}
+
 .area-scroll {
   max-height: 20rem;
   overflow-y: auto;

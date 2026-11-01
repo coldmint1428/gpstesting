@@ -106,6 +106,12 @@ const PLAY_SPEEDS = [1, 10, 60]
 let playRaf = null
 let playLast = 0
 let playDrawnAt = 0
+// The cursor is being dragged along the ruler by hand: the map follows the finger, and nothing plays (QA 1 Nov).
+const scrubbing = ref(false)
+
+// The group waiting for a tap on the map to say where it stands at the open frame (QA 1 Nov: a plan drawn by hand
+// had no way to put a group on the map at all -- a badge could be dragged only once it had a position).
+const placing = ref(null)
 
 const selected = computed(() => frames.value.find((f) => f.id === selectedId.value) || null)
 const tracks = computed(() => resolveTracks(frames.value))
@@ -333,6 +339,10 @@ let markerLayer = null
 const markers = new Map()
 // The drag in flight: { leaderId, roster: [{ id, lat, lng }] } — where every badge it will move started.
 let groupDrag = null
+// Where a drop put the badges while its write is on the way: { frameId, at: Map(groupId -> { lat, lng }) }. Any
+// redraw in that window (a check coming back, a background read) drew the badges at the old place, so they jumped
+// back and then forward again (QA 1 Nov). Until the write has been read back, the drop is what the map shows.
+let pendingMoves = null
 // Fitting happens twice at most: once for the polygons as soon as they arrive, then once more when the plan's
 // positions arrive, because the areas and the people are not always in the same corner of the map. After that the
 // view is the planner's: re-fitting on every save would drag the map out from under a drag.
@@ -392,7 +402,9 @@ function fitMap() {
   // Not animated, deliberately: a fit that has to glide is a fit that can lose the argument with the layout — the
   // inspector changes the map's height, and an animation started at the old size lands somewhere else. Instant
   // framing is also what a plan switch should feel like (finding 39).
-  map.fitBounds(bounds.pad(0.2), { animate: false })
+  // Capped at 18: the first group placed on a new plan is a single point, and fitting to it went to zoom 20, where
+  // OneMap has no tiles and the map turned to a hatched blank (QA 1 Nov).
+  map.fitBounds(bounds.pad(0.2), { animate: false, maxZoom: 18 })
   fitted = true
   fittedWithFrames = tracks.value.size > 0
 }
@@ -576,15 +588,18 @@ function drawMarkers() {
   // A hand is on the board. Redrawing replaces the very marker Leaflet is dragging -- the drag ends with the marker
   // that was removed -- and snaps the dots back under a stretch being moved. The redraw the reload wanted happens as
   // soon as the gesture is over, because the drag's own write re-reads the plan.
-  if (groupDrag || dragState.value || pointerDown.value) return
+  // A scrub is the one gesture that wants the badges redrawn under the hand: it is how the map follows the cursor.
+  if (groupDrag || dragState.value || (pointerDown.value && !scrubbing.value)) return
   markerLayer.clearLayers()
   markers.clear()
   const frame = selected.value
   const run = playhead.value != null ? pointAt(playhead.value) : null
   if (!frame && !run) return
 
+  const dropped = !run && pendingMoves && frame && pendingMoves.frameId === frame.id ? pendingMoves.at : null
   for (const group of shownGroups.value) {
-    const point = run ? run.get(group.id) : framePosition(frame, group.id)
+    let point = run ? run.get(group.id) : framePosition(frame, group.id)
+    if (point && dropped && dropped.has(group.id)) point = { ...point, ...dropped.get(group.id) }
     // Not placed yet, or not on the map at this moment: no badge. An off-site row is still the plan's statement —
     // the inspector lists it and calls it "off site" — but nobody is standing there, so a marker would be a person
     // the map is drawing who is not there. Step 10's Done-when is the words: "one fewer marker, still listed".
@@ -704,12 +719,19 @@ async function endGroupDrag(leaderId) {
   // is what frame_save takes, and because the pair is what makes the gesture reversible (step 13).
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
+  pendingMoves = {
+    frameId: frame.id,
+    at: new Map(state.roster.map((row) => [row.id, { lat: changes[row.id].lat, lng: changes[row.id].lng }])),
+  }
   try {
     await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
   } catch {
+    pendingMoves = null
     drawMarkers() // the database was not changed; put every badge back where it has it
     return
   }
+  pendingMoves = null
+  drawMarkers()
   const movers = nameList(state.roster.map((row) => groupName(row.id)))
   edits.positions(frame.id, before, after, `moved ${movers} at ${formatOffset(frame.t_s)}`)
   if (state.roster.length > 1) {
@@ -721,6 +743,45 @@ async function endGroupDrag(leaderId) {
   } else {
     toast(`${groupName(leaderId)} moved to ${formatOffset(frame.t_s)}.`, 'success', 2200)
   }
+}
+
+// ---------- placing a group (QA 1 Nov) ----------
+
+/** The groups the open frame says nothing about: no badge to drag, so the only way onto the map is a tap. */
+const unplacedGroups = computed(() =>
+  selected.value ? shownGroups.value.filter((g) => !framePosition(selected.value, g.id)) : [],
+)
+
+/** Arm the map: the next tap on it is where this group stands at the open frame. Pressing again disarms it. */
+function startPlacing(groupId) {
+  if (!props.canEdit || !selected.value) return
+  placing.value = placing.value === groupId ? null : groupId
+}
+
+/**
+ * The tap that places the armed group. It is a statement at the open frame like a drag is, so it is the same one
+ * write: the frame's own positions plus this group (restatedPositions), never this group alone, which would delete
+ * everyone else's position on the frame. After a placement the next group still unplaced is armed, so a new plan is
+ * a tap per group rather than a button and a tap per group.
+ */
+async function onMapClick(event) {
+  const groupId = placing.value
+  const frame = selected.value
+  if (!groupId || !frame || !props.canEdit || busy.value) return
+  const changes = { [groupId]: { lat: event.latlng.lat, lng: event.latlng.lng, state: 'on_site', verify: 'auto' } }
+  const before = restatedPositions(frame)
+  const after = restatedPositions(frame, changes)
+  try {
+    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
+  } catch (error) {
+    toast(planErrorMessage(error), 'danger', 5000)
+    return
+  }
+  edits.positions(frame.id, before, after, `placed ${groupName(groupId)} at ${formatOffset(frame.t_s)}`)
+  toast(`${groupName(groupId)} placed at ${formatOffset(frame.t_s)}.`, 'success', 2200)
+  await nextTick()
+  const next = unplacedGroups.value[0]
+  placing.value = next ? next.id : null
 }
 
 // ---------- the time bar ----------
@@ -873,17 +934,72 @@ function startDrag(frame, event) {
   const up = async () => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
     const state = dragState.value
-    dragState.value = null
     if (!state || !state.delta) {
+      dragState.value = null
       // Nothing was written, so nothing re-reads the plan: put back any redraw the gesture suppressed.
       drawMarkers()
       return
     }
+    // The dots stay where the hand left them until the moved frames are read back (the frames watcher lets go of
+    // the offset in the same render that brings the new times); clearing it now put them back for the length of
+    // the write, then forward again (QA 1 Nov).
+    dragState.value = { ...state, settling: true }
     await shiftStretch(state.from_s, state.delta, state.to_s)
+    dragState.value = null
+    drawLines()
+    drawMarkers()
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
+  // A touch the browser takes over (a scroll) ends in pointercancel, never pointerup: without this the drag never
+  // ended and the badges were never redrawn again.
+  window.addEventListener('pointercancel', up)
+}
+
+// ---------- scrubbing: the cursor dragged by hand (QA 1 Nov) ----------
+
+/** The time under a pointer on the strip, clamped to the plan. */
+function timeAtClientX(clientX) {
+  const inner = trackEl.value ? trackEl.value.querySelector('.pv-track-inner') : null
+  if (!inner) return 0
+  const end = frameOrder.value.length ? frameOrder.value[frameOrder.value.length - 1].t_s : 0
+  const t = (clientX - inner.getBoundingClientRect().left - PAD_LEFT) / pxPerSecond.value
+  return Math.min(Math.max(t, 0), end)
+}
+
+/**
+ * Press on the ruler (or grab the cursor) and drag: the cursor follows the hand and the map shows where everyone is
+ * at that instant, so any moment can be looked at without playing from the start. Letting go leaves the cursor there,
+ * paused; Resume plays on from it and Stop opens the frame it is on.
+ */
+function startScrub(event) {
+  if (!frames.value.length || (event.pointerType === 'mouse' && event.button !== 0)) return
+  blurActive()
+  haltPlay()
+  selection.value = new Set()
+  selectedId.value = null
+  placing.value = null
+  groupDrag = null
+  scrubbing.value = true
+  if (api.pauseLive) api.pauseLive(true)
+  const go = (e) => {
+    playhead.value = timeAtClientX(e.clientX)
+    drawMarkers()
+  }
+  go(event)
+  const up = () => {
+    window.removeEventListener('pointermove', go)
+    window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
+    scrubbing.value = false
+    if (api.pauseLive) api.pauseLive(false)
+    drawMarkers()
+  }
+  window.addEventListener('pointermove', go)
+  window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
 }
 
 /**
@@ -901,6 +1017,7 @@ function startSweep(event) {
   const up = () => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
     const walked = sweep.value
     sweep.value = null
     if (!walked) return
@@ -920,6 +1037,7 @@ function startSweep(event) {
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
 }
 
 function countLabel(n) {
@@ -1834,6 +1952,7 @@ function initMap() {
   zoneLayer = L.layerGroup().addTo(map)
   lineLayer = L.layerGroup().addTo(map)
   markerLayer = L.layerGroup().addTo(map)
+  map.on('click', onMapClick)
   map.invalidateSize()
   drawZones()
   drawLines()
@@ -1915,6 +2034,20 @@ watch([frames, selectedId, () => zones.value.length], async () => {
 
 watch(() => zones.value.length, () => { drawZones(); fitMap() })
 watch(selectedId, () => drawMarkers())
+// A tap waiting to place a group belongs to the frame it was armed on; another frame, or a run, puts it down.
+watch([selectedId, playhead], () => {
+  if (placing.value && (playhead.value != null || !unplacedGroups.value.some((g) => g.id === placing.value))) {
+    placing.value = null
+  }
+})
+// The moved frames have been read back: let go of the drag's offset in the same render that draws their new times.
+watch(
+  frames,
+  () => {
+    if (dragState.value && dragState.value.settling) dragState.value = null
+  },
+  { flush: 'sync' },
+)
 // Every frame read is followed by the database's verdict on the whole plan, so an edit can never leave the board
 // saying less than the gate would. `immediate` covers the preview harness, which starts with frames in hand.
 watch(frames, refreshProblems, { immediate: true })
@@ -1980,7 +2113,8 @@ watch(
       <div class="pv-toolbar">
         <select v-if="!props.onlyGroupId" class="pv-select" :value="plan ? plan.id : ''" @change="choosePlan($event.target.value)">
           <option v-for="p in plans" :key="p.id" :value="p.id">
-            {{ p.name }}{{ p.status === 'live' ? ' · live' : '' }} ({{ p.frame_count }})
+            <!-- "(3)" read as a third copy of the plan (QA 1 Nov); it is how many moments it has. -->
+            {{ p.name }}{{ p.status === 'live' ? ' · live' : '' }} · {{ countLabel(p.frame_count || 0) }}
           </option>
         </select>
         <strong v-else-if="plan" data-testid="plan-name">{{ plan.name }}</strong>
@@ -2104,9 +2238,13 @@ watch(
 
       <div class="pv-body">
       <div class="pv-stage">
-        <div ref="mapEl" class="pv-map"></div>
-        <div class="pv-hint" data-testid="board-hint">
-          <template v-if="playhead != null">
+        <div ref="mapEl" class="pv-map" :class="{ 'is-placing': !!placing }"></div>
+        <div class="pv-hint" :class="{ 'is-placing': !!placing }" data-testid="board-hint">
+          <template v-if="placing && selected">
+            Tap the map where <strong>{{ groupName(placing) }}</strong> stands at {{ formatOffset(selected.t_s) }}.
+            <button type="button" class="pv-btn is-quiet" data-testid="place-cancel" @click="placing = null">Cancel</button>
+          </template>
+          <template v-else-if="playhead != null">
             {{ playText }}<template v-if="playing"> · playing at {{ speed }}×</template>
           </template>
           <template v-else-if="selectionSpan && selectionSpan.count > 1">
@@ -2151,7 +2289,14 @@ watch(
         <div ref="trackEl" class="pv-track">
           <!-- A sweep anywhere on the strip that is not a dot selects the run it touches. -->
           <div class="pv-track-inner" :style="{ width: trackWidth + 'px' }" @pointerdown="startSweep">
-            <div class="pv-ruler">
+            <!-- The ruler is the scrub handle: press anywhere on it and drag to move the cursor to any moment. -->
+            <div
+              class="pv-ruler"
+              :class="{ 'is-scrubbable': frames.length > 0 }"
+              data-testid="scrub-ruler"
+              title="Drag along the ruler to see any moment"
+              @pointerdown.stop.prevent="startScrub"
+            >
               <div v-for="tick in ticks" :key="'t' + tick.t" class="pv-tick" :style="{ left: xOf(tick.t) + 'px' }">
                 <span>{{ tick.label }}</span>
               </div>
@@ -2172,8 +2317,10 @@ watch(
             <div
               v-if="playhead != null"
               class="pv-playhead"
+              :class="{ 'is-scrubbing': scrubbing }"
               data-testid="play-head"
               :style="{ left: xOf(playhead) + 'px' }"
+              @pointerdown.stop.prevent="startScrub"
             ></div>
 
             <div class="pv-frames">
@@ -2290,6 +2437,20 @@ watch(
                   <span class="pv-group-state">
                     {{ stateWord(framePosition(selected, group.id)) }}
                   </span>
+                </button>
+                <!-- A group the frame says nothing about has no badge to drag: Place arms the map for one tap. -->
+                <button
+                  v-if="props.canEdit && !framePosition(selected, group.id)"
+                  type="button"
+                  class="pv-btn pv-place-btn"
+                  :class="{ 'is-primary': placing === group.id }"
+                  data-testid="place-group"
+                  :data-group="group.id"
+                  :aria-pressed="placing === group.id"
+                  :disabled="busy"
+                  @click="startPlacing(group.id)"
+                >
+                  {{ placing === group.id ? 'Tap the map…' : 'Place on map' }}
                 </button>
                 <!-- The two flags on this group's position, as segmented controls: what is true now is filled, and
                      pressing the other half is the edit. Off site is written at this moment (a row here, or the

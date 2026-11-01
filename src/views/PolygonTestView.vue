@@ -716,6 +716,7 @@ function pasteArea() {
     // Its own zone code: the original's is taken, and the database refuses a code twice
     code: copyCode(from.code, areas.value.map((a) => a.code)),
     points: from.points.map((point) => offsetLatLng(point, PASTE_OFFSET_M)),
+    locked: false, // a copy is put down to be moved, even when the original is pinned
   }
   if (!area.code) delete area.code // demo bench: no codes
   // addArea records the step, like every other write (see the section above).
@@ -736,6 +737,7 @@ function pastePlan() {
     id: newId(),
     name: copyName(from.name, taken),
     centre: offsetLatLng(from.centre, PASTE_OFFSET_M),
+    locked: false, // a copy is put down to be moved, even when the original is pinned
   }
   // A copy of a floor plan at least does not cost a second picture: the image is stored once, under the
   // md5 of the image itself (017), so a paste of one that is already here adds its placement and
