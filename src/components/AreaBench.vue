@@ -3190,8 +3190,8 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   flex: none;
 }

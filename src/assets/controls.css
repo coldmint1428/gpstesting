@@ -1,0 +1,486 @@
+/* Controls: one size system for every field, dropdown and button on the website.
+ *
+ * Two heights only, so anything placed side by side lines up:
+ *   regular  38px  Bootstrap .form-control / .form-select / .btn
+ *   small    32px  their -sm versions, and the plan pages' own .pv-input / .pv-select / .pv-btn
+ * Every control uses the same 8px corner and centres its content, so text, icons and badges sit on one line.
+ *
+ * Loaded after the theme files and before native.css. The Bootstrap sizes are for the website only
+ * (html:not(.native-app)): the phone app keeps its own larger, touch-sized fields and buttons from native.css.
+ * The `:where()` wrappers keep these selectors as light as the theme's, so a page's own rule can still adjust one.
+ * The plan rules start with `html` so they win over planova.css, which the plan pages import themselves (later in
+ * the page).
+ */
+
+:root {
+  --control-h: 38px;
+  --control-h-sm: 32px;
+  --control-radius: var(--radius-md, 8px);
+  --control-pad-x: 12px;
+  --control-pad-x-sm: 10px;
+  /* The dropdown arrow: one chevron for every select, in the ink colour. */
+  --control-chevron: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2343504a' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8' d='m4 6 4 4 4-4'/%3e%3c/svg%3e");
+}
+
+/* ---------- Bootstrap fields and buttons (website) ---------- */
+
+/* Single-line fields: a fixed height, so a field, a dropdown and a button in one row are the same size.
+   Textareas, multi-line selects, file pickers and colour swatches keep their own size. */
+html:not(.native-app) .form-control:where(:not(textarea, .form-control-color, [type='file'])),
+html:not(.native-app) .form-select:where(:not([multiple], [size])) {
+  height: var(--control-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: calc(var(--control-h) - 2px);
+}
+html:not(.native-app) .form-control-sm:where(:not(textarea, .form-control-color, [type='file'])),
+html:not(.native-app) .form-select-sm:where(:not([multiple], [size])) {
+  height: var(--control-h-sm);
+  line-height: calc(var(--control-h-sm) - 2px);
+}
+html:not(.native-app) .form-control,
+html:not(.native-app) .form-select,
+html:not(.native-app) .input-group-text {
+  border-radius: var(--control-radius);
+}
+/* An input group's add-on matches its field's height. */
+html:not(.native-app) .input-group-text {
+  height: var(--control-h);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+html:not(.native-app) .input-group-sm > .input-group-text {
+  height: var(--control-h-sm);
+}
+
+/* The dropdown arrow and its room, on every screen (the phone too). */
+html .form-select {
+  padding-left: var(--control-pad-x);
+  padding-right: 36px;
+  background-image: var(--control-chevron);
+  background-position: right 12px center;
+  background-size: 14px 14px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+html .form-select-sm {
+  padding-left: var(--control-pad-x-sm);
+  padding-right: 30px;
+  background-position: right 9px center;
+  background-size: 12px 12px;
+}
+html .form-select:disabled {
+  cursor: not-allowed;
+}
+
+/* Buttons: content centred both ways and an icon beside its words on one line (every screen); the two heights on
+   the website. */
+html .btn:where(:not(.btn-link, .btn-close)) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  vertical-align: middle;
+}
+html .btn.w-100 {
+  display: flex;
+}
+html .btn > svg,
+html .btn > img {
+  flex: none;
+}
+html:not(.native-app) .btn:where(:not(.btn-link, .btn-close)) {
+  min-height: var(--control-h);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+html:not(.native-app) .btn-sm:where(:not(.btn-link, .btn-close)) {
+  min-height: var(--control-h-sm);
+  --bs-btn-border-radius: var(--control-radius);
+}
+html:not(.native-app) .btn-lg:where(:not(.btn-link)) {
+  min-height: 46px;
+}
+/* A deliberately compact button (py-0: a card header's Paste, the map's Stop following) keeps a slim height. */
+html:not(.native-app) .btn.py-0 {
+  min-height: 26px;
+}
+/* A link-style button sits in a sentence: no height of its own, its text on the line of the words around it. */
+html .btn-link {
+  vertical-align: baseline;
+}
+/* Badges beside a control sit on its centre line rather than on the text baseline. */
+html .d-flex > .badge,
+html .input-group > .badge {
+  align-self: center;
+}
+
+/* ---------- The plan pages' own controls (planova.css) ----------
+ * The Timeline, Schedule and Ops pages draw their controls with pv-* classes rather than Bootstrap's. They are made to
+ * look exactly like Bootstrap's small controls here (the same 32px, 14px text, 8px corner, colours, outline and focus
+ * ring), so the plan pages and the rest of the site read as one design:
+ *   .pv-btn            = .btn .btn-sm .btn-outline-secondary
+ *   .pv-btn.is-primary = .btn .btn-sm .btn-primary
+ *   .pv-btn.is-quiet   = a borderless text button
+ *   .pv-btn.is-danger  = .btn .btn-sm .btn-outline-danger
+ *   .pv-input / .pv-select / .pv-log-select = .form-control-sm / .form-select-sm
+ */
+html .pv-btn,
+html .pv-select,
+html .pv-log-select,
+html .pv-input {
+  box-sizing: border-box;
+  height: var(--control-h-sm);
+  border-radius: var(--control-radius);
+  font-family: inherit;
+  font-size: 14px;
+  vertical-align: middle;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+html .pv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--control-pad-x-sm);
+  border: 1.5px solid var(--border-strong, #0f5c50);
+  background: transparent;
+  color: var(--text-link, #0f5c50);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+html .pv-btn:hover:not(:disabled) {
+  border-color: var(--border-strong, #0f5c50);
+  background: var(--interactive-hover-overlay, #f2f6f4);
+  color: var(--brand-primary-pressed, #0b3d35);
+}
+html .pv-btn:disabled {
+  opacity: 1;
+  border-color: var(--border-subtle, #e2dfd6);
+  color: var(--text-disabled, #9aa39e);
+}
+html .pv-btn.is-primary {
+  border-color: var(--brand-primary, #0f5c50);
+  background: var(--brand-primary, #0f5c50);
+  color: var(--text-on-brand, #fff);
+}
+html .pv-btn.is-primary:hover:not(:disabled) {
+  border-color: var(--brand-primary-hover, #0b3d35);
+  background: var(--brand-primary-hover, #0b3d35);
+  color: var(--text-on-brand, #fff);
+}
+html .pv-btn.is-primary:disabled {
+  border-color: transparent;
+  background: var(--bg-muted, #eaeaea);
+  color: var(--text-disabled, #9aa39e);
+}
+html .pv-btn.is-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-link, #0f5c50);
+}
+html .pv-btn.is-quiet:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--interactive-hover-overlay, #f2f6f4);
+}
+html .pv-btn.is-quiet:disabled {
+  border-color: transparent;
+  color: var(--text-disabled, #9aa39e);
+}
+html .pv-btn.is-danger:disabled {
+  border-color: var(--border-subtle, #e2dfd6);
+  color: var(--text-disabled, #9aa39e);
+}
+html .pv-btn.is-danger {
+  border-color: var(--status-error-border, #c4321f);
+  color: var(--status-error-fg, #c4321f);
+}
+html .pv-btn.is-danger:hover:not(:disabled) {
+  border-color: var(--danger-solid, #c4321f);
+  background: var(--danger-solid, #c4321f);
+  color: var(--text-on-danger, #fff);
+}
+html .pv-btn:focus-visible,
+html .pv-input:focus,
+html .pv-select:focus,
+html .pv-log-select:focus {
+  outline: none;
+  border-color: #2e8a7a;
+  box-shadow: 0 0 0 4px rgba(46, 138, 122, 0.3);
+}
+html .pv-input {
+  padding: 0 var(--control-pad-x-sm);
+  border: 1px solid var(--border-default, #c9c5b9);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #14201b);
+  line-height: calc(var(--control-h-sm) - 2px);
+}
+html .pv-input::placeholder {
+  color: var(--text-secondary, #6c757d);
+  opacity: 1;
+}
+/* "Place on map" sits inside a list row: the compact size, still centred. */
+html .pv-btn.pv-place-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+html .pv-select,
+html .pv-log-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 30px 0 var(--control-pad-x-sm);
+  border: 1px solid var(--border-default, #c9c5b9);
+  line-height: calc(var(--control-h-sm) - 2px);
+  background-color: var(--bg-surface, #fff);
+  background-image: var(--control-chevron);
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 12px 12px;
+  color: var(--text-primary, #14201b);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+html .pv-select:hover,
+html .pv-log-select:hover,
+html .pv-input:hover {
+  border-color: var(--border-strong, #0f5c50);
+}
+/* A badge beside a control in a toolbar sits on its centre line. */
+html .pv-toolbar > .pv-badge {
+  align-self: center;
+}
+
+/* The Timeline's header: the plan picker and, under it, the field that renames the plan. They are one column of the
+   same width, and the two rows share one band with even spacing, so the name field sits under the picker and
+   "New plan", Export and Import sit on the field's centre line. */
+html .pv-name-field {
+  width: 320px;
+  max-width: 100%;
+  flex: 0 1 320px;
+}
+html .pv-board-head > .pv-toolbar {
+  min-height: 52px;
+}
+html .pv-board-head > .pv-toolbar:has(+ .pv-toolbar) {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+html .pv-board-head > .pv-toolbar.is-second {
+  padding-top: 4px;
+}
+
+/* On the phone the plan pages' controls are finger-sized, like the rest of the app. */
+html.native-app .pv-btn,
+html.native-app .pv-select,
+html.native-app .pv-log-select,
+html.native-app .pv-input {
+  height: 40px;
+  font-size: 15px;
+  border-radius: 10px;
+}
+html.native-app .pv-select,
+html.native-app .pv-log-select,
+html.native-app .pv-input {
+  line-height: 38px;
+}
+html.native-app .pv-btn.pv-place-btn {
+  height: 36px;
+  font-size: 14px;
+}
+
+/* ---------- The list a dropdown opens ----------
+ * Browsers that can style it (Chrome and Edge 135+, and the Android app's WebView) draw it in the app's own style:
+ * a white card with 8px corners, roomy rows, the chosen row tinted and ticked, unavailable rows greyed. Other browsers
+ * keep their own list, which still works the same. */
+@supports (appearance: base-select) {
+  html select.form-select:where(:not([multiple], [size])),
+  html select.pv-select,
+  html select.pv-log-select {
+    appearance: base-select;
+    align-items: center;
+  }
+  /* A styleable select lays its chosen text out as a flex row: centred in the box, whatever the box's height. */
+  html select.form-select:where(:not([multiple], [size])) {
+    display: flex;
+  }
+  html select.pv-select,
+  html select.pv-log-select {
+    display: inline-flex;
+  }
+  /* The arrow is the background chevron above; the browser's own would be a second one. */
+  html select.form-select::picker-icon,
+  html select.pv-select::picker-icon,
+  html select.pv-log-select::picker-icon {
+    display: none;
+  }
+  html select.form-select::picker(select),
+  html select.pv-select::picker(select),
+  html select.pv-log-select::picker(select) {
+    appearance: base-select;
+    /* Always open downwards, under the field. The browser's default flips the list above the field whenever there is
+       more room up there; instead the list stays below and scrolls inside the space that is left. */
+    position-area: block-end span-inline-end;
+    position-try-fallbacks: none;
+    position-try-order: normal;
+    margin-top: 4px;
+    padding: 4px;
+    min-width: anchor-size(width);
+    max-height: min(360px, calc(100% - 12px));
+    overflow-y: auto;
+    border: 1px solid var(--border-subtle, #e2dfd6);
+    border-radius: var(--control-radius);
+    background: var(--bg-surface, #fff);
+    color: var(--text-primary, #14201b);
+    box-shadow: 0 8px 24px rgba(20, 32, 27, 0.14), 0 1px 3px rgba(20, 32, 27, 0.08);
+  }
+  html select.form-select option,
+  html select.pv-select option,
+  html select.pv-log-select option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    line-height: 1.3;
+    cursor: pointer;
+  }
+  html select.pv-select option,
+  html select.pv-log-select option {
+    font-size: 13px;
+  }
+  /* Rows a finger has to hit on the phone. */
+  html.native-app select.form-select option,
+  html.native-app select.pv-select option,
+  html.native-app select.pv-log-select option {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  html select.form-select option:hover,
+  html select.pv-select option:hover,
+  html select.pv-log-select option:hover,
+  html select.form-select option:focus-visible,
+  html select.pv-select option:focus-visible,
+  html select.pv-log-select option:focus-visible {
+    background: var(--interactive-hover-overlay, #f2f6f4);
+    outline: none;
+  }
+  html select.form-select option:checked,
+  html select.pv-select option:checked,
+  html select.pv-log-select option:checked {
+    background: var(--interactive-selected, #dcefea);
+    font-weight: 600;
+  }
+  /* The tick goes after the words, on the right, in the brand colour. */
+  html select.form-select option::checkmark,
+  html select.pv-select option::checkmark,
+  html select.pv-log-select option::checkmark {
+    order: 1;
+    margin-left: auto;
+    color: var(--brand-primary, #0f5c50);
+  }
+  html select.form-select option:disabled,
+  html select.pv-select option:disabled,
+  html select.pv-log-select option:disabled {
+    color: var(--text-disabled, #9aa39e);
+    background: none;
+    cursor: default;
+    font-weight: 400;
+  }
+}
+
+/* ---------- Messages: warnings and errors in the site's alert style ----------
+ * The plan pages say "could not read", "refused" and "this plan was published again" in lines of their own. They use
+ * the same colours, border and corner as Bootstrap's .alert-warning / .alert-danger (planova-theme.css), so a problem
+ * looks the same wherever it is said. */
+html .pv-sched-line.is-warn,
+html .pv-ops-error,
+html .pv-run.is-stale {
+  background: var(--status-warning-bg, #fdefd9);
+  color: var(--status-warning-fg, #9a5200);
+  border-left: 4px solid var(--status-warning-border, #9a5200);
+}
+html .pv-route-line.is-warn,
+html .pv-warnings {
+  background: var(--status-error-bg, #fbe5e1);
+  color: var(--status-error-fg, #c4321f);
+  border-color: var(--status-error-border, #c4321f);
+}
+html .pv-route-line.is-warn {
+  border-left: 4px solid var(--status-error-border, #c4321f);
+}
+html .pv-warnings {
+  border-radius: var(--control-radius);
+}
+html .pv-sched-line.is-warn,
+html .pv-ops-error,
+html .pv-route-line.is-warn {
+  font-size: 14px;
+}
+html .pv-run-warn {
+  color: var(--status-warning-fg, #9a5200);
+}
+html .pv-run-warn .pv-btn,
+html .pv-run-warn .pv-btn:hover:not(:disabled) {
+  border-color: var(--status-warning-border, #9a5200);
+  background: var(--status-warning-border, #9a5200);
+  color: #fff;
+}
+
+/* ---------- Form errors (lib/formErrors.js) ----------
+ * The browser's own "Please fill in this field." bubble is replaced by Bootstrap's invalid style: a red border on the
+ * field and the message under it in the same red, small text. */
+html .is-invalid.pv-input,
+html .is-invalid.pv-select {
+  border-color: var(--status-error-border, #c4321f);
+}
+html .form-control.is-invalid,
+html .form-select.is-invalid {
+  border-color: var(--status-error-border, #c4321f);
+  background-image: none;
+  padding-right: var(--control-pad-x);
+}
+html .form-select.is-invalid {
+  background-image: var(--control-chevron);
+  padding-right: 36px;
+}
+html .form-control.is-invalid:focus,
+html .form-select.is-invalid:focus,
+html .is-invalid.pv-input:focus {
+  border-color: var(--status-error-border, #c4321f);
+  box-shadow: 0 0 0 4px rgba(196, 50, 31, 0.2);
+}
+html .form-check-input.is-invalid {
+  border-color: var(--status-error-border, #c4321f);
+}
+html .field-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--status-error-fg, #c4321f);
+}
+html .field-error::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm-.75 3.5h1.5v5h-1.5v-5Zm0 6h1.5V12h-1.5v-1.5Z'/%3e%3c/svg%3e") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm-.75 3.5h1.5v5h-1.5v-5Zm0 6h1.5V12h-1.5v-1.5Z'/%3e%3c/svg%3e") center / contain no-repeat;
+}
+
+/* ---------- One set of corners ----------
+ * The plan pages' own corner sizes, pointed at the site's: 8px for controls and small boxes, 12px for cards. */
+html .pv {
+  --pv-radius: var(--radius-lg, 12px);
+  --pv-radius-sm: var(--radius-md, 8px);
+}

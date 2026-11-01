@@ -2124,7 +2124,7 @@ watch(
         <h2 class="pv-board-title">{{ props.onlyGroupId ? 'Your plan' : 'Planning' }}</h2>
         <span class="pv-spacer"></span>
         <template v-if="props.canEdit">
-          <input v-model="newPlanName" class="pv-input" style="max-width: 200px" placeholder="Name the first plan" @keyup.enter="confirmCreate" />
+          <input v-model="newPlanName" class="pv-input pv-name-field" placeholder="Name the first plan" @keyup.enter="confirmCreate" />
           <button class="pv-btn is-primary" :disabled="busy || !newPlanName.trim()" @click="confirmCreate">Create plan</button>
         </template>
       </div>
@@ -2152,7 +2152,7 @@ watch(
     <div v-else class="pv-board">
       <header class="pv-board-head">
       <div class="pv-toolbar">
-        <select v-if="!props.onlyGroupId" class="pv-select" :value="plan ? plan.id : ''" @change="choosePlan($event.target.value)">
+        <select v-if="!props.onlyGroupId" class="pv-select pv-name-field" :value="plan ? plan.id : ''" @change="choosePlan($event.target.value)">
           <option v-for="p in plans" :key="p.id" :value="p.id">
             <!-- "(3)" read as a third copy of the plan (QA 1 Nov); it is how many moments it has. -->
             {{ p.name }}{{ p.status === 'live' ? ' · live' : '' }} · {{ countLabel(p.frame_count || 0) }}
@@ -2213,12 +2213,11 @@ watch(
         </template>
       </div>
 
-      <div v-if="creating" class="pv-toolbar" style="padding-top: 0">
+      <div v-if="creating" class="pv-toolbar is-second">
         <input
           v-model="newPlanName"
-          class="pv-input"
+          class="pv-input pv-name-field"
           data-testid="plan-create-name"
-          style="max-width: 220px"
           placeholder="Plan name"
           @keyup.enter="confirmCreate"
         />
@@ -2226,11 +2225,10 @@ watch(
         <button class="pv-btn is-quiet" @click="creating = false">Cancel</button>
       </div>
 
-      <div v-if="!creating && props.canEdit" class="pv-toolbar" style="padding-top: 0">
+      <div v-if="!creating && props.canEdit" class="pv-toolbar is-second">
         <input
           v-if="plan"
-          class="pv-input"
-          style="max-width: 240px"
+          class="pv-input pv-name-field"
           :value="plan.name"
           @change="renameTo($event.target.value)"
         />
