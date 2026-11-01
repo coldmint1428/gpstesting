@@ -2237,8 +2237,11 @@ watch(
       />
 
       <div class="pv-body">
-      <div class="pv-stage">
-        <div ref="mapEl" class="pv-map" :class="{ 'is-placing': !!placing }"></div>
+      <!-- The placing class is on the stage, never on the map element: Leaflet keeps its own classes on that element
+           (leaflet-container clips the map), and a Vue class binding there replaced them, so the map spilled over the
+           page as soon as Place was pressed. -->
+      <div class="pv-stage" :class="{ 'is-placing': !!placing }">
+        <div ref="mapEl" class="pv-map"></div>
         <div class="pv-hint" :class="{ 'is-placing': !!placing }" data-testid="board-hint">
           <template v-if="placing && selected">
             Tap the map where <strong>{{ groupName(placing) }}</strong> stands at {{ formatOffset(selected.t_s) }}.

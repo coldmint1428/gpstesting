@@ -1900,8 +1900,8 @@
   transform: scale(1.3);
 }
 
-.pv-map.is-placing,
-.pv-map.is-placing .leaflet-grab {
+.pv-stage.is-placing .pv-map,
+.pv-stage.is-placing .pv-map .leaflet-grab {
   cursor: crosshair;
 }
 
