@@ -449,7 +449,7 @@ const history = computed(() =>
   border-radius: 0.75rem;
   padding: 1rem;
   background: #fff; /* a QR reads best dark on white, also in dark mode */
-  color: #212529;
+  color: var(--ink);
 }
 .qr-img {
   width: min(100%, 18rem);
@@ -460,7 +460,7 @@ const history = computed(() =>
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #6c757d;
+  color: var(--muted);
 }
 .qr-bar {
   height: 0.4rem;

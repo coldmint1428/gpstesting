@@ -14,6 +14,9 @@ import './assets/harbour.css' // Planova 2 colours "Harbour & Signal": tokens, B
 import './assets/controls.css' // one size system for fields, dropdowns and buttons (after the theme, before native.css)
 import './assets/motion.css' // hover, press, page and tab transitions, skeletons while loading
 import './assets/native.css' // the phone app's own look (Android first), only under html.native-app
+import './assets/kinetic-tokens.css' // Planova Kinetic design tokens
+import './assets/kinetic.css' // Planova Kinetic components
+import './assets/kinetic-bridge.css' // Kinetic look for Bootstrap and the older screens' classes (last, so it wins)
 import { isNativeApp } from './lib/platform'
 import { installFormErrors } from './lib/formErrors'
 

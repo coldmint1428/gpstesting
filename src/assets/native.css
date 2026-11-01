@@ -13,7 +13,7 @@ html.native-app {
   --pv-main: var(--brand-primary);
   --pv-highlight: var(--timeline-active);
   --pv-accent: var(--status-warning-border);
-  --pv-accent-dull: #a8480c;
+  --pv-accent-dull: var(--danger-strong);
   --pv-card: var(--bg-surface);
   --pv-ground: var(--bg-canvas);
   --pv-line: var(--border-subtle);
@@ -21,7 +21,7 @@ html.native-app {
   --pv-safe-top: env(safe-area-inset-top, 0px);
   --pv-safe-bottom: env(safe-area-inset-bottom, 0px);
   --bs-body-font-family: var(--font-ui);
-  --bs-primary: #244f3f;
+  --bs-primary: var(--forest);
   --bs-primary-rgb: 36, 79, 63;
   -webkit-tap-highlight-color: transparent;
 }
@@ -118,7 +118,7 @@ html.native-app .card {
   font-weight: 600;
 }
 .pv-tab[aria-current='page'] .pv-tab-pill {
-  background: rgba(36, 79, 63, 0.12);
+  background: rgba(11, 61, 46, 0.12);
 }
 .pv-tab:focus-visible {
   outline: 2px solid var(--pv-main);
@@ -141,7 +141,7 @@ html.native-app .card {
   position: fixed;
   inset: 0;
   z-index: 1040;
-  background: rgba(29, 31, 29, 0.6);
+  background: rgba(10, 31, 23, 0.6);
 }
 .pv-sheet {
   position: fixed;
@@ -154,7 +154,7 @@ html.native-app .card {
   padding: 10px 20px calc(24px + var(--pv-safe-bottom));
   max-height: 88vh;
   overflow-y: auto;
-  box-shadow: 0 -8px 24px rgba(29, 31, 29, 0.18);
+  box-shadow: 0 -8px 24px rgba(10, 31, 23, 0.18);
   /* Opens and closes with BottomSheet.vue's transition (motion.css, "sheet" and "backdrop") */
 }
 .pv-grabber {
@@ -461,7 +461,7 @@ html.native-app .next-move .btn-outline-success {
   color: var(--pv-highlight);
 }
 .pv-role-planner {
-  background: rgba(36, 79, 63, 0.12);
+  background: rgba(11, 61, 46, 0.12);
   color: var(--pv-main);
 }
 .pv-role-marshal {
@@ -492,7 +492,7 @@ html.native-app .next-move .btn-outline-success {
   font-size: 16px;
   font-weight: 600;
   padding: 16px 22px 16px 18px;
-  box-shadow: 0 6px 16px rgba(29, 31, 29, 0.25);
+  box-shadow: 0 6px 16px rgba(10, 31, 23, 0.25);
 }
 .pv-fab svg {
   width: 22px;

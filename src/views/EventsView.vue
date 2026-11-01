@@ -1,6 +1,6 @@
 <script setup>
 // My events + create an event + join one with a code
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getMyEvents, createQuickEvent, joinEventByCode, getLiveEventIds } from '../services/eventService'
@@ -12,6 +12,7 @@ import { formatDayTime } from '../utils/time'
 import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import ExpandTransition from '../components/ExpandTransition.vue'
+import KVenueMap from '../components/kinetic/KVenueMap.vue'
 import { cachedMyEvents, saveMyEvents } from '../lib/myEventsCache'
 
 const auth = useAuthStore()
@@ -143,47 +144,49 @@ const WEB_TABS = [
   { key: 'upcoming', label: 'Upcoming' },
   { key: 'past', label: 'Past' },
 ]
-// Switching tabs: one underline slides from the old tab to the new one, and the list slides out the way the tabs
-// moved (Past is to the right of Upcoming, so its list comes in from the right). The underline is a single element
-// moved with a transform, measured from the chosen tab, so it also follows the counts changing a tab's width.
-const tabsEl = ref(null)
-const ink = ref({ x: 0, w: 0, ready: false })
+// Switching tabs: the list slides out the way the tabs moved (Past is to the right of Upcoming, so its list comes in
+// from the right).
 const tabDir = ref('right')
-function placeInk() {
-  const bar = tabsEl.value
-  const btn = bar && bar.querySelector('[aria-selected="true"]')
-  if (!btn) return
-  ink.value = { x: btn.offsetLeft, w: btn.offsetWidth, ready: ink.value.ready }
-  if (!ink.value.ready) requestAnimationFrame(() => (ink.value = { ...ink.value, ready: true })) // no slide on first draw
-  // On a narrow screen the tabs scroll sideways: bring the chosen one into view
-  if (bar.scrollWidth > bar.clientWidth) btn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
-}
 function pickTab(key) {
   const order = WEB_TABS.map((t) => t.key)
   tabDir.value = order.indexOf(key) >= order.indexOf(activeTab.value) ? 'right' : 'left'
   tab.value = key
 }
-watch(
-  () => [activeTab.value, tabLists.value.ongoing.length, tabLists.value.upcoming.length, tabLists.value.past.length],
-  () => nextTick(placeInk),
-)
-let tabsResize = null
-watch(tabsEl, (el) => {
-  if (tabsResize) tabsResize.disconnect()
-  if (!el || typeof ResizeObserver === 'undefined') return
-  tabsResize = new ResizeObserver(() => placeInk())
-  tabsResize.observe(el)
-  nextTick(placeInk)
+// The next-up band: the live event, otherwise the soonest one with a date
+const nextEvent = computed(() => tabLists.value.ongoing[0] || tabLists.value.upcoming.find((ev) => ev.startsAt) || null)
+const nextIsLive = computed(() => !!tabLists.value.ongoing[0])
+// Counts down in whole minutes, so once every 30 seconds is plenty; the digits just change
+const nowTick = ref(Date.now())
+const tickTimer = setInterval(() => (nowTick.value = Date.now()), 30000)
+onBeforeUnmount(() => clearInterval(tickTimer))
+const countdown = computed(() => {
+  const left = nextEvent.value && nextEvent.value.startsAt ? Math.max(0, Math.floor((new Date(nextEvent.value.startsAt).getTime() - nowTick.value) / 60000)) : 0
+  const two = (n) => String(n).padStart(2, '0')
+  return { d: two(Math.floor(left / 1440)), h: two(Math.floor((left % 1440) / 60)), m: two(left % 60) }
 })
-onBeforeUnmount(() => tabsResize && tabsResize.disconnect())
-const inkStyle = computed(() => ({ transform: `translateX(${ink.value.x}px) scaleX(${ink.value.w / 100})` }))
+const today = computed(() => {
+  const at = new Date(nowTick.value)
+  const SG = { timeZone: 'Asia/Singapore' }
+  const date = at.toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short', ...SG }).replace(',', '')
+  const time = at.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...SG })
+  return date + ' · ' + time
+})
+// "Join with code": a popover that closes when you click away
+const joinPop = ref(false)
+const joinWrap = ref(null)
+function closeJoinPop(event) {
+  if (joinPop.value && joinWrap.value && !joinWrap.value.contains(event.target)) joinPop.value = false
+}
+onMounted(() => document.addEventListener('pointerdown', closeJoinPop))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', closeJoinPop))
 
 // "Create a simulation event": opens and closes with the shared unfold (ExpandTransition)
 const simOpen = ref(false)
 
-function roleClass(ev) {
+// The role pills: Root ink, Planner mint, In-Charge peach, anyone else soft
+function roleChip(ev) {
   const label = roleLabel(ev)
-  return label === 'Root' ? 'pl-role--root' : label === 'Planner' ? 'pl-role--planner' : label === 'Marshal' ? 'pl-role--marshal' : label === 'IC' ? 'pl-role--ic' : ''
+  return label === 'Root' ? 'rl-root' : label === 'Planner' ? 'rl-planner' : label === 'IC' || label === 'In-Charge' ? 'rl-ic' : 'chip-soft'
 }
 
 const ROLE_TONE = { Root: 'pv-role-root', Planner: 'pv-role-planner', Marshal: 'pv-role-marshal' }
@@ -302,130 +305,165 @@ function roleTone(label) {
     </BottomSheet>
   </main>
 
-  <!-- ===== Website: My events (Planova) ===== -->
-  <main v-else class="pl-page">
-    <div class="pl-page__head">
-      <div>
-        <h1 class="pl-h-page">{{ greeting }} {{ firstName }}</h1>
-        <p class="pl-meta mb-0">Your role is set per event, so what you can do changes from event to event.</p>
-      </div>
-      <div class="pl-actions">
-        <form class="d-flex gap-2" @submit.prevent="joinEvent">
-          <input
-            :value="joinCode"
-            @input="onJoinInput"
-            class="form-control text-uppercase"
-            style="width: 8.5rem"
-            placeholder="Event code"
-            autocapitalize="characters"
-            required
-            aria-label="Event code"
-            data-testid="join-code"
-          />
-          <button class="btn btn-outline-primary" type="submit" data-testid="join-btn">Join</button>
-        </form>
-        <RouterLink :to="{ name: 'event-new' }" class="btn btn-primary" data-testid="create-event-btn">Create event</RouterLink>
-      </div>
-    </div>
-
-    <BenchAlert v-if="errorMsg" data-testid="events-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
-
-    <!-- Live now: straight into the event -->
-    <RouterLink
-      v-for="ev in tabLists.ongoing.slice(0, 1)"
-      :key="'live-' + ev.id"
-      :to="{ name: 'event', params: { id: ev.id } }"
-      class="pl-live data-in"
-      :data-testid="'live-' + ev.id"
-    >
-      <span class="pl-badge pl-badge--live"><span class="pl-badge__dot"></span>Live now</span>
-      <span class="pl-live__text">
-        <span class="pl-live__name d-block">{{ ev.name }}</span>
-        <span class="pl-meta d-block">
-          <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
-          · You are <strong>{{ roleLabel(ev) }}</strong>
-        </span>
-      </span>
-      <span class="pl-live__cta">Open event</span>
-    </RouterLink>
-
-    <div class="pl-page__head">
-      <div ref="tabsEl" class="pl-tabs has-ink" role="tablist" aria-label="Event list">
-        <button
-          v-for="t in WEB_TABS"
-          :key="t.key"
-          type="button"
-          class="pl-tab"
-          role="tab"
-          :aria-selected="activeTab === t.key"
-          :data-testid="'events-tab-' + t.key"
-          @click="pickTab(t.key)"
-        >
-          {{ t.label }}<span v-if="tabLists[t.key].length" class="pl-count">{{ tabLists[t.key].length }}</span>
-        </button>
-        <span class="pl-tabs-ink" :class="{ 'is-ready': ink.ready }" :style="inkStyle" aria-hidden="true"></span>
-      </div>
-      <div class="pl-search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 1 1 16 0" /></svg>
-        <input v-model="search" class="form-control" type="search" placeholder="Search events" aria-label="Search events" />
-      </div>
-    </div>
-
-    <SkeletonLoader v-if="loading" :rows="5" label="Loading your events…" />
-    <div v-else-if="events.length === 0" class="pl-empty data-in" data-testid="no-events">
-      <strong>No events yet</strong>
-      <span class="pl-meta">Join one with a code, or create your own.</span>
-      <RouterLink :to="{ name: 'event-new' }" class="btn btn-primary mt-2">Create event</RouterLink>
-    </div>
-    <!-- Each tab's list slides in from the side the tab is on; typing in the search does not re-run it. The direction
-         is a CSS variable on the wrapper, so the list that is leaving reads the new direction too. -->
-    <div v-else class="pl-tabswap data-in" :style="{ '--tab-shift': tabDir === 'right' ? '16px' : '-16px' }">
-      <Transition name="tabswap">
-        <div :key="activeTab" role="tabpanel">
-          <div v-if="shownEvents.length === 0" class="pl-empty">
-            <strong>{{ search ? 'No events match your search' : 'Nothing here yet' }}</strong>
-            <span class="pl-meta">{{ search ? 'Try a different name or venue.' : 'Events in this tab will show up here.' }}</span>
+  <!-- ===== Website: Your events (Planova Kinetic) ===== -->
+  <div v-else class="k kq">
+    <!-- "Join with code" sits in the site's top bar (App.vue), which is always on the page first -->
+    <Teleport to="#k-nav-actions">
+      <div ref="joinWrap" class="wrapm">
+        <button type="button" class="kb kb-line kb-sm" :aria-expanded="joinPop ? 'true' : 'false'" data-testid="join-open" @click="joinPop = !joinPop">Join with code</button>
+        <form v-if="joinPop" class="ke-pop" @submit.prevent="joinEvent">
+          <label class="lab" for="k-code" style="margin-top: 0">Event code</label>
+          <div class="row">
+            <input
+              id="k-code"
+              :value="joinCode"
+              class="kin"
+              placeholder="e.g. 3MF5Y5"
+              autocapitalize="characters"
+              autocomplete="off"
+              required
+              style="font: 700 16px Unbounded; letter-spacing: 0.14em; text-transform: uppercase"
+              data-testid="join-code"
+              @input="onJoinInput"
+            />
+            <button class="kb kb-lime" type="submit" :disabled="joinCode.length < 6" data-testid="join-btn">Join</button>
           </div>
-          <ul v-else class="pl-list" data-testid="event-list">
-            <li v-for="ev in shownEvents" :key="ev.id">
-              <RouterLink :to="{ name: 'event', params: { id: ev.id } }" class="pl-row">
-                <span class="pl-row__lead">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v16H4V5m3-3v6m10-6v6M4 10h16" /></svg>
-                </span>
-                <span class="pl-row__body">
-                  <span class="pl-row__title">{{ ev.name }}</span>
-                  <span class="pl-row__meta" data-testid="event-list-when">
-                    <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
-                    <template v-if="!ev.startsAt && !ev.venue">No date yet</template>
-                  </span>
-                </span>
-                <span class="pl-row__trail">
-                  <span v-if="ev.isSimulation" class="pl-badge pl-badge--info">Simulation</span>
-                  <span class="pl-role" :class="roleClass(ev)" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
-                  <svg class="pl-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-                </span>
-              </RouterLink>
-            </li>
-          </ul>
-        </div>
-      </Transition>
-    </div>
+        </form>
+      </div>
+    </Teleport>
 
-    <!-- A name-only test event for virtual groups (Stage 3) -->
-    <div class="pl-meta">
-      <button type="button" class="pl-disclosure" :aria-expanded="simOpen ? 'true' : 'false'" aria-controls="sim-form" @click="simOpen = !simOpen">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-        Create a simulation event (virtual groups for testing)
-      </button>
-      <ExpandTransition>
-        <div v-if="simOpen" id="sim-form">
-          <form class="d-flex gap-2 pt-2" style="max-width: 28rem" @submit.prevent="createSimulation">
-            <label for="sim-name" class="visually-hidden">Simulation name</label>
-            <input id="sim-name" v-model="simName" class="form-control" placeholder="Simulation name" maxlength="80" required data-testid="sim-event-name" />
-            <button class="btn btn-outline-secondary" type="submit" data-testid="create-sim-btn">Create</button>
-          </form>
+    <main class="ke2-main ek-main">
+      <div class="ke2-greet">
+        <div>
+          <span class="ey">{{ today }}</span>
+          <h1>{{ greeting.replace(',', '') }}<template v-if="firstName">, {{ firstName }}</template></h1>
         </div>
-      </ExpandTransition>
-    </div>
-  </main>
+        <span class="sp"></span>
+        <RouterLink :to="{ name: 'event-new' }" class="kb kb-ink" data-testid="create-event-btn">
+          <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Create event
+        </RouterLink>
+      </div>
+
+      <BenchAlert v-if="errorMsg" data-testid="events-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
+
+      <!-- The next-up band: whichever event is live, otherwise the soonest upcoming. The whole band is one link. -->
+      <RouterLink
+        v-if="nextEvent"
+        :to="{ name: 'event', params: { id: nextEvent.id } }"
+        class="ke2-next data-in"
+        :aria-label="'Open ' + nextEvent.name"
+        :data-testid="nextIsLive ? 'live-' + nextEvent.id : 'next-' + nextEvent.id"
+      >
+        <div class="txt">
+          <span v-if="nextIsLive" class="chip chip-lime"><i class="dot pulse" style="background: var(--ink)"></i>Live now</span>
+          <span class="ey" :style="{ color: 'var(--lime)', display: 'block', marginTop: nextIsLive ? '14px' : 0 }">{{ nextIsLive ? 'Live now' : 'Next up' }} · you’re {{ roleLabel(nextEvent) }}</span>
+          <h2>{{ nextEvent.name }}</h2>
+          <div style="color: var(--on-forest-body); font-size: 15px">
+            <template v-if="nextEvent.startsAt">{{ formatDayTime(nextEvent.startsAt) }}</template><template v-if="nextEvent.startsAt && nextEvent.venue"> · </template>{{ nextEvent.venue }}
+          </div>
+          <div v-if="!nextIsLive" class="ke2-cd" :aria-label="'Starts in ' + countdown.d + ' days ' + countdown.h + ' hours ' + countdown.m + ' minutes'">
+            <div><b>{{ countdown.d }}</b><span>DAYS</span></div>
+            <div><b>{{ countdown.h }}</b><span>HRS</span></div>
+            <div><b>{{ countdown.m }}</b><span>MIN</span></div>
+          </div>
+        </div>
+        <div class="kl-stage kl-spin" aria-hidden="true"><KVenueMap /></div>
+      </RouterLink>
+
+      <section class="ke2-list" aria-label="Events">
+        <div class="ke2-lh">
+          <h2>Your events</h2>
+          <div class="seg" role="tablist" aria-label="Event list">
+            <button
+              v-for="t in WEB_TABS"
+              :key="t.key"
+              type="button"
+              role="tab"
+              :aria-pressed="activeTab === t.key ? 'true' : 'false'"
+              :aria-selected="activeTab === t.key ? 'true' : 'false'"
+              :data-testid="'events-tab-' + t.key"
+              @click="pickTab(t.key)"
+            >
+              {{ t.label }} <span v-if="tabLists[t.key].length" style="opacity: 0.6">{{ tabLists[t.key].length }}</span>
+            </button>
+          </div>
+          <span class="sp"></span>
+          <div class="ek-search">
+            <input v-model="search" class="kin" type="search" placeholder="Search" aria-label="Search events" />
+            <span><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg></span>
+          </div>
+        </div>
+
+        <SkeletonLoader v-if="loading" :rows="5" label="Loading your events…" />
+        <div v-else-if="events.length === 0" class="ek-empty data-in" data-testid="no-events">
+          <div class="U ek-empty-title">No events yet</div>
+          <p class="mut">Join one with a code, or create your own.</p>
+        </div>
+        <!-- Each tab's list slides in from the side the tab is on; typing in the search does not re-run it. The direction
+             is a CSS variable on the wrapper, so the list that is leaving reads the new direction too. -->
+        <div v-else class="pl-tabswap data-in" :style="{ '--tab-shift': tabDir === 'right' ? '16px' : '-16px' }">
+          <Transition name="tabswap">
+            <div :key="activeTab" role="tabpanel">
+              <div v-if="shownEvents.length === 0" class="ek-empty">
+                <div class="U ek-empty-title">{{ search ? 'No events match' : 'Nothing here yet' }}</div>
+                <p class="mut">{{ search ? 'Try another name.' : 'Create an event or join one with a code.' }}</p>
+              </div>
+              <div v-else data-testid="event-list">
+                <RouterLink v-for="ev in shownEvents" :key="ev.id" :to="{ name: 'event', params: { id: ev.id } }" class="ke2-row ek-row">
+                  <span class="ke2-dt" :class="{ tbc: !ev.startsAt }"><b>{{ ev.startsAt ? dayOf(ev.startsAt).padStart(2, '0') : 'TBC' }}</b><span>{{ ev.startsAt ? monthOf(ev.startsAt).toUpperCase() : 'DATE' }}</span></span>
+                  <span style="min-width: 0">
+                    <span class="nm text-truncate">{{ ev.name }}</span>
+                    <span class="mt" data-testid="event-list-when">
+                      <template v-if="ev.startsAt">{{ formatDayTime(ev.startsAt) }}</template><template v-if="ev.startsAt && ev.venue"> · </template>{{ ev.venue }}
+                      <template v-if="!ev.startsAt && !ev.venue">No date yet</template>
+                    </span>
+                  </span>
+                  <span class="ke2-tags">
+                    <span v-if="ev.isSimulation" class="chip rl-sim">Sim</span>
+                    <span class="chip" :class="roleChip(ev)" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
+                  </span>
+                  <span><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>
+                </RouterLink>
+              </div>
+            </div>
+          </Transition>
+        </div>
+      </section>
+
+      <!-- A name-only test event for virtual groups (Stage 3) -->
+      <div class="ek-sim">
+        <button type="button" class="link" :aria-expanded="simOpen ? 'true' : 'false'" aria-controls="sim-form" @click="simOpen = !simOpen">
+          Create a simulation event (virtual groups for testing)
+        </button>
+        <ExpandTransition>
+          <div v-if="simOpen" id="sim-form">
+            <form class="row ek-sim-form" @submit.prevent="createSimulation">
+              <label for="sim-name" class="visually-hidden">Simulation name</label>
+              <input id="sim-name" v-model="simName" class="kin" placeholder="Simulation name" maxlength="80" required data-testid="sim-event-name" />
+              <button class="kb kb-line" type="submit" data-testid="create-sim-btn">Create</button>
+            </form>
+          </div>
+        </ExpandTransition>
+      </div>
+    </main>
+  </div>
 </template>
+
+<style scoped>
+.ek-main { overflow: visible; max-width: 1440px; margin: 0 auto; padding-top: 22px; }
+.ek-row { grid-template-columns: 72px minmax(0, 1fr) 200px 28px; }
+.ek-search { position: relative; width: 230px; max-width: 100%; }
+.ek-search input { padding-left: 40px; height: 42px; border-radius: 999px; background: var(--canvas); border-color: transparent; }
+.ek-search span { position: absolute; left: 14px; top: 11px; color: var(--muted); }
+.ek-empty { padding: 50px 0; text-align: center; }
+.ek-empty-title { font-size: 20px; font-weight: 700; }
+.ek-empty p { margin: 8px 0 0; }
+.ek-sim { margin-top: 20px; font-size: 14px; }
+.ek-sim-form { padding-top: 10px; max-width: 28rem; }
+@container k (max-width: 767.98px) {
+  .ek-row { grid-template-columns: 56px minmax(0, 1fr) 20px; gap: 12px; }
+  .ek-row .ke2-tags { display: none; }
+  .ek-search { width: 100%; }
+  .k .ke2-lh .seg { max-width: 100%; overflow-x: auto; }
+}
+</style>

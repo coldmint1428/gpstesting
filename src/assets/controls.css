@@ -143,62 +143,62 @@ html .pv-btn {
   justify-content: center;
   gap: 6px;
   padding: 0 var(--control-pad-x-sm);
-  border: 1.5px solid var(--border-strong, #0f5c50);
+  border: 1.5px solid var(--border-strong, var(--forest));
   background: transparent;
-  color: var(--text-link, #0f5c50);
+  color: var(--text-link, var(--forest));
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
 }
 html .pv-btn:hover:not(:disabled) {
-  border-color: var(--border-strong, #0f5c50);
-  background: var(--interactive-hover-overlay, #f2f6f4);
-  color: var(--brand-primary-pressed, #0b3d35);
+  border-color: var(--border-strong, var(--forest));
+  background: var(--interactive-hover-overlay, var(--canvas));
+  color: var(--brand-primary-pressed, var(--forest));
 }
 html .pv-btn:disabled {
   opacity: 1;
-  border-color: var(--border-subtle, #e2dfd6);
-  color: var(--text-disabled, #9aa39e);
+  border-color: var(--border-subtle, var(--line));
+  color: var(--text-disabled, var(--muted));
 }
 html .pv-btn.is-primary {
-  border-color: var(--brand-primary, #0f5c50);
-  background: var(--brand-primary, #0f5c50);
+  border-color: var(--brand-primary, var(--forest));
+  background: var(--brand-primary, var(--forest));
   color: var(--text-on-brand, #fff);
 }
 html .pv-btn.is-primary:hover:not(:disabled) {
-  border-color: var(--brand-primary-hover, #0b3d35);
-  background: var(--brand-primary-hover, #0b3d35);
+  border-color: var(--brand-primary-hover, var(--forest));
+  background: var(--brand-primary-hover, var(--forest));
   color: var(--text-on-brand, #fff);
 }
 html .pv-btn.is-primary:disabled {
   border-color: transparent;
-  background: var(--bg-muted, #eaeaea);
-  color: var(--text-disabled, #9aa39e);
+  background: var(--bg-muted, var(--line));
+  color: var(--text-disabled, var(--muted));
 }
 html .pv-btn.is-quiet {
   border-color: transparent;
   background: transparent;
-  color: var(--text-link, #0f5c50);
+  color: var(--text-link, var(--forest));
 }
 html .pv-btn.is-quiet:hover:not(:disabled) {
   border-color: transparent;
-  background: var(--interactive-hover-overlay, #f2f6f4);
+  background: var(--interactive-hover-overlay, var(--canvas));
 }
 html .pv-btn.is-quiet:disabled {
   border-color: transparent;
-  color: var(--text-disabled, #9aa39e);
+  color: var(--text-disabled, var(--muted));
 }
 html .pv-btn.is-danger:disabled {
-  border-color: var(--border-subtle, #e2dfd6);
-  color: var(--text-disabled, #9aa39e);
+  border-color: var(--border-subtle, var(--line));
+  color: var(--text-disabled, var(--muted));
 }
 html .pv-btn.is-danger {
-  border-color: var(--status-error-border, #c4321f);
-  color: var(--status-error-fg, #c4321f);
+  border-color: var(--status-error-border, var(--danger));
+  color: var(--status-error-fg, var(--danger));
 }
 html .pv-btn.is-danger:hover:not(:disabled) {
-  border-color: var(--danger-solid, #c4321f);
-  background: var(--danger-solid, #c4321f);
+  border-color: var(--danger-solid, var(--danger));
+  background: var(--danger-solid, var(--danger));
   color: var(--text-on-danger, #fff);
 }
 html .pv-btn:focus-visible,
@@ -206,18 +206,18 @@ html .pv-input:focus,
 html .pv-select:focus,
 html .pv-log-select:focus {
   outline: none;
-  border-color: #2e8a7a;
+  border-color: var(--forest-2);
   box-shadow: 0 0 0 4px rgba(46, 138, 122, 0.3);
 }
 html .pv-input {
   padding: 0 var(--control-pad-x-sm);
-  border: 1px solid var(--border-default, #c9c5b9);
+  border: 1px solid var(--border-default, var(--line));
   background: var(--bg-surface, #fff);
-  color: var(--text-primary, #14201b);
+  color: var(--text-primary, var(--ink));
   line-height: calc(var(--control-h-sm) - 2px);
 }
 html .pv-input::placeholder {
-  color: var(--text-secondary, #6c757d);
+  color: var(--text-secondary, var(--muted));
   opacity: 1;
 }
 /* "Place on map" sits inside a list row: the compact size, still centred. */
@@ -231,14 +231,14 @@ html .pv-log-select {
   appearance: none;
   -webkit-appearance: none;
   padding: 0 30px 0 var(--control-pad-x-sm);
-  border: 1px solid var(--border-default, #c9c5b9);
+  border: 1px solid var(--border-default, var(--line));
   line-height: calc(var(--control-h-sm) - 2px);
   background-color: var(--bg-surface, #fff);
   background-image: var(--control-chevron);
   background-repeat: no-repeat;
   background-position: right 9px center;
   background-size: 12px 12px;
-  color: var(--text-primary, #14201b);
+  color: var(--text-primary, var(--ink));
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
@@ -247,7 +247,7 @@ html .pv-log-select {
 html .pv-select:hover,
 html .pv-log-select:hover,
 html .pv-input:hover {
-  border-color: var(--border-strong, #0f5c50);
+  border-color: var(--border-strong, var(--forest));
 }
 /* A badge beside a control in a toolbar sits on its centre line. */
 html .pv-toolbar > .pv-badge {
@@ -331,11 +331,11 @@ html.native-app .pv-btn.pv-place-btn {
     min-width: anchor-size(width);
     max-height: min(360px, calc(100% - 12px));
     overflow-y: auto;
-    border: 1px solid var(--border-subtle, #e2dfd6);
+    border: 1px solid var(--border-subtle, var(--line));
     border-radius: var(--control-radius);
     background: var(--bg-surface, #fff);
-    color: var(--text-primary, #14201b);
-    box-shadow: 0 8px 24px rgba(20, 32, 27, 0.14), 0 1px 3px rgba(20, 32, 27, 0.08);
+    color: var(--text-primary, var(--ink));
+    box-shadow: 0 8px 24px rgba(10, 31, 23, 0.14), 0 1px 3px rgba(10, 31, 23, 0.08);
   }
   html select.form-select option,
   html select.pv-select option,
@@ -367,13 +367,13 @@ html.native-app .pv-btn.pv-place-btn {
   html select.form-select option:focus-visible,
   html select.pv-select option:focus-visible,
   html select.pv-log-select option:focus-visible {
-    background: var(--interactive-hover-overlay, #f2f6f4);
+    background: var(--interactive-hover-overlay, var(--canvas));
     outline: none;
   }
   html select.form-select option:checked,
   html select.pv-select option:checked,
   html select.pv-log-select option:checked {
-    background: var(--interactive-selected, #dcefea);
+    background: var(--interactive-selected, var(--mint));
     font-weight: 600;
   }
   /* The tick goes after the words, on the right, in the brand colour. */
@@ -382,12 +382,12 @@ html.native-app .pv-btn.pv-place-btn {
   html select.pv-log-select option::checkmark {
     order: 1;
     margin-left: auto;
-    color: var(--brand-primary, #0f5c50);
+    color: var(--brand-primary, var(--forest));
   }
   html select.form-select option:disabled,
   html select.pv-select option:disabled,
   html select.pv-log-select option:disabled {
-    color: var(--text-disabled, #9aa39e);
+    color: var(--text-disabled, var(--muted));
     background: none;
     cursor: default;
     font-weight: 400;
@@ -401,18 +401,18 @@ html.native-app .pv-btn.pv-place-btn {
 html .pv-sched-line.is-warn,
 html .pv-ops-error,
 html .pv-run.is-stale {
-  background: var(--status-warning-bg, #fdefd9);
-  color: var(--status-warning-fg, #9a5200);
-  border-left: 4px solid var(--status-warning-border, #9a5200);
+  background: var(--status-warning-bg, var(--danger-bg));
+  color: var(--status-warning-fg, var(--danger));
+  border-left: 4px solid var(--status-warning-border, var(--danger));
 }
 html .pv-route-line.is-warn,
 html .pv-warnings {
-  background: var(--status-error-bg, #fbe5e1);
-  color: var(--status-error-fg, #c4321f);
-  border-color: var(--status-error-border, #c4321f);
+  background: var(--status-error-bg, var(--danger-bg));
+  color: var(--status-error-fg, var(--danger));
+  border-color: var(--status-error-border, var(--danger));
 }
 html .pv-route-line.is-warn {
-  border-left: 4px solid var(--status-error-border, #c4321f);
+  border-left: 4px solid var(--status-error-border, var(--danger));
 }
 html .pv-warnings {
   border-radius: var(--control-radius);
@@ -423,12 +423,12 @@ html .pv-route-line.is-warn {
   font-size: 14px;
 }
 html .pv-run-warn {
-  color: var(--status-warning-fg, #9a5200);
+  color: var(--status-warning-fg, var(--danger));
 }
 html .pv-run-warn .pv-btn,
 html .pv-run-warn .pv-btn:hover:not(:disabled) {
-  border-color: var(--status-warning-border, #9a5200);
-  background: var(--status-warning-border, #9a5200);
+  border-color: var(--status-warning-border, var(--danger));
+  background: var(--status-warning-border, var(--danger));
   color: #fff;
 }
 
@@ -437,11 +437,11 @@ html .pv-run-warn .pv-btn:hover:not(:disabled) {
  * field and the message under it in the same red, small text. */
 html .is-invalid.pv-input,
 html .is-invalid.pv-select {
-  border-color: var(--status-error-border, #c4321f);
+  border-color: var(--status-error-border, var(--danger));
 }
 html .form-control.is-invalid,
 html .form-select.is-invalid {
-  border-color: var(--status-error-border, #c4321f);
+  border-color: var(--status-error-border, var(--danger));
   background-image: none;
   padding-right: var(--control-pad-x);
 }
@@ -452,11 +452,11 @@ html .form-select.is-invalid {
 html .form-control.is-invalid:focus,
 html .form-select.is-invalid:focus,
 html .is-invalid.pv-input:focus {
-  border-color: var(--status-error-border, #c4321f);
+  border-color: var(--status-error-border, var(--danger));
   box-shadow: 0 0 0 4px rgba(196, 50, 31, 0.2);
 }
 html .form-check-input.is-invalid {
-  border-color: var(--status-error-border, #c4321f);
+  border-color: var(--status-error-border, var(--danger));
 }
 html .field-error {
   display: flex;
@@ -466,7 +466,7 @@ html .field-error {
   margin-top: 4px;
   font-size: 13px;
   line-height: 1.35;
-  color: var(--status-error-fg, #c4321f);
+  color: var(--status-error-fg, var(--danger));
 }
 html .field-error::before {
   content: '';

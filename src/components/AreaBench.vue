@@ -3196,7 +3196,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   flex: none;
 }
 .plan-row.is-locked {
-  background: var(--bs-tertiary-bg, #f4f4f2);
+  background: var(--bs-tertiary-bg, var(--canvas));
 }
 
 /* The list of floor plans, capped. A bench with a dozen plans used to grow this column until
@@ -3263,7 +3263,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   height: 14px;
   margin: -7px 0 0 -7px;
   background: #fff;
-  border: 2px solid #0d6efd;
+  border: 2px solid var(--forest);
   border-radius: 2px;
   cursor: nwse-resize;
   touch-action: none;
@@ -3289,7 +3289,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #0d6efd;
+  background: var(--forest);
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
@@ -3301,7 +3301,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   height: 16px;
   border-radius: 50%;
   background: #fff;
-  border: 2px solid #fd7e14;
+  border: 2px solid var(--stale);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   /* A bin: clicking a dot removes it (dragging still moves it) */
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11' fill='white' stroke='black' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 10 10, pointer;

@@ -63,7 +63,7 @@ async function copyLink() {
 <template>
   <div class="row g-3">
     <div class="col-12 col-md-6">
-      <div class="card h-100">
+      <div class="card h-100 k-invite">
         <div class="card-body">
           <h2 class="h6">Event code</h2>
           <p class="display-6 font-monospace mb-1" data-testid="join-code-display">{{ joinCode }}</p>

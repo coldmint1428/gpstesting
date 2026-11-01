@@ -356,11 +356,11 @@ let fittedWithFrames = false
 let zoneBounds = null
 
 const ZONE_STYLE = {
-  zone: { color: '#244f3f', weight: 1.5, fillOpacity: 0.06, fillColor: '#244f3f' },
-  no_go: { color: '#a63a2f', weight: 2, dashArray: '6 4', fillOpacity: 0.1, fillColor: '#a63a2f' },
-  obstacle: { color: '#6d6a62', weight: 1.5, dashArray: '3 3', fillOpacity: 0.16, fillColor: '#6d6a62' },
-  stage: { color: '#163026', weight: 2, fillOpacity: 0.12, fillColor: '#163026' },
-  entrance: { color: '#3d6ea8', weight: 1.5, fillOpacity: 0.08, fillColor: '#3d6ea8' },
+  zone: { color: '#0b3d2e', weight: 2.5, fillOpacity: 0.6, fillColor: '#9be7c4' },
+  no_go: { color: '#c2410c', weight: 2.5, dashArray: '10 7', fillOpacity: 0.35, fillColor: '#ff8a65' },
+  obstacle: { color: '#56685f', weight: 1.5, dashArray: '3 3', fillOpacity: 0.16, fillColor: '#56685f' },
+  stage: { color: '#0a1f17', weight: 2.5, fillOpacity: 0.75, fillColor: '#c6f36b' },
+  entrance: { color: '#14523e', weight: 1.5, fillOpacity: 0.08, fillColor: '#14523e' },
 }
 
 function drawZones() {
@@ -541,7 +541,7 @@ function drawLines() {
     const line = (run) => {
       if (run.length < 2) return
       L.polyline(run, {
-        color: colorOf.value.get(groupId) || '#244f3f',
+        color: colorOf.value.get(groupId) || '#0b3d2e',
         weight: 2,
         // A group that is not ticked steps back so the ticked ones read as the subject.
         opacity: selectedGroups.value.size && !selectedGroups.value.has(groupId) ? 0.12 : 0.55,
@@ -567,7 +567,7 @@ function drawLines() {
         [gap.from.lat, gap.from.lng],
         [gap.to.lat, gap.to.lng],
       ],
-      { color: '#a63a2f', weight: 3, opacity: 0.9, interactive: false },
+      { color: '#c2410c', weight: 3, opacity: 0.9, interactive: false },
     ).addTo(lineLayer)
   }
   // The stretches the database refuses that the walk above does not report: a line through a zone, or a hop too
@@ -583,7 +583,7 @@ function drawLines() {
         [from.lat, from.lng],
         [to.lat, to.lng],
       ],
-      { color: '#a63a2f', weight: 3, opacity: 0.9, dashArray: '2 4', interactive: false },
+      { color: '#c2410c', weight: 3, opacity: 0.9, dashArray: '2 4', interactive: false },
     ).addTo(lineLayer)
   }
 }
@@ -609,7 +609,7 @@ function drawMarkers() {
     // the inspector lists it and calls it "off site" — but nobody is standing there, so a marker would be a person
     // the map is drawing who is not there. Step 10's Done-when is the words: "one fewer marker, still listed".
     if (!point || point.state === 'off_site') continue
-    const color = colorOf.value.get(group.id) || '#244f3f'
+    const color = colorOf.value.get(group.id) || '#0b3d2e'
     const dim = selectedGroups.value.size > 0 && !selectedGroups.value.has(group.id)
     // This badge is an end of a stretch the database refuses: same red ring the bar and the lane use.
     const bad = !run && flaggedCells.value.has(`${group.id}|${frame.id}`)
