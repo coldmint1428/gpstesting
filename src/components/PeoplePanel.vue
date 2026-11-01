@@ -5,11 +5,11 @@
 //   Planner       : the same for people below planner
 //   Group admin   : add people to their own group; IC and removing members of their own group
 //   Everyone else : the list only
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { initials } from '../utils/people'
 import { ROLE_RANK, ROLE_LABEL, topRole, isMarshal, canManage, assignableRoles, canSetMarshal, canSetIC, canRemove } from '../utils/permissions'
 import { addEventMember, setMemberRole, setMarshal, setGroupIC, setArrivalTolerance, removeEventMember } from '../services/memberService'
-import { searchPeople } from '../services/eventService'
+import { findPersonByEmail, looksLikeEmail } from '../services/eventService'
 import { askConfirm, toast } from '../composables/useNotify'
 import BenchAlert from './BenchAlert.vue'
 
@@ -84,44 +84,43 @@ const myAdminGroupId = computed(() => (props.mode === 'edit' && props.me && prop
 const canAddPeople = computed(() => managesAll.value || myAdminGroupId.value !== null)
 const myAdminGroupName = computed(() => groupName(myAdminGroupId.value))
 
-const addName = ref('')
+const addEmail = ref('')
 const addGroupId = ref('') // '' = no group
-// Find people by name as you type (search_people, 034); each result shows its email, to tell apart two people
-// with the same name. People already in the event are left out.
-const found = ref([])
-const searching = ref(false)
-let searchTimer = null
-let searchSeq = 0
-watch(addName, (value) => {
-  clearTimeout(searchTimer)
-  if (value.trim().length < 2) {
-    found.value = []
-    searching.value = false
-    return
-  }
-  searching.value = true
-  searchTimer = setTimeout(async () => {
-    const mine = ++searchSeq
-    try {
-      const rows = await searchPeople(value)
-      if (mine === searchSeq) found.value = rows.filter((p) => !props.members.some((m) => m.id === p.id))
-    } catch (error) {
-      console.log(error.message)
-      if (mine === searchSeq) found.value = []
-    } finally {
-      if (mine === searchSeq) searching.value = false
-    }
-  }, 300)
+// Add an existing account by its full email address (068). Nothing is suggested while typing and no list of accounts
+// is shown -- the way email to someone outside your organisation works -- so this page never shows anyone's email.
+const finding = ref(false)
+const addMessage = ref('')
+const canFind = computed(() => looksLikeEmail(addEmail.value) && !finding.value && !busy.value)
+watch(addEmail, (value) => {
+  if (value) addMessage.value = ''
 })
-onUnmounted(() => clearTimeout(searchTimer))
+
+async function addByEmail() {
+  if (!canFind.value) return
+  finding.value = true
+  addMessage.value = ''
+  try {
+    const person = await findPersonByEmail(addEmail.value)
+    if (!person) {
+      addMessage.value = 'No account uses that email. Check the address, or send them the event code.'
+      return
+    }
+    if (props.members.some((m) => m.id === person.id)) {
+      addMessage.value = person.display_name + ' is already in this event.'
+      return
+    }
+    await addMember(person)
+  } catch (error) {
+    addMessage.value = error.message
+  } finally {
+    finding.value = false
+  }
+}
 
 async function addMember(p) {
   const groupId = managesAll.value ? addGroupId.value || null : myAdminGroupId.value
   const ok = await run(() => addEventMember(props.eventId, p.id, groupId), p.display_name + ' was added to the event.')
-  if (ok) {
-    addName.value = ''
-    found.value = []
-  }
+  if (ok) addEmail.value = ''
 }
 
 async function changeRole(m, select) {
@@ -195,43 +194,40 @@ async function changeTolerance(m, input) {
     <p class="small text-muted mb-2" data-testid="people-scope">{{ myScope }}</p>
     <BenchAlert v-if="errorMsg" data-testid="people-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-    <!-- Add an existing account: find them by name, pick the right one by email -->
+    <!-- Add an existing account by their full email: nothing suggested, no one's email shown -->
     <div v-if="canAddPeople" class="card mb-3" data-testid="add-person">
       <div class="card-body">
         <h2 class="h6">Add a person</h2>
-        <div class="row g-2">
+        <form class="row g-2" @submit.prevent="addByEmail">
           <div class="col-12 col-sm">
-            <label for="add-name" class="visually-hidden">Name</label>
+            <label for="add-email" class="visually-hidden">Their email address</label>
             <input
-              id="add-name"
-              v-model="addName"
-              type="search"
+              id="add-email"
+              v-model="addEmail"
+              type="email"
               class="form-control"
-              placeholder="Search by name"
+              placeholder="Their full email address"
               autocomplete="off"
-              data-testid="add-name"
+              autocapitalize="off"
+              spellcheck="false"
+              inputmode="email"
+              data-testid="add-email"
             />
           </div>
-          <div v-if="managesAll" class="col-12 col-sm-5">
+          <div v-if="managesAll" class="col-12 col-sm-4">
             <select v-model="addGroupId" class="form-select" aria-label="Group" data-testid="add-group">
               <option value="">No group yet</option>
               <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
             </select>
           </div>
-        </div>
-        <p v-if="searching" class="text-muted small mt-2 mb-0">Searching...</p>
-        <p v-else-if="addName.trim().length >= 2 && !found.length" class="text-muted small mt-2 mb-0" data-testid="add-none">
-          No one found who is not already in this event.
-        </p>
-        <ul v-if="found.length" class="list-group mt-2" data-testid="add-found">
-          <li v-for="p in found" :key="p.id" class="list-group-item py-1 d-flex align-items-center gap-2">
-            <span class="me-auto min-w-0">
-              <span class="d-block text-truncate">{{ p.display_name }}</span>
-              <span class="d-block text-truncate small text-muted">{{ p.email }}</span>
-            </span>
-            <button type="button" class="btn btn-sm btn-primary flex-shrink-0" :disabled="busy" @click="addMember(p)">Add</button>
-          </li>
-        </ul>
+          <div class="col-12 col-sm-auto">
+            <button type="submit" class="btn btn-primary w-100" :disabled="!canFind" data-testid="add-email-btn">
+              {{ finding ? 'Checking...' : 'Add' }}
+            </button>
+          </div>
+        </form>
+        <p v-if="addMessage" class="text-danger small mt-2 mb-0" role="status" data-testid="add-none">{{ addMessage }}</p>
+        <div class="form-text">For privacy, people are added by their exact email only; nobody is suggested.</div>
         <div v-if="!managesAll" class="form-text">They will be added to {{ myAdminGroupName }}.</div>
       </div>
     </div>

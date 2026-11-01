@@ -1,46 +1,55 @@
 <script setup>
-// Wizard step 2: find people by name (their email tells apart two with the same name), add them, choose their role
-import { ref, watch, onUnmounted } from 'vue'
+// Wizard step 2: add people by their full email address, then choose their role. Nothing is suggested while typing
+// and no list of accounts is ever shown (068): you must already know the exact address, as with email to someone
+// outside your organisation.
+import { ref, computed, watch } from 'vue'
 import { useEventWizardStore, ROLE_OPTIONS } from '../../stores/eventWizard'
-import { searchPeople } from '../../services/eventService'
+import { findPersonByEmail, looksLikeEmail } from '../../services/eventService'
 
 const wizard = useEventWizardStore()
 
-const term = ref('')
-const results = ref([])
-const searching = ref(false)
-const searchError = ref('')
-let timer = null
-let latest = 0 // only the newest search may show its results (older ones can arrive later)
+const email = ref('')
+const finding = ref(false)
+const message = ref('') // the answer to the last Add, shown under the field
+const messageKind = ref('') // 'error' | 'ok'
 
-// Search 300 ms after the last key press
-watch(term, (value) => {
-  clearTimeout(timer)
-  searchError.value = ''
-  if (value.trim().length < 2) {
-    results.value = []
-    searching.value = false
-    return
-  }
-  searching.value = true
-  timer = setTimeout(() => runSearch(value), 300)
+const canFind = computed(() => looksLikeEmail(email.value) && !finding.value)
+
+// A new address is a new question: the last answer no longer applies (but emptying the field after an add does not
+// take back the "added" it just said)
+watch(email, (value) => {
+  if (value) message.value = ''
 })
 
-async function runSearch(value) {
-  const mine = ++latest
+async function addByEmail() {
+  if (!canFind.value) return
+  const typed = email.value.trim()
+  finding.value = true
+  message.value = ''
   try {
-    const found = await searchPeople(value)
-    if (mine === latest) results.value = found
+    const person = await findPersonByEmail(typed)
+    if (!person) {
+      messageKind.value = 'error'
+      message.value = 'No account uses that email. Check the address, or send them the event code once it is made.'
+      return
+    }
+    if (wizard.people.some((p) => p.id === person.id)) {
+      messageKind.value = 'error'
+      message.value = person.display_name + ' is already added.'
+      return
+    }
+    // The email shown beside them is the one you typed, not one the app looked up
+    wizard.addPerson({ ...person, email: typed })
+    messageKind.value = 'ok'
+    message.value = person.display_name + ' added.'
+    email.value = ''
   } catch (error) {
-    if (mine === latest) searchError.value = error.message
+    messageKind.value = 'error'
+    message.value = error.message
   } finally {
-    if (mine === latest) searching.value = false
+    finding.value = false
   }
 }
-
-onUnmounted(() => clearTimeout(timer))
-
-const isAdded = (id) => wizard.people.some((p) => p.id === id)
 
 // Planners are never in a group (036): a new planner leaves the group they were put in at step 3
 function roleChanged(p) {
@@ -53,38 +62,34 @@ function roleChanged(p) {
     <h2 class="h5 mb-1">Add people</h2>
     <p class="text-muted small mb-3">You are the event's Root automatically. People can also join later with the event's code.</p>
 
-    <label for="people-search" class="form-label">Find by name</label>
-    <input
-      id="people-search"
-      v-model="term"
-      type="search"
-      class="form-control"
-      placeholder="e.g. Komin Tan"
-      autocomplete="off"
-      data-testid="wiz-search"
-    />
-    <div class="form-text">Type at least 2 characters of their name.</div>
-
-    <p v-if="searchError" class="text-danger small mt-2">{{ searchError }}</p>
-    <p v-else-if="searching" class="text-muted small mt-2">Searching...</p>
-    <p v-else-if="term.trim().length >= 2 && results.length === 0" class="text-muted small mt-2">No one found.</p>
-
-    <ul v-if="results.length" class="list-group mt-2" data-testid="wiz-results">
-      <li v-for="p in results" :key="p.id" class="list-group-item d-flex justify-content-between align-items-center gap-2">
-        <span class="text-truncate">
-          {{ p.display_name }} <span v-if="p.email" class="text-muted small">{{ p.email }}</span>
-        </span>
-        <button
-          type="button"
-          class="btn btn-sm flex-shrink-0"
-          :class="isAdded(p.id) ? 'btn-outline-secondary' : 'btn-primary'"
-          :disabled="isAdded(p.id)"
-          @click="wizard.addPerson(p)"
-        >
-          {{ isAdded(p.id) ? 'Added' : 'Add' }}
-        </button>
-      </li>
-    </ul>
+    <label for="people-email" class="form-label">Add by email</label>
+    <form class="d-flex gap-2" @submit.prevent="addByEmail">
+      <input
+        id="people-email"
+        v-model="email"
+        type="email"
+        class="form-control"
+        placeholder="name@example.com"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        inputmode="email"
+        data-testid="wiz-email"
+      />
+      <button type="submit" class="btn btn-primary flex-shrink-0" :disabled="!canFind" data-testid="wiz-email-add">
+        {{ finding ? 'Checking...' : 'Add' }}
+      </button>
+    </form>
+    <div class="form-text">Type their full email address. For privacy, nobody is suggested and no one's email is shown.</div>
+    <p
+      v-if="message"
+      class="small mt-2 mb-0"
+      :class="messageKind === 'error' ? 'text-danger' : 'text-success'"
+      role="status"
+      data-testid="wiz-email-result"
+    >
+      {{ message }}
+    </p>
 
     <h3 class="h6 mt-4">Added ({{ wizard.people.length }})</h3>
     <p v-if="wizard.people.length === 0" class="text-muted small">No one yet.</p>

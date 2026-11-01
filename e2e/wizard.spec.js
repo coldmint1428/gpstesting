@@ -1,6 +1,6 @@
 // E2E: making an event with the four-step wizard, and deleting it again (root only).
 import { test, expect } from '@playwright/test'
-import { contextAs, clientFor } from './support/session.js'
+import { contextAs, clientFor, qa } from './support/session.js'
 import { shot } from './support/shots.js'
 
 test.setTimeout(120_000)
@@ -26,13 +26,20 @@ test('root makes an event with people and a group, then deletes it', async ({ br
   await page.getByTestId('wiz-end').fill(local(new Date(start.getTime() + 5 * 3600_000)))
   await page.getByTestId('wiz-next').click()
 
-  // Step 2: people, found by search
-  // The search is by display name ("Find by name"); a username finds nobody (QA-03, minor)
-  await page.getByTestId('wiz-search').fill('qa_member')
-  await expect(page.getByText('No one found.')).toBeVisible()
-  for (const who of ['QA Member', 'QA Ic1']) {
-    await page.getByTestId('wiz-search').fill(who)
-    await page.getByTestId('wiz-results').locator('li', { hasText: who }).getByRole('button', { name: 'Add' }).click()
+  // Step 2: people, added by their exact email only (068, 1 Nov). Nothing is suggested while typing: a name or part
+  // of an address cannot even be submitted, and a wrong address says so without naming anyone.
+  const email = page.getByTestId('wiz-email')
+  const add = page.getByTestId('wiz-email-add')
+  await email.fill('QA Mem')
+  await expect(add).toBeDisabled()
+  await expect(page.locator('[data-testid=wiz-results]')).toHaveCount(0) // there is no list of accounts any more
+  await email.fill('nobody-' + Date.now() + '@planova.test')
+  await add.click()
+  await expect(page.getByTestId('wiz-email-result')).toContainText('No account uses that email')
+  for (const who of ['member', 'ic1']) {
+    await email.fill(qa(who).email.toUpperCase()) // the match ignores case, as email does
+    await add.click()
+    await expect(page.getByTestId('wiz-email-result')).toContainText('added')
   }
   await expect(page.getByTestId('wiz-people')).toContainText('QA Member')
   await shot(page, 'wiz-02-people')

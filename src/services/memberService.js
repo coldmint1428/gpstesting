@@ -12,7 +12,7 @@ async function call(fn, params) {
 // Beyond the course (CLAUDE.md asks for Axios + an Express REST API): this project's backend is Supabase, so these
 // call its database functions with supabase.rpc. Each still returns '' or the error's message, as the course's
 // try...catch examples show it.
-// An existing account, picked from searchPeople (034); groupId null = no group yet (group admins: their own group only)
+// An existing account, found by its exact email (findPersonByEmail, 068); groupId null = no group yet (group admins: their own group only)
 export const addEventMember = (eventId, userId, groupId) =>
   call('add_event_member', { p_event_id: eventId, p_user_id: userId, p_group_id: groupId })
 

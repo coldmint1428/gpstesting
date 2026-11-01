@@ -17,22 +17,20 @@ function fail(error) {
   return new Error(msg)
 }
 
-// Characters that would break the search, and the "@" people type in front of usernames
-function cleanSearchTerm(term) {
-  return String(term || '')
-    .replace(/[,()%*]/g, '')
-    .trim()
-    .replace(/^@/, '')
+// A full email address, the shape the database checks too: something@something.something, no spaces
+export function looksLikeEmail(value) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(value || '').trim())
 }
 
-// Find accounts by name (034_people_search_by_name.sql): the wizard's step 2 and the People page.
-// Returns [{ id, display_name, email }] (at most 10; never the caller; [] for under 2 characters)
-export async function searchPeople(term) {
-  const clean = cleanSearchTerm(term)
-  if (clean.length < 2) return []
-  const { data, error } = await db().rpc('search_people', { p_term: clean })
+// Find the one account with exactly this email (068_find_person_by_email.sql): the wizard's step 2 and the People
+// page. Nothing is suggested while typing and no list comes back -- the way email to someone outside your
+// organisation works. Returns { id, display_name } or null (no such account, yourself, or not a full address).
+export async function findPersonByEmail(email) {
+  const clean = String(email || '').trim()
+  if (!looksLikeEmail(clean)) return null
+  const { data, error } = await db().rpc('find_person_by_email', { p_email: clean })
   if (error) throw fail(error)
-  return data
+  return data && data.length ? data[0] : null
 }
 
 // Step 4 of the wizard: save everything in ONE transaction (030_event_wizard.sql). Returns the event id.
