@@ -166,8 +166,11 @@ function saveDetails() {
               <dd class="col-7" data-testid="overview-status">{{ status }}</dd>
               <dt class="col-5">Your role</dt>
               <dd class="col-7">{{ ROLE_LABEL[role] }}</dd>
-              <dt class="col-5">Your group</dt>
-              <dd class="col-7">{{ myGroup ? myGroup.name : 'None yet' }}</dd>
+              <!-- planners (and the root) run the whole event and are never in a group -->
+              <template v-if="role !== 'root' && role !== 'planner'">
+                <dt class="col-5">Your group</dt>
+                <dd class="col-7">{{ myGroup ? myGroup.name : 'None yet' }}</dd>
+              </template>
               <dt class="col-5">People</dt>
               <dd class="col-7">{{ members.length }} in {{ groupCount }}</dd>
             </dl>

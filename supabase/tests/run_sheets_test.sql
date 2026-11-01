@@ -305,8 +305,10 @@ begin
   -- R8 group details
   perform public.zz_as(u_planner);
   perform public.update_group_details(g_b1, ' band 1 ', ' Bands ', 'North', 40);
+  -- headcount is the number of people in the group (036), not the 40 passed in
+  select count(*) into n from public.group_members where group_id = g_b1;
   select code || '|' || category || '|' || sector || '|' || headcount into t from public.groups where id = g_b1;
-  if t = 'BAND_1|Bands|North|40' then passed := passed + 1; else failures := failures || E'\nR8a details ' || t; end if;
+  if t = 'BAND_1|Bands|North|' || n then passed := passed + 1; else failures := failures || E'\nR8a details ' || t; end if;
   res := public.zz_err(format('select public.update_group_details(%L, %L, null, null, null)', g_b2, 'BAND_1'), 'already has the code');
   if res = 'ok' then passed := passed + 1; else failures := failures || E'\nR8b duplicate code ' || res; end if;
   res := public.zz_err(format('select public.update_group_details(%L, %L, null, null, null)', g_b2, 'b@d'), 'a group code is');

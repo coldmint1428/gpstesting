@@ -219,8 +219,8 @@ async function startNow() {
   const ok = await askConfirm({
     title: 'Start the event now?',
     message:
-      (hasSheets.value ? (chosen ? 'Run sheet: "' + sheetName(chosen) + '". ' : 'No run sheet: tracking only (no cues, no moves). ') : '') +
-      'ICs can share their location from now, and ICs who are not sharing get a reminder on their phone.' +
+      (hasSheets.value ? (chosen ? 'Run sheet: "' + sheetName(chosen) + '". ' : 'No run sheet: location tracking only. ') : '') +
+      'ICs can share their location from now on. ICs who are not sharing get a reminder.' +
       (scheduledEnd.value ? ' It still ends at ' + formatDayTime(scheduledEnd.value) + '.' : ''),
     confirmText: 'Start event',
   })
@@ -240,9 +240,9 @@ async function endNow() {
   const ok = await askConfirm({
     title: running ? 'End the event and its show?' : 'End the event now?',
     message:
-      (running ? 'The show "' + running + '" is still running: ending stops its cues, every group\'s moves and their pushes. ' : '') +
+      (running ? 'The show "' + running + '" is running. Ending the event stops its cues, group moves and notifications. ' : '') +
       (scheduledEnd.value ? 'It ends now instead of at ' + formatTime(scheduledEnd.value) + '. ' : '') +
-      "Everyone's location sharing stops. To continue later, press Start event again (a new recording). " +
+      'All location sharing stops. To continue later, press Start event again. This starts a new recording. ' +
       'This recording stays in Playback for 7 days.',
     confirmText: 'End event now',
     danger: true,
@@ -265,7 +265,7 @@ async function removeEnd() {
 async function cancelSchedule() {
   const ok = await askConfirm({
     title: 'Cancel the schedule?',
-    message: "The event won't start by itself. You can still press Start event now.",
+    message: 'The event will not start automatically. You can still press Start event now.',
     confirmText: 'Cancel schedule',
     danger: true,
   })
@@ -280,7 +280,7 @@ function remind() {
       result && result.sent
         ? 'Reminder sent to ' + result.sent + (result.sent === 1 ? ' phone.' : ' phones.')
         : {
-            text: 'No phone to remind: the ICs not sharing have no app with notifications on, or were reminded in the last minute.',
+            text: 'No reminders sent. The ICs who are not sharing have notifications off, or were reminded in the last minute.',
             type: 'warning',
           },
   )
@@ -312,7 +312,7 @@ function remind() {
             <template v-if="scheduledEnd">ends <strong>{{ endText(scheduledEnd, scheduledStart) }}</strong></template>
             <span v-else class="text-muted">no end time</span>
             <span v-if="openSheetName" data-testid="status-run-sheet"> · will run <strong>{{ openSheetName }}</strong></span>
-            <span v-if="openSheetDraft" class="text-danger" data-testid="status-run-sheet-draft"> (changed since checked: check it again in the Run sheet tab)</span>
+            <span v-if="openSheetDraft" class="text-danger" data-testid="status-run-sheet-draft"> (changed since it was checked. Check it again on the Timeline page.)</span>
           </template>
           <template v-else>ICs can't share their location until {{ canManage ? 'you start' : 'a planner starts' }} the event.</template>
         </span>
@@ -356,7 +356,7 @@ function remind() {
           <option value="">No run sheet: tracking only</option>
           <option v-for="s in sheetList" :key="s.id" :value="s.id" :disabled="s.status === 'draft'">{{ sheetOption(s) }}</option>
         </select>
-        <div class="small text-muted mt-1">Only Ready (or already used) versions can run. Check a draft in the Run sheet tab first.</div>
+        <div class="small text-muted mt-1">Only Ready or used versions can run. Check a draft on the Timeline page first.</div>
         <div class="d-flex justify-content-end gap-2 mt-2">
           <button class="btn btn-sm btn-outline-secondary" type="button" @click="form = ''">Cancel</button>
           <button class="btn btn-sm btn-success px-3" type="submit" :disabled="busy" data-testid="start-confirm-btn">Start event…</button>
@@ -371,8 +371,8 @@ function remind() {
             <p class="small text-muted mb-0">
               {{
                 form === 'schedule'
-                  ? 'The event goes live by itself at the start and ends by itself at the end.'
-                  : "At the end time everyone's sharing stops by itself."
+                  ? 'The event starts and ends automatically at these times.'
+                  : 'All location sharing stops automatically at the end time.'
               }}
             </p>
           </div>

@@ -76,6 +76,9 @@ export async function enablePush(router) {
           router.push({ name: 'event', params: { id: data.eventId }, query: { share: '1' } })
         } else if (MOVE_KINDS.includes(data.kind) && data.eventId) {
           router.push({ name: 'event', params: { id: data.eventId }, query: { next: '1' } })
+        } else if (data.kind === 'sos' && data.eventId) {
+          // an SOS (038): the live map, zoomed to it
+          router.push({ name: 'event', params: { id: data.eventId, page: 'live' }, query: { sos: String(data.sosId || '') } })
         }
       })
       // Arrived while the app is OPEN: the phone notification is drawn by ReminderMessagingService.java

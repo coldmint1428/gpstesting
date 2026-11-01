@@ -36,7 +36,7 @@ const plan = computed(() => {
       <p class="mb-2">{{ plan }}</p>
       <p v-if="!group && (role === 'ic' || role === 'member')" class="small text-muted mb-2">You are not in a group yet.</p>
       <p class="small text-muted mb-0">
-        <template v-if="isLive">The event is live: the Live page shows where to go next.</template>
+        <template v-if="isLive">The event is live. The Live page shows where to go next.</template>
         <template v-else-if="scheduledStart">The event starts {{ formatDayTime(scheduledStart) }}.</template>
         <template v-else>This screen is still being built.</template>
       </p>

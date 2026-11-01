@@ -38,7 +38,7 @@ export const TABS = {
     C('name', 'Group name', true, 'Shown on the map and run sheet. Up to 50 characters. A group with this code (or else this name) in the app is updated; otherwise it is created.', 26),
     C('category', 'Category', true, 'Bands, Choirs, Contingents, VIP, Mobile Column … Movements can target a whole category (CAT:Bands).', 14),
     C('sector', 'Sector', false, 'Area or sector this group belongs to (S3, Bay, Padang).', 10),
-    C('headcount', 'Headcount', true, 'Number of people in the group.', 11),
+    C('headcount', 'Headcount', false, 'For reference: not imported. The app counts the people in each group.', 11),
     C('ics', 'IC usernames', false, 'For reference: not imported. Set ICs in the Members tab.', 34),
     C('admin', 'Group admin username', false, 'For reference: not imported. Set admins in the Members tab.', 20),
     C('colour', 'Colour', false, '#RRGGBB for the map (new groups; changes an existing group\'s colour).', 10),

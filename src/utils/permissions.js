@@ -60,26 +60,32 @@ export function canRemove(actor, target) {
 }
 
 // ---------- Event pages ----------
-// Page keys are the URL: /events/:id/<page>
-export const PAGES = ['overview', 'timeline', 'map', 'people', 'groups', 'live', 'playback', 'simulator']
+// Page keys are the URL: /events/:id/<page>. In the order of the side menu: what everyone uses first, planning
+// pages next, then people, then the planners' tools.
+export const PAGES = ['overview', 'live', 'timeline', 'map', 'groups', 'people', 'attendance', 'playback', 'simulator']
 export const PAGE_LABEL = {
   overview: 'Overview',
   timeline: 'Timeline',
   map: 'Map',
   groups: 'Groups',
   people: 'People',
+  attendance: 'Attendance',
   live: 'Live',
   playback: 'Playback',
   simulator: 'Simulator',
 }
 
 const EVERYONE = ['root', 'planner', 'marshal', 'admin', 'ic', 'member']
+// Timeline and Map are only listed for the roles they are built for. The view-only map and a group's own timetable
+// (EventPagePlaceholder.vue) are still to be built: add the other roles back here when they are. Until then everyone
+// sees the zones on the Live map, and a group's next move on Live (phone: Now).
 export const PAGE_ACCESS = {
   overview: EVERYONE,
-  timeline: EVERYONE,
-  map: EVERYONE,
+  timeline: ['root', 'planner', 'marshal'],
+  map: ['root', 'planner'],
   groups: EVERYONE,
   people: EVERYONE,
+  attendance: EVERYONE, // checking in; ICs, admins and planners also run roll calls (037)
   live: EVERYONE,
   playback: ['root', 'planner'],
   simulator: ['root'], // and only in a simulation event
@@ -104,10 +110,11 @@ export const canEdit = (page, role) => EDIT_ACCESS[page]?.includes(role) ?? fals
 export const can = (feature, role) => FEATURE_ACCESS[feature]?.includes(role) ?? false
 export const pageMode = (page, role) => (canEdit(page, role) ? 'edit' : 'view')
 
-// Where an event opens: planning for root / planners, groups for admins, the live view (if live) for everyone else
+// Where an event opens: planning for root / planners, groups for admins; for everyone else the live view while the
+// event is live, else the timeline (marshals) or the event's details (ICs and members)
 export function defaultPage(role, isLive) {
   if (role === 'root' || role === 'planner') return 'timeline'
   if (role === 'admin') return 'groups'
   if (role === 'marshal') return isLive ? 'live' : 'timeline'
-  return isLive ? 'live' : 'timeline'
+  return isLive ? 'live' : 'overview'
 }

@@ -1,14 +1,15 @@
 <script setup>
 // The event's People page: everyone in the event with their role, group and IC tag. Controls appear only for what MY
 // role may do to each person (src/utils/permissions.js); the database checks every change again (031).
-//   Root          : add people; make planners, group admins, members; marshal and IC (duties of a member) on / off; remove anyone
+//   Root          : add people; make planners, group admins, members; remove anyone
 //   Planner       : the same for people below planner
-//   Group admin   : add people to their own group; IC and removing members of their own group
+//   Group admin   : add people to their own group; removing members of their own group
 //   Everyone else : the list only
+// Marshal and IC (duties of a member) are switched on the Groups page (MembersPanel.vue); here they are badges only.
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { initials } from '../utils/people'
-import { ROLE_RANK, ROLE_LABEL, topRole, isMarshal, canManage, assignableRoles, canSetMarshal, canSetIC, canRemove } from '../utils/permissions'
-import { addEventMember, setMemberRole, setMarshal, setGroupIC, removeEventMember } from '../services/memberService'
+import { ROLE_RANK, ROLE_LABEL, topRole, isMarshal, canManage, assignableRoles, canRemove } from '../utils/permissions'
+import { addEventMember, setMemberRole, removeEventMember } from '../services/memberService'
 import { searchPeople } from '../services/eventService'
 import { askConfirm, toast } from '../composables/useNotify'
 import BenchAlert from './BenchAlert.vue'
@@ -47,10 +48,6 @@ const rows = computed(() => {
       const edit = props.mode === 'edit'
       const actions = {
         role: edit && !isMe && canManage(myRole.value, role),
-        marshal: edit && canSetMarshal(props.me, m),
-        ic: edit && canSetIC(props.me, m),
-        // root / planners: show IC greyed out for someone with no group (IC belongs to a group)
-        icNeedsGroup: edit && !m.groupId && canSetIC(props.me, { ...m, groupId: 'any' }),
         remove: edit && canRemove(props.me, m),
       }
       return { m, role, isMe, actions, any: Object.values(actions).some(Boolean) }
@@ -61,10 +58,10 @@ const rows = computed(() => {
 // What I can do here, in one line
 const myScope = computed(() => {
   if (props.mode !== 'edit') return 'You can see everyone in this event.'
-  if (myRole.value === 'root') return 'You can change anyone’s role, make marshals and ICs, and remove people.'
-  if (myRole.value === 'planner') return 'You can manage group admins and members: roles, marshals, ICs and removing them.'
-  if (myRole.value === 'admin' && props.me.groupId) return 'You can set ICs and remove members in ' + groupName(props.me.groupId) + '.'
-  return 'Group admins manage their own group. You are not in a group, so there is no one to manage.'
+  if (myRole.value === 'root') return 'You can change roles and remove people. Set marshals and ICs on the Groups page.'
+  if (myRole.value === 'planner') return 'You can change the roles of group admins and members, and remove them. Set marshals and ICs on the Groups page.'
+  if (myRole.value === 'admin' && props.me.groupId) return 'You can remove members of ' + groupName(props.me.groupId) + '. Set ICs on the Groups page.'
+  return 'You are not in a group, so you have no one to manage.'
 })
 
 async function run(call, success) {
@@ -133,7 +130,7 @@ async function changeRole(m, select) {
       title: 'Make ' + m.display_name + ' a planner?',
       message:
         'Planners edit the timeline and map, run the event and manage everyone below them.' +
-        (m.groupId ? ' Planners are not in a group, so they will leave ' + groupName(m.groupId) + '.' : ''),
+        (m.groupId ? ' Planners are not in a group, so they leave ' + groupName(m.groupId) + '.' : ''),
       confirmText: 'Make planner',
     })
     if (!ok) {
@@ -145,28 +142,10 @@ async function changeRole(m, select) {
   if (!ok) select.value = was // refused: the list did not change, so put the menu back by hand
 }
 
-async function toggleMarshal(m, box) {
-  const on = box.checked
-  const ok = await run(
-    () => setMarshal(props.eventId, m.id, on),
-    m.display_name + (on ? ' is now a marshal.' : ' is no longer a marshal.'),
-  )
-  if (!ok) box.checked = !on
-}
-
-async function toggleIC(m, box) {
-  const isIC = box.checked
-  const ok = await run(
-    () => setGroupIC(m.groupId, m.id, isIC),
-    m.display_name + (isIC ? ' is now an IC of ' : ' is no longer an IC of ') + groupName(m.groupId) + '.',
-  )
-  if (!ok) box.checked = !isIC
-}
-
 async function remove(m) {
   const ok = await askConfirm({
     title: 'Remove ' + m.display_name + ' from this event?',
-    message: 'They also leave ' + groupName(m.groupId) + '. They can join again with the invite code.',
+    message: 'They also leave ' + groupName(m.groupId) + '. They can rejoin with the invite code.',
     confirmText: 'Remove',
     danger: true,
   })
@@ -199,14 +178,14 @@ async function remove(m) {
           </div>
           <div v-if="managesAll" class="col-12 col-sm-5">
             <select v-model="addGroupId" class="form-select" aria-label="Group" data-testid="add-group">
-              <option value="">No group yet</option>
+              <option value="">No group</option>
               <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
             </select>
           </div>
         </div>
         <p v-if="searching" class="text-muted small mt-2 mb-0">Searching...</p>
         <p v-else-if="addName.trim().length >= 2 && !found.length" class="text-muted small mt-2 mb-0" data-testid="add-none">
-          No one found who is not already in this event.
+          No one found. People already in this event are not shown.
         </p>
         <ul v-if="found.length" class="list-group mt-2" data-testid="add-found">
           <li v-for="p in found" :key="p.id" class="list-group-item py-1 d-flex align-items-center gap-2">
@@ -236,7 +215,7 @@ async function remove(m) {
       </div>
     </div>
 
-    <p v-if="!rows.length" class="text-muted" data-testid="people-empty">No one matches.</p>
+    <p v-if="!rows.length" class="text-muted" data-testid="people-empty">No matches.</p>
     <ul class="list-unstyled d-grid gap-2 mb-0" data-testid="people-list">
       <li v-for="r in rows" :key="r.m.id" class="card" :data-testid="'person-' + r.m.username">
         <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
@@ -287,36 +266,6 @@ async function remove(m) {
                   {{ ROLE_LABEL[role] }}{{ role === 'admin' && !r.m.groupId ? ' (needs a group)' : '' }}
                 </option>
               </select>
-            </div>
-            <div v-if="r.actions.marshal" class="form-check form-switch mb-0">
-              <input
-                :id="'marshal-' + r.m.id"
-                class="form-check-input"
-                type="checkbox"
-                :checked="isMarshal(r.m)"
-                :disabled="busy"
-                :data-testid="'person-marshal-toggle-' + r.m.username"
-                @change="toggleMarshal(r.m, $event.target)"
-              />
-              <label class="form-check-label small" :for="'marshal-' + r.m.id">Marshal</label>
-            </div>
-            <div v-if="r.actions.icNeedsGroup" class="form-check form-switch mb-0">
-              <input :id="'ic-' + r.m.id" class="form-check-input" type="checkbox" disabled :aria-describedby="'ic-help-' + r.m.id" />
-              <label class="form-check-label small text-muted" :for="'ic-' + r.m.id">
-                IC <span :id="'ic-help-' + r.m.id">(needs a group)</span>
-              </label>
-            </div>
-            <div v-if="r.actions.ic" class="form-check form-switch mb-0">
-              <input
-                :id="'ic-' + r.m.id"
-                class="form-check-input"
-                type="checkbox"
-                :checked="r.m.isIC"
-                :disabled="busy"
-                :data-testid="'person-ic-toggle-' + r.m.username"
-                @change="toggleIC(r.m, $event.target)"
-              />
-              <label class="form-check-label small" :for="'ic-' + r.m.id">IC (shares GPS)</label>
             </div>
             <button
               v-if="r.actions.remove"

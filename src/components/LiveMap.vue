@@ -18,6 +18,9 @@
 // the one picked in the queue) get a status ring and a dashed line along their route to the zone with "+0:28".
 // The summary bar's filters hide the other groups' markers.
 //
+// SOS (038): each active SOS is a pulsing red marker above everything else, with a circle for how accurate its location
+// is. Tap it for who, what happened and when. focusSos(id) zooms to one.
+//
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles + reverse geocoding (c) Singapore Land Authority
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
@@ -55,6 +58,8 @@ const props = defineProps({
   // From the movements engine (useOps, merger Stage 7): empty when no show runs or for members
   opsActive: { type: Object, default: () => ({}) }, // groupId -> the group's active movement row
   opsVisible: { type: Object, default: null }, // Set of group ids that pass the ops filters, or null (all)
+  // Active SOSs with a location (EventView, from useSos): [{ id, lat, lng, accuracy, name, note, raisedAt: Date }]
+  sosAlerts: { type: Array, default: () => [] },
 })
 
 const positions = computed(() => props.positions)
@@ -759,7 +764,59 @@ function focusGroup(groupId) {
   if (at && map) map.setView(at, Math.max(map.getZoom(), 17))
   opsSoon()
 }
-defineExpose({ focusGroup })
+// ---------- SOS markers (038) ----------
+let sosLayer = null
+const sosMarkers = {} // sos id -> { marker, circle }
+function sosPopup(s) {
+  return (
+    '<strong>SOS: ' + escapeHtml(s.name) + '</strong>' +
+    (s.note ? '<br>"' + escapeHtml(s.note) + '"' : '') +
+    '<br><span class="text-muted">Sent ' + formatTime(s.raisedAt) + ' · location ±' + Math.round(s.accuracy || 0) + ' m</span>'
+  )
+}
+function drawSos() {
+  if (!map || !sosLayer) return
+  const shown = new Set()
+  for (const s of props.sosAlerts) {
+    if (s.lat == null || s.lng == null) continue
+    shown.add(s.id)
+    const at = [s.lat, s.lng]
+    const existing = sosMarkers[s.id]
+    if (existing) {
+      existing.marker.setLatLng(at).setPopupContent(sosPopup(s))
+      existing.circle.setLatLng(at).setRadius(s.accuracy || 0)
+      continue
+    }
+    const circle = L.circle(at, { radius: s.accuracy || 0, color: '#dc3545', weight: 1, fillOpacity: 0.12, interactive: false }).addTo(sosLayer)
+    const marker = L.marker(at, {
+      icon: L.divIcon({ className: '', html: '<div class="sos-pin">SOS</div>', iconSize: [44, 44], iconAnchor: [22, 22] }),
+      zIndexOffset: 10000, // above every person and group
+      keyboard: true,
+      title: 'SOS: ' + s.name,
+    })
+      .bindPopup(sosPopup(s))
+      .addTo(sosLayer)
+    sosMarkers[s.id] = { marker, circle }
+  }
+  for (const id of Object.keys(sosMarkers)) {
+    if (shown.has(Number(id))) continue
+    sosLayer.removeLayer(sosMarkers[id].marker)
+    sosLayer.removeLayer(sosMarkers[id].circle)
+    delete sosMarkers[id]
+  }
+}
+watch(() => props.sosAlerts, drawSos, { deep: true })
+
+// "Show on map" for an SOS: zoom to it and open its card
+function focusSos(id) {
+  const s = sosMarkers[id]
+  if (!s || !map) return
+  stopFollowing()
+  map.setView(s.marker.getLatLng(), Math.max(map.getZoom(), 18))
+  s.marker.openPopup()
+}
+
+defineExpose({ focusGroup, focusSos })
 
 // ---------- Zones layer (merger Stage 1) ----------
 // The event's zones, drawn under the people: outlines in their kind's colour (the same colours as the
@@ -854,6 +911,7 @@ onMounted(() => {
   trailLayer = L.layerGroup().addTo(map)
   opsLayer = L.layerGroup().addTo(map)
   clusterLayer = L.layerGroup().addTo(map)
+  sosLayer = L.layerGroup().addTo(map) // last: on top
   zoom.value = map.getZoom()
   map.on('zoomend', placeZoneLabels)
   map.on('zoomend', () => (zoom.value = map.getZoom()))
@@ -873,6 +931,7 @@ onMounted(() => {
     resizeObserver.observe(mapEl.value)
   }
   render()
+  drawSos()
 })
 
 onUnmounted(() => {
@@ -914,6 +973,7 @@ onUnmounted(() => {
       <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0d6efd"></span>No update for 2–10 min</span>
       <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
+      <span v-if="sosAlerts.length" class="text-danger fw-semibold"><span class="dot d-inline-block align-middle me-1" style="background-color: #dc3545"></span>SOS</span>
       <span v-if="liveSince">Tap a marker to see their trail · tap the trail for times</span>
       <label v-if="hasOps" class="form-check form-check-inline mb-0 ms-auto" title="Zoomed out, groups gather into one bubble per zone or sector" data-testid="clusters-toggle">
         <input v-model="clustersOn" class="form-check-input" type="checkbox" />

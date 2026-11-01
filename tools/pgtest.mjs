@@ -27,6 +27,10 @@
 //   search   supabase/tests/people_search_test.sql: find people by name, add them by id (032)
 //   details  supabase/tests/event_details_test.sql: the root edits the event's details (033)
 //   planners supabase/tests/planners_test.sql: planners are never in a group (034)
+//   groups   supabase/tests/edit_group_test.sql: rename a group, change its colour (035)
+//   headcount supabase/tests/auto_headcount_test.sql: a group's headcount is the number of people in it (036)
+//   attendance supabase/tests/attendance_test.sql: roll calls, by hand or by scanning a QR (037)
+//   sos      supabase/tests/sos_test.sql: anyone in an event can call for help (038)
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -543,6 +547,155 @@ await phase('planners', {
     await runSql(db, read('supabase/tests/roles_test.sql'), 'roles_test.sql with 034')
     await runSql(db, read('supabase/migrations/034_planners_not_in_groups.sql'), '034 a second time')
     return ['supabase/tests/planners_test.sql and roles_test.sql passed, and 034 re-applies cleanly']
+  },
+})
+
+// ---------- phase 11: the root or a planner renames / recolours a group (035) ----------
+await phase('groups', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
+    { name: '034_planners_not_in_groups.sql', sql: read('supabase/migrations/034_planners_not_in_groups.sql') },
+    { name: '035_edit_group.sql', sql: read('supabase/migrations/035_edit_group.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/edit_group_test.sql'), 'edit_group_test.sql')
+    await runSql(db, read('supabase/migrations/035_edit_group.sql'), '035 a second time')
+    return ['supabase/tests/edit_group_test.sql passed, and 035 re-applies cleanly']
+  },
+})
+
+// ---------- phase 12: a group's headcount is the number of people in it (036) ----------
+await phase('headcount', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    { name: '020 (headcount column only)', sql: 'alter table public.groups add column if not exists headcount integer check (headcount is null or headcount >= 0);' },
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
+    { name: '034_planners_not_in_groups.sql', sql: read('supabase/migrations/034_planners_not_in_groups.sql') },
+    { name: '036_auto_headcount.sql', sql: read('supabase/migrations/036_auto_headcount.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/auto_headcount_test.sql'), 'auto_headcount_test.sql')
+    await runSql(db, read('supabase/tests/planners_test.sql'), 'planners_test.sql with 036')
+    await runSql(db, read('supabase/migrations/036_auto_headcount.sql'), '036 a second time')
+    return ['supabase/tests/auto_headcount_test.sql and planners_test.sql passed, and 036 re-applies cleanly']
+  },
+})
+
+// ---------- phase 13: attendance with a code that changes every 30 s (037) ----------
+await phase('attendance', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
+    { name: '034_planners_not_in_groups.sql', sql: read('supabase/migrations/034_planners_not_in_groups.sql') },
+    { name: '037_attendance.sql', sql: read('supabase/migrations/037_attendance.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/attendance_test.sql'), 'attendance_test.sql')
+    await runSql(db, read('supabase/migrations/037_attendance.sql'), '037 a second time')
+    return ['supabase/tests/attendance_test.sql passed, and 037 re-applies cleanly']
+  },
+})
+
+// ---------- phase 14: 037 over its first version (the 6-digit spoken code), with a check-in by code in it ----------
+await phase('attendance-upgrade', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '037 first version (its tables and one function)',
+      sql: `create table public.attendance_rollcalls (
+              id uuid primary key default gen_random_uuid(),
+              event_id uuid not null references public.events (id) on delete cascade,
+              group_id uuid not null references public.groups (id) on delete cascade,
+              title text not null, opened_by uuid, opened_at timestamptz not null default now(),
+              closes_at timestamptz not null, closed_at timestamptz);
+            create table public.attendance_secrets (rollcall_id uuid primary key references public.attendance_rollcalls (id) on delete cascade, secret text not null);
+            create table public.attendance_checkins (
+              rollcall_id uuid not null references public.attendance_rollcalls (id) on delete cascade,
+              event_id uuid not null, group_id uuid not null, user_id uuid not null,
+              status text not null check (status in ('present', 'excused')),
+              method text not null check (method in ('code', 'manual')),
+              marked_by uuid, at timestamptz not null default now(), primary key (rollcall_id, user_id));
+            create table public.attendance_tries (rollcall_id uuid, user_id uuid, wrong integer, last_wrong_at timestamptz);
+            create function public.check_in(p_event uuid, p_code text) returns jsonb language sql as 'select null::jsonb';
+            insert into auth.users (id, email, raw_user_meta_data)
+              values ('37100000-0000-0000-0000-000000000001', 'up@example.test', '{"username":"up_r","display_name":"Up Root"}');
+            insert into public.events (id, name, created_by) values ('37100000-0000-0000-0000-0000000000e1', 'Up', '37100000-0000-0000-0000-000000000001');
+            insert into public.groups (id, event_id, name) values ('37100000-0000-0000-0000-0000000000a1', '37100000-0000-0000-0000-0000000000e1', 'G');
+            insert into public.attendance_rollcalls (id, event_id, group_id, title, closes_at)
+              values ('37100000-0000-0000-0000-0000000000c1', '37100000-0000-0000-0000-0000000000e1', '37100000-0000-0000-0000-0000000000a1', 'Old', now());
+            insert into public.attendance_checkins values ('37100000-0000-0000-0000-0000000000c1', '37100000-0000-0000-0000-0000000000e1',
+              '37100000-0000-0000-0000-0000000000a1', '37100000-0000-0000-0000-000000000001', 'present', 'code', null, now());`,
+    },
+    { name: '037_attendance.sql', sql: read('supabase/migrations/037_attendance.sql') },
+  ],
+  body: async (db) => {
+    const r = await db.query(
+      `select (select method from public.attendance_checkins) as method,
+              (select mode from public.attendance_rollcalls) as mode,
+              to_regclass('public.attendance_tries') as tries,
+              to_regprocedure('public.check_in(uuid, text)') as old_fn`,
+    )
+    const row = r.rows[0]
+    if (row.method !== 'scan' || row.mode !== 'manual' || row.tries !== null || row.old_fn !== null) {
+      throw new Error('037 over its first version: ' + JSON.stringify(row))
+    }
+    return ["037 upgrades its first version: 'code' check-ins become 'scan', the spoken code's table and function are gone"]
+  },
+})
+
+// ---------- phase 15: SOS (038) ----------
+await phase('sos', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
+    {
+      name: '028 (the push queue only)',
+      sql: `create table public.push_queue (
+              id bigserial primary key,
+              user_id uuid not null references public.profiles (id) on delete cascade,
+              event_id uuid not null references public.events (id) on delete cascade,
+              session_id uuid,
+              kind text not null,
+              dedup text not null unique,
+              title text not null, body text not null, data jsonb not null default '{}',
+              created_at timestamptz not null default now(), sent_at timestamptz);`,
+    },
+    { name: '038_sos.sql', sql: read('supabase/migrations/038_sos.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/sos_test.sql'), 'sos_test.sql')
+    await runSql(db, read('supabase/migrations/038_sos.sql'), '038 a second time')
+    return ['supabase/tests/sos_test.sql passed, and 038 re-applies cleanly']
   },
 })
 
