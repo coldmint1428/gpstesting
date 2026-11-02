@@ -2548,9 +2548,43 @@ function onWindowResize() {
   onMapMoved()
 }
 
+// ---------- Opening on the zones ----------
+// The map opens where it was left. With nowhere saved, or a saved view that misses some of the zones,
+// it would open on the whole of Singapore with the event a speck in the middle, so it frames the drawn
+// zones instead -- once, when the map first has a size (a tab that is still hidden has none) and the
+// areas are in. After that the view is the planner's.
+let framedOnOpen = false
+let openObserver = null
+function frameOnOpen() {
+  if (framedOnOpen || !map) return
+  const el = map.getContainer()
+  if (!el.clientWidth || !el.clientHeight) return
+  const points = props.areas.flatMap((a) => (Array.isArray(a.points) ? a.points : []))
+  if (!points.length) return
+  framedOnOpen = true
+  map.invalidateSize()
+  const bounds = L.latLngBounds(points.map(([lat, lng]) => L.latLng(lat, lng)))
+  if (!bounds.isValid()) return
+  const pad = L.point(FRAME_PADDING_PX * 2, FRAME_PADDING_PX * 2)
+  const fitZoom = Math.min(19, map.getBoundsZoom(bounds, false, pad))
+  // A saved view is kept when it shows every zone at a useful size; one zoomed far out is not.
+  if (props.view && map.getBounds().contains(bounds) && map.getZoom() >= fitZoom - 2) return
+  map.fitBounds(bounds, { padding: [FRAME_PADDING_PX, FRAME_PADDING_PX], maxZoom: 19, animate: false })
+}
+watch(() => props.areas.length, frameOnOpen)
+
 onMounted(() => {
   map = createSingaporeMap(mapEl.value)
-  if (props.view) map.setView([props.view.lat, props.view.lng], props.view.zoom)
+  // No animation: an animated jump finishes a moment later and would undo the framing just below.
+  if (props.view) map.setView([props.view.lat, props.view.lng], props.view.zoom, { animate: false })
+  frameOnOpen()
+  if (!framedOnOpen && typeof ResizeObserver !== 'undefined') {
+    openObserver = new ResizeObserver(() => {
+      frameOnOpen()
+      if (framedOnOpen) openObserver.disconnect()
+    })
+    openObserver.observe(mapEl.value)
+  }
 
   // The map is a wall against page scrolling: see onMapWheel.
   map.getContainer().addEventListener('wheel', onMapWheel, WHEEL_OPTIONS)
@@ -2586,6 +2620,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (openObserver) openObserver.disconnect()
   window.removeEventListener('resize', onWindowResize)
   window.removeEventListener('keydown', onKeyDown, true)
   document.removeEventListener('pointerdown', onDocumentPointerDown)
@@ -2926,7 +2961,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                   </button>
                   <button
                     class="btn btn-sm btn-outline-secondary"
-                    title="Copy this area, then paste it to draw the same shape again"
+                    title="Copy this area to paste it again"
                     data-testid="area-copy"
                     @click="copyArea(editingArea)"
                   >
@@ -2987,8 +3022,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                   class="d-flex align-items-center gap-2 ms-auto"
                   data-testid="canvas-size"
                   :title="
-                    'Storage for this whole bench (every area and floor plan): ' + sizeText + '. ' +
-                    'Floor plan pictures are what make it big; moving a shape only changes it by a few bytes.'
+                    'Storage used by all areas and floor plans: ' + sizeText + '. Floor plan pictures take the most space.'
                   "
                 >
                   <span class="small text-muted">Storage: {{ sizeText }}</span>
@@ -3083,7 +3117,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                         :class="plan.locked ? 'btn-secondary' : 'btn-outline-secondary'"
                         :aria-pressed="Boolean(plan.locked)"
                         :aria-label="(plan.locked ? 'Unlock ' : 'Lock ') + planLabel(plan, index)"
-                        :title="plan.locked ? 'Locked: it cannot be moved. Press to unlock.' : 'Lock it where it is, so it cannot be dragged by accident'"
+                        :title="plan.locked ? 'Locked: it cannot be moved. Press to unlock.' : 'Lock it so it cannot be moved by accident'"
                         :data-testid="'plan-lock-' + index"
                         @click.stop="togglePlanLock(plan)"
                       >
@@ -3134,7 +3168,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
                       </button>
                       <button
                         class="btn btn-sm btn-outline-secondary"
-                        title="Copy this floor plan, then paste it to place the same picture again"
+                        title="Copy this floor plan to paste it again"
                         :data-testid="'plan-copy-' + index"
                         @click="copyPlan(plan)"
                       >
@@ -3367,14 +3401,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   border-radius: 0.5rem;
 }
 
-/* Leaflet draws area labels outside Vue, so the rule has to be global. */
-:global(.area-label) {
-  background: rgba(255, 255, 255, 0.85);
-  border: none;
-  box-shadow: none;
-  font-size: 0.75rem;
-  padding: 0 0.25rem;
-}
+/* Leaflet draws area labels outside Vue, so the rule has to be global (size: kinetic-bridge.css). */
 :global(.area-label::before) {
   display: none;
 }

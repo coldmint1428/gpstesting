@@ -32,7 +32,7 @@
 //   attendance supabase/tests/attendance_test.sql: roll calls, by hand or by scanning a QR (071)
 //   sos      supabase/tests/sos_test.sql: anyone in an event can call for help (072)
 //   own-group supabase/tests/own_group_test.sql: ICs and members see only their own group (073)
-//   marshal-user supabase/tests/marshal_user_test.sql: a marshal sees what any other user sees (074)
+//   roles-077 supabase/tests/no_marshals_test.sql: one role fewer -- root, planner, group admin, member (074, 077)
 //   noise    supabase/tests/location_noise_test.sql: coarse fixes and repeated uploads are not stored (075)
 //   rehearsals supabase/tests/rehearsals_test.sql: everyone reads them, only root and planners schedule them (079)
 //
@@ -741,8 +741,8 @@ await phase('own-group', {
   },
 })
 
-// ---------- A marshal sees what any other user sees (074); the suites of 033, 036 and 072 must still pass ----------
-await phase('marshal-user', {
+// ---------- One role fewer (074, 077): an event from before 077 comes through it; the older suites must still pass ----------
+await phase('roles-077', {
   migrations: [
     named('001_locations.sql'),
     named('002_users_events_groups.sql'),
@@ -770,15 +770,19 @@ await phase('marshal-user', {
     { name: '072_sos.sql', sql: read('supabase/migrations/072_sos.sql') },
     { name: '073_members_see_own_group.sql', sql: read('supabase/migrations/073_members_see_own_group.sql') },
     { name: '074_marshals_are_users.sql', sql: read('supabase/migrations/074_marshals_are_users.sql') },
+    { name: 'no_marshals_seed.sql (an event from before 077)', sql: read('supabase/tests/no_marshals_seed.sql') },
+    { name: '077_no_marshals.sql', sql: read('supabase/migrations/077_no_marshals.sql') },
   ],
   body: async (db) => {
-    await runSql(db, read('supabase/tests/marshal_user_test.sql'), 'marshal_user_test.sql')
-    await runSql(db, read('supabase/tests/roles_test.sql'), 'roles_test.sql with 074')
-    await runSql(db, read('supabase/tests/planners_test.sql'), 'planners_test.sql with 074')
-    await runSql(db, read('supabase/tests/sos_test.sql'), 'sos_test.sql with 074')
-    await runSql(db, read('supabase/tests/attendance_test.sql'), 'attendance_test.sql with 074')
-    await runSql(db, read('supabase/migrations/074_marshals_are_users.sql'), '074 a second time')
-    return ['marshal_user_test.sql and the roles, planners, SOS and attendance suites passed, and 074 re-applies cleanly']
+    await runSql(db, read('supabase/tests/no_marshals_test.sql'), 'no_marshals_test.sql')
+    await runSql(db, read('supabase/tests/roles_test.sql'), 'roles_test.sql with 077')
+    await runSql(db, read('supabase/tests/planners_test.sql'), 'planners_test.sql with 077')
+    await runSql(db, read('supabase/tests/sos_test.sql'), 'sos_test.sql with 077')
+    await runSql(db, read('supabase/tests/attendance_test.sql'), 'attendance_test.sql with 077')
+    await runSql(db, read('supabase/tests/own_group_test.sql'), 'own_group_test.sql with 077')
+    await runSql(db, read('supabase/migrations/077_no_marshals.sql'), '077 a second time')
+    await runSql(db, read('supabase/tests/no_marshals_test.sql'), 'no_marshals_test.sql after 077 again')
+    return ['no_marshals_test.sql and the roles, planners, SOS, attendance and own-group suites passed, and 077 re-applies cleanly']
   },
 })
 

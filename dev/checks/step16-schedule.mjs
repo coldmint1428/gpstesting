@@ -4,9 +4,8 @@
 //     node tools/sql.mjs --file dev/checks/step16-schedule-prep.sql
 //     node tools/run.mjs dev/checks/step16-schedule.mjs --session .tmp/session.json
 //
-// Needs two more sessions (the check says so if they are missing):
+// Needs one more session (the check says so if it is missing):
 //     node tools/authlink.mjs 2906655b-33ad-4e9d-a608-f083e43e22d4 .tmp/session3.json   (Sound, plain member)
-//     node tools/authlink.mjs 00cd023b-0e26-4574-a635-760e782c8029 .tmp/session5.json   (marshal, no group)
 //
 // The event is dev/checks/step16-schedule-prep.sql's own bench (e16): a live plan whose five moments carry all five
 // words -- arrived, not required, late, missed, pending -- for Sound, and a second group so "only their group" has
@@ -16,8 +15,7 @@
 // newest tab's seeded session is the one every tab starts using: a tab opened as the planner makes the whole browser
 // the planner. That is a property of the bench, not of the app (step 3's check is written the same way). So the
 // planner acts first, and is finished before the member exists; the member is opened second and is the identity while
-// everything about the schedule is asserted; the marshal is opened last, because its read is about scope and not about
-// the clock. The push that tells a screen a plan was republished is step 15's proof, with two tabs of one identity;
+// everything about the schedule is asserted. The push that tells a screen a plan was republished is step 15's proof, with two tabs of one identity;
 // the other half -- the clock waking the page at the moment the read gave it -- is proved here, on a tab nobody
 // touches after it opens.
 //
@@ -33,9 +31,7 @@
 //      the five words on them;
 //   5. the moved moment reads "due" and then turns "late" when the clock passes it -- no reload, and with a second
 //      read visible in the browser's resource timings;
-//   6. a marshal opens the same page as a timetable with every group on it (10 rows) -- closing the plan surface did
-//      not close the ops read;
-//   7. once the planner ends the event, the member's page still reads its timetable, with the clock stopped at the
+//   6. once the planner ends the event, the member's page still reads its timetable, with the clock stopped at the
 //      moment it closed and nothing left saying "due" -- the closed branch of the screen, read at its end time.
 import fs from 'node:fs'
 
@@ -71,17 +67,14 @@ export default {
     const eventId = '0b000000-0000-4000-8000-000000000e16'
     const timeline = `${base}/events/${eventId}/timeline`
     const memberFile = process.env.MEMBER_SESSION || '.tmp/session3.json'
-    const marshalFile = process.env.MARSHAL_SESSION || '.tmp/session5.json'
     for (const [file, id, who] of [
       [memberFile, '2906655b-33ad-4e9d-a608-f083e43e22d4', 'Sound member'],
-      [marshalFile, '00cd023b-0e26-4574-a635-760e782c8029', 'marshal'],
     ]) {
       if (!fs.existsSync(file)) {
         throw new Error(`no ${who} session at ${file}. Mint one with: node tools/authlink.mjs ${id} ${file}`)
       }
     }
     const member = JSON.parse(fs.readFileSync(memberFile, 'utf8'))
-    const marshal = JSON.parse(fs.readFileSync(marshalFile, 'utf8'))
 
     // ---------- 1. the planner's page is still the board ----------
     const planner = await newTab({ label: 'planner', url: timeline, width: 1440, height: 1000 })
@@ -308,33 +301,7 @@ export default {
     await viewer.assertNoErrors()
     await viewer.close()
 
-    // ---------- 6. the marshal reads the same page with every group on it ----------
-    const ops = await newTab({ session: marshal, label: 'marshal', url: timeline, width: 1440, height: 1000 })
-    await ops.waitFor('[data-testid=plan-schedule]', { timeout: 20000 })
-    await ops.waitUntil(`document.querySelectorAll('[data-testid=sched-row]').length === 10`, {
-      what: 'ten rows: two groups, five moments',
-    })
-    await ops.assertThat('the marshal has no board either', `!document.querySelector('.pv-board')`)
-    await ops.assertContains('.pv-sched-title', 'Timetable')
-    const opsGroups = await ops.eval(
-      `[...new Set([...document.querySelectorAll('.pv-sched-group')].map((e) => e.textContent.trim()))]`,
-    )
-    ops.pass(`the marshal's timetable names ${opsGroups.join(' and ')}`)
-    await ops.assertThat(
-      'both groups are named',
-      opsGroups.length === 2 && opsGroups.includes('Gate Crew') && opsGroups.includes('Sound'),
-    )
-    // The other group's record is on the ops read; the member's page has no row of it at all.
-    await ops.assertThat(
-      "the other group's rows are on the ops read",
-      `[...document.querySelectorAll('[data-testid=sched-row]')].some((r) =>
-         r.dataset.group === '0b000000-0000-4000-8000-00000000a160' && r.dataset.state === 'arrived')`,
-    )
-    await ops.shot('shots/step16-marshal-timetable.png')
-    await ops.assertNoErrors()
-    await ops.close()
-
-    // ---------- 7. a closed event keeps its timetable, read as it stood when it closed ----------
+    // ---------- 6. a closed event keeps its timetable, read as it stood when it closed ----------
     const closing = await newTab({ label: 'closing planner', url: timeline, width: 1440, height: 1000 })
     await closing.waitFor('[data-testid=end-event-btn]', { timeout: 20000 })
     await closing.click('[data-testid=end-event-btn]')

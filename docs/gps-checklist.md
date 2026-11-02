@@ -28,9 +28,9 @@ Owner: Komin · Pages: `/login`, `/events`, `/events/:id`, `/events/:id/share` (
 Done (Claude):
 - [x] Database: `profiles`, `events` (6-char join code), `event_roles`, `groups`, `group_members` (admin / IC) – `supabase/migrations/002_users_events_groups.sql`, applied to gpstest
 - [x] Sign-up trigger creates a profile (username + display name) for every new account
-- [x] RLS: only ICs insert locations, only for their own group; root/planner/marshal see all groups; others see own group only
+- [x] RLS: only ICs insert locations, only for their own group; root/planner see all groups; others see own group only
 - [x] RLS: names (profiles) only visible to people who share an event with you
-- [x] Database actions: create event, join by code, add by username, create group, assign group, set admin/IC, planner/marshal, remove/leave (root can't be removed)
+- [x] Database actions: create event, join by code, add by username, create group, assign group, set admin/IC, planner, remove/leave (root can't be removed)
 - [x] RLS tested with 5 simulated users – 15/15 checks passed (test rolled back, nothing left behind)
 - [x] Supabase security advisor run; internal functions locked down
 - [x] Login / sign-up page (email, password, username, display name) + username-taken check
@@ -38,7 +38,7 @@ Done (Claude):
 - [x] Navbar: Events link, `@username`, Log out
 - [x] Events page: my events with role badges, create event (you = Root), join with code
 - [x] Event page tabs: Live map · Members · Invite
-- [x] Members tab: create groups (with colour), add by username, assign group, IC / Group admin / Planner / Marshal switches, remove – each shown only to roles allowed to use it
+- [x] Members tab: create groups (with colour), add by username, assign group, IC / Group admin / Planner switches, remove – each shown only to roles allowed to use it
 - [x] Invite tab: code, invite link + copy, QR code, Share on WhatsApp, Share on Telegram (warns if link is localhost)
 - [x] `/join/:code` link / QR → login if needed → joins event
 - [x] Share page tied to my event + group; Start only enabled for ICs; "you are sharing" banner
@@ -612,7 +612,7 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 
 - [x] Migration `021_zone_presence.sql`: `zone_presence`, `group_positions`, `zone_alerts`, trigger on `locations` (never blocks an upload), `ack_zone_alert` – rolled-back SQL test 13/13
 - [x] Live map: IC tooltip "Inside <zone> since HH:MM:SS"; zone labels with "n ICs (n groups)"; group tooltip "Moving x m/s"; a No-Go zone with someone inside drawn bold red
-- [x] No-Go entry: toast for root / planners / marshals and the IC; the IC also gets a red banner until they leave (2 readings outside)
+- [x] No-Go entry: toast for root / planners and the IC; the IC also gets a red banner until they leave (2 readings outside)
 - [ ] Phone walk test (Stages 0–2 together): draw a zone around where you stand + a No-Go nearby, share from the phone, walk in and out; laptop shows "Inside … since", the No-Go toast and banner
 - [ ] Later (Stage 8): push notification to the IC for a No-Go entry when the app is closed
 
@@ -628,9 +628,9 @@ Push reminders – reach a closed app (built 12 Oct, needs your Firebase setup):
 
 Stages 4–6 (run sheet builder, Excel import / export, live show) are recorded in `docs/merger-build-plan.md`.
 
-- [x] Migration `027_movements.sql` (+ 027b–e on the project): `movement_status`, `movement_routes`, `group_messages`, `event_roles.sector`; engine `move_step` / `move_tick` (pg_cron `gps-move-tick`, 5 s); OneMap routes `route_wanted` / `route_due` / `route_claim` / `route_save` (pg_cron `gps-route-eta`, 30 s, push cron secret); ops functions `ops_board`, `ops_handle`, `ops_ack`, `ops_snooze`, `message_group`, `show_keep_holding`, `set_marshal_sector`, `sim_plan_movements`; simulator legs `sim_follow_plan` – rolled-back SQL test 53/53
+- [x] Migration `027_movements.sql` (+ 027b–e on the project): `movement_status`, `movement_routes`, `group_messages`; engine `move_step` / `move_tick` (pg_cron `gps-move-tick`, 5 s); OneMap routes `route_wanted` / `route_due` / `route_claim` / `route_save` (pg_cron `gps-route-eta`, 30 s, push cron secret); ops functions `ops_board`, `ops_handle`, `ops_ack`, `ops_snooze`, `message_group`, `show_keep_holding`, `sim_plan_movements`; simulator legs `sim_follow_plan` – rolled-back SQL test 53/53
 - [x] Edge Function `route-eta` deployed (verify_jwt off, checks the cron secret; OneMap secrets as reverse-geocode)
-- [x] Live map tab (root / planners / marshals during a show): summary bar + filters, decision banner, problem queue, run sheet chips, clusters, rings + route lines; Members: marshal sector; Simulator: Plan their movements
+- [x] Live map tab (root / planners during a show): summary bar + filters, decision banner, problem queue, run sheet chips, clusters, rings + route lines; Simulator: Plan their movements
 - [ ] 120-group simulator rehearsal (Komin presses Add groups: virtual ICs are accounts Claude does not create): Simulator → Add 120 → Plan their movements into a Draft with cues ~10 min ahead → Ready → Start event with it → watch on-time green, "2 min late" red, lost signal grey, the queue and the clusters
 - [ ] Phone walk: a movement for your group to a zone ~300 m away → walk it with the S25 → ETA and status on the laptop within ±30 s; arrival 20 s after entering
 - [ ] Second planner on another device: I'll handle it on one shows "Handled by …" on the other
@@ -659,7 +659,7 @@ Stages 4–6 (run sheet builder, Excel import / export, live show) are recorded 
 - [x] Live phone + laptop: hold / resume / next / change of plan pushes, radio In position / Undo / Held up, We're in position, double +30 refused, End warning
 - [ ] More test accounts (Komin creates them, e.g. testuser4–10, or Simulator → Add groups) for a 5+ phone walk
 - [ ] Put each group's radio channel / call sign in Members → Group details before a rehearsal
-- [ ] Team: decide on the radio ideas not built yet (an "all stations" message, marshal check-in by sector, a radio log view)
+- [ ] Team: decide on the radio ideas not built yet (an "all stations" message, a radio log view)
 
 ## 5. Progress pitch (due Week 8 Sunday 22:00)
 - [x] One feature working end to end (login → join event → IC shares from phone → others see it live on the laptop map)

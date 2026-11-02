@@ -6,10 +6,10 @@
 -- ============================================================
 begin;
 
--- R root, M marshal; group G: A (admin), I (IC), U; group H: V; N has no group
+-- R root, M (no group); group G: A (admin), I (IC), U; group H: V; N has no group
 insert into auth.users (id, email, raw_user_meta_data) values
   ('39000000-0000-0000-0000-000000000001', 'og-r@example.test', '{"username":"og_r","display_name":"Og Root"}'),
-  ('39000000-0000-0000-0000-000000000002', 'og-m@example.test', '{"username":"og_m","display_name":"Og Marshal"}'),
+  ('39000000-0000-0000-0000-000000000002', 'og-m@example.test', '{"username":"og_m","display_name":"Og Em"}'),
   ('39000000-0000-0000-0000-000000000003', 'og-a@example.test', '{"username":"og_a","display_name":"Og Admin"}'),
   ('39000000-0000-0000-0000-000000000004', 'og-i@example.test', '{"username":"og_i","display_name":"Og Ic"}'),
   ('39000000-0000-0000-0000-000000000005', 'og-u@example.test', '{"username":"og_u","display_name":"Og User"}'),
@@ -19,7 +19,6 @@ insert into public.events (id, name, created_by) values ('39000000-0000-0000-000
 insert into public.event_roles (event_id, user_id, role) values
   ('39000000-0000-0000-0000-0000000000e1', '39000000-0000-0000-0000-000000000001', 'root'),
   ('39000000-0000-0000-0000-0000000000e1', '39000000-0000-0000-0000-000000000002', 'participant'),
-  ('39000000-0000-0000-0000-0000000000e1', '39000000-0000-0000-0000-000000000002', 'marshal'),
   ('39000000-0000-0000-0000-0000000000e1', '39000000-0000-0000-0000-000000000003', 'participant'),
   ('39000000-0000-0000-0000-0000000000e1', '39000000-0000-0000-0000-000000000004', 'participant'),
   ('39000000-0000-0000-0000-0000000000e1', '39000000-0000-0000-0000-000000000005', 'participant'),
@@ -54,11 +53,9 @@ do $$
 declare
   t text;
 begin
-  -- 1. Everyone in the event for the root, a marshal and a group admin: 7 people, 4 group rows, 2 groups, 7 names
+  -- 1. Everyone in the event for the root and a group admin: 7 people, 4 group rows, 2 groups, 7 names
   t := pg_temp.zz_sees('39000000-0000-0000-0000-000000000001');
   if t <> '7/4/2/7' then raise exception 'FAIL 1: the root sees %', t; end if;
-  t := pg_temp.zz_sees('39000000-0000-0000-0000-000000000002');
-  if t <> '7/4/2/7' then raise exception 'FAIL 1: a marshal sees %', t; end if;
   t := pg_temp.zz_sees('39000000-0000-0000-0000-000000000003');
   if t <> '7/4/2/7' then raise exception 'FAIL 1: a group admin sees %', t; end if;
 

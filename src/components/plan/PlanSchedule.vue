@@ -1,7 +1,7 @@
 <script setup>
 // PlanSchedule — the Schedule page: where a person's group should be and when, as a map and a list of the plan's moments.
 //
-// WHO THIS IS FOR. Everyone the board is not for: a member, an IC, a group admin, a marshal. Each row says when and where
+// WHO THIS IS FOR. Everyone the board is not for: a member, an IC, a group admin. Each row says when and where
 // and can zoom the map to its point. Once the event is live a row also says late or on schedule; before the start and
 // after the end it does not. The map is PlanRoute, which draws the rows read here. (The board keeps root and planner.)
 //
@@ -48,6 +48,7 @@ import { planErrorMessage, usePlan } from '../../composables/usePlan'
 import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
 import PlanRoute from './PlanRoute.vue'
+import EmptyState from '../EmptyState.vue'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -55,7 +56,7 @@ const props = defineProps({
   // The session to read: the live one, the scheduled one, or the last one that has ended (EventView picks). Null
   // when the event has never been started, which is the one case with nothing to read.
   session: { type: Object, default: null },
-  // True for ops staff (root, planner, marshal): they read every group's timetable. False for everyone else, whose
+  // True for ops staff (root, planner): they read every group's timetable. False for everyone else, whose
   // rows the database has already scoped to their group.
   whole: { type: Boolean, default: false },
   // The caller's group, for the header and for the no-group empty state. The rows are the authority for what is
@@ -541,19 +542,14 @@ watch(
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the schedule…" data-testid="sched-loading" />
 
-      <div v-else-if="!rows.length" class="pv-sched-empty" data-testid="sched-empty">
-        <template v-if="phase === 'none'">
-          No schedule yet.
-        </template>
-        <template v-else-if="!session.planId">
-          This event is running without a plan.
-        </template>
-        <template v-else-if="!whole && !groupName">
-          You are not in a group yet.
-        </template>
-        <template v-else-if="whole">This plan has no moments in it yet.</template>
-        <template v-else>This plan has no moments for {{ groupName }} yet.</template>
-      </div>
+      <EmptyState
+        v-else-if="!rows.length"
+        compact
+        icon="clock"
+        :title="phase === 'none' ? 'No schedule yet' : !session.planId ? 'No plan running' : !whole && !groupName ? 'Not in a group' : 'Nothing planned'"
+        :text="phase === 'none' ? 'The schedule appears once the event starts with a plan.' : !session.planId ? 'This event is running without a plan.' : !whole && !groupName ? 'Ask a planner to add you to a group.' : whole ? 'This plan has no moments yet.' : 'This plan has no moments for ' + groupName + ' yet.'"
+        data-testid="sched-empty"
+      />
 
       <ol v-else-if="!whole || !isLive" class="pv-sched-list">
         <li

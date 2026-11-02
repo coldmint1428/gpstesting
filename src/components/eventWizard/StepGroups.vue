@@ -66,7 +66,7 @@ async function removeGroup(group) {
       <h2 class="kp-title">Groups</h2>
       <span class="kp-chip">{{ unassigned.length }} without a group</span>
     </div>
-    <p class="kp-sub mb-3">Each group with people needs at least one IC, the phone that shares its location.</p>
+    <p class="kp-sub mb-3">Each group with people needs at least one IC to share its location.</p>
 
     <form class="mb-3" @submit.prevent="addGroup">
       <label for="new-group-name" class="form-label">New group</label>
@@ -99,7 +99,7 @@ async function removeGroup(group) {
               <div class="kp-inline mb-3">
                 <input :id="'group-colour-' + g.key" v-model="g.colour" type="color" class="form-control form-control-color kp-colour" aria-label="Colour" />
                 <input :id="'group-name-' + g.key" v-model="g.name" class="form-control" maxlength="50" />
-                <button type="button" class="btn btn-sm btn-ghost-danger" @click="removeGroup(g)">Delete</button>
+                <button type="button" class="btn btn-sm btn-ghost-danger kp-btn-icon" @click="removeGroup(g)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>Delete</button>
               </div>
 
               <p v-if="g.members.length === 0" class="kp-note mb-3">No one in this group yet.</p>

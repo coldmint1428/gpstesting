@@ -2,7 +2,7 @@
 // PlanRoute — the follower's own map (step 29): the walk their group is meant to take, drawn on the venue's zones, and
 // nothing of any other group's.
 //
-// WHO THIS IS FOR. Everyone the board is not for — a member, an IC, a group admin, a marshal. The Map tab used to be a
+// WHO THIS IS FOR. Everyone the board is not for — a member, an IC, a group admin. The Map tab used to be a
 // placeholder for all of them ("the event map: zones and areas, view only") that drew nothing, because the one read a
 // follower has answered the moment's place *name* and not its point (`session_timetable`, 062). Step 29 gives the read
 // the point (065) and this file the map. Root and planner keep the zone editor on this tab; this is mounted for
@@ -17,7 +17,7 @@
 // page), nothing here estimates a walk time, and nothing here routes around anything.
 //
 // WHY IT CANNOT SHOW ANOTHER GROUP. Not because this screen filters: `session_timetable` applies 040's scope inside the
-// engine (052), so a member's read answers their group's rows alone, and a marshal's answers both. The map draws what
+// engine (052), so a member's read answers their group's rows alone, and a planner's answers every group's. The map draws what
 // arrived. A client-side filter would look identical in a browser and be a different rule.
 //
 // ONE READ, THE SAME ONE THE SCHEDULE MAKES. The timetable, every 30 s, woken at each moment, and on a publish (the
@@ -35,6 +35,7 @@
 // drawing the rows that page has already read (`walkRows`), and `showMoment` zooms in on the row somebody picked.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
+import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
 import { areaStyle } from '../../utils/areaKinds'
@@ -45,6 +46,7 @@ import { usePlanWalk } from '../../composables/usePlanWalk'
 import { supabase } from '../../lib/supabase'
 import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
+import EmptyState from '../EmptyState.vue'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -52,7 +54,7 @@ const props = defineProps({
   // The session to read: the live one, the scheduled one, or the last one that ended (EventView picks). Null when the
   // event has never been started, which is the one case with nothing to read.
   session: { type: Object, default: null },
-  // True for ops staff (root, planner, marshal): the read answers every group, so the map draws every group's walk.
+  // True for ops staff (root, planner): the read answers every group, so the map draws every group's walk.
   whole: { type: Boolean, default: false },
   // The caller's group, for the header and for the no-group empty state. The rows are the authority for what is drawn.
   myGroup: { type: Object, default: null },
@@ -311,19 +313,12 @@ function fit() {
   // in the layout, fits it properly.
   const size = map.getSize()
   if (!size.x || !size.y) return
-  const bounds = L.latLngBounds([])
-  if (zoneLayer) {
-    const zoneBounds = zoneLayer.getBounds()
-    if (zoneBounds.isValid()) bounds.extend(zoneBounds)
-  }
-  let hasPoint = false
-  for (const track of tracks.value.values()) {
-    for (const point of track.points) {
-      bounds.extend([point.lat, point.lng])
-      hasPoint = true
-    }
-  }
-  if (!bounds.isValid()) return
+  const points = []
+  for (const track of tracks.value.values()) for (const point of track.points) points.push([point.lat, point.lng])
+  const hasPoint = points.length > 0
+  // The zones, widened only by the walk near them (utils/venueFrame)
+  const bounds = venueBounds(L, zoneLayer ? zoneLayer.getBounds() : null, points)
+  if (!bounds || !bounds.isValid()) return
   // An empty plan with zones is framed on the zones and reframed when the walk arrives; the walk itself is the subject.
   map.fitBounds(bounds.pad(0.25), { animate: false })
   fittedWithPoints = hasPoint
@@ -509,23 +504,16 @@ watch(
         </div>
       </div>
 
-      <SkeletonLoader v-if="!embedded && !loaded" variant="lines" :rows="4" label="Reading your route…" data-testid="route-loading" />
+      <SkeletonLoader v-if="!embedded && !loaded" variant="map" height="clamp(340px, 66vh, 780px)" :rows="3" label="Reading your route…" data-testid="route-loading" />
 
-      <div v-else-if="!embedded && !rows.length" class="pv-route-empty" data-testid="route-empty">
-        <template v-if="phase === 'none'">
-          No route yet.
-        </template>
-        <template v-else-if="!session.planId">
-          This event is running without a plan.
-        </template>
-        <template v-else-if="!whole && !groupName">
-          You are not in a group yet.
-        </template>
-        <template v-else-if="phase === 'live'">
-          This plan has no moments for {{ whole ? 'any group' : groupName }}.
-        </template>
-        <template v-else>This plan has no moments for {{ whole ? 'any group' : groupName }}.</template>
-      </div>
+      <EmptyState
+        v-else-if="!embedded && !rows.length"
+        compact
+        icon="route"
+        :title="phase === 'none' ? 'No route yet' : !session.planId ? 'No plan running' : !whole && !groupName ? 'Not in a group' : 'Nothing planned'"
+        :text="phase === 'none' ? 'The route appears once the event starts with a plan.' : !session.planId ? 'This event is running without a plan.' : !whole && !groupName ? 'Ask a planner to add you to a group.' : 'This plan has no moments for ' + (whole ? 'any group' : groupName) + '.'"
+        data-testid="route-empty"
+      />
 
       <p v-else-if="rows.length && !hasPoints" class="pv-route-note" data-testid="route-nopoints">
         {{ whole ? 'No group has a place on the map yet.' : 'Your group has no places on the map yet.' }}

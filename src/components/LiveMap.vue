@@ -34,6 +34,7 @@
 //            OneMap basemap tiles + reverse geocoding (c) Singapore Land Authority
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
+import { venueBounds } from '../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { supabase } from '../lib/supabase'
 import { createSingaporeMap } from '../utils/onemap'
@@ -85,6 +86,8 @@ const tracks = {} // userId -> recent readings + playhead (liveMotion.js)
 const places = {} // userId -> place name text (filled when a tooltip opens)
 let framed = false // the camera has been set once
 let framedWithPlan = false // ...and the plan's walk was in that frame
+let framedWithPeople = false // ...and the people sharing were in it
+let zoneBounds = null // the event's zones together: where the venue is, before anyone shares
 let userMoved = false // somebody dragged the map: the view is theirs now, not every read's
 
 // Follow mode: keep one person centred on the map while they move
@@ -681,8 +684,15 @@ async function loadZones() {
     zoneShapes[z.id] = { shape, kind: z.kind }
   }
   zoneCount.value = (data || []).length
+  zoneBounds = null
+  for (const entry of Object.values(zoneShapes)) {
+    const b = entry.shape.getBounds()
+    if (!b.isValid()) continue
+    zoneBounds = zoneBounds ? zoneBounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast())
+  }
   refreshZoneState()
   placeZoneLabels()
+  frameOnce() // the zones are often the first thing there is to frame
 }
 
 // "Formation 1 · FORM_A · 2 ICs (1 group)", and a No-Go zone with somebody inside drawn bold red.
@@ -821,24 +831,25 @@ function drawPlan() {
 watch([planWalks, legKey, showPlan, () => props.groups], drawPlan, { flush: 'post' })
 
 /**
- * Frame the map once -- the people and the plan's walk together when there is a walk, because 80 m of line inside a
- * 1.5 km viewport is a picture of a neighbourhood rather than of the venue. The people's answer may land first, so the
- * camera is allowed one refit when the walk arrives; after somebody has dragged the map the view is theirs, not every
- * read's.
+ * Frame the map once on the venue: the event's zones, the people sharing and the plan's walk together. Without the
+ * zones, a map with nobody sharing yet stayed on the whole of Singapore. The answers land in any order, so the camera
+ * may refit once when the people or the walk arrive after the first frame (80 m of walk inside a 1.5 km view is a
+ * picture of a neighbourhood, not of the venue); after somebody has dragged the map the view is theirs, not every read's.
  */
 function frameOnce() {
   if (!map || userMoved) return
   const walk = planPoints.value
-  if (framed && (framedWithPlan || !walk.length)) return
+  const hasPeople = people.value.length > 0
+  if (framed && (framedWithPlan || !walk.length) && (framedWithPeople || !hasPeople)) return
   const size = map.getSize()
-  if (!size.x || !size.y) return // measured while the page was hidden: the next draw frames it properly
-  const bounds = L.latLngBounds([])
-  for (const person of people.value) bounds.extend([person.lat, person.lng])
-  for (const point of walk) bounds.extend(point)
-  if (!bounds.isValid()) return
-  map.fitBounds(bounds.pad(walk.length ? 0.2 : 0.3), { maxZoom: walk.length ? 20 : 17, animate: false })
+  if (!size.x || !size.y) return // measured while the tab was hidden: framed when it is shown (the ResizeObserver)
+  // The zones, widened only by people and walk near them (utils/venueFrame)
+  const bounds = venueBounds(L, zoneBounds, [...people.value.map((p) => [p.lat, p.lng]), ...walk])
+  if (!bounds || !bounds.isValid()) return
+  map.fitBounds(bounds.pad(walk.length ? 0.2 : 0.15), { maxZoom: walk.length ? 20 : 18, animate: false })
   framed = true
   if (walk.length) framedWithPlan = true
+  if (hasPeople) framedWithPeople = true
 }
 
 let unsubscribe = null
@@ -867,7 +878,12 @@ onMounted(() => {
   // The map's box changes size when the page it sits in is resized (a phone turning, the window changing shape): Leaflet
   // must be told, or it keeps drawing for the box it was last measured in.
   if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(() => map && map.invalidateSize())
+    // A map first drawn on a hidden tab has no size, so it could not be framed then: frame it when it is shown.
+    resizeObserver = new ResizeObserver(() => {
+      if (!map) return
+      map.invalidateSize()
+      frameOnce()
+    })
     resizeObserver.observe(mapEl.value)
   }
   render()
@@ -1020,14 +1036,7 @@ onUnmounted(() => {
 :global(.trail-hover) {
   cursor: pointer;
 }
-:global(.zone-label) {
-  background: rgba(255, 255, 255, 0.85);
-  border: 0;
-  box-shadow: none;
-  padding: 0 4px;
-  font-size: 11px;
-  color: var(--ink);
-}
+/* size: kinetic-bridge.css */
 :global(.zone-label::before) {
   display: none;
 }

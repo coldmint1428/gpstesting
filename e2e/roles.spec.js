@@ -64,9 +64,8 @@ test.describe('the database refuses what a role may not do', () => {
     expect(still.data).toHaveLength(1)
   })
 
-  test('a member and a marshal read only their own group, a planner reads everyone (073, 074)', async () => {
+  test('a member reads only their own group, a planner reads everyone (073)', async () => {
     const member = await clientFor('member')
-    const marshal = await clientFor('marshal')
     const planner = await clientFor('planner')
     const read = async (sb) => ({
       groups: (await sb.from('groups').select('id').eq('event_id', ev.eventId)).data.map((g) => g.id),
@@ -75,21 +74,15 @@ test.describe('the database refuses what a role may not do', () => {
     const m = await read(member.sb)
     expect(m.groups).toEqual([ev.groups.Alpha])
     expect(new Set(m.memberRows.map((r) => r.group_id))).toEqual(new Set([ev.groups.Alpha]))
-    const k = await read(marshal.sb) // qa_marshal is in no group
-    expect(k.groups).toEqual([])
-    expect(k.memberRows).toEqual([])
     const p = await read(planner.sb)
     expect(p.groups.length).toBeGreaterThan(1)
   })
 
-  test('a member sees their own group\'s locations, a marshal in no group sees none, a planner every group', async () => {
+  test('a member sees their own group\'s locations, a planner every group', async () => {
     const member = await clientFor('member')
-    const marshal = await clientFor('marshal')
     const m = await member.sb.from('locations').select('group_id').eq('event_id', ev.eventId)
     expect(m.data.length).toBeGreaterThan(0)
     expect(new Set(m.data.map((r) => r.group_id))).toEqual(new Set([ev.groups.Alpha]))
-    const k = await marshal.sb.from('locations').select('group_id').eq('event_id', ev.eventId)
-    expect(k.data).toEqual([])
     const p = await (await clientFor('planner')).sb.from('locations').select('group_id').eq('event_id', ev.eventId)
     expect(p.data.length).toBe(m.data.length)
   })
@@ -131,8 +124,8 @@ test.describe('the pages show each role what it may do', () => {
 
   test('a group admin can make someone in their own group an IC', async ({ browser, baseURL }) => {
     const page = await (await contextAs(browser, 'admin', baseURL)).newPage()
-    // IC and Marshal are switched on the Groups page, in the group's own member list (moved there on 1 Nov, Ern's
-    // event_creation_ern merge); the People page shows them as badges only.
+    // IC is switched on the Groups page, in the group's own member list (moved there on 1 Nov, Ern's
+    // event_creation_ern merge); the People page shows it as a badge only.
     await page.goto(`/events/${ev.eventId}/people`)
     await expect(page.locator('[data-testid^="person-ic-toggle-"]')).toHaveCount(0)
     await expect(page.locator('[data-testid="person-role-select-qa_member"]')).toHaveCount(0) // ranks are root's and planners'

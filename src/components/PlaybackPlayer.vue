@@ -8,8 +8,11 @@
 // component doesn't care which (see utils/playback.js).
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
+import { venueBounds } from '../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
+import { supabase } from '../lib/supabase'
+import { areaStyle } from '../utils/areaKinds'
 import { positionAt, trailAt, timelineMarks, TRAIL_MS } from '../utils/playback'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml } from '../utils/people'
@@ -24,15 +27,16 @@ const props = defineProps({
   fileName: { type: String, default: '' }, // set = replaying a CSV file
   canDownload: { type: Boolean, default: false },
   active: { type: Boolean, default: true }, // false while another tab is shown
+  eventId: { type: String, default: '' }, // the event's zones are drawn under the trails (none for a CSV file)
 })
 const emit = defineEmits(['close', 'go-live', 'download'])
 
 const SPEEDS = [1, 2, 5, 10, 30, 60, 120]
 const SKIPS = [
-  { label: '⏪ 10 min', ms: -10 * 60000 },
-  { label: '⏪ 1 min', ms: -60000 },
-  { label: '1 min ⏩', ms: 60000 },
-  { label: '10 min ⏩', ms: 10 * 60000 },
+  { label: '10 min', ms: -10 * 60000, back: true },
+  { label: '1 min', ms: -60000, back: true },
+  { label: '1 min', ms: 60000, back: false },
+  { label: '10 min', ms: 10 * 60000, back: false },
 ]
 
 const t = ref(props.recording.from) // the moment being shown (ms)
@@ -69,6 +73,11 @@ const mapEl = ref(null)
 let map = null
 let trailRenderer = null
 let trailLayer = null
+let zoneLayer = null
+let zoneBounds = null
+let trackPoints = [] // every reading's [lat, lng]: they widen the view only near the zones (utils/venueFrame)
+let framing = false
+let viewTouched = false // the person zoomed or dragged: the zones arriving late do not move their view
 const markers = {} // userId -> Leaflet marker
 const groupMarkers = {} // groupId -> Leaflet marker
 let positionsNow = {} // userId -> position at t (from the last draw)
@@ -287,8 +296,19 @@ function loop(nowMs) {
     }
   }
   lastFrame = nowMs
-  frame = requestAnimationFrame(loop)
+  // Only keep asking for frames while playing: an idle loop would still run every frame behind other pages
+  frame = playing.value ? requestAnimationFrame(loop) : null
 }
+// Start the frame loop on play; it stops by itself on pause, at the end, or when the tab is left
+watch(playing, (on) => {
+  if (on && frame == null) {
+    lastFrame = performance.now()
+    frame = requestAnimationFrame(loop)
+  } else if (!on && frame != null) {
+    cancelAnimationFrame(frame)
+    frame = null
+  }
+})
 
 function togglePlay() {
   if (!playing.value && t.value >= to.value) t.value = from.value // at the end: start again
@@ -320,7 +340,11 @@ watch(
   () => props.active,
   (active) => {
     if (!active) playing.value = false
-    else if (map) nextTick(() => map.invalidateSize())
+    else if (map)
+      nextTick(() => {
+        map.invalidateSize()
+        frameView() // framed now if it was hidden when it loaded (kept if the person has moved the map)
+      })
   },
 )
 watch(
@@ -332,6 +356,29 @@ function onKey(event) {
   if (event.key === 'Escape' && selectedId.value) deselect()
 }
 
+// The first view: the venue's zones and everything in the recording together, so a recording with few readings still
+// opens on the venue rather than on one street (or, with none, on the whole of Singapore).
+function frameView() {
+  if (!map || viewTouched) return
+  const bounds = venueBounds(L, zoneBounds, trackPoints)
+  if (!bounds || !bounds.isValid()) return
+  if (!map.getSize().x) return // not laid out yet
+  framing = true // our own fit fires zoomstart too; only the person's own zoom or drag keeps the view theirs
+  map.fitBounds(bounds.pad(0.15), { maxZoom: 18, animate: false })
+  framing = false
+}
+async function loadZones() {
+  if (!props.eventId || !supabase) return
+  const { data, error } = await supabase.rpc('event_zones', { p_event: props.eventId })
+  if (error || !map || !zoneLayer) return
+  for (const z of data || []) {
+    const shape = L.geoJSON(z.geojson, { style: areaStyle(z.kind), interactive: false }).addTo(zoneLayer)
+    const b = shape.getBounds()
+    if (b.isValid()) zoneBounds = zoneBounds ? zoneBounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast())
+  }
+  frameView()
+}
+
 onMounted(() => {
   map = createSingaporeMap(mapEl.value)
   trailRenderer = L.canvas({ padding: 0.5 })
@@ -339,28 +386,26 @@ onMounted(() => {
   map.on('click', deselect) // tap empty map = put the person down
   map.on('dragstart', () => (following.value = false)) // looking around yourself = stop following
 
-  // Zoom to everything in the recording
-  let minLat = Infinity
-  let maxLat = -Infinity
-  let minLng = Infinity
-  let maxLng = -Infinity
-  for (const track of props.recording.tracks) {
-    for (const p of track.points) {
-      if (p.lat < minLat) minLat = p.lat
-      if (p.lat > maxLat) maxLat = p.lat
-      if (p.lng < minLng) minLng = p.lng
-      if (p.lng > maxLng) maxLng = p.lng
-    }
-  }
-  if (minLat !== Infinity) map.fitBounds(L.latLngBounds([minLat, minLng], [maxLat, maxLng]).pad(0.2), { maxZoom: 17 })
+  // The event's zones under everything, and the first view framed on them with the recording (below)
+  zoneLayer = L.layerGroup().addTo(map)
+  trailLayer.remove()
+  trailLayer.addTo(map) // trails over the zones
+  loadZones()
+  map.on('dragstart zoomstart', () => {
+    if (!framing) viewTouched = true
+  })
+
+  // Open on the zones; the readings widen the view only where they are near them
+  trackPoints = []
+  for (const track of props.recording.tracks) for (const p of track.points) trackPoints.push([p.lat, p.lng])
+  frameView()
 
   draw(true)
-  frame = requestAnimationFrame(loop)
   document.addEventListener('keydown', onKey)
 })
 
 onUnmounted(() => {
-  cancelAnimationFrame(frame)
+  if (frame != null) cancelAnimationFrame(frame)
   clearTimeout(placeTimer)
   document.removeEventListener('keydown', onKey)
   if (map) map.remove()
@@ -370,11 +415,11 @@ onUnmounted(() => {
 <template>
   <div data-testid="playback-player">
     <!-- Header -->
+    <button type="button" class="kp-back" data-testid="playback-back" @click="emit('close')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>Recordings</button>
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-      <button class="btn btn-sm btn-ghost" data-testid="playback-back" @click="emit('close')">‹ Recordings</button>
-      <h2 class="kp-title">{{ title }}</h2>
-      <button v-if="canDownload" class="btn btn-sm btn-outline-secondary" data-testid="player-download" @click="emit('download')">
-        CSV
+      <h2 class="kp-title me-auto">{{ title }}</h2>
+      <button v-if="canDownload" class="btn btn-sm btn-outline-secondary kp-btn-icon" data-testid="player-download" title="Download this recording as a CSV file" @click="emit('download')">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>CSV
       </button>
       <button v-if="live" class="btn btn-sm btn-live" data-testid="go-live-btn" @click="emit('go-live')">Back to live</button>
     </div>
@@ -450,25 +495,48 @@ onUnmounted(() => {
           <span>{{ live ? 'now' : formatTime(to) }}</span>
         </div>
 
-        <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
-          <button v-for="s in SKIPS.slice(0, 2)" :key="s.label" class="btn btn-sm btn-outline-secondary" @click="seek(t + s.ms)">
+        <!-- Back, Play, forward: the site's own pill buttons with drawn arrows (no emoji); on a phone, Play on top and the jumps in a row below -->
+        <div class="pb-transport mb-2">
+          <button
+            v-for="s in SKIPS.slice(0, 2)"
+            :key="'b' + s.label"
+            type="button"
+            class="btn btn-sm btn-outline-dark pb-skip is-back"
+            :aria-label="'Back ' + s.label"
+            @click="seek(t + s.ms)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17 6 12l5-5M18 17l-5-5 5-5" /></svg>
             {{ s.label }}
           </button>
-          <button class="btn btn-sm btn-primary px-3" data-testid="play-btn" @click="togglePlay">
-            {{ playing ? '⏸ Pause' : '▶ Play' }}
+          <button type="button" class="btn btn-sm btn-primary pb-play" data-testid="play-btn" @click="togglePlay">
+            <svg v-if="playing" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+            <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="is-fill"><path d="M7 4.5v15l12-7.5z" /></svg>
+            {{ playing ? 'Pause' : 'Play' }}
           </button>
-          <button v-for="s in SKIPS.slice(2)" :key="s.label" class="btn btn-sm btn-outline-secondary" @click="seek(t + s.ms)">
+          <button
+            v-for="s in SKIPS.slice(2)"
+            :key="'f' + s.label"
+            type="button"
+            class="btn btn-sm btn-outline-dark pb-skip is-fwd"
+            :aria-label="'Forward ' + s.label"
+            @click="seek(t + s.ms)"
+          >
             {{ s.label }}
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 17 5-5-5-5M6 17l5-5-5-5" /></svg>
           </button>
         </div>
 
         <div class="d-flex flex-wrap align-items-center gap-3">
-          <div class="btn-group btn-group-sm" role="group" aria-label="Speed">
+          <!-- Speed: one rounded track of choices that wraps on a narrow screen (a button group never wraps, and its
+               seven buttons made the page wider than a phone, which then shrank the whole page to fit) -->
+          <div class="pb-speeds" role="group" aria-label="Speed">
             <button
               v-for="s in SPEEDS"
               :key="s"
-              class="btn"
-              :class="speed === s ? 'btn-dark' : 'btn-outline-dark'"
+              type="button"
+              class="pb-speed"
+              :class="{ 'is-on': speed === s }"
+              :aria-pressed="speed === s ? 'true' : 'false'"
               :data-testid="'speed-' + s"
               @click="speed = s"
             >
@@ -528,6 +596,124 @@ onUnmounted(() => {
   padding: 0.5rem 0.75rem;
   background: #fff;
   border-radius: 0.5rem;
+}
+.pb-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pb-transport svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pb-transport svg.is-fill {
+  fill: currentColor;
+  stroke: none;
+}
+.pb-skip {
+  gap: 4px;
+  padding-inline: 12px;
+}
+.pb-play {
+  min-width: 104px;
+}
+/* Hover: the pill fills in dark with lime text and its arrows nudge the way they point.
+   (The site's usual outline hover turns the button white, which shows nothing on this white card.) */
+.pb-skip svg {
+  transition: transform var(--motion-base, 200ms) var(--ease-out, ease-out);
+}
+@media (hover: hover) {
+  html body .pb-skip:hover:not(:disabled) {
+    background: var(--ink, #0a1f17);
+    color: var(--lime, #c6f36b);
+  }
+  .pb-skip.is-back:hover svg {
+    transform: translateX(-3px);
+  }
+  .pb-skip.is-fwd:hover svg {
+    transform: translateX(3px);
+  }
+}
+/* On a phone: Play across the top, then the four jumps in one even row (a wrapping row left them 3 + 2) */
+@media (max-width: 575.98px) {
+  .pb-transport {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .pb-play {
+    grid-column: 1 / -1;
+    order: -1;
+    justify-content: center;
+  }
+  .pb-skip {
+    justify-content: center;
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+  .pb-skip svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+.pb-speeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  max-width: 100%;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--soft, rgba(10, 31, 23, 0.07));
+}
+.pb-speed {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--ink, #0a1f17);
+  font: 800 13px var(--font-body, inherit);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast, 120ms) ease,
+    color var(--motion-fast, 120ms) ease;
+}
+.pb-speed.is-on {
+  background: var(--ink, #0a1f17);
+  color: var(--lime, #d4f36b);
+}
+@media (hover: hover) {
+  .pb-speed:not(.is-on):hover {
+    background: var(--surface, #fff);
+  }
+}
+.pb-speed:focus-visible {
+  outline: 3px solid var(--ink, #0a1f17);
+  outline-offset: 2px;
+}
+/* On a phone: all seven speeds in one even row, the full width of the card (wrapping left 120× alone below) */
+@media (max-width: 575.98px) {
+  .pb-speeds {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+    width: 100%;
+  }
+  .pb-speed {
+    min-width: 0;
+    padding: 0;
+    font-size: 12px;
+  }
 }
 .timeline {
   position: relative;

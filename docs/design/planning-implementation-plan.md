@@ -219,7 +219,7 @@ positions are readable. A read function returning only my group unless I am staf
 **Done when:** impersonating two members in SQL, each sees only their own group's rows; a planner sees all.
 
 **DONE.** `040_plan_group_scope.sql` gives `plan_positions_read` the rule the rest of the app already uses:
-ops staff (`root`, `planner`, `marshal` — the same trio as `FEATURE_ACCESS.wholeEvent` and the movements policies
+ops staff (`root` and `planner` — the same pair as `FEATURE_ACCESS.wholeEvent` and the movements policies
 in 027) read every group; everyone else reads only `group_id = my_group_id(event_id)`. A group admin is *not*
 staff and sees their group only. The same file closes finding 20: every 037/038 plan function is revoked from
 PUBLIC and `anon` and granted to `authenticated`, trigger functions included (revoked, not granted — they fire
@@ -231,8 +231,7 @@ whose groups stood outside the drawn areas with not one marker in view (finding 
 Prove it: `node tools/sql.mjs --file supabase/fixtures/plan_bench.sql` then
 `node tools/sql.mjs --file dev/checks/step3-group-scope.sql` — a Gate Crew IC sees 4 of the clean plan's 16
 positions and one group, the second IC sees the same, Sound's group admin sees 4 and only *their own* 200 m error
-from `plan_check` (the Gate Crew IC sees zero), both planners see all 16 and the error, and a marshal added
-temporarily sees 16 while on duty and 4 again once the duty is deleted; grants are PUBLIC 0 / anon 0 /
+from `plan_check` (the Gate Crew IC sees zero), both planners see all 16 and the error; grants are PUBLIC 0 / anon 0 /
 authenticated 12 of 12. The check was then broken on purpose twice — the old `is_event_member` policy, and one
 function back on PUBLIC — and it failed at 1a and 7a respectively before both were restored. Through the screen:
 `node tools/run.mjs dev/checks/step3-member-view.mjs --session .tmp/session.json` with a second session for
@@ -1159,7 +1158,7 @@ the SQL checks for steps 2–15 green, PGlite 322, `npm run build` clean, ledger
 0 drifted**.
 
 **16. My schedule** — M, needs 15
-Read-only per-group timetable for member / IC / marshal, clock times, arrived/missed; off-site frames read as "not
+Read-only per-group timetable for member / IC / group admin, clock times, arrived/missed; off-site frames read as "not
 required"; replaces the board for those roles.
 **Done when:** as a member, only their group appears — asserted **in the browser** and **at the database** (step 3
 made the second half possible).
@@ -1184,8 +1183,8 @@ is deliberately left as 040 wrote it**: a group's own coordinates without their 
 header and the labels come back with the times instead of needing a second read (R2: the return type changed, so
 DROP + CREATE + re-GRANT). `usePlan.readTimetable` gained the `p_at` argument the screen uses for a closed event.
 
-**Who sees which screen.** Root and planner keep the board; a member, an IC, a group admin and a **marshal** get the
-schedule — the ops read is unscoped, so a marshal sees every group's timetable (proved). `EventView` chooses between
+**Who sees which screen.** Root and planner keep the board; a member, an IC and a group admin get the
+schedule. `EventView` chooses between
 them, the tab is labelled *Schedule* for those roles, and the address stays `/timeline`, so the page keeps one name in
 the URL. The styles are `pv-sched-*`, checked against `native.css` before they were used: that file already owns
 `.pv-row`, `.pv-live`, `.pv-head` and `.pv-title`, which is the trap that made step 15's strip white on cream
@@ -1205,7 +1204,7 @@ Sound member: five rows, one group, and every state word exactly once — `arriv
 pending` — with `planned_at = t0_at + t_s`, the marks and their recorders, and the notes on the frames. Then the
 closed paths, table and function both: frames 0, `plan_frames_list` 0 (the draft's too), `plans` exactly the live
 one, positions and outcomes their own group's only, and `session_status` called straight answering five rows instead
-of ten. A marshal sees all ten rows, every frame (draft included), eight positions and four outcomes. The other
+of ten. A planner sees all ten rows, every frame (draft included), eight positions and four outcomes. The other
 group's IC sees their own five through all four doors. A member with no group reads nothing but still sees the live
 plan. An outsider is refused the read and sees no rows; `anon` cannot execute either function or read any of the
 four tables. **Proven to bite:** with `plan_frames_read` back to `is_event_member`, `FAIL 4a: a member reads 24 plan
@@ -1223,8 +1222,7 @@ of the board: no strip, picker, map, Add frame, Publish, Copy or Undo, and its r
 for the plan, its frames or its positions at all**; only the timetable. Their five rows are Sound's five, in clock
 order, each printing a clock time, the first equal to the header's T+0; the notes are the planner's labels; each
 word's detail says what it means. The moved moment reads "due, in 30 s" and then, untouched and with **no reload**,
-turns "late" a moment later — with a second `session_timetable` read counted. A marshal opens the same page as
-*Timetable* with both groups (10 rows) and the other group's record. And when the planner ends the event, the
+turns "late" a moment later — with a second `session_timetable` read counted. And when the planner ends the event, the
 member's page still reads it: phase *ended*, the clock stopped at the close, nothing left "due". **Proven to
 bite:** with the board rendered for every role, the check fails waiting for the schedule; with the wake removed
 *and* the poll pushed to ten minutes, it fails waiting for "late" — while the same check with only the poll pushed
@@ -1382,7 +1380,7 @@ name/date/T+0, `published_by` five minutes fresh); a frame edited afterwards lea
 refused by the gate and writes no version (then publishes once fixed); an empty plan leaves a version holding `[]`.
 Publishing a copy taken mid-walk writes `fork_of`/`fork_cut_s` on its version and hands the session over with the
 clock untouched — and a refused publish at revision 99 hands nobody over, stands nobody down and writes nothing. Ops
-staff (root, planner, marshal) read six versions; a member and an outsider read none; `anon` has no table privilege;
+staff (root, planner) read six versions; a member and an outsider read none; `anon` has no table privilege;
 `authenticated` has `SELECT` and no insert/update/delete; RLS is on with exactly one read policy. Deleting a plan
 takes its versions and only nulls the link on a copy's version; the copy's death takes its own. `plan_publish(uuid)`
 is gone, `(uuid, integer)` exists, and `anon` and `PUBLIC` cannot execute it. **Proven to bite:** no null check →
@@ -1961,7 +1959,7 @@ step 17 **44** (3 tabs), step 18 **42** (2 tabs), step 19 **32** (3 tabs), step 
 **23** (5 tabs), step 23 **43**; `npm run test:runsheet` **105** (the workbook is step 25's to delete), `npm run
 test:sheet` **58**, PGlite **322**; `npm run build` clean (the chunk notice only); ledger **60 files, 60 applied, 0
 pending, 0 drifted**. Two of the browser checks needed sessions the runner did not have — step 16 wanted
-`.tmp/session5.json` (the marshal) and step 17 `.tmp/session3.json` — and step 6 failed once on a toast that never
+`.tmp/session5.json` and step 17 `.tmp/session3.json` — and step 6 failed once on a toast that never
 appeared and passed on its re-run at 44 assertions: I could not reproduce it, and I would rather say so than call it
 fixed.
 
@@ -2086,7 +2084,7 @@ tested (its 105 assertions died with `runSheetFile.js`); `npm run build` clean.
 at a zone, and a plan's positions do not, so a planner can now delete a zone mid-event and its alerts and presence rows
 go with it (`on delete cascade`) — a live-event guard for zones is a product decision, not a leftover to keep. The
 `route-eta` Edge Function's **source** is deleted but the deployed function must be removed in the Supabase dashboard
-(a migration cannot), and `send-reminders` is now the only one. The ops board that a marshal used to read (queue,
+(a migration cannot), and `send-reminders` is now the only one. The ops board that ops staff used to read (queue,
 filters, clusters) is gone for run-sheet sessions by construction and has no plan equivalent on the map: `PlanOps` is a
 table of moments, not a drawing, so "zoomed out, one bubble per zone" has no replacement and its disappearance is a
 product loss worth naming. `show_who` still carries a `show_` name for a helper the plan uses. And the debts below
@@ -2134,10 +2132,9 @@ answered the place Stage`.
 reads `Sound Dock`, then nothing (off site), then `Stage`, then nothing twice (carried), with the five state words
 **unmoved** — a place that displaced a word would be a regression this step could otherwise hide. The page is proved
 to have asked `session_timetable` **and** to have made **zero** requests for the plan's frames or positions, so the
-place came from the one read and not from a lookup the member's screen is not allowed to make. The marshal's tab then
-shows both groups on one frame saying **different** places (`Main Gate` / `Sound Dock`), which is what makes this a
-row-level fact rather than a frame-level one. Evidence: `shots/step26-member-place.png`,
-`shots/step26-marshal-place.png`.
+place came from the one read and not from a lookup the member's screen is not allowed to make. Two groups on one frame say
+**different** places (`Main Gate` / `Sound Dock`), which is what makes this a row-level fact rather than a frame-level
+one. Evidence: `shots/step26-member-place.png`.
 
 **Found while doing it:** three findings (103–105). `my_schedule` **never existed** — the name came from the 052
 filename and had travelled into this plan's step list, where it read as a function (103); a name invented in a
@@ -2160,7 +2157,7 @@ still standing wherever the last statement put it — the read reports what the 
 group is, and carrying the point forward would be a second copy of the walk 051 owns. **Overlapping zones resolve by
 kind then name**, so two zones of the same kind covering the same point resolve alphabetically, and nothing tells a
 planner their zones overlap. The **ops board still identifies a moment by its numbers**: `plan_ops` returns
-`plan_lat`/`plan_lng` and no place, so a marshal reading the table sees the walk's midpoint rather than the name —
+`plan_lat`/`plan_lng` and no place, so a planner reading the table sees the walk's midpoint rather than the name —
 giving it one is a second `drop`/`create` of a 26-column function, and a decision rather than a fix. And the state
 chip and the place now sit side by side and read as one phrase ("ARRIVED Sound Dock"); a long zone name pushes the
 detail onto a second line, which is legible but not designed.
@@ -2170,7 +2167,7 @@ detail onto a second line, which is legible but not designed.
 **The model this serves, in your words.** "The planner is the one who plans routes by creating new frames; the map's
 line between two moments is indeed the path." On the member's end the timeline says what time to be at which zone and
 the map draws the route; the intermediate moments **are** the route and nobody is judged for cutting a corner, though
-a marshal may confirm one. "What really matters is if they are in their zone by the planned time." On the ground that
+a planner may confirm one. "What really matters is if they are in their zone by the planned time." On the ground that
 is a **distance**: "we calculate reached a moment as distance from planned latlng to actual latlng (let planner
 configure)". 057 could only close a moment when an IC stood inside the polygon the point was drawn in, which is a
 claim about a drawing, not about a phone in a crowd.
@@ -2260,7 +2257,7 @@ than left to contradict the code (108).
 **step27** 17 (3 tabs); `npm run test:db` **322**; `npm run test:sheet` **58**; `npm run build` clean; ledger **63
 files, 63 applied, 0 drifted**.
 
-**Owing.** The radius is **not on the ops board**: a marshal sees a group that has not closed itself and cannot see why.
+**Owing.** The radius is **not on the ops board**: a planner sees a group that has not closed itself and cannot see why.
 **Two ICs of one group each have a number and the first one close enough wins**, so a group with one tight and one
 loose IC is judged by whichever is nearer, and nothing on any screen says so. **A radius is per event, not per venue**:
 two events at one venue copy nothing between them, so a planner sets it twice. Nothing **tells an IC** that a planner
@@ -2276,8 +2273,8 @@ stops meaning anything in a crowd) and nothing in the system tests it against a 
 **28. The IC's own "we're here" press** — M, needs 21 — **DONE** (064).
 
 **The gap this closes.** `progress_mark` (050) has admitted the group's IC and its admin since the day it was written,
-but the only client caller was the ops board — and the ops board is mounted only for root, planner and marshal
-(`EventView.vue`'s `seesWholeEvent`), exactly the three roles the function exempts. Half of its role check had never
+but the only client caller was the ops board — and the ops board is mounted only for root and planner
+(`EventView.vue`'s `seesWholeEvent`), exactly the roles the function exempts. Half of its role check had never
 been reached by anything: the door was real and no screen knocked on it, and the guard the earlier plan asked for ("a
 second person must not replace a mark") would have protected a case that could not happen. So this step is the screen
 first: the timetable step 16 gave every member offers its IC **one** press — "We're here" on the moment the clock is on
@@ -2370,12 +2367,12 @@ intended, with "the publisher or another ops hand" the only correction path.
 
 **29. The follower's own map** — M, needs 16, 26 — **DONE** (065)
 
-A member, an IC or a marshal opens the Map tab and sees the walk their group is meant to take — the line through their
+A member, an IC or a group admin opens the Map tab and sees the walk their group is meant to take — the line through their
 own group's moments, on the venue's zones — and nothing of any other group.
 
 **The gap this closes.** The Map tab was `EventPagePlaceholder` for every role but root and planner (`EventView.vue`,
 whose condition was `!canManage`): it printed "the event map: zones and areas, view only" and drew nothing, and a
-**marshal** kept the same stub. The one read a follower had — `session_timetable` — answered the moment's place *name*
+**group admin** kept the same stub. The one read a follower had — `session_timetable` — answered the moment's place *name*
 and not its point (062), so even with a map there would have been nothing to join up. The walk was drawn only where the
 walk is drawn. That placeholder was the last page still using the component, so it is gone with this step.
 
@@ -2417,7 +2414,7 @@ answers no point and no place; the off-site moment answers `not_required` and no
 place; the walk's far end is the stage; three points for Gate Crew, five for Sound. **2**: a Sound member reads five
 rows, none of Gate Crew's, and `session_status` called straight answers the same five — the engine is scoped, not the
 wrapper. **3**: a Gate Crew member reads their own five, two of them without a point (the frames the map needs to know
-the walk stops). **4**: a marshal reads ten, and the carried frame is still null in that read. **5**: an outsider is
+the walk stops). **4**: a second planner reads ten, and the carried frame is still null in that read. **5**: an outsider is
 refused by both the timetable and the engine. **6**: `anon` cannot execute and `authenticated` can.
 
 **Proven to bite, three times** (each restored before the next run, the check then re-run green, the ledger showing 0
@@ -2467,7 +2464,7 @@ planned line *underneath* the person's dot was deliberately **not** here: same d
 change, and it should be seen working on the first one before it is copied. Step 30 did it, and the copy was one file:
 `planWalk.js` and `usePlanWalk.js` are both screens' now.
 
-**Owing.** A marshal's map draws **every** group's walk at once (the read answers all of them) and offers no way to look
+**Owing.** A map that reads every group draws **every** group's walk at once (the read answers all of them) and offers no way to look
 at one — the board's tick boxes are the answer on the board, and this screen has none. The map names the plan's revision
 and the read's time ("as of 7:42 pm") but has no "this is older than the plan" warning of its own: the 30 s poll is the
 age, as on the schedule. **Zones are read once**, so a planner who edits the venue mid-event needs a reload to see it —
@@ -2561,7 +2558,7 @@ dragged the map, after which the view is theirs (the `dragstart` that stopped fo
 **Fixture.** `dev/checks/step30-planline-prep.sql` — step 29's browser bench with three additions: a **GPS reading** for
 each group (Gate Crew's IC and Sound's member, both about 25 m **off** the plan's line, fresh enough to be "Live", so the
 shot and the check hold both halves of the question at once: where the plan says the group is, and where the group
-actually is), a **marshal** role (the identity that reads every group from the Live page), and the two empty benches
+actually is), and the two empty benches
 (`…e3a` never started, `…e3b` running without a plan) carried over so one prep serves every tab. It keeps step 29's
 event and frame ids, so either check can run on either prep; the pair is named together in the README, because a change
 to one is a change to the other. Run within five minutes of the prep, as step 29's is: the bold leg is the pair
@@ -2577,8 +2574,8 @@ line does not eat the tap); and the page asked the timetable for the walk and ne
 positions. **2**, the toggle: unchecked, no line and no leg, the same people still there; checked again, the walk returns
 — a hidden layer, not a discarded read. **3**, two identities on the same address: a **Sound member** sees one line and it
 is Sound's, with its own leg; **Gate Crew's IC** sees one line and it is Gate Crew's; neither sees the staff board at
-all. **4**, a **marshal**: two lines and the board's two rows. **5–6**, the two empty benches: no line, no legend line, no
-checkbox, and the map that is still there is the people's. **7**, the shots: `shots/step30-planline-staff.png` (both
+all. **4–5**, the two empty benches: no line, no legend line, no
+checkbox, and the map that is still there is the people's. **6**, the shots: `shots/step30-planline-staff.png` (both
 walks under both people, the board above) and `shots/step30-planline-sound.png` (one member's own line, and no board).
 
 **Done when, in the code**, without a browser: `npm run test:walk` (`tools/plan_walk_test.mjs`) — **26 assertions**. It
@@ -2593,14 +2590,14 @@ session. A mutation whose anchor line has moved throws instead of passing quietl
 proof that can no longer fail).
 
 **What it is not.** No interpolated "should be here" dot, for the reason above. **No per-group filtering** on the live
-map: the board has tick boxes and this map gets the legend, and a marshal who wants one group's line is the debt this
+map: the board has tick boxes and this map gets the legend, and a planner who wants one group's line is the debt this
 step adds. No tap on a line — it is `interactive: false` on purpose, because a dashed line across the venue would
 swallow the taps meant for the people under it, and the taps are the screen's subject. No walk time or distance (step
 29's refusal, unchanged). No notice when a republish moves the line: the composable re-reads on the revision and
 redraws, and the ops table's own numbers are the announcement. Nothing is drawn for a session that runs no plan, which
 is the divide step 29's empty states already drew.
 
-**Owing it adds.** A republish redraws silently. A marshal has no way to isolate one group. Two lines that cross look
+**Owing it adds.** A republish redraws silently. A planner has no way to isolate one group on the live map. Two lines that cross look
 like one at low zoom, and a group with a single stated point draws no line at all (a run of one is a dot). The checkbox
 is not remembered, and neither is the camera: it frames the venue once and then it is the person's, so a group that
 walks out of the frame stays out of it until somebody pans. And the composable is now shared: a change to `usePlanWalk`
@@ -2777,7 +2774,7 @@ and a debt (a planner who does not read the panel can leave a plan in that state
 no-go zone with a single statement is not reported: the rule tests the line between two statements, and one point has
 no line — if standing inside matters it is a different rule with different words ("inside", not "crosses"). A pair that
 is both over 25 m and crossing a zone is reported as the distance only, so a zone can be crossed by the one hop that
-is too long to be plausible. The pace threshold is **6 m/s for everybody**: a marshal on a bicycle, a buggy, or a
+is too long to be plausible. The pace threshold is **6 m/s for everybody**: an IC on a bicycle, a buggy, or a
 group that really does take a lift has no way to say so, and an off-site excursion is deliberately not measured, so a
 plan can still contain a group that travels 200 m while nobody is looking. `frames_fill` still ignores both flags, so
 closing a distance gap can write a walk through a zone — the fill button and the crossing rule do not know about each
@@ -2817,7 +2814,7 @@ of any hand-run.
 **New from step 14:** there was **no screen** for actuals until step 16 — `progress_mark` still has no client caller
 (step 21's arrival marking is where a tap is made), so what step 14 proved is the data and its rules, and step 16
 proved that the timetable *reads* them (arrived, missed, when, by whom) on a member's own schedule.
-A mark WAS **last write wins**: two marshals recording the same frame both succeeded and the later `marked_at` /
+A mark WAS **last write wins**: two ops hands recording the same frame both succeeded and the later `marked_at` /
 `marked_by` replaced the earlier with no history — **changed in step 28** (064): two ops hands still both succeed (ops
 may correct), but two ICs no longer do — the second is refused with who marked it and when — and a deleted profile no
 longer turns a person's mark into the tick's (`marked_auto`). What is still missing is the history the hand-back log
@@ -2992,7 +2989,7 @@ hundred moments.
 delete a zone that a live movement pointed at; a plan's positions are lat/lng, so a plan pins no zone to anything and
 the guard would have refused with no reason. The loss is real: a planner can delete a zone mid-event, and its alerts
 and presence rows go with it (`on delete cascade`). A live-event guard for zones is a decision to make, not a leftover
-to restore. **The map has no plan ops layer.** A marshal used to get clusters of groups by zone, a worst-status ring and
+to restore. **The map has no plan ops layer.** Ops staff used to get clusters of groups by zone, a worst-status ring and
 a dashed line to the zone they were walking to, all drawn from `movement_status`; `PlanOps` is a table of moments and
 has no map counterpart, so "zoomed out, one bubble per zone" is simply gone. **The `route-eta` Edge Function's source
 is deleted and the deployed function is not**: a migration cannot remove an Edge Function, so it has to be deleted in
@@ -3032,14 +3029,14 @@ member cannot tell a walk from a gap; a carried frame is silent even though the 
 the read reports what the plan *states* at that frame. The lookup answers with the **first** zone by kind and then by
 name, so a point inside two zones of the same kind resolves alphabetically, and nothing anywhere warns a planner that
 two zones overlap — the same silence that made the no-go question worth deciding. The **ops board still speaks in
-coordinates**: `plan_ops` has `plan_lat`/`plan_lng` and no place, so the marshal's table and the member's schedule
+coordinates**: `plan_ops` has `plan_lat`/`plan_lng` and no place, so the ops table and the member's schedule
 now describe the same moment in two different vocabularies, and closing that is a 26-column drop-and-create rather
 than a column. The member's page remains **one read** on purpose (step 16's check forbids a `plan_positions` request),
 which is what made a server-side column necessary — and also means the place can never be a client-side enrichment of
 something the plan did not state.
 
 **New from step 27:** the radius is a number **nothing shows on the ops board** — `plan_ops` has no tolerance and no
-"how far off was the phone", so a marshal watches a group stay late and cannot see whether the phone was 40 m short or
+"how far off was the phone", so a planner watches a group stay late and cannot see whether the phone was 40 m short or
 had stopped reporting. **Two ICs of one group each carry a number and the nearest close wins**, so the group's honesty
 is the loosest phone in it, and no screen says which IC closed what. It is **per event**, so two events in one venue
 share nothing. A planner can change an IC's radius **without telling them**: the change is toasted on the planner's

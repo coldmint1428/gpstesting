@@ -5,7 +5,7 @@
 //    tab switched, Wi-Fi to 4G). When the page is shown again, the connection comes back or
 //    a check every minute runs, we fetch what was missed and rebuild a dead channel. Network
 //    errors show "Reconnecting..." and are retried; they are not shown as errors.
-// RLS decides WHO I see (root/planner/marshal: everyone; others: own group only),
+// RLS decides WHO I see (root/planner: everyone; others: own group only),
 // for both the first load and the realtime updates.
 import { ref, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'

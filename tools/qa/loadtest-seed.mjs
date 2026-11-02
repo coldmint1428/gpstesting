@@ -45,7 +45,6 @@ const pct = (xs, p) => {
 
 const { sb: root } = await clientFor('root')
 const planner = (await clientFor('planner')).user.id
-const marshal = (await clientFor('marshal')).user.id
 
 // ---------- the event and its groups ----------
 let done = stopwatch('create_event_ms')
@@ -61,7 +60,6 @@ const eventId = must(
     },
     p_members: [
       { user_id: planner, role: 'planner' },
-      { user_id: marshal, role: 'marshal' },
     ],
     p_groups: plan.groups.map((g) => ({ name: g.name, colour: g.colour, members: [] })),
   }),

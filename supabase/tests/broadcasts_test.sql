@@ -1,7 +1,7 @@
 -- supabase/tests/broadcasts_test.sql -- Message everyone (032_broadcasts.sql), run against the real project.
 --
 -- One transaction that ends with an exception, so nothing is kept (no push is sent either: the queued rows and the
--- pg_net request are rolled back). "event for testing": komin is root; testuser1 (planner, marshal of North, IC and
+-- pg_net request are rolled back). "event for testing": komin is root; testuser1 (planner, IC and
 -- admin of Test group A) sends; komin2 and testuser2 are planners and in Test group A; testuser3–7 are plain members
 -- without a group. testuser1 is also a planner of the simulation event "NDP sim run 1".
 do $test$

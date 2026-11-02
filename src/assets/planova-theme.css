@@ -499,7 +499,6 @@ html .ops-chip.ops-ok { background: var(--status-info-bg); border-color: var(--s
 }
 .pl-role--root { background: var(--brand-primary); border-color: var(--brand-primary); color: var(--text-on-brand); }
 .pl-role--planner { background: var(--brand-primary-subtle); border-color: var(--border-default); color: var(--text-link); }
-.pl-role--marshal { background: var(--accent-100); border-color: var(--accent-500); color: var(--accent-700); }
 .pl-role--ic { background: var(--bg-surface); border-color: var(--border-strong); color: var(--text-link); }
 
 /* ---------- Log in: dark brand panel beside the form ---------- */

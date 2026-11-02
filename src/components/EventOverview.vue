@@ -9,7 +9,7 @@ import InvitePanel from './InvitePanel.vue'
 
 const props = defineProps({
   event: { type: Object, required: true },
-  role: { type: String, default: null }, // view role: root | planner | marshal | admin | ic | member
+  role: { type: String, default: null }, // view role: root | planner | admin | ic | member
   mode: { type: String, default: 'view' }, // 'edit' (root) | 'view'
   members: { type: Array, required: true },
   groups: { type: Array, required: true },
@@ -155,7 +155,7 @@ function saveDetails() {
     </div>
 
     <div>
-      <button v-if="mode === 'edit'" type="button" class="btn btn-sm btn-ghost-danger" :disabled="busy" data-testid="delete-event" @click="emit('delete')">
+      <button v-if="mode === 'edit'" type="button" class="btn btn-sm btn-ghost-danger kp-btn-icon" :disabled="busy" data-testid="delete-event" @click="emit('delete')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
         Delete event
       </button>
       <button v-else type="button" class="btn btn-sm btn-ghost-danger" data-testid="leave-event" @click="emit('leave')">Leave event</button>

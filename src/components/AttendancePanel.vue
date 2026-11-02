@@ -13,6 +13,7 @@ import QRCode from 'qrcode'
 import { formatDayTime, formatTime } from '../utils/time'
 import BenchAlert from './BenchAlert.vue'
 import QrScanner from './QrScanner.vue'
+import EmptyState from './EmptyState.vue'
 
 const props = defineProps({
   groups: { type: Array, required: true },
@@ -248,7 +249,7 @@ const history = computed(() =>
         </template>
       </template>
     </section>
-    <p v-else-if="!myGroup && !runnable.length && !seesWholeEvent" class="kp-empty">Roll calls are taken by group, and you are not in one yet.</p>
+    <section v-else-if="!myGroup && !runnable.length && !seesWholeEvent" class="kp-card"><EmptyState compact icon="people" title="Not in a group" text="Roll calls are taken by group. Ask a planner to add you to one." /></section>
 
     <!-- ========== Take attendance (root / planners, a group's IC or admin) ========== -->
     <section v-if="runnable.length" class="kp-card" data-testid="attendance-run">

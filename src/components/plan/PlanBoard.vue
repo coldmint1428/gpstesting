@@ -34,11 +34,13 @@
 // the one this tab's inverses were built against.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
+import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createOneMapLayer } from '../../utils/onemap'
 import { planErrorMessage, usePlan } from '../../composables/usePlan'
 import { usePlanUndo } from '../../composables/usePlanUndo'
 import PlanLive from './PlanLive.vue'
+import EmptyState from '../EmptyState.vue'
 import { askConfirm, askNotice, toast } from '../../composables/useNotify'
 import { saveFile } from '../../lib/saveFile'
 import {
@@ -62,7 +64,7 @@ const props = defineProps({
   eventId: { type: String, required: true },
   canEdit: { type: Boolean, default: false },
   // Set for a member, an IC or a group admin: they see one group, never the event (040). 'none' means they are
-  // in no group yet. Null for ops staff (root, planner, marshal), who see every group.
+  // in no group yet. Null for ops staff (root, planner), who see every group.
   onlyGroupId: { type: String, default: null },
   // The event's live session (useEventSessions), when there is one: the board says which revision of the running
   // plan it is showing, and warns when another tab publishes a newer one (step 15).
@@ -117,6 +119,27 @@ const scrubbing = ref(false)
 // The group waiting for a tap on the map to say where it stands at the open frame (QA 1 Nov: a plan drawn by hand
 // had no way to put a group on the map at all -- a badge could be dragged only once it had a position).
 const placing = ref(null)
+// Lock: no dragging frames along the time bar or badges on the map, so a slip of the finger cannot move anything.
+// Buttons (Add frame, flags, placing a group) still work. Remembered on this device.
+const LOCK_KEY = 'planova.planLock'
+const moveLock = ref(readLock())
+function readLock() {
+  try {
+    return localStorage.getItem(LOCK_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function toggleLock() {
+  moveLock.value = !moveLock.value
+  try {
+    localStorage.setItem(LOCK_KEY, moveLock.value ? '1' : '0')
+  } catch {
+    /* private mode: the lock still works until the page closes */
+  }
+  drawMarkers()
+}
+const canMove = computed(() => props.canEdit && !moveLock.value)
 
 const selected = computed(() => frames.value.find((f) => f.id === selectedId.value) || null)
 const tracks = computed(() => resolveTracks(frames.value))
@@ -396,14 +419,15 @@ function fitMap() {
   if (!map) return
   // Once the plan is in the view, stop moving the map: a planner who has panned somewhere else keeps that view.
   if (fitted && (fittedWithFrames || !tracks.value.size)) return
-  const bounds = L.latLngBounds([])
-  if (zoneBounds?.isValid()) bounds.extend(zoneBounds)
   // Only the places somebody is: an off-site row has a coordinate but is not a position on the map (step 10), and
-  // fitting to it would open the plan looking at somewhere nobody stands.
+  // fitting to it would open the plan looking at somewhere nobody stands. They widen the zones' view only when they
+  // are near the zones (utils/venueFrame).
+  const points = []
   for (const [, track] of tracks.value) {
-    for (const point of track) if (point.state !== 'off_site') bounds.extend([point.lat, point.lng])
+    for (const point of track) if (point.state !== 'off_site') points.push([point.lat, point.lng])
   }
-  if (!bounds.isValid()) return
+  const bounds = venueBounds(L, zoneBounds, points)
+  if (!bounds || !bounds.isValid()) return
   // Not animated, deliberately: a fit that has to glide is a fit that can lose the argument with the layout — the
   // inspector changes the map's height, and an animation started at the old size lands somewhere else. Instant
   // framing is also what a plan switch should feel like (finding 39).
@@ -623,12 +647,12 @@ function drawMarkers() {
       icon,
       // Nobody drags a badge while the clock is running: the position on screen is a place between two moments, and
       // there is no row to write it to.
-      draggable: props.canEdit && !run,
+      draggable: canMove.value && !run,
       keyboard: false,
       autoPan: true,
       title: group.name,
     })
-    if (props.canEdit && !run) {
+    if (canMove.value && !run) {
       // Only the badge under the pointer raises dragstart/dragend; the companions are moved with setLatLng(), which
       // raises no drag event. So one gesture is one dragend, and one write is all that can happen.
       marker.on('dragstart', () => beginGroupDrag(group.id))
@@ -916,7 +940,7 @@ function cycleSpeed() {
  * than squashing its first frames onto it, because a compressed chunk is not what the hand did.
  */
 function startDrag(frame, event) {
-  if (!props.canEdit || event.button !== 0) return
+  if (!canMove.value || event.button !== 0) return
   // Shift+click is a selection gesture, not a drag. The click handler runs after this one and extends the selection
   // from the open frame, so picking the frame here first would leave the anchor on the frame just pressed and the
   // extension would collapse to a single frame.
@@ -1744,8 +1768,8 @@ async function fork() {
     const cut = copy && copy.fork_cut_s != null ? copy.fork_cut_s : null
     toast(
       cut == null
-        ? 'Copied. Edit this one; the original is untouched.'
-        : `Copied from ${formatOffset(cut)}. Everyone is anchored where the walk already had them; everything before that stays on the original.`,
+        ? 'Duplicated. Edit this one; the original is untouched.'
+        : `Copied from ${formatOffset(cut)}. Earlier moments stay on the original.`,
       'success',
       6000,
     )
@@ -1762,8 +1786,8 @@ async function publish() {
   const ok = await askConfirm({
     title: again ? `Publish "${plan.value.name}" again?` : `Publish "${plan.value.name}"?`,
     message: again
-      ? 'This announces the timetable as it stands now: everyone following it is told it changed. Any other live plan is stood down.'
-      : 'This becomes the timetable everyone follows. Any other live plan is stood down.',
+      ? 'Everyone following it is told the timetable changed. Any other live plan stops.'
+      : 'This becomes the timetable everyone follows. Any other live plan stops.',
     confirmText: again ? 'Publish again' : 'Publish',
   })
   if (!ok) return
@@ -1951,8 +1975,8 @@ async function onSheetPicked(event) {
     title: `Import "${file.name}" into "${target.name}"?`,
     message:
       had === 0
-        ? 'Every moment of the file is written into the plan. This cannot be undone.'
-        : `This replaces every moment the plan has: its ${had} frame${had === 1 ? '' : 's'} are deleted first. This cannot be undone.`,
+        ? 'Every moment in the file is added to the plan. This cannot be undone.'
+        : `This replaces the plan's ${had} frame${had === 1 ? '' : 's'}. This cannot be undone.`,
     lines: [
       `${framesIn} frame${framesIn === 1 ? '' : 's'} and ${positions} position${positions === 1 ? '' : 's'} in the file.`,
       ...(target.status === 'live'
@@ -2125,31 +2149,25 @@ watch(
 
 <template>
   <div class="pv">
-    <div v-if="!loading && (!readablePlan || props.onlyGroupId === 'none')" class="pv-board" style="grid-template-columns: 1fr">
+    <div v-if="!loading && (!readablePlan || props.onlyGroupId === 'none')" class="pv-board is-empty" style="grid-template-columns: 1fr">
       <div class="pv-toolbar">
         <h2 class="pv-board-title">{{ props.onlyGroupId ? 'Your plan' : 'Planning' }}</h2>
-        <span class="pv-spacer"></span>
-        <template v-if="props.canEdit">
-          <input v-model="newPlanName" class="pv-input pv-name-field" placeholder="Name the first plan" @keyup.enter="confirmCreate" />
-          <button class="pv-btn is-primary" :disabled="busy || !newPlanName.trim()" @click="confirmCreate">Create plan</button>
-        </template>
       </div>
-      <div class="pv-board-empty" data-testid="plan-empty">
-        <template v-if="props.onlyGroupId === 'none'">
-          You are not in a group yet.
+      <EmptyState v-if="props.onlyGroupId === 'none'" icon="people" title="You're not in a group yet" text="Ask a planner to add you to one." data-testid="plan-empty" />
+      <EmptyState v-else-if="props.onlyGroupId" icon="plan" title="No plan yet" text="Your group's plan appears here once a planner publishes it." data-testid="plan-empty" />
+      <EmptyState v-else icon="plan" title="No plans yet" data-testid="plan-empty">
+        <template v-if="props.canEdit && !zones.length">
+          <RouterLink :to="{ name: 'event', params: { id: props.eventId, page: 'map' } }">Draw your zones on the Map page</RouterLink>, then create a plan.
         </template>
-        <template v-else-if="props.onlyGroupId">
-          No plan is published yet.
+        <template v-else-if="props.canEdit">Name a plan, then place each group frame by frame.</template>
+        <template v-else>A planner hasn't made one yet.</template>
+        <template v-if="props.canEdit" #actions>
+          <form class="pv-empty-create" @submit.prevent="confirmCreate">
+            <input v-model="newPlanName" class="pv-input" placeholder="Name the first plan" aria-label="Plan name" />
+            <button type="submit" class="pv-btn is-primary" :disabled="busy || !newPlanName.trim()">Create plan</button>
+          </form>
         </template>
-        <template v-else>
-          No plans yet. Create one, then place each group frame by frame.
-        </template>
-      </div>
-      <div class="pv-inspector">
-        <p v-if="props.canEdit" class="pv-note">
-          Draw your areas on the Map page first.
-        </p>
-      </div>
+      </EmptyState>
     </div>
 
     <div v-else class="pv-board" :aria-busy="busy || loading ? 'true' : null">
@@ -2170,30 +2188,28 @@ watch(
           v-if="blocking.length"
           class="pv-badge is-blocked"
           data-testid="plan-blocked"
-          :title="`The database refuses this plan for ${blocking.length} reason${blocking.length === 1 ? '' : 's'} the board's own walk does not report`"
+          :title="`This plan can't be published yet: ${blocking.length} problem${blocking.length === 1 ? '' : 's'} to fix`"
         >
           {{ blocking.length }} problem{{ blocking.length === 1 ? '' : 's' }}
         </span>
 
-        <span class="pv-spacer"></span>
-
-        <template v-if="props.canEdit">
-          <button class="pv-btn is-quiet" data-testid="undo" :disabled="busy || !canUndo" title="Undo the last change (Ctrl+Z)" @click="runUndo">Undo</button>
-          <button class="pv-btn is-quiet" data-testid="redo" :disabled="busy || !canRedo" title="Put it back (Ctrl+Y, or Ctrl+Shift+Z)" @click="runRedo">Redo</button>
-          <button class="pv-btn" data-testid="frame-add" :disabled="busy" @click="addFrame">Add frame</button>
+        <div v-if="props.canEdit" class="pv-head-actions">
+          <button class="pv-btn is-quiet" data-testid="undo" :disabled="busy || !canUndo" title="Undo the last change (Ctrl+Z)" @click="runUndo"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg>Undo</button>
+          <button class="pv-btn is-quiet" data-testid="redo" :disabled="busy || !canRedo" title="Put it back (Ctrl+Y, or Ctrl+Shift+Z)" @click="runRedo"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" /></svg>Redo</button>
+          <span class="pv-sep" aria-hidden="true"></span>
           <button
             class="pv-btn is-primary"
             :disabled="busy"
             :title="
               plan && plan.status === 'live'
-                ? 'Announce this timetable again: everyone following it is told it changed'
+                ? 'Send the updated timetable to everyone'
                 : 'Make this the timetable everyone follows'
             "
             @click="publish"
           >
             {{ plan && plan.status === 'live' ? 'Publish again' : 'Publish' }}
           </button>
-        </template>
+        </div>
       </div>
 
       <div v-if="creating" class="pv-toolbar is-second">
@@ -2215,11 +2231,8 @@ watch(
           :value="plan.name"
           @change="renameTo($event.target.value)"
         />
-        <button class="pv-btn is-quiet" :disabled="busy" @click="startCreate">New plan</button>
-        <span class="pv-sep" aria-hidden="true"></span>
-        <button class="pv-btn is-quiet" data-testid="frame-copy" :disabled="busy || !selected" title="Copy this frame (Ctrl+C)" @click="copyFrame">Copy</button>
-        <button class="pv-btn is-quiet" data-testid="frame-paste" :disabled="busy || !clipboard" title="Paste it as a new frame (Ctrl+V)" @click="pasteFrame">Paste</button>
-        <button class="pv-btn is-quiet" :disabled="busy" @click="fork">Copy plan</button>
+        <button class="pv-btn is-quiet" :disabled="busy" title="Start a new, empty plan" @click="startCreate"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>New plan</button>
+        <button class="pv-btn is-quiet" :disabled="busy" title="Make a copy of this plan to try changes on" @click="fork"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8zM5 16V5h11" /></svg>Duplicate plan</button>
         <span class="pv-spacer"></span>
         <!-- The whole plan as a file (step 23). One control each: the button opens a picker nobody would design
              themselves, so the picker is hidden and the button is the product's own. -->
@@ -2230,7 +2243,7 @@ watch(
           title="Download this plan as a CSV sheet, to read or edit in a spreadsheet"
           @click="exportSheet"
         >
-          Export CSV
+          <svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Export CSV
         </button>
         <button
           class="pv-btn is-quiet"
@@ -2239,7 +2252,7 @@ watch(
           title="Replace every moment of this plan from a CSV sheet"
           @click="pickSheet"
         >
-          Import CSV
+          <svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14" /></svg>Import CSV
         </button>
         <input
           ref="sheetFile"
@@ -2249,7 +2262,8 @@ watch(
           data-testid="sheet-file"
           @change="onSheetPicked"
         />
-        <button class="pv-btn is-quiet" :disabled="busy" @click="removePlan">Delete plan</button>
+        <span class="pv-sep" aria-hidden="true"></span>
+        <button class="pv-btn is-quiet is-danger-text" :disabled="busy" title="Delete this plan" @click="removePlan"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>Delete plan</button>
       </div>
       </header>
 
@@ -2278,21 +2292,19 @@ watch(
             {{ playText }}<template v-if="playing"> · playing at {{ speed }}×</template>
           </template>
           <template v-else-if="selectionSpan && selectionSpan.count > 1">
-            {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}<template v-if="props.canEdit"> — drag one to push the stretch.</template>
+            {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}<template v-if="canMove"> — drag one to move them all.</template>
           </template>
-          <template v-else-if="selected">Frame {{ formatOffset(selected.t_s) }} — <template v-if="props.canEdit"><template v-if="dragTargets.length > 1">drag any of the {{ dragTargets.length }} ticked groups; they move together.</template><template v-else>drag a badge to move a group.</template></template><template v-else>where your group is at this moment.</template></template>
+          <template v-else-if="selected">Frame {{ formatOffset(selected.t_s) }} — <template v-if="moveLock && props.canEdit">locked, unlock to drag.</template><template v-else-if="props.canEdit"><template v-if="dragTargets.length > 1">drag any of the {{ dragTargets.length }} ticked groups to move them together.</template><template v-else>drag a badge to move a group.</template></template><template v-else>where your group is at this moment.</template></template>
           <!-- A plan with no moments has nothing on the bar to pick (QA 1 Nov): say what comes first instead. -->
           <template v-else-if="!frames.length">
-            This plan has no moments yet.<template v-if="props.canEdit"> Press Add frame to make the first one (+0:00), then place each group on the map.</template>
+            This plan has no moments yet.<template v-if="props.canEdit"> Press Add frame, then place each group on the map.</template>
           </template>
-          <template v-else>Tap or click a dot on the time bar below to open that moment.</template>
+          <template v-else>Pick a dot on the time bar to open that moment.</template>
         </div>
       </div>
 
       <div class="pv-bar">
         <div class="pv-bar-head">
-          <strong>Time from T+0</strong>
-          <span>{{ frames.length }} frame{{ frames.length === 1 ? '' : 's' }}</span>
           <button
             v-if="frames.length"
             class="pv-btn is-quiet"
@@ -2301,10 +2313,12 @@ watch(
             title="Play the walk: the map moves with the clock"
             @click="playing ? pausePlay() : startPlay()"
           >
+            <svg v-if="playing" class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+            <svg v-else class="pv-ico is-fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14l11-7z" /></svg>
             {{ playing ? 'Pause' : playhead != null ? 'Resume' : 'Play' }}
           </button>
           <button v-if="playhead != null" class="pv-btn is-quiet" data-testid="play-stop" title="Back to editing" @click="stopPlay">
-            Stop
+            <svg class="pv-ico is-fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z" /></svg>Stop
           </button>
           <button
             v-if="frames.length"
@@ -2316,9 +2330,35 @@ watch(
             {{ speed }}×
           </button>
           <span v-if="playhead != null" class="pv-play-clock" data-testid="play-clock">{{ playClock }}</span>
-          <span class="pv-spacer"></span>
-          <button class="pv-btn is-quiet" data-testid="zoom-out" title="Zoom the strip out" @click="zoom(0.5)">−</button>
-          <button class="pv-btn is-quiet" data-testid="zoom-in" title="Zoom the strip in" @click="zoom(2)">+</button>
+          <span class="pv-bar-count">{{ frames.length }} frame{{ frames.length === 1 ? '' : 's' }} · time from T+0</span>
+          <!-- Frame tools sit on the bar they act on; one group, so on a narrow screen it wraps as a whole -->
+          <div class="pv-bar-tools">
+          <template v-if="props.canEdit">
+            <button class="pv-btn is-quiet" data-testid="frame-add" :disabled="busy" title="Add a frame after the open one" @click="addFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add frame</button>
+            <button class="pv-btn is-quiet" data-testid="frame-copy" :disabled="busy || !selected" title="Copy this frame (Ctrl+C)" @click="copyFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8zM5 16V5h11" /></svg>Copy</button>
+            <button class="pv-btn is-quiet" data-testid="frame-paste" :disabled="busy || !clipboard" title="Paste it as a new frame (Ctrl+V)" @click="pasteFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM7 5H5v16h14V5h-2" /></svg>Paste</button>
+            <span class="pv-sep" aria-hidden="true"></span>
+          </template>
+          <button
+            v-if="props.canEdit"
+            class="pv-btn is-quiet pv-lock"
+            :class="{ 'is-locked': moveLock }"
+            data-testid="plan-lock"
+            :aria-pressed="moveLock"
+            :title="moveLock ? 'Unlock to drag frames and groups again' : 'Lock so frames and groups cannot be dragged by accident'"
+            @click="toggleLock"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="10" rx="2" />
+              <path :d="moveLock ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2'" />
+            </svg>
+            {{ moveLock ? 'Locked' : 'Lock' }}
+          </button>
+          <span class="pv-zoom" role="group" aria-label="Zoom the time bar">
+            <button class="pv-btn is-quiet" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom out" @click="zoom(0.5)">−</button>
+            <button class="pv-btn is-quiet" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom in" @click="zoom(2)">+</button>
+          </span>
+          </div>
         </div>
         <div ref="trackEl" class="pv-track">
           <!-- A sweep anywhere on the strip that is not a dot selects the run it touches. -->
@@ -2388,20 +2428,22 @@ watch(
         <div v-if="errorMsg" class="pv-warnings">{{ errorMsg }}</div>
 
         <template v-if="selectionSpan">
+          <section class="pv-sec">
           <h3>{{ selectionSpan.count > 1 ? 'Stretch' : 'Frame' }}</h3>
 
           <!-- Why the open dot is red: the walk it belongs to, and the span that walk covers. -->
           <p v-if="stretchAtSelected.length" class="pv-note" data-testid="frame-stretch">
-            This moment is inside a stretch that cannot be walked:
+            This moment is in a stretch that can't be walked in time:
             <template v-for="(s, i) in stretchAtSelected" :key="s.groupId + i"><strong>{{ groupName(s.groupId) }}</strong>, {{ formatOffset(s.from_t_s) }} → {{ formatOffset(s.to_t_s) }}<template v-if="i < stretchAtSelected.length - 1">; </template></template>.
           </p>
 
           <!-- One frame: its time and its note. Several: the span they cover, and nothing to type into. -->
           <p v-if="selectionSpan.count > 1" class="pv-note" data-testid="selection-span">
             {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}.
-            They move together; nothing outside them moves.
+            They move together.
           </p>
           <template v-else-if="selected">
+            <div class="pv-field-row">
             <div class="pv-field">
               <label for="pv-frame-time">Time from T+0</label>
               <input
@@ -2409,7 +2451,7 @@ watch(
                 class="pv-input"
                 :value="formatOffset(selected.t_s)"
                 :disabled="!props.canEdit || isCutFrame(selected)"
-                :title="isCutFrame(selected) ? 'A copy starts at this instant; its start cannot move.' : ''"
+                :title="isCutFrame(selected) ? 'A copy starts here, so this frame cannot move.' : ''"
                 @blur="setFrameTime(selected.id, $event.target.value, $event.target)"
                 @keyup.enter="$event.target.blur()"
               />
@@ -2426,31 +2468,37 @@ watch(
                 @keyup.enter="$event.target.blur()"
               />
             </div>
+            </div>
             <!-- The copy's starting frame: the one moment the board will not let the plan be written before. -->
             <p v-if="isCutFrame(selected)" class="pv-note pv-cut-note" data-testid="frame-cut-note">
-              This copy starts here, at {{ formatOffset(selected.t_s) }}. Everyone is anchored where the walk already
-              had them; the moments before this one stay on the plan it was copied from.
+              This copy starts here, at {{ formatOffset(selected.t_s) }}. Earlier moments stay on the original plan.
             </p>
           </template>
 
           <!-- The push controls act on the selection, so there is one set of them whether one frame or six. -->
-          <div v-if="props.canEdit" class="pv-stack">
-            <button class="pv-btn" data-testid="push-60" :disabled="busy" @click="push(60)">Push +1m</button>
-            <button class="pv-btn" data-testid="push-300" :disabled="busy" @click="push(300)">+5m</button>
-            <button class="pv-btn" data-testid="push-minus-60" :disabled="busy" @click="push(-60)">−1m</button>
+          <div v-if="props.canEdit" class="pv-act">
+            <span class="pv-act-label">Shift time</span>
+            <div class="pv-stack">
+              <button class="pv-btn" data-testid="push-minus-60" :disabled="busy" title="1 minute earlier" @click="push(-60)">−1m</button>
+              <button class="pv-btn" data-testid="push-60" :disabled="busy" title="1 minute later" @click="push(60)">+1m</button>
+              <button class="pv-btn" data-testid="push-300" :disabled="busy" title="5 minutes later" @click="push(300)">+5m</button>
+            </div>
+          </div>
+          <div v-if="props.canEdit && selectionSpan.count === 1" class="pv-act">
             <button
-              v-if="selectionSpan.count === 1"
-              class="pv-btn is-danger"
+              class="pv-btn is-quiet is-danger-text pv-act-delete"
               data-testid="frame-delete"
               :disabled="busy || isCutFrame(selected)"
-              :title="isCutFrame(selected) ? 'A copy cannot lose the moment it starts at.' : ''"
+              :title="isCutFrame(selected) ? 'A copy starts here, so this frame cannot be deleted.' : ''"
               @click="removeFrame"
             >
-              Delete frame
+              <svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>Delete frame
             </button>
           </div>
+          </section>
 
           <template v-if="selectionSpan.count === 1 && selected">
+            <section class="pv-sec">
             <h3>{{ props.onlyGroupId ? 'Your group' : 'Groups here' }}</h3>
             <div class="pv-groups">
               <div v-for="group in shownGroups" :key="group.id" class="pv-group-item">
@@ -2512,7 +2560,7 @@ watch(
                     :class="{ 'is-on': isOffSite(selected, group.id) }"
                     :disabled="busy || !framePosition(selected, group.id)"
                     :aria-pressed="isOffSite(selected, group.id)"
-                    title="Not on the map at this moment — no rule measures a walk to it"
+                    title="Not on the map at this moment, so no walk is checked"
                     @click="setGroupState(group.id, 'off_site')"
                   >
                     off site
@@ -2553,27 +2601,31 @@ watch(
             <template v-if="props.canEdit">
               <p class="pv-note" data-testid="drag-target">
                 <template v-if="dragTargets.length > 1">
-                  Drag any of {{ dragLabel }}: they move together, by the same distance.
+                  Drag any of {{ dragLabel }} to move them together.
                 </template>
                 <template v-else-if="dragTargets.length === 1">
-                  Drag {{ dragLabel }} to move it — tick more groups to move them together.
+                  Drag {{ dragLabel }} to move it. Tick more groups to move them together.
                 </template>
-                <template v-else>Drag a badge to move that group; tick two or more to move them together.</template>
+                <template v-else>Drag a badge to move that group. Tick two or more to move them together.</template>
               </p>
-
+            </template>
+            </section>
+            <template v-if="props.canEdit">
+              <section class="pv-sec">
               <!-- Hold: state these groups again, here, at a later moment. One row of durations, the same shape as
                    the push controls above, because it is the same kind of edit: one call, one sentence back. -->
               <h3>Hold</h3>
               <p class="pv-note" data-testid="hold-target">
                 <template v-if="standingTargets.length">
-                  Keep {{ standingLabel }} where {{ standingTargets.length > 1 ? 'they stand' : 'it stands' }} — say so again
-                  later, so the next move happens after that moment instead of now.
+                  Keep {{ standingLabel }} in place for longer, so the next move starts later.
                 </template>
                 <template v-else>Tick a group that stands at this frame to hold it.</template>
               </p>
+              <div class="pv-act">
+              <span class="pv-act-label">Hold for</span>
               <div class="pv-stack">
                 <button class="pv-btn" data-testid="hold-60" :disabled="busy || !standingTargets.length" @click="hold(60)">
-                  Hold +1m
+                  +1m
                 </button>
                 <button class="pv-btn" data-testid="hold-300" :disabled="busy || !standingTargets.length" @click="hold(300)">
                   +5m
@@ -2582,13 +2634,15 @@ watch(
                   +10m
                 </button>
               </div>
+              </div>
+              </section>
             </template>
           </template>
 
           <!-- Flags: the same two sets the selection model keeps, applied to a position. The state buttons act on the
                open frame, because "off site" is a statement about one moment; the confirmation buttons act on the
                whole selected stretch in one call, which is why they can name more than one frame. -->
-          <template v-if="props.canEdit && selected">
+          <section v-if="props.canEdit && selected" class="pv-sec">
             <h3>Flags</h3>
             <p class="pv-note" data-testid="flag-target">
               <template v-if="standingTargets.length">Acting on {{ standingLabel }}.</template>
@@ -2638,15 +2692,13 @@ watch(
                 </button>
               </div>
             </div>
-          </template>
+          </section>
         </template>
 
         <template v-else-if="!frames.length">
           <h3>No moments yet</h3>
           <p class="pv-note" data-testid="plan-no-frames">
-            A plan is a strip of moments on one clock. At each one you say where every group is, and the app works out
-            the walk in between.<template v-if="props.canEdit"> Start with the first moment at +0:00, then use Place on
-            map for each group.</template>
+            At each moment you set where every group is, and the app works out the walk in between.<template v-if="props.canEdit"> Add the first frame, then place each group on the map.</template>
           </p>
           <div v-if="props.canEdit" class="pv-stack">
             <button class="pv-btn is-primary" data-testid="frame-add-first" :disabled="busy" @click="addFrame">
@@ -2657,7 +2709,7 @@ watch(
         <template v-else>
           <h3>Nothing selected</h3>
           <p class="pv-note">
-            Tap or click a dot on the time bar to open that moment.<template v-if="props.canEdit"> Add a frame to place everyone somewhere new.</template>
+            Pick a dot on the time bar to open that moment.<template v-if="props.canEdit"> Add a frame to move everyone somewhere new.</template>
           </p>
         </template>
 
@@ -2673,7 +2725,7 @@ watch(
               class="pv-btn is-quiet pv-gap-fill"
               data-testid="gap-fill"
               :disabled="busy || !plan"
-              :title="`Add the frames that space ${gapGroups(gap).length > 1 ? 'these groups' : groupName(gap.groupId)} out, in one go`"
+              :title="`Add frames to give ${gapGroups(gap).length > 1 ? 'these groups' : groupName(gap.groupId)} enough time`"
               @click="fillGap(gap)"
             >
               Fill
@@ -2700,7 +2752,7 @@ watch(
         </div>
 
         <p v-if="props.canEdit" class="pv-note">
-          Ctrl+C / V copy and paste a frame. Ctrl+Z / Y undo and redo. Shift+click two dots to select a stretch.
+          Ctrl+C / V: copy and paste a frame. Ctrl+Z / Y: undo and redo. Shift+click two dots to select a stretch.
         </p>
         <p class="pv-note" style="margin-top: auto">
           {{ formatOffset(0) }} is the start of the run.

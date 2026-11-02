@@ -51,8 +51,10 @@ export function areaStyle(value, { dimmed = false } = {}) {
 
 // Leaflet tooltips take HTML. The name is user-typed, so it is escaped by the caller
 // (utils/people.js) -- this only adds the colour.
+// A zone's label is just its name, in the label's own light text on its dark pill: coloured text (a dark green or
+// orange name on the dark pill) could not be read, and the outline already shows the zone's colour.
 export function areaTooltipHtml(value, escapedName) {
-  return '<span style="font-weight:600;color:' + areaColour(value) + '">' + escapedName + '</span>'
+  return '<span>' + escapedName + '</span>'
 }
 
 export function isValidAreaName(name) {

@@ -156,7 +156,7 @@ E = [
     ("event_roles", 11.70, 1.25, 3.85, "event", "per event", [
         ("PK FK", "event_id",   "uuid",        "-> events.id"),
         ("PK FK", "user_id",    "uuid",        "-> profiles.id"),
-        ("PK",    "role",       "text",        "root/planner/marshal"),
+        ("PK",    "role",       "text",        "root/planner/participant"),
         ("",      "created_at", "timestamptz", "default now()"),
     ], "PK spans all 3 columns, so roles are additive - plus one root per event."),
 
@@ -185,7 +185,7 @@ E = [
         ("",   "lat",         "double precision", "required"),
         ("",   "lng",         "double precision", "required"),
         ("",   "accuracy",    "real",             "nullable"),
-        ("",   "source",      "text",             "gps | marshal | stop"),
+        ("",   "source",      "text",             "gps | stop"),
         ("",   "recorded_at", "timestamptz",      "default now()"),
     ], "Never updated, never deleted on a schedule - one new row per reading."),
 ]

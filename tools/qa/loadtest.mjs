@@ -14,7 +14,7 @@
 //              request the phone's background tracker sends -- walking their group's planned route from the show
 //              matrix, with GPS noise (sigma 6 m), accuracy 5-25 m, and one reading in fifty thrown 150 m off.
 //   map (8%)   members who open the Map tab: latest_locations, and the locations INSERT channel.
-//   staff (3)  root, planner, marshal: plan_ops every 5 s (PlanOps POLL_MS), plan_log_list, the locations channel.
+//   staff (2)  root, planner: plan_ops every 5 s (PlanOps POLL_MS), plan_log_list, the locations channel.
 //
 // People arrive over RAMP_S (the gates open), and the planners push back mid-show, the way NDP does:
 //   +360 s  "the whole event slips": frame_shift +5 min from now, publish        -> every phone re-reads
@@ -288,7 +288,7 @@ async function planners() {
 // ---------- run ----------
 let active = 0
 const staffIds = {}
-for (const who of ['root', 'planner', 'marshal']) {
+for (const who of ['root', 'planner']) {
   const sess = staffCache[who]
   staffIds[who] = sess.user.id
   sessions[sess.user.id] = { access_token: sess.access_token, refresh_token: sess.refresh_token }

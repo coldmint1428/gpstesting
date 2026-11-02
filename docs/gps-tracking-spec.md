@@ -9,7 +9,7 @@ Status as of 2026-10-08. Source of truth for migrating into the team repo / new 
 
 - Users sign up (email + password + username), create or join **events**, and are put into **groups**.
 - Each group has one or more **ICs** (in-charge). Only ICs share GPS.
-- Viewers see a **live map**: root / planners / marshals see every group; everyone else sees only their own group.
+- Viewers see a **live map**: root / planners see every group; everyone else sees only their own group.
 - **Browser:** shares while the page is open (`navigator.geolocation`).
 - **Phone app (Capacitor + Transistorsoft):** shares in the background — locked, in another app, or swiped away from Recents.
 - Phone uploads use a **tracking pass** (not the login token), so tracking runs for hours without the 1-hour login expiry.
@@ -91,7 +91,7 @@ Vite reads `.env` only at start/build → restart `npm run dev`, redeploy Vercel
 |---|---|---|---|---|
 | event_id | uuid | no | – | FK → `events(id)` CASCADE |
 | user_id | uuid | no | – | FK → `profiles(id)` CASCADE |
-| role | text | no | – | `root` \| `planner` \| `marshal` \| `participant` |
+| role | text | no | – | `root` \| `planner` \| `participant` |
 | created_at | timestamptz | no | `now()` | |
 
 PK `(event_id, user_id, role)` · unique index `event_roles_one_root (event_id) WHERE role='root'` · index `(user_id)`.
@@ -129,7 +129,7 @@ PK `(group_id, user_id)` · UNIQUE `(event_id, user_id)` (max one group per pers
 | lat | double precision | no | – | decimal degrees (SG ≈ 1.2–1.5) |
 | lng | double precision | no | – | decimal degrees (SG ≈ 103.6–104.1) |
 | accuracy | real | yes | – | metres |
-| source | text | no | `'gps'` | `gps` \| `marshal` \| `stop` (`stop` = pressed Stop sharing) |
+| source | text | no | `'gps'` | `gps` \| `stop` (`stop` = pressed Stop sharing) |
 | recorded_at | timestamptz | no | `now()` | time on the phone when taken |
 
 Indexes: `(event_id, recorded_at DESC)`, `(event_id, user_id, recorded_at DESC)`.
@@ -202,7 +202,7 @@ All 7 tables have RLS **enabled**. Policies (all `TO authenticated`):
 | groups | members see groups | SELECT | `is_event_member(event_id)` |
 | group_members | members see group members | SELECT | `is_event_member(event_id)` |
 | locations | ICs insert own group locations | INSERT | `user_id = auth.uid() AND is_ic_of(event_id, group_id)` |
-| locations | see locations by role | SELECT | `has_event_role(event_id, ['root','planner','marshal']) OR group_id = my_group_id(event_id)` |
+| locations | see locations by role | SELECT | `has_event_role(event_id, ['root','planner']) OR group_id = my_group_id(event_id)` |
 
 All other writes go through the functions in §7. Helper functions are `SECURITY DEFINER` + `SET search_path = ''` to avoid RLS recursion.
 
@@ -234,7 +234,7 @@ All `SECURITY DEFINER`, `SET search_path = ''`. `EXECUTE` revoked from `public`/
 | `add_member_by_username(p_event_id, p_username, p_group_id uuid default null)` | root/planner, or admin of `p_group_id` | uuid | adds participant (+ group); checks group ∈ event |
 | `assign_group(p_event_id, p_user_id, p_group_id)` | root/planner: any; group admin: add someone without a group to own group / remove from own group | void | `p_group_id = null` removes; resets admin/IC |
 | `set_group_flags(p_group_id, p_user_id, p_is_admin, p_is_ic)` | root/planner: both; group admin: IC only | void | |
-| `set_event_role(p_event_id, p_user_id, p_role, p_enabled)` | root only | void | role ∈ planner, marshal |
+| `set_event_role(p_event_id, p_user_id, p_role, p_enabled)` | root only | void | role = planner |
 | `remove_member(p_event_id, p_user_id)` | root/planner, or self (leave) | void | root can't be removed |
 | `latest_locations(p_event_id uuid)` | authenticated (**SECURITY INVOKER** → RLS applies) | table(user_id, group_id, lat, lng, accuracy, source, recorded_at) | newest row per user |
 
@@ -274,9 +274,8 @@ Since 007, `start_tracking_pass` also refuses when the event isn't live, and `re
 
 | Role | Scope | Stored in | Can |
 |---|---|---|---|
-| Root | event (exactly 1) | `event_roles` | everything; make planners/marshals; can't be removed |
+| Root | event (exactly 1) | `event_roles` | everything; make planners; can't be removed |
 | Planner | event | `event_roles` | create groups, add by username, assign groups, set admin/IC; sees all groups |
-| Marshal | event | `event_roles` | sees all groups (manual marks = future, `source='marshal'`) |
 | Participant ("User") | event | `event_roles` | sees own group |
 | Group admin | group | `group_members.is_admin` | add/remove people in own group, set IC |
 | IC | group | `group_members.is_ic` | **only role that can share GPS** |
@@ -414,7 +413,7 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveM
 
 - Trigger `locations_zone_update` (after insert on `locations`): finds the session the reading belongs to (by `recorded_at`); skips a late reading if a newer one of that person exists; `stop` closes every open stay; else finds the zones within min(accuracy, 15 m) of the point (PostGIS `ST_DWithin`), opens a stay at the first inside reading (and a `zone_alerts` row if the zone is `no_go`, one per entry), resets a blip, and closes a stay after 2 readings in a row outside (exited_at = the first of them); then refreshes `group_positions`. Errors are caught and logged as warnings – the reading is always stored.
 - `group_positions` (one row per group per session): accuracy-weighted midpoint of the ICs' newest readings (≤ 2 min old, ≤ 100 m), average speed from each IC's reading 30–90 s earlier, ICs sharing, last seen.
-- RLS: presence and group positions like `locations` (root / planner / marshal everything, others their group); alerts to ops roles and the IC concerned. All three published to Realtime (presence changes only on enter / blip / exit).
+- RLS: presence and group positions like `locations` (root / planner everything, others their group); alerts to ops roles and the IC concerned. All three published to Realtime (presence changes only on enter / blip / exit).
 - Client: `composables/useZoneActivity.js` (event page) loads + subscribes; `LiveMap` gets `zoneStays`, `zoneCounts`, `noGoOccupied`, `groupPositions`.
 
 ### 12.4 Simulator (merger Stage 3, 15 Oct)
@@ -437,7 +436,7 @@ Files: `components/LiveMap.vue`, `composables/useLiveLocations.js`, `utils/liveM
 - Tables (027): `movement_status` (PK session + movement + group; `state` waiting / active / done; `status` pending, on_track, at_risk, late, no_signal, arrived, arrived_late, missed, skipped; `cand_status` for the two-look rule; `planned_deadline`, `deadline`, `eta`, `spare_s`, `late_s`, `leave_by`, `remaining_m`, `speed_mps`, `basis` route / straight / inside, `moving_since`, `ics_inside / required / sharing / no_signal`, `arrived_at`, `handled_by`, `acked_status`, `snoozed_until`, `updated_at`), `movement_routes` (OneMap path per movement + group; no RLS policy: only `ops_board` hands routes out), `group_messages` (Realtime; the group's members and ops roles read), `event_roles.sector`.
 - Engine `move_step(session, now)` (pg_cron `gps-move-tick`, 5 s, via `move_tick`; needs the show of Stage 6): rows from `rs_moves`; per group the earliest unfinished movement is active. Deadline: cue start = when the cue is due (`due_at`; for a started cue `least(started, when the cue before ended)`), cue end = projected / real end, or the fixed time; minus `early_s`. Per IC (group members with `is_ic`): newest reading of the session, open presence in the zone, distance (`move_dist`: inside 0, < 50 m straight, within 50 m of the route along it, else straight × 1.3 / 1.4 / 1 in simulations), progress from the IC's earliest reading 50–90 s before. ETA k-th fastest (k = `min_ics` or ICs heard in 2 min), rounded up to 5 s. Arrived at the k-th (entered + `dwell_s`). Two looks must agree before a status changes (arrived, arrived late, missed and the first look apply at once).
 - Routes: `gps-route-eta` (30 s) posts to the Edge Function `route-eta` only when `route_due()`; the function claims up to 20 (`route_claim`), calls OneMap routing (`walk` / `drive`, polyline precision 5, else 6) and saves (`route_save`); an error is saved too (the straight line is used).
-- Ops view reads `ops_board(session, since)` every 4 s (full read first, then rows changed since the last read with a 10 s overlap; full read every minute and when the version changes). Buttons: `ops_handle`, `ops_ack`, `ops_snooze`, `message_group`, `show_keep_holding`; `set_marshal_sector` (Members). Client: `composables/useOps.js`, `useGroupMessages.js`, `utils/opsStatus.js`, `components/OpsSummary.vue`, `OpsQueue.vue`, `OpsDecision.vue`, `CueChips.vue`; `LiveMap` gets `opsActive` and `opsVisible` (clusters below zoom 16, rings + route lines).
+- Ops view reads `ops_board(session, since)` every 4 s (full read first, then rows changed since the last read with a 10 s overlap; full read every minute and when the version changes). Buttons: `ops_handle`, `ops_ack`, `ops_snooze`, `message_group`, `show_keep_holding`. Client: `composables/useOps.js`, `useGroupMessages.js`, `utils/opsStatus.js`, `components/OpsSummary.vue`, `OpsQueue.vue`, `OpsDecision.vue`, `CueChips.vue`; `LiveMap` gets `opsActive` and `opsVisible` (clusters below zoom 16, rings + route lines).
 - Simulation: `sim_follow_plan` (called by `move_step` in simulation events) gives a virtual group with an active movement a new leg from where it stands to the zone's middle at the movement's pace, leaving 60 s before its leave by (`late_2min` +120 s); `wrong_zone` groups are left alone. `sim_plan_movements(event, sheet, cue)` adds one movement per virtual group to a Draft. **Retired in step 24 (060):** `sim_follow_plan` is called by `sim_tick` and aims each group at its next on-site plan moment, `sim_plan_movements` is gone, and `move_step`/`move_tick` no longer exist.
 
 ### 12.6 IC phone: next move and pushes (merger Stage 8, 18 Oct)

@@ -9,7 +9,7 @@ import BottomSheet from '../components/BottomSheet.vue'
 import { isNativeApp } from '../lib/platform'
 import { useLocationTracker } from '../composables/useLocationTracker'
 import { formatDayTime } from '../utils/time'
-import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
+import { ROLE_LABEL, topRole, viewRole } from '../utils/permissions'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import ExpandTransition from '../components/ExpandTransition.vue'
 import KVenueMap from '../components/kinetic/KVenueMap.vue'
@@ -69,9 +69,9 @@ async function joinEvent() {
   }
 }
 
-// "NDP Rehearsal · Planner": my role in each event (a member who is marshal or IC shows as that)
+// "NDP Rehearsal · Planner": my role in each event (a member who is IC shows as that)
 function roleLabel(ev) {
-  return ROLE_LABEL[viewRole({ role: topRole(ev), is_ic: ev.isIC, is_marshal: isMarshal(ev) })]
+  return ROLE_LABEL[viewRole({ role: topRole(ev), is_ic: ev.isIC })]
 }
 
 onMounted(loadEvents)
@@ -189,7 +189,7 @@ function roleChip(ev) {
   return label === 'Root' ? 'rl-root' : label === 'Planner' ? 'rl-planner' : label === 'IC' || label === 'In-Charge' ? 'rl-ic' : 'chip-soft'
 }
 
-const ROLE_TONE = { Root: 'pv-role-root', Planner: 'pv-role-planner', Marshal: 'pv-role-marshal' }
+const ROLE_TONE = { Root: 'pv-role-root', Planner: 'pv-role-planner' }
 function roleTone(label) {
   return ROLE_TONE[label] || 'pv-role-member'
 }

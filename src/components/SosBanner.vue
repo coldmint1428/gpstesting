@@ -2,7 +2,7 @@
 // SosBanner - the event's active SOSs, on every page of the event (038_sos.sql).
 //   My own SOS : that it was sent, whether my location is being sent, who is on the way, and "I'm safe".
 //   Others'    : who needs help and where, "Show on map", "I'm on my way", and "Mark handled" for the people who may
-//                end it (root, planners, marshals, and an IC or admin of the person's group).
+//                end it (root, planners, and an IC or admin of the person's group).
 // It only shows things and emits what was pressed; the event page (EventView.vue) calls the database.
 import { computed } from 'vue'
 import { timeAgo } from '../utils/people'
@@ -12,7 +12,7 @@ const props = defineProps({
   mine: { type: Object, default: null }, // useSos().mine
   gps: { type: String, default: 'waiting' }, // useSos().gps
   me: { type: Object, default: null },
-  canEndAny: { type: Boolean, default: false }, // root, planner or marshal
+  canEndAny: { type: Boolean, default: false }, // root or planner
   now: { type: Number, required: true },
   busy: { type: Boolean, default: false },
 })

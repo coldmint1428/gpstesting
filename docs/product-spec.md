@@ -23,9 +23,6 @@ where the bottlenecks are, whether physical or time-based.
   - Users, admins and ICs all see their own timeline and location, where to where, at what time.
 - One person can hold several roles at once (planner, IC, admin). Everything is event-scoped; no
   cross-event mixing. IC in event A, planner in event B.
-- Let's add a Marshal role: positioned at checkpoints or sit with spectators, marking group
-  locations manually (drag and drop if GPS fails). They are the fallback for tracking. Small
-  feature but useful.
 - No other roles for now.
 
 ## Joining
@@ -77,21 +74,17 @@ where the bottlenecks are, whether physical or time-based.
 ## Live
 
 - Planners see actual movements in real time, e.g. during rehearsals.
-- Position sources are IC GPS and marshal marks.
+- The position source is IC GPS.
 - Multiple ICs per group are allowed. The group's position is the weighted midpoint of them, so
   one faulty device doesn't drag the rest.
-  - Marshal marks (if needed) take highest priority, and can hand tracking back to IC at their
-    judgement once the IC's GPS is working again (marshal can still see their IC's GPS). The
-    handoff is logged.
-  - Marshals can also indicate when a group has reached a checkpoint by a specified time.
 
 ## Comparison
 
 - Comparison happens only when a planned state is hit. The diff is temporal: arrival versus the
   planned time.
-- Whether a state was hit is defined by a human (the marshal), not by automation. The app may help
-  by flagging when a group appears to be within the checkpoint, a suggestion, confirmed by the
-  marshal.
+- Whether a state was hit is defined by a human (the IC or a planner), not by automation. The app may
+  help by flagging when a group appears to be within the checkpoint, a suggestion, confirmed by a
+  person.
 - Outcomes: hit on time, hit late (with delta), missed, or not yet. A state past its planned time
   with no mark is visibly outstanding by default.
 - The comparison is evaluated against the plan version in force at that moment, never the current

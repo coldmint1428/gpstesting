@@ -14,10 +14,10 @@ exception when others then
   return sqlerrm;
 end $$;
 
--- R root, M marshal; group G: A (IC), B, C; group H: D; O is in another event
+-- R root, M (no group); group G: A (IC), B, C; group H: D; O is in another event
 insert into auth.users (id, email, raw_user_meta_data) values
   ('38000000-0000-0000-0000-000000000001', 'so-r@example.test', '{"username":"so_r","display_name":"So Root"}'),
-  ('38000000-0000-0000-0000-000000000002', 'so-m@example.test', '{"username":"so_m","display_name":"So Marshal"}'),
+  ('38000000-0000-0000-0000-000000000002', 'so-m@example.test', '{"username":"so_m","display_name":"So Em"}'),
   ('38000000-0000-0000-0000-000000000003', 'so-a@example.test', '{"username":"so_a","display_name":"So Ic"}'),
   ('38000000-0000-0000-0000-000000000004', 'so-b@example.test', '{"username":"so_b","display_name":"So Bee"}'),
   ('38000000-0000-0000-0000-000000000005', 'so-c@example.test', '{"username":"so_c","display_name":"So Cee"}'),
@@ -29,7 +29,6 @@ insert into public.events (id, name, created_by) values
 insert into public.event_roles (event_id, user_id, role) values
   ('38000000-0000-0000-0000-0000000000e1', '38000000-0000-0000-0000-000000000001', 'root'),
   ('38000000-0000-0000-0000-0000000000e1', '38000000-0000-0000-0000-000000000002', 'participant'),
-  ('38000000-0000-0000-0000-0000000000e1', '38000000-0000-0000-0000-000000000002', 'marshal'),
   ('38000000-0000-0000-0000-0000000000e1', '38000000-0000-0000-0000-000000000003', 'participant'),
   ('38000000-0000-0000-0000-0000000000e1', '38000000-0000-0000-0000-000000000004', 'participant'),
   ('38000000-0000-0000-0000-0000000000e1', '38000000-0000-0000-0000-000000000005', 'participant'),
@@ -139,7 +138,7 @@ begin
     raise exception 'FAIL 3c: helped with an ended SOS';
   end if;
 
-  -- 4. After it ends a new SOS can be sent; the sender ends it themselves: safe. A marshal can end anyone's.
+  -- 4. After it ends a new SOS can be sent; the sender ends it themselves: safe. The root can end anyone's.
   perform pg_temp.zz_as('38000000-0000-0000-0000-000000000004');
   v_again := public.raise_sos('38000000-0000-0000-0000-0000000000e1', null, null, null, null);
   if v_again = v_id or (select lat from public.sos_alerts where id = v_again) is not null then
@@ -151,10 +150,10 @@ begin
   end if;
   perform pg_temp.zz_as('38000000-0000-0000-0000-000000000006');
   v_again := public.raise_sos('38000000-0000-0000-0000-0000000000e1', 1.3, 103.8, 20, null);
-  perform pg_temp.zz_as('38000000-0000-0000-0000-000000000002');
+  perform pg_temp.zz_as('38000000-0000-0000-0000-000000000001');
   perform public.resolve_sos(v_again);
   if (select resolution from public.sos_alerts where id = v_again) is distinct from 'handled' then
-    raise exception 'FAIL 4c: a marshal could not end an SOS';
+    raise exception 'FAIL 4c: the root could not end an SOS';
   end if;
 end $$;
 

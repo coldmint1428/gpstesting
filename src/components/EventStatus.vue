@@ -265,7 +265,7 @@ async function startNow() {
     title: 'Start the event now?',
     message:
       what +
-      'ICs can share their location from now, and ICs who are not sharing get a reminder on their phone.' +
+      'ICs can start sharing their location, and those not sharing get a reminder.' +
       (scheduledEnd.value ? ' It still ends at ' + formatDayTime(scheduledEnd.value) + '.' : ''),
     confirmText: 'Start event',
   })
@@ -287,8 +287,7 @@ async function endNow() {
     title: 'End the event now?',
     message:
       (scheduledEnd.value ? 'It ends now instead of at ' + formatTime(scheduledEnd.value) + '. ' : '') +
-      "Everyone's location sharing stops. To continue later, press Start event again (a new recording). " +
-      'This recording stays in Playback for 7 days.',
+      "Everyone's sharing stops. The recording stays in Playback for 7 days.",
     confirmText: 'End event now',
     danger: true,
     requireText: 'END', // ending stops everyone's sharing: a typed word, so a stray click can't do it
@@ -326,7 +325,7 @@ function remind() {
       result && result.sent
         ? 'Reminder sent to ' + result.sent + (result.sent === 1 ? ' phone.' : ' phones.')
         : {
-            text: 'No phone to remind: the ICs not sharing have no app with notifications on, or were reminded in the last minute.',
+            text: 'No one to remind: those ICs have notifications off, or were reminded in the last minute.',
             type: 'warning',
           },
   )

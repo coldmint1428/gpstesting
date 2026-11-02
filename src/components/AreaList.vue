@@ -208,7 +208,7 @@ function paste() {
                   :disabled="Boolean(blocked(row.area.id))"
                   :aria-pressed="Boolean(row.area.locked)"
                   :aria-label="(row.area.locked ? 'Unlock ' : 'Lock ') + row.area.name"
-                  :title="row.area.locked ? 'Locked: it cannot be moved or edited. Press to unlock.' : 'Lock it where it is, so it cannot be dragged by accident'"
+                  :title="row.area.locked ? 'Locked: it cannot be moved or edited. Press to unlock.' : 'Lock it so it cannot be moved by accident'"
                   :data-testid="'area-lock-' + row.area.name"
                   @click.stop="toggleLock(row.area)"
                 >

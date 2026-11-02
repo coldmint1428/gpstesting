@@ -28,7 +28,7 @@ const QUICK = [
   { key: 'resume', label: 'All clear: resume', urgent: false, body: 'All clear. Go to your next position now: check your next moment in the app.' },
   { key: 'rain', label: 'Wet weather plan', urgent: false, body: 'The wet weather plan is now in effect. Your next moment in the app is updated.' },
   { key: 'late', label: 'Running late', urgent: false, body: 'The event is running about 5 minutes late. Your times in the app are updated.' },
-  { key: 'evacuate', label: 'Evacuate', urgent: true, body: 'Evacuate now: walk calmly to DISPERSAL and follow the marshals.' },
+  { key: 'evacuate', label: 'Evacuate', urgent: true, body: 'Evacuate now: walk calmly to DISPERSAL and follow your IC.' },
 ]
 
 const open = ref(false)

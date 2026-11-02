@@ -525,11 +525,6 @@ html.native-app .next-move .btn-outline-success {
   color: var(--ink);
   box-shadow: var(--outline);
 }
-.pv-role-marshal {
-  background: var(--peach);
-  color: var(--ink);
-  box-shadow: var(--outline);
-}
 .pv-role-member {
   background: var(--soft);
   color: var(--ink);

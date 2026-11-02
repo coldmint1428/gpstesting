@@ -35,7 +35,7 @@ export async function findPersonByEmail(email) {
 
 // Step 4 of the wizard: save everything in ONE transaction (030_event_wizard.sql). Returns the event id.
 // event   : { name, description, venue, starts_at, ends_at }   (ISO times)
-// members : [{ user_id, role }]                                 (participant | planner | marshal)
+// members : [{ user_id, role }]                                 (participant | planner)
 // groups  : [{ name, colour, members: [{ user_id, is_admin, is_ic }] }]
 export async function createEventWithSetup({ event, members, groups }) {
   const { data, error } = await db().rpc('create_event_with_setup', {

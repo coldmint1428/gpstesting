@@ -127,9 +127,8 @@ that cannot account for one stops with a sentence rather than tidying it away.
 
 | Role | Can do |
 |---|---|
-| Root | Creator. Everything, incl. making planners / marshals. Cannot be removed. |
+| Root | Creator. Everything, incl. making planners. Cannot be removed. |
 | Planner | Create groups, add people by username, assign groups, make group admins / ICs. Sees every group. |
-| Marshal | Sees every group (manual position marking comes later). |
 | Group admin | Add / remove people in their own group, promote ICs. |
 | IC | The device that shares GPS for its group. Only ICs can send locations. |
 | Participant (spec: "User") | Sees their own group on the map. |
@@ -349,8 +348,8 @@ The member's schedule has a bench of its own, because a timetable is judged agai
 bench's T+0 is often still ahead. `dev/checks/step16-schedule-prep.sql` rebuilds one event, one live plan whose T+0
 is fifteen minutes in the past, and a session whose five moments carry arrived, not required, late, missed and
 pending — then `dev/checks/step16-schedule.mjs` reads them as a plain member (the planner's board, then the member's
-schedule, then a marshal's timetable). Three sessions are needed: `.tmp/session.json` (testuser1),
-`.tmp/session3.json` (testuser3, Sound) and `.tmp/session5.json` (testuser5, marshal); the check names the mint
+schedule). Two sessions are needed: `.tmp/session.json` (testuser1) and
+`.tmp/session3.json` (testuser3, Sound); the check names the mint
 command if one is missing, and the prep file if the bench is stale.
 
 A copy taken mid-walk has a bench of its own too, for the same reason: it is about a clock that is already running.
@@ -489,10 +488,9 @@ an **off-site** moment is not a place either. A frame that only carries a group 
 place. The schedule prints it between the state word and the detail, so a row reads `7:40 · due · Main Gate`.
 `dev/checks/step26-place.sql` proves the column at the database (twelve assertions, including that the route point
 really stands in no zone and that the stage point really stands in two zones before the tie-break is asked), and its
-two bites are recorded in the plan document; `dev/checks/step26-place.mjs` proves it on the screen for a member and a
-marshal, and asserts the page still makes no request for the plan's frames. `dev/checks/step16-schedule-prep.sql`
-gained three zones so the fixture has somewhere for a moment to be. Screenshots: `shots/step26-member-place.png`,
-`shots/step26-marshal-place.png`.
+two bites are recorded in the plan document; `dev/checks/step26-place.mjs` proves it on the screen for a member, and
+asserts the page still makes no request for the plan's frames. `dev/checks/step16-schedule-prep.sql`
+gained three zones so the fixture has somewhere for a moment to be. Screenshot: `shots/step26-member-place.png`.
 
 A moment also closes itself when the IC's **phone is close enough**, not only when it is inside the polygon the point
 was drawn in. The radius is the IC's own: `group_members.ic_tolerance_m` (5–100 m, default 30) lives on the membership
@@ -530,7 +528,7 @@ side by side on the ops board). Screenshots: `shots/step28-here.png`, `shots/ste
 `shots/step28-ops.png`.
 
 A follower also has a map of their own walk now. The Map tab is `PlanRoute` for everyone the plan board is not for (a
-member, an IC, a group admin, a marshal); root and planner keep the zone editor there. It draws the venue's zones from
+member, an IC, a group admin); root and planner keep the zone editor there. It draws the venue's zones from
 `event_zones` with the Live map's own colours, then one dashed line per group in the group's colour through the moments
 that group **stated** — an off-site moment breaks the line rather than being drawn through, and a carried frame does not
 break it — a dot on each of those moments labelled with its clock time and its place, the moment the clock is on ringed,
@@ -563,10 +561,10 @@ a `v-show`n page from asking behind the one on screen) is `src/composables/usePl
 composable**, so `PlanRoute` no longer owns its own copy of the poll, and step 29's 51 assertions re-run unmodified are the
 proof that the move changed nothing a follower can see. The camera frames the people and the walk **together** (capped at
 zoom 20, with one refit when the walk arrives): framing the people alone left an 80 m walk a smudge in a 1.5 km viewport.
-`dev/checks/step30-planline-prep.sql` is step 29's bench plus a GPS reading 25 m off each group's line and a marshal;
-`dev/checks/step30-planline.mjs` proves the screen (55 assertions over seven tabs: staff with the board's row on the same
+`dev/checks/step30-planline-prep.sql` is step 29's bench plus a GPS reading 25 m off each group's line;
+`dev/checks/step30-planline.mjs` proves the screen (over six tabs: staff with the board's row on the same
 moment the bold leg starts from, the toggle off and on, Sound's member and Gate Crew's IC on the same address each seeing
-only their own line, a marshal seeing both, and the two empty benches with no line and no checkbox), and
+only their own line, and the two empty benches with no line and no checkbox), and
 `npm run test:walk` (26 assertions) proves the geometry and the clock without a browser — including four mutated copies of
 `planWalk.js`, imported one at a time, each of which must turn its named case red. Screenshots:
 `shots/step30-planline-staff.png`, `shots/step30-planline-sound.png`.

@@ -22,7 +22,7 @@ import { useZoneActivity } from '../composables/useZoneActivity'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
 import { formatDayTime, formatTimeSeconds } from '../utils/time'
 import { groupRoleLabel } from '../utils/people'
-import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, isMarshal, viewRole, canView, pageMode } from '../utils/permissions'
+import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, viewRole, canView, pageMode } from '../utils/permissions'
 import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, updateEventDetails, deleteEvent } from '../services/memberService'
 import { isNativeApp } from '../lib/platform'
 import PeoplePanel from '../components/PeoplePanel.vue'
@@ -54,6 +54,7 @@ import { useSos } from '../composables/useSos'
 import PhoneTabBar from '../components/PhoneTabBar.vue'
 import BottomSheet from '../components/BottomSheet.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
+import EmptyState from '../components/EmptyState.vue'
 import { providePageReady } from '../composables/usePageReady'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -337,7 +338,7 @@ function openPage(key) {
 // My membership as the permission map wants it, from the member list (kept up to date by Realtime)
 const membership = computed(() =>
   me.value
-    ? { role: topRole(me.value), group_id: me.value.groupId, is_admin: me.value.isAdmin, is_ic: me.value.isIC, is_marshal: isMarshal(me.value) }
+    ? { role: topRole(me.value), group_id: me.value.groupId, is_admin: me.value.isAdmin, is_ic: me.value.isIC }
     : null,
 )
 const role = computed(() => viewRole(membership.value)) // root | planner | admin | ic | member
@@ -518,8 +519,7 @@ const PAGE_INFO = computed(() => ({
     modeOf('timeline') === 'edit'
       ? {
           hint: 'The plan board',
-          about: "The plan: each group's moments on one clock and where it must be by when. Pick a plan when you " +
-            'start the event.',
+          about: 'Where each group must be, and when. Pick a plan when you start the event.',
         }
       : {
           hint: 'Where to be and when',
@@ -528,10 +528,9 @@ const PAGE_INFO = computed(() => ({
   map: canManage.value
     ? {
         hint: 'Areas, doors, No-Go',
-        about: 'The places groups must reach (formations, holding areas, doors) and No-Go areas. Each gets a code the ' +
-          'plan uses, and everyone sees them on the live map.',
+        about: 'The places groups must reach, and No-Go zones. Everyone sees them on the live map.',
       }
-    : { hint: 'Your route', about: "Where your group walks on the plan, and when it is due at each place." },
+    : { hint: 'Your route', about: 'Where your group goes, and when it is due at each place.' },
   rehearsals: {
     hint: modeOf('rehearsals') === 'edit' ? 'Schedule and calendar' : 'When to practise',
     about: modeOf('rehearsals') === 'edit' ? 'Schedule rehearsals. Everyone in the event sees them on this calendar.' : 'When the event’s rehearsals are.',
@@ -543,7 +542,7 @@ const PAGE_INFO = computed(() => ({
   },
   groups: ownGroupOnly.value
     ? { hint: 'Who is in your group', about: 'Your group and who is in it.' }
-    : { hint: 'Groups and their ICs', about: "The event's groups and who is in each. A group's IC shares its location." },
+    : { hint: 'Groups and their ICs', about: "The event's groups and their members. Each group's IC shares its location." },
   live: {
     hint: planSession.value ? 'The plan is running' : isLive.value ? 'Live now' : 'Where everyone is',
     badge: isLive.value ? 'LIVE' : '',
@@ -551,12 +550,12 @@ const PAGE_INFO = computed(() => ({
     about: viewText.value,
   },
   playback: { hint: 'Replay a session', about: 'Replay a past session of this event, or export it.' },
-  simulator: { hint: 'Virtual groups', about: 'Virtual groups that the server moves, to test zones, alerts and the plan at scale.' },
+  simulator: { hint: 'Virtual groups', about: 'Virtual groups that move on their own, for testing zones, alerts and plans.' },
   attendance: {
     hint: 'Roll calls',
     badge: showAttendanceBanner.value ? 'OPEN' : '',
     badgeLive: true,
-    about: 'Take attendance by group. The IC ticks who is there, or everyone scans a QR code on the IC’s screen.',
+    about: 'Take attendance by group: the IC ticks people off, or everyone scans the IC’s QR code.',
   },
 }))
 const pages = computed(() => visiblePages.value.map((key) => ({ key, label: pageLabel(key), ...PAGE_INFO.value[key] })))
@@ -643,16 +642,18 @@ watch(
       const kids = [...main.children]
       const head = main.querySelector(':scope > .ev-page-head')
       const from = head ? kids.indexOf(head) : 0
-      kids.slice(from).forEach((el, i) => {
+      kids.slice(from).forEach((el) => {
         if (!el.getClientRects().length) return // a page hidden by v-show
         el.animate(
           // The phone app fades only: its tab bar, sheets and button are fixed to the screen inside this section,
           // and moving their parent would carry them along for a moment.
-          native ? [{ opacity: 0 }, { opacity: 1 }] : [
-            { opacity: 0, transform: 'translateY(8px)' },
+          // It starts already mostly visible and with no delay, so a busy moment never leaves the new page blank
+          // (the old page gone, the address changed, and nothing to see until the animation caught up).
+          native ? [{ opacity: 0.6 }, { opacity: 1 }] : [
+            { opacity: 0.6, transform: 'translateY(6px)' },
             { opacity: 1, transform: 'none' },
           ],
-          { duration: 220, delay: Math.min(i, 3) * 30, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: 'backwards' },
+          { duration: 180, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
         )
       })
     })
@@ -716,12 +717,13 @@ async function removeEvent() {
 </script>
 
 <template>
-  <SkeletonLoader v-if="loading || (event && !pageReady)" variant="event" label="Loading the event…" />
-  <div v-if="!loading && !event" class="container py-3">
-    <div class="alert alert-danger" role="alert">
-      {{ errorMsg || 'Event not found.' }}
-      <div class="mt-2"><RouterLink to="/events">Back to my events</RouterLink></div>
-    </div>
+  <SkeletonLoader v-if="loading || (event && !pageReady)" variant="event" :page="native && tab === 'map' ? 'live' : tab" :status="showStatusCard" label="Loading the event…" />
+  <div v-if="!loading && !event" class="ev-missing">
+    <EmptyState tone="danger" icon="alert" title="Can't open this event" :text="errorMsg || 'Event not found.'" data-testid="event-error">
+      <template #actions>
+        <RouterLink to="/events" class="btn btn-primary">Back to my events</RouterLink>
+      </template>
+    </EmptyState>
   </div>
 
   <!-- Built while the skeleton shows (so every panel can fetch its data), shown in one go when all of it is in -->
@@ -734,7 +736,7 @@ async function removeEvent() {
       <div class="pv-head-text">
         <h1 class="pv-title" data-testid="event-name">{{ event.name }}</h1>
         <p class="pv-sub" data-testid="event-role-badge">
-          {{ ROLE_LABEL[topRole(me)] || 'Member' }}<template v-if="isMarshal(me)"> · Marshal</template><template v-if="myGroup"> · {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</template>
+          {{ ROLE_LABEL[topRole(me)] || 'Member' }}<template v-if="myGroup"> · {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</template>
         </p>
       </div>
       <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">Live</span>
@@ -779,10 +781,10 @@ async function removeEvent() {
         </ul>
         <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
         <div class="ks-me k-you">
-          <span>You</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" /></svg>
+          <span class="k-you-label">You</span>
           <div class="k-you-pills">
             <span class="chip" :class="topRole(me) === 'root' ? 'rl-root' : topRole(me) === 'planner' ? 'rl-planner' : 'chip-soft'" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
-            <span v-if="isMarshal(me)" class="chip chip-soft" data-testid="event-marshal-badge">Marshal</span>
             <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
           </div>
         </div>
@@ -795,7 +797,7 @@ async function removeEvent() {
           :mine="sos.mine.value"
           :gps="sos.gps.value"
           :me="me"
-          :can-end-any="canManage || isMarshal(me)"
+          :can-end-any="canManage"
           :now="live.now.value"
           :busy="sos.busy.value"
           @help="onSosHelp"
@@ -1047,8 +1049,8 @@ async function removeEvent() {
         />
 
         <!-- Timeline: the plan board for the people who draw it, and the timetable for the people who follow it
-             (step 16). Root and planner get the strip, the map and the inspector; a member, an IC, a group admin or a
-             marshal gets the map and list of where to be, from the one read that is already scoped to them (052). -->
+             (step 16). Root and planner get the strip, the map and the inspector; a member, an IC or a group admin gets
+             the map and list of where to be, from the one read that is already scoped to them (052). -->
         <template v-if="tab === 'timeline'">
           <PlanBoard
             v-if="modeOf('timeline') === 'edit'"

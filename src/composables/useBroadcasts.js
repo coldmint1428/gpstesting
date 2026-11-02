@@ -13,7 +13,7 @@ export const AUDIENCES = [
   { value: 'everyone', label: 'Everyone in the event' },
   { value: 'groups', label: "Every group's members" },
   { value: 'ics', label: 'ICs and group admins' },
-  { value: 'staff', label: 'Planners and marshals' },
+  { value: 'staff', label: 'Root and planners' },
   { value: 'sector', label: 'One sector…' },
   { value: 'category', label: 'One category…' },
 ]

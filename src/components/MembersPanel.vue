@@ -1,10 +1,10 @@
 <script setup>
 // The event's Groups page: a card per group with its summary (people, ICs, admins, details); a card opens the
 // group in full (?group=<id>, or ?group=none for people without a group). Which controls appear depends on MY role:
-//   Root / planner : create groups, rename / recolour them, group details, assign groups, marshal sectors
+//   Root / planner : create groups, rename / recolour them, group details, assign groups
 //   Group admin    : put people in / take them out of their own group, IC for its members
-// IC and marshal switches follow the People page's rules (src/utils/permissions.js).
-//   Everyone else  : read-only. ICs, marshals and members go straight to their own group, with no list of groups
+// The IC switch follows the People page's rules (src/utils/permissions.js).
+//   Everyone else  : read-only. ICs and members go straight to their own group, with no list of groups
 //                    (onlyGroupId)
 // Adding people, roles, IC and removing people from the event are on the People page (PeoplePanel.vue).
 // The database checks every action again (see 002_users_events_groups.sql).
@@ -12,9 +12,10 @@ import { ref, computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { initials } from '../utils/people'
-import { ROLE_LABEL, topRole, isMarshal, canSetIC, canSetMarshal } from '../utils/permissions'
-import { setGroupIC, setMarshal } from '../services/memberService'
+import { ROLE_LABEL, topRole, canSetIC } from '../utils/permissions'
+import { setGroupIC } from '../services/memberService'
 import BenchAlert from './BenchAlert.vue'
+import EmptyState from './EmptyState.vue'
 import { askConfirm, toast } from '../composables/useNotify'
 import { nextGroupColour, textOn } from '../utils/groupColours'
 
@@ -112,7 +113,7 @@ async function addToOpenGroup() {
   }
 }
 
-// ---------- IC and marshal on / off (031): the same calls as the People page ----------
+// ---------- IC on / off (031): the same calls as the People page ----------
 async function toggleIC(m, box) {
   const isIC = box.checked
   const name = groupNameOf(m.groupId)
@@ -124,18 +125,6 @@ async function toggleIC(m, box) {
     errorMsg.value = message
     box.checked = !isIC
   } else toast(m.display_name + (isIC ? ' is now an IC of ' : ' is no longer an IC of ') + name + '.', 'success', 3000)
-  emit('changed')
-}
-async function toggleMarshal(m, box) {
-  const on = box.checked
-  errorMsg.value = ''
-  busy.value = true
-  const message = await setMarshal(props.eventId, m.id, on)
-  busy.value = false
-  if (message) {
-    errorMsg.value = message
-    box.checked = !on
-  } else toast(m.display_name + (on ? ' is now a marshal.' : ' is no longer a marshal.'), 'success', 3000)
   emit('changed')
 }
 
@@ -285,16 +274,6 @@ function assignGroup(member, groupId) {
 }
 
 
-// A marshal's sector (merger Stage 7): the ops view opens filtered to it
-const sectorChoices = computed(() => [...new Set(props.groups.map((g) => g.sector).filter(Boolean))].sort())
-async function setSector(member, value) {
-  if ((value || '') === (member.sector || '')) return
-  if (await run('set_marshal_sector', { p_event: props.eventId, p_user: member.id, p_sector: value })) {
-    toast(member.display_name + (value.trim() ? ' now marshals sector ' + value.trim() + '.' : ' now marshals all sectors.'), 'success', 3000)
-  }
-}
-
-
 // Stop an IC's phone sharing remotely (e.g. they forgot after a rehearsal).
 // Cancels their tracking pass: the phone's next upload is refused and the map shows "Stopped sharing".
 async function stopSharing(member) {
@@ -330,14 +309,10 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
   <div class="kp-stack" :aria-busy="busy ? 'true' : null">
     <BenchAlert v-if="errorMsg" data-testid="members-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-    <datalist :id="'sectors-' + eventId">
-      <option v-for="s in sectorChoices" :key="s" :value="s"></option>
-    </datalist>
-
     <!-- ========== One group in full (?group=) ========== -->
     <template v-if="openGroup">
       <div>
-        <RouterLink v-if="!onlyGroupId" :to="{ query: {} }" class="kp-back" data-testid="group-back">‹ All groups</RouterLink>
+        <RouterLink v-if="!onlyGroupId" :to="{ query: {} }" class="kp-back" data-testid="group-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>All groups</RouterLink>
         <!-- Name and colour (root / planner) -->
         <form v-if="editingGroup" class="kp-card" data-testid="group-edit" @submit.prevent="saveGroup">
           <h2 class="kp-label">Name and colour</h2>
@@ -409,7 +384,6 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
               <div class="kp-chips mt-1">
                 <span class="kp-chip" :data-testid="'role-badge-' + m.username">{{ ROLE_LABEL[topRole(m)] }}</span>
                 <span v-if="m.isAdmin && topRole(m) !== 'admin'" class="kp-chip">Group admin</span>
-                <span v-if="isMarshal(m)" class="kp-chip">Marshal</span>
                 <span v-if="m.isIC" class="kp-chip kp-chip-peach">IC</span>
                 <span v-if="sharingStatus[m.id] === true" class="kp-chip kp-chip-mint" data-testid="badge-sharing">Sharing</span>
                 <span v-else-if="sharingStatus[m.id] === false" class="kp-chip kp-chip-warn" :data-testid="'badge-not-sharing-' + m.username">Not sharing</span>
@@ -417,15 +391,11 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
             </div>
 
             <div class="kp-row-actions">
-              <!-- IC (shares GPS) and marshal duties -->
-              <div v-if="canSetIC(me, m) || canSetMarshal(me, m)" class="kp-switches">
+              <!-- IC (shares GPS) -->
+              <div v-if="canSetIC(me, m)" class="kp-switches">
                 <div v-if="canSetIC(me, m)" class="form-check form-switch">
                   <input :id="'gv-ic-' + m.id" class="form-check-input" type="checkbox" :checked="m.isIC" :disabled="busy" :data-testid="'group-ic-toggle-' + m.username" @change="toggleIC(m, $event.target)" />
                   <label class="form-check-label" :for="'gv-ic-' + m.id">IC</label>
-                </div>
-                <div v-if="canSetMarshal(me, m)" class="form-check form-switch">
-                  <input :id="'gv-marshal-' + m.id" class="form-check-input" type="checkbox" :checked="isMarshal(m)" :disabled="busy" :data-testid="'group-marshal-toggle-' + m.username" @change="toggleMarshal(m, $event.target)" />
-                  <label class="form-check-label" :for="'gv-marshal-' + m.id">Marshal</label>
                 </div>
               </div>
 
@@ -438,22 +408,6 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
               <!-- Group admin: add to / remove from own group -->
               <button v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="assignGroup(m, myAdminGroupId)">Add</button>
               <button v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-ghost" :disabled="busy" @click="assignGroup(m, null)">Remove</button>
-
-              <!-- A marshal's sector (root / planners): the ops view opens filtered to it -->
-              <input
-                v-if="canManage && m.roles.includes('marshal')"
-                class="form-control form-control-sm kp-stepped"
-                style="width: 9rem"
-                :value="m.sector || ''"
-                :list="'sectors-' + eventId"
-                maxlength="50"
-                placeholder="All sectors"
-                :disabled="busy"
-                :aria-label="'Sector that ' + m.display_name + ' marshals'"
-                :data-testid="'sector-' + m.username"
-                @change="setSector(m, $event.target.value)"
-              />
-              <span v-else-if="m.roles.includes('marshal') && m.sector" class="small text-muted">Sector: {{ m.sector }}</span>
 
               <button v-if="canStopSharing(m)" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'stop-sharing-' + m.username" @click="stopSharing(m)">Stop sharing</button>
             </div>
@@ -476,8 +430,8 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         </button>
       </div>
 
-      <p v-if="onlyGroupId === 'none'" class="kp-empty" data-testid="no-group">You are not in a group. Ask a planner or a group admin to add you.</p>
-      <p v-else-if="!shownGroups.length" class="kp-empty">No groups yet.</p>
+      <EmptyState v-if="onlyGroupId === 'none'" compact icon="people" title="Not in a group" text="Ask a planner or a group admin to add you." data-testid="no-group" />
+      <EmptyState v-else-if="!shownGroups.length" compact icon="people" title="No groups yet" />
 
       <!-- Group details (root / planner): category, code, sector, headcount -->
       <div v-if="canManage && showDetails && groups.length" class="kp-card" data-testid="group-details">

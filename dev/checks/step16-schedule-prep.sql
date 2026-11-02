@@ -18,10 +18,10 @@
 --
 -- so one screen carries every word the timetable can print. Gate Crew is the other group: arrived, arrived on site,
 -- late, arrived, pending -- present so that "the member sees only Sound" has something it must not show, and so the
--- marshal's read has two rows a moment rather than one.
+-- ops read has two rows a moment rather than one.
 --
 -- testuser3 is a plain member of Sound on purpose: step 16's done-when is about a member, not an IC or an admin.
--- testuser5 is a marshal with no group, so the ops read is proved on the same fixture. testuser1 draws the board.
+-- testuser5 is a second planner (no group), so the ops read is proved on the same fixture. testuser1 draws the board.
 
 begin;
 
@@ -54,7 +54,7 @@ insert into public.groups (id, event_id, name, code, colour, category) values
 insert into public.event_roles (event_id, user_id, role) values
   ('0b000000-0000-4000-8000-000000000e16', 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7', 'root'),
   ('0b000000-0000-4000-8000-000000000e16', 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7', 'planner'),
-  ('0b000000-0000-4000-8000-000000000e16', '00cd023b-0e26-4574-a635-760e782c8029', 'marshal'),
+  ('0b000000-0000-4000-8000-000000000e16', '00cd023b-0e26-4574-a635-760e782c8029', 'planner'),
   -- A participant is an event_roles row as well as a group_members row: is_event_member() reads event_roles, so a
   -- person who is only "in a group" is not a member of the event at all (036's shape, and why the bench fixture
   -- lists participants here too).
