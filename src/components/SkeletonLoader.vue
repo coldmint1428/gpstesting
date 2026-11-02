@@ -8,7 +8,8 @@
 //   variant  rows   a list: a square, two lines of text, a pill on the right (event lists, recordings)
 //            lines  a few lines of text of different widths (notes, small panels)
 //            board  a plan board: a toolbar, then rows (Timeline, Route, Schedule, Ops)
-//            event  a whole event page: the side menu, a heading, cards (EventView while the event loads)
+//            event  a whole event page in its real frame; `page` shapes the body like that page (EventView)
+//            map    a map at `height`, then `rows` lines (route, zone editor)
 //   rows     how many rows or lines to draw
 //   dark     for a dark background (the Join card, the live map's panels)
 defineProps({
@@ -16,6 +17,9 @@ defineProps({
   rows: { type: Number, default: 3 },
   label: { type: String, default: 'Loading…' },
   dark: { type: Boolean, default: false },
+  page: { type: String, default: '' }, // event: which page is loading
+  status: { type: Boolean, default: false }, // event: that page has the status bar on top
+  height: { type: String, default: '60vh' }, // map: the map's height
 })
 
 // Lines of slightly different lengths look like text; equal ones look like a progress bar.
@@ -23,23 +27,53 @@ const widths = ['92%', '78%', '85%', '64%', '88%', '70%']
 </script>
 
 <template>
-  <div class="skeleton-wrap" :class="['sk-' + variant, { 'skeleton-on-dark': dark }]" role="status" aria-live="polite">
+  <div class="skeleton-wrap" :class="['skw-' + variant, { 'skeleton-on-dark': dark }]" role="status" aria-live="polite">
     <span class="visually-hidden">{{ label }}</span>
 
     <template v-if="variant === 'event'">
+      <!-- The event page's own frame: the side menu, the status bar, the title, then a body shaped like the page -->
       <div class="sk-event" aria-hidden="true">
         <div class="sk-event-nav">
-          <span class="skeleton skeleton-line is-title" style="width: 70%"></span>
-          <span v-for="n in 6" :key="n" class="skeleton sk-nav-item"></span>
+          <span v-for="n in 8" :key="n" class="skeleton sk-nav-item"></span>
         </div>
         <div class="sk-event-main">
-          <span class="skeleton skeleton-line is-title" style="width: 40%"></span>
-          <span class="skeleton skeleton-line" style="width: 60%"></span>
-          <div class="sk-cards">
-            <span v-for="n in 3" :key="n" class="skeleton sk-card"></span>
+          <span v-if="status" class="skeleton sk-status"></span>
+          <span class="skeleton sk-head"></span>
+          <div v-if="page === 'overview'" class="sk-overview">
+            <span class="skeleton sk-card is-tall"></span>
+            <span class="skeleton sk-card"></span>
           </div>
-          <span class="skeleton sk-panel"></span>
+          <div v-else-if="page === 'live'" class="sk-live">
+            <span class="skeleton sk-map"></span>
+            <span class="skeleton sk-side"></span>
+          </div>
+          <template v-else-if="page === 'map'">
+            <div class="sk-chips"><span v-for="n in 3" :key="n" class="skeleton sk-chip"></span></div>
+            <span class="skeleton sk-map is-bench"></span>
+          </template>
+          <span v-else-if="page === 'timeline'" class="skeleton sk-board-block"></span>
+          <div v-else-if="page === 'groups'" class="sk-grid">
+            <span v-for="n in 6" :key="n" class="skeleton sk-card is-group"></span>
+          </div>
+          <div v-else class="sk-list-card">
+            <div v-for="n in rows + 2" :key="n" class="sk-row">
+              <span class="skeleton sk-tile"></span>
+              <span class="sk-row-text">
+                <span class="skeleton skeleton-line" :style="{ width: widths[(n + 1) % widths.length] }"></span>
+                <span class="skeleton skeleton-line" style="width: 45%"></span>
+              </span>
+              <span class="skeleton skeleton-pill" style="width: 64px"></span>
+            </div>
+          </div>
         </div>
+      </div>
+    </template>
+
+    <template v-else-if="variant === 'map'">
+      <!-- A map panel: the map at its own height, then a few rows under it -->
+      <div class="sk-mapwrap" aria-hidden="true">
+        <span class="skeleton sk-map" :style="{ height }"></span>
+        <span v-for="n in rows" :key="n" class="skeleton skeleton-line" :style="{ width: widths[(n - 1) % widths.length] }"></span>
       </div>
     </template>
 
@@ -137,53 +171,129 @@ const widths = ['92%', '78%', '85%', '64%', '88%', '70%']
 }
 
 .sk-event {
-  display: flex;
-  gap: 24px;
-  padding: 16px;
-  max-width: 1320px;
-  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: calc(100vh - 73px);
 }
 .sk-event-nav {
-  flex: none;
-  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 14px;
+}
+.sk-nav-item {
+  height: 48px;
+  border-radius: var(--radius-pill, 999px);
+}
+.sk-event-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  max-width: 1320px;
+  padding: 26px 32px 60px;
+}
+.sk-status {
+  height: 56px;
+  border-radius: 20px;
+}
+.sk-head {
+  width: min(240px, 60%);
+  height: 40px;
+  border-radius: 12px;
+}
+.sk-card,
+.sk-map,
+.sk-side,
+.sk-board-block,
+.sk-list-card {
+  border-radius: 22px;
+}
+.sk-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.sk-card {
+  height: 150px;
+}
+.sk-card.is-tall {
+  height: 300px;
+}
+.sk-card.is-group {
+  height: 132px;
+}
+.sk-live {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 16px;
+}
+.sk-map {
+  display: block;
+  height: 600px;
+}
+.sk-map.is-bench {
+  height: 70vh;
+  min-height: 360px;
+}
+.sk-side {
+  height: 600px;
+}
+.sk-chips {
+  display: flex;
+  gap: 8px;
+}
+.sk-chip {
+  width: 132px;
+  height: 40px;
+  border-radius: var(--radius-pill, 999px);
+}
+.sk-board-block {
+  height: 620px;
+}
+.sk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+/* A list page: one white card holding the rows, like the page's own card */
+.sk-list-card {
+  padding: 8px 20px;
+  background: var(--surface, #fff);
+}
+.sk-mapwrap {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.sk-nav-item {
-  height: 34px;
+.sk-mapwrap .sk-map {
+  border-radius: var(--radius-lg, 18px);
 }
-.sk-event-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.sk-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-top: 8px;
-}
-.sk-card {
-  height: 96px;
-  border-radius: var(--radius-lg, 12px);
-}
-.sk-panel {
-  height: 260px;
-  border-radius: var(--radius-lg, 12px);
-}
-/* On a phone the event's menu is a row of tabs along the bottom, so the outline is the content alone. */
+/* On a phone the event's menu is the bar along the bottom, so the outline is the content alone, stacked */
 @media (max-width: 767.98px) {
+  .sk-event {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .sk-event-nav {
     display: none;
   }
-  .sk-cards {
-    grid-template-columns: 1fr 1fr;
+  .sk-event-main {
+    padding: 16px 16px 96px;
   }
-  .sk-cards .sk-card:nth-child(3) {
-    display: none;
+  .sk-overview,
+  .sk-live {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sk-map {
+    height: 60vh;
+    min-height: 320px;
+  }
+  .sk-side {
+    height: 160px;
+  }
+  .sk-board-block {
+    height: 480px;
   }
 }
 </style>

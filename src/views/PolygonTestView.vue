@@ -887,7 +887,7 @@ onUnmounted(() => {
       {{ errorMsg }}
     </BenchAlert>
 
-    <SkeletonLoader v-if="loading" :rows="4" label="Loading the bench…" />
+    <SkeletonLoader v-if="loading" variant="map" height="70vh" :rows="0" label="Loading the map…" />
 
     <AreaBench
       v-else

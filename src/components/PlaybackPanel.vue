@@ -14,6 +14,7 @@ import { formatTime, formatDay, formatDayTime, sgtParts } from '../utils/time'
 import { askConfirm, toast } from '../composables/useNotify'
 import PlaybackPlayer from './PlaybackPlayer.vue'
 import SkeletonLoader from './SkeletonLoader.vue'
+import EmptyState from './EmptyState.vue'
 import { useLoadGate } from '../composables/usePageReady'
 
 const props = defineProps({
@@ -233,6 +234,7 @@ onUnmounted(() => clearInterval(liveTimer))
       :file-name="player.fileName"
       :can-download="!player.fileName"
       :active="active"
+      :event-id="eventId"
       @close="closePlayer"
       @go-live="goLive"
       @download="download(player.item)"
@@ -241,7 +243,7 @@ onUnmounted(() => clearInterval(liveTimer))
     <template v-else>
       <section class="kp-card">
         <SkeletonLoader v-if="loadingList && !items.length" :rows="3" label="Loading recordings…" />
-        <p v-else-if="!items.length" class="kp-empty" data-testid="no-recordings">No recordings yet.</p>
+        <EmptyState v-else-if="!items.length" compact icon="play" title="No recordings yet" text="Each time the event runs, a recording appears here." data-testid="no-recordings" />
 
         <ul class="kp-list" data-testid="recording-list">
           <li v-for="item in items" :key="item.key" class="kp-row" :data-testid="'recording-' + item.kind">
@@ -255,27 +257,29 @@ onUnmounted(() => clearInterval(liveTimer))
                   <template v-if="item.endReason === 'auto'"> · ended automatically</template>
                 </template>
               </span>
-              <span v-if="!item.expired && item.expiresSoon" class="kp-chip kp-chip-warn mt-1">Download to keep</span>
+              <span v-if="!item.expired && item.expiresSoon" class="kp-chip kp-chip-warn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" /></svg>Download to keep</span>
             </div>
             <div class="kp-row-actions">
               <template v-if="!item.expired">
                 <span v-if="busyKey === item.key" class="small text-muted">{{ progress }}</span>
-                <button class="btn btn-sm" :class="item.live ? 'btn-outline-secondary' : 'btn-success'" :disabled="busyKey !== null || item.readings === 0" data-testid="play-recording-btn" @click="play(item)">
-                  {{ item.live ? 'Rewind' : '▶ Play' }}
+                <button class="btn btn-sm kp-btn-icon" :class="item.live ? 'btn-outline-secondary' : 'btn-success'" :disabled="busyKey !== null || item.readings === 0" data-testid="play-recording-btn" @click="play(item)">
+                  <svg v-if="item.live" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17 6 12l5-5M18 17l-5-5 5-5" /></svg>
+                  <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="is-fill"><path d="M7 4.5v15l12-7.5z" /></svg>
+                  {{ item.live ? 'Rewind' : 'Play' }}
                 </button>
-                <button v-if="!item.live" class="btn btn-sm btn-ghost" :disabled="busyKey !== null || item.readings === 0" data-testid="download-csv-btn" @click="download(item)">CSV</button>
+                <button v-if="!item.live" class="btn btn-sm btn-ghost kp-btn-icon" :disabled="busyKey !== null || item.readings === 0" data-testid="download-csv-btn" title="Download this recording as a CSV file" @click="download(item)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>CSV</button>
               </template>
-              <button v-if="!item.live" class="btn btn-sm btn-ghost-danger" :disabled="busyKey !== null" title="Delete this recording" data-testid="delete-recording-btn" @click="remove(item)">Delete</button>
+              <button v-if="!item.live" class="btn btn-sm btn-ghost-danger kp-btn-icon" :disabled="busyKey !== null" title="Delete this recording" data-testid="delete-recording-btn" @click="remove(item)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>Delete</button>
             </div>
           </li>
         </ul>
-        <p class="kp-note mb-0">Recordings stay online for 7 days after the event. Download a CSV to keep one longer.</p>
+        <p class="kp-note mb-0">Recordings are kept for 7 days. Download a CSV to keep one longer.</p>
       </section>
 
       <section class="kp-card">
         <h3 class="kp-title mb-2" style="font-size: 16px">Replay a CSV</h3>
         <input ref="fileInput" type="file" accept=".csv,text/csv" class="form-control" aria-label="CSV file to replay" data-testid="csv-input" @change="openFile" />
-        <p class="kp-note mb-0">It stays on this computer.</p>
+        <p class="kp-note mb-0">The file stays on this device.</p>
       </section>
     </template>
   </div>

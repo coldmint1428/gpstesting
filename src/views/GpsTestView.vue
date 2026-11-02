@@ -160,7 +160,7 @@ function updateMap(lat, lng, accuracy) {
 <template>
   <main class="kp-page kp-page-wide kp-stack">
     <div>
-      <RouterLink :to="{ name: 'event', params: { id } }" class="kp-back">‹ Back to event</RouterLink>
+      <RouterLink :to="{ name: 'event', params: { id } }" class="kp-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>Back to event</RouterLink>
       <div class="kp-head mb-0">
         <h1>My GPS</h1>
         <button v-if="!sharingHere" class="btn btn-success" :disabled="!canShare" data-testid="start-btn" @click="startSharing">Start sharing</button>

@@ -185,7 +185,7 @@ function shiftPlan() {
 }
 
 const FAQ = [
-  ['Who is tracked?', 'Only In-Charges, and only while the event is live. They can stop sharing at any time. Members are never on the map.'],
+  ['Who is tracked?', 'Only In-Charges, and only while the event is live. They can stop at any time. Members are never on the map.'],
   ['How do people join?', 'Share the 6-character event code or the invite link. Planners can also add people by email or CSV.'],
   ['Can I bring my existing run sheet?', 'Yes. Import a CSV and each row becomes a moment on the plan. You can adjust it on the map.'],
   ['What happens after the event?', 'A replay is kept for 7 days. Scrub through it to compare planned and actual routes, or export it as CSV.'],

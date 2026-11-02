@@ -807,21 +807,42 @@ html body .ev-nav-badge-live {
   background: var(--lime);
   color: var(--ink);
 }
+/* Who you are, at the foot of the side menu: a row lined up with the menu's own icons and text rather than a
+   separate floating card. */
 html body .k-you {
   margin-top: auto;
-  padding: 14px;
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  font-size: 13px;
+  padding: 16px 14px 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font: 700 15px var(--font-body);
   color: var(--muted);
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+html body .k-you > svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .k-you-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-left: auto;
+}
+/* The kinetic menu marks the open page with its dark fill alone: the old theme's side bar (motion.css) showed as a
+   stray lime sliver on hover. */
+html body .ev-nav-btn::before {
+  display: none;
 }
 .k-you-pills .chip {
   display: inline-flex;
@@ -909,6 +930,13 @@ html body .ev-chip-sim {
   html body .ev:not(.ev-native) .ev-body {
     display: block;
   }
+  /* Nothing in the event's pages may make the page wider than the phone: one wide row (a long plan name, a row of
+     buttons) made the browser shrink the whole page to fit it, leaving a blank strip down the right and the bottom
+     bar wider than the screen. Clip, not hidden, so sticky headers keep working; the fixed bottom bar is not clipped. */
+  html body .ev:not(.ev-native) .ev-main {
+    max-width: 100vw;
+    overflow-x: clip;
+  }
   html body .ev:not(.ev-native) .ev-main {
     padding: 18px 14px 110px;
   }
@@ -921,7 +949,9 @@ html body .ev-chip-sim {
     left: 10px;
     right: 10px;
     bottom: 10px;
-    z-index: var(--z-bottomnav);
+    /* Above everything inside the page (maps and their overlays go up to 1000, the plan board's hint bar, the
+       playback person card), below sheets (1040+), dialogs and notifications. Same layer as the phone app's tab bar. */
+    z-index: 1030;
     width: auto;
     height: auto;
     padding: 6px;
@@ -1003,6 +1033,9 @@ html body .leaflet-container {
   font-family: var(--font-body);
   background: var(--map-ground);
   border-radius: inherit;
+  /* Leaflet stacks its own layers at z-index 400 to 1000. Kept inside the map, so a map never draws over the page's
+     bars (the phone's bottom bar is 50, the top bar 40) as it scrolls under them. */
+  isolation: isolate;
 }
 html body .leaflet-bar {
   border: 0;
@@ -1038,6 +1071,15 @@ html body .leaflet-tooltip:has(br) {
   width: max-content;
   max-width: min(300px, calc(100vw - 32px));
   overflow-wrap: anywhere;
+}
+/* A zone's name on the map (AreaBench .area-label, LiveMap .zone-label): small and slightly see-through, so the
+   shape underneath still shows when zoomed in. */
+html body .leaflet-tooltip.area-label,
+html body .leaflet-tooltip.zone-label {
+  padding: 2px 7px;
+  font-size: 10px;
+  line-height: 1.35;
+  background: rgba(10, 31, 23, 0.8);
 }
 html body .leaflet-tooltip .text-muted {
   color: rgba(255, 255, 255, 0.72) !important;
@@ -1171,4 +1213,11 @@ html.native-app .pv-logo,
 html.native-app .pv-live-name {
   font-family: var(--font-display);
   letter-spacing: -0.04em;
+}
+
+/* Selected text: lime with dark text everywhere. Without a set text colour, lime text (the open menu item, dark
+   chips) vanished into the lime highlight. */
+html body ::selection {
+  background: var(--lime);
+  color: var(--ink);
 }

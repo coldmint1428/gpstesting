@@ -159,8 +159,7 @@ onBeforeUnmount(() => {
          client ignores. This names both numbers and what the page is showing, and offers the reload. -->
     <div v-if="stale" class="pv-run-warn">
       <span data-testid="plan-stale">
-        This plan was published again while this page was open (version {{ stale.from }} → {{ stale.to }}).
-        What is on screen is version {{ stale.from }}.
+        A newer version of this plan was published (v{{ stale.to }}). You are seeing v{{ stale.from }}.
       </span>
       <button class="pv-btn is-primary" data-testid="plan-reload" :disabled="checking" @click="useFresh">
         Show version {{ stale.to }}

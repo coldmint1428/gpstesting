@@ -42,6 +42,7 @@ import { formatOffset } from '../../utils/planFrames'
 import { planErrorMessage, usePlan } from '../../composables/usePlan'
 import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
+import EmptyState from '../EmptyState.vue'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -469,19 +470,14 @@ watch(
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the schedule…" data-testid="sched-loading" />
 
-      <div v-else-if="!rows.length" class="pv-sched-empty" data-testid="sched-empty">
-        <template v-if="phase === 'none'">
-          No schedule yet.
-        </template>
-        <template v-else-if="!session.planId">
-          This event is running without a plan.
-        </template>
-        <template v-else-if="!whole && !groupName">
-          You are not in a group yet.
-        </template>
-        <template v-else-if="whole">This plan has no moments in it yet.</template>
-        <template v-else>This plan has no moments for {{ groupName }} yet.</template>
-      </div>
+      <EmptyState
+        v-else-if="!rows.length"
+        compact
+        icon="clock"
+        :title="phase === 'none' ? 'No schedule yet' : !session.planId ? 'No plan running' : !whole && !groupName ? 'Not in a group' : 'Nothing planned'"
+        :text="phase === 'none' ? 'The schedule appears once the event starts with a plan.' : !session.planId ? 'This event is running without a plan.' : !whole && !groupName ? 'Ask a planner to add you to a group.' : whole ? 'This plan has no moments yet.' : 'This plan has no moments for ' + groupName + ' yet.'"
+        data-testid="sched-empty"
+      />
 
       <ol v-else class="pv-sched-list">
         <li

@@ -43,6 +43,7 @@ import { formatDuration, formatTime } from '../../utils/time'
 import { formatOffset } from '../../utils/planFrames'
 import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
+import EmptyState from '../EmptyState.vue'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -491,9 +492,7 @@ watch(
       </p>
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the ops board…" data-testid="ops-loading" />
-      <p v-else-if="!groups.length" class="pv-ops-empty" data-testid="ops-empty">
-        This plan has no moments yet.
-      </p>
+      <EmptyState v-else-if="!groups.length" compact icon="plan" title="Nothing planned" text="This plan has no moments yet." data-testid="ops-empty" />
 
       <ul v-else class="pv-ops-list">
         <li

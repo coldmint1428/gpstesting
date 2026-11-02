@@ -31,6 +31,7 @@
 // rules must not exist twice.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
+import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
 import { areaStyle } from '../../utils/areaKinds'
@@ -41,6 +42,7 @@ import { usePlanWalk } from '../../composables/usePlanWalk'
 import { supabase } from '../../lib/supabase'
 import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
+import EmptyState from '../EmptyState.vue'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -245,19 +247,12 @@ function fit() {
   // in the layout, fits it properly.
   const size = map.getSize()
   if (!size.x || !size.y) return
-  const bounds = L.latLngBounds([])
-  if (zoneLayer) {
-    const zoneBounds = zoneLayer.getBounds()
-    if (zoneBounds.isValid()) bounds.extend(zoneBounds)
-  }
-  let hasPoint = false
-  for (const track of tracks.value.values()) {
-    for (const point of track.points) {
-      bounds.extend([point.lat, point.lng])
-      hasPoint = true
-    }
-  }
-  if (!bounds.isValid()) return
+  const points = []
+  for (const track of tracks.value.values()) for (const point of track.points) points.push([point.lat, point.lng])
+  const hasPoint = points.length > 0
+  // The zones, widened only by the walk near them (utils/venueFrame)
+  const bounds = venueBounds(L, zoneLayer ? zoneLayer.getBounds() : null, points)
+  if (!bounds || !bounds.isValid()) return
   // An empty plan with zones is framed on the zones and reframed when the walk arrives; the walk itself is the subject.
   map.fitBounds(bounds.pad(0.25), { animate: false })
   fittedWithPoints = hasPoint
@@ -417,23 +412,16 @@ watch(
         </button>
       </div>
 
-      <SkeletonLoader v-if="!loaded" variant="lines" :rows="4" label="Reading your route…" data-testid="route-loading" />
+      <SkeletonLoader v-if="!loaded" variant="map" height="clamp(340px, 66vh, 780px)" :rows="3" label="Reading your route…" data-testid="route-loading" />
 
-      <div v-else-if="!rows.length" class="pv-route-empty" data-testid="route-empty">
-        <template v-if="phase === 'none'">
-          No route yet.
-        </template>
-        <template v-else-if="!session.planId">
-          This event is running without a plan.
-        </template>
-        <template v-else-if="!whole && !groupName">
-          You are not in a group yet.
-        </template>
-        <template v-else-if="phase === 'live'">
-          This plan has no moments for {{ whole ? 'any group' : groupName }}.
-        </template>
-        <template v-else>This plan has no moments for {{ whole ? 'any group' : groupName }}.</template>
-      </div>
+      <EmptyState
+        v-else-if="!rows.length"
+        compact
+        icon="route"
+        :title="phase === 'none' ? 'No route yet' : !session.planId ? 'No plan running' : !whole && !groupName ? 'Not in a group' : 'Nothing planned'"
+        :text="phase === 'none' ? 'The route appears once the event starts with a plan.' : !session.planId ? 'This event is running without a plan.' : !whole && !groupName ? 'Ask a planner to add you to a group.' : 'This plan has no moments for ' + (whole ? 'any group' : groupName) + '.'"
+        data-testid="route-empty"
+      />
 
       <p v-else-if="!tracks.size || ![...tracks.values()].some((t) => t.points.length)" class="pv-route-note" data-testid="route-nopoints">
         {{ whole ? 'No group has a stated point yet.' : 'Your group has no stated points yet.' }}

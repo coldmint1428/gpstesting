@@ -8,6 +8,7 @@
 // IC (a duty of a member) is switched on the Groups page (MembersPanel.vue); here it is a badge only.
 // An IC's arrival radius (063) stays here, beside the IC it belongs to.
 import { ref, computed, watch } from 'vue'
+import EmptyState from './EmptyState.vue'
 import { initials } from '../utils/people'
 import { ROLE_RANK, ROLE_LABEL, topRole, canManage, assignableRoles, canSetIC, canRemove } from '../utils/permissions'
 import { addEventMember, setMemberRole, setArrivalTolerance, removeEventMember } from '../services/memberService'
@@ -212,7 +213,7 @@ async function changeTolerance(m, input) {
         </div>
       </div>
 
-      <p v-if="!rows.length" class="kp-empty" data-testid="people-empty">No one matches.</p>
+      <EmptyState v-if="!rows.length" compact icon="search" title="No one matches" text="Try another name or filter." data-testid="people-empty" />
       <ul class="kp-list" data-testid="people-list">
         <li v-for="r in rows" :key="r.m.id" class="kp-row" :data-testid="'person-' + r.m.username">
           <span class="kp-av" :style="{ backgroundColor: groupColour(r.m.groupId), color: '#fff' }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>

@@ -15,6 +15,7 @@ import { initials } from '../utils/people'
 import { ROLE_LABEL, topRole, canSetIC } from '../utils/permissions'
 import { setGroupIC } from '../services/memberService'
 import BenchAlert from './BenchAlert.vue'
+import EmptyState from './EmptyState.vue'
 import { askConfirm, toast } from '../composables/useNotify'
 import { nextGroupColour, textOn } from '../utils/groupColours'
 
@@ -311,7 +312,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
     <!-- ========== One group in full (?group=) ========== -->
     <template v-if="openGroup">
       <div>
-        <RouterLink v-if="!onlyGroupId" :to="{ query: {} }" class="kp-back" data-testid="group-back">‹ All groups</RouterLink>
+        <RouterLink v-if="!onlyGroupId" :to="{ query: {} }" class="kp-back" data-testid="group-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>All groups</RouterLink>
         <!-- Name and colour (root / planner) -->
         <form v-if="editingGroup" class="kp-card" data-testid="group-edit" @submit.prevent="saveGroup">
           <h2 class="kp-label">Name and colour</h2>
@@ -429,8 +430,8 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         </button>
       </div>
 
-      <p v-if="onlyGroupId === 'none'" class="kp-empty" data-testid="no-group">You are not in a group. Ask a planner or a group admin to add you.</p>
-      <p v-else-if="!shownGroups.length" class="kp-empty">No groups yet.</p>
+      <EmptyState v-if="onlyGroupId === 'none'" compact icon="people" title="Not in a group" text="Ask a planner or a group admin to add you." data-testid="no-group" />
+      <EmptyState v-else-if="!shownGroups.length" compact icon="people" title="No groups yet" />
 
       <!-- Group details (root / planner): category, code, sector, headcount -->
       <div v-if="canManage && showDetails && groups.length" class="kp-card" data-testid="group-details">
