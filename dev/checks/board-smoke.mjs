@@ -168,11 +168,65 @@ export default {
       `document.querySelector('[data-testid=plan-badge][data-group="g1"]').getBoundingClientRect().left > ${free.x + 20}`,
     )
 
+    // ---------- 8. a colleague's drag is a ghost, drawn where they are taking the badge ----------
+    // The badge itself does not move on this screen while somebody else drags it: it is drawn from the plan, and the
+    // plan has not changed yet. Their drag arrives as a broadcast (usePlanStream) and is drawn as a hollow ghost
+    // beside the ring. Nothing about it can be written -- a ghost is a preview, never a position.
+    const ghostAt = await peer.eval(`__planPreview.at('f1','g1')`)
+    await peer.eval(`__planPreview.draft('f1','g2', ${ghostAt.lat}, ${ghostAt.lng})`)
+    await peer.assertCount('[data-testid=plan-ghost]', 1)
+    // Drawn where it said: the ghost of Sound is aimed at the place Gate Crew's badge stands, and both are 26 px
+    // anchored at their centre -- so two centres in the same place is the map agreeing with the draft.
+    const ghg1 = await peer.rect('[data-testid=plan-badge][data-group="g1"]')
+    const ghg2 = await peer.rect('[data-testid=plan-ghost][data-group="g2"]')
+    await peer.assertThat(
+      'the ghost is drawn where the drag has got to',
+      Math.abs(ghg2.x - ghg1.x) < 4 && Math.abs(ghg2.y - ghg1.y) < 4,
+    )
+    await peer.assertThat(
+      'the name on it comes from the holders read, not from the broadcast',
+      `document.querySelector('[data-testid=plan-ghost][data-group="g2"]').dataset.by === 'Priya'`,
+    )
+    await peer.assertThat(
+      'the badge the ghost is about is still where the plan has it',
+      `Math.abs(document.querySelector('[data-testid=plan-badge][data-group="g2"]').getBoundingClientRect().left - ${heldAfter}) < 3`,
+    )
+    // For the picture: the same ghost a step away from the badge, the way a drag in progress looks (the assertions
+    // above needed it exactly on a badge, because that is a place the check can measure to the pixel).
+    await peer.eval(`__planPreview.draft('f1','g2', ${ghostAt.lat + 0.0006}, ${ghostAt.lng + 0.0012})`)
+    await peer.sleep(150)
+    await peer.shot('shots/step4-draft.png')
+    // A sender letting go takes its ghost away, which is what a gesture's last draft says.
+    await peer.eval(`__planPreview.draft('f1','g2')`)
+    await peer.assertCount('[data-testid=plan-ghost]', 0)
+
+    // ---------- 9. an undo is refused by a badge somebody else holds, and writes nothing ----------
+    // The gesture above is the last command on the stack. Put a colleague's hand on its badge: the inverse asks for
+    // every cell it touches in ONE call before it writes anything (phase 4), so it is refused whole -- the badge does
+    // not move, the sentence is in the strip, and the command is still on the stack for when the badge is free.
+    const beforeUndo = await peer.rect('[data-testid=plan-badge][data-group="g1"]')
+    await peer.eval(`__planPreview.block('f1|g1', 'Priya')`)
+    await peer.press('Control+z')
+    await peer.assertContains('[data-testid=plan-refusal]', 'Undo did not happen: Priya is editing Gate Crew at +0:00')
+    const afterRefusal = await peer.rect('[data-testid=plan-badge][data-group="g1"]')
+    await peer.assertThat(
+      'a refused undo wrote nothing at all',
+      Math.abs(afterRefusal.x - beforeUndo.x) < 3 && Math.abs(afterRefusal.y - beforeUndo.y) < 3,
+    )
+    await peer.eval(`__planPreview.unblock('f1|g1')`)
+    await peer.press('Control+z')
+    await peer.sleep(500)
+    const undone = await peer.rect('[data-testid=plan-badge][data-group="g1"]')
+    await peer.assertThat(
+      'the same key, once the badge is free, is the same undo',
+      Math.abs(undone.x - free.x) < 8,
+    )
+
     await peer.shot('shots/step1-peer.png')
     await peer.assertNoErrors()
     await peer.close()
 
-    // ---------- 8. `?concurrent=0` turns the picture off, not the rule ----------
+    // ---------- 10. `?concurrent=0` turns the picture off, not the rule ----------
     // The flag exists so the new UI can be looked at from the side; it deliberately cannot bring back the old write
     // path (082 refuses a badge map for a frame that already stands). So: no ring and no stack -- and a badge somebody
     // else has is still refused, by the database, with its sentence in the strip.
@@ -183,12 +237,16 @@ export default {
       'with the flag off nobody is marked as editing',
       `document.querySelector('[data-testid=plan-badge][data-group="g2"]').dataset.hold === ''`,
     )
+    // And no ghosts: the live stream is off with the rest of the ownership picture (decision 16).
+    const plainAt = await plain.eval(`__planPreview.at('f1','g1')`)
+    await plain.eval(`__planPreview.draft('f1','g2', ${plainAt.lat}, ${plainAt.lng})`)
+    await plain.assertCount('[data-testid=plan-ghost]', 0)
     await plain.drag('[data-testid=plan-badge][data-group="g2"]', 40, 0)
     await plain.assertContains('[data-testid=plan-refusal]', 'This badge stopped being yours to edit')
     await plain.assertNoErrors()
     await plain.close()
 
-    // ---------- 9. a reload starts again from the fixtures ----------
+    // ---------- 11. a reload starts again from the fixtures ----------
     await left.reload()
     await left.waitFor('.pv-frame')
     await left.assertCount('.pv-frame', 5)
@@ -198,7 +256,7 @@ export default {
       `document.querySelector('.pv-board-head select').selectedOptions[0].textContent.trim().replace(/\\s+/g, ' ').startsWith('Show night — example')`,
     )
 
-    // ---------- 10. a second tab, opened on the same page, selects independently ----------
+    // ---------- 12. a second tab, opened on the same page, selects independently ----------
     const right = await newTab({ label: 'right', url, width: 900, height: 800 })
     await right.waitFor('.pv-frame')
     await right.assertCount('.pv-frame', 5)

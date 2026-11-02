@@ -131,6 +131,50 @@ describe('usePlanLocks', () => {
     expect(rec.doors()).toEqual(['plan_lock_cells', 'frame_unplace_many', 'plan_unlock_cells'])
   })
 
+  it('an undo asks for every cell of BOTH directions in one call, then writes, then lets go once', async () => {
+    // The inverse of a gesture can place some badges and take others away. One hold has to cover all of them, asked
+    // for before the first write -- that is what makes a refusal all-or-nothing (decision 10).
+    const written = await locks.rewrite('p1', [cell('f1', 'g1'), cell('f1', 'g2')], [
+      { frame: 'f1', group: 'g3' },
+    ])
+
+    expect(written).toEqual({ placed: 2, removed: 1 })
+    expect(rec.doors()).toEqual([
+      'plan_lock_cells',
+      'frame_place_many',
+      'frame_unplace_many',
+      'plan_unlock_cells',
+    ])
+    // The grab is one statement about three cells, and the let-go is one statement about the same three.
+    expect(rec.calls[0].args.p_cells).toEqual([
+      cell('f1', 'g1'),
+      cell('f1', 'g2'),
+      { frame: 'f1', group: 'g3' },
+    ])
+    expect(rec.calls[3].args.p_cells).toHaveLength(3)
+  })
+
+  it('an undo refused by a badge being taken away writes nothing at all', async () => {
+    const refusal = Object.assign(new Error('Priya is editing Backstage at +1:00.'), { code: 'PT423' })
+    rec = recorder({
+      plan_lock_cells: () => {
+        throw refusal
+      },
+    })
+    locks = usePlanLocks(rec.call)
+
+    await expect(locks.rewrite('p1', [cell('f1', 'g1')], [{ frame: 'f1', group: 'g3' }])).rejects.toThrow(
+      /Priya is editing Backstage/,
+    )
+    // Not a placement, not a removal, and not a release of a hold it never took.
+    expect(rec.doors()).toEqual(['plan_lock_cells'])
+  })
+
+  it('an undo with nothing to do asks nobody anything', async () => {
+    await expect(locks.rewrite('p1', [], [])).resolves.toEqual({ placed: 0, removed: 0 })
+    expect(rec.doors()).toEqual([])
+  })
+
   it('holds the moment around the write, and lets go even when the write throws', async () => {
     await locks.withMoment('p1', 'f1', async () => 'saved')
     expect(rec.doors()).toEqual(['plan_lock_frame', 'plan_unlock_frame'])

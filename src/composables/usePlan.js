@@ -12,7 +12,9 @@
 import { computed, onScopeDispose, ref } from 'vue'
 import { supabase } from '../lib/supabase'
 import { readTimetable as readTimetableShared, forgetTimetable, staleTimetables } from '../lib/timetableReader'
+import { draftCell } from '../utils/planDraft'
 import { usePlanLocks } from './usePlanLocks'
+import { usePlanStream } from './usePlanStream'
 
 const P409 = 'PT409'
 
@@ -67,6 +69,12 @@ export function usePlan(eventId) {
 
   // Ownership of a badge while it is being written (081, 082). Everything it does is one of the plan_* doors.
   const locks = usePlanLocks(call)
+
+  // Where a badge somebody else is dragging is going, this second (phase 4). A broadcast, never a write: see
+  // usePlanStream for why that is the whole design. The board decides when it is on (the `?concurrent=0` flag turns
+  // it off with the rest of the ownership picture) and who draws it; this composable only owns the socket's lifetime.
+  const stream = usePlanStream()
+  let onDrafts = null // the board's renderer, registered through onDraft()
 
   // Reads of the same rows are queued, one at a time, and each applies before the next starts. Overlapping reads do
   // not have to come back in the order they left: a save's own reload and a background one, or a plan switch against
@@ -326,6 +334,40 @@ export function usePlan(eventId) {
     locks.onLost(fn)
   }
 
+  // ---------- live drafts: where a badge somebody else is dragging is going (phase 4) ----------
+
+  /**
+   * Join this plan's draft channel. The board calls it when a plan opens and stopDrafts() when it leaves, because
+   * whether the stream is wanted is the board's decision -- `?concurrent=0` turns it off with the rest of the
+   * ownership picture. Nothing here reads the database and nothing here writes it: see usePlanStream.
+   */
+  function startDrafts(planId) {
+    stream.start(planId, (rows) => {
+      if (onDrafts) onDrafts(rows)
+    })
+  }
+
+  /** Leave the draft channel (a plan switch, a teardown, or the ownership picture turned off). */
+  function stopDrafts() {
+    stream.stop()
+  }
+
+  /** Publish where a badge is going, for everybody else's screen. `cell` is `{ frame, group }`. */
+  function planDraft(cell, at) {
+    if (!cell) return
+    stream.send(draftCell(cell.frame, cell.group), at)
+  }
+
+  /** A gesture has ended: the ghosts for these badges go now rather than when their two and a half seconds run out. */
+  function clearDrafts(cells) {
+    stream.clear(cells)
+  }
+
+  /** The board's renderer for other planners' drags: `fn(rows)`, a whole list, after every change. */
+  function onDraft(fn) {
+    onDrafts = fn
+  }
+
   /** Take badges off the plan -- the only way a position disappears (082), and a write like any other. */
   async function unplaceCells(frameId, groupIds) {
     if (!plan.value || !frameId) return 0
@@ -337,6 +379,65 @@ export function usePlan(eventId) {
       await loadFrames()
       await loadPlans()
       return removed
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * Put a frame's badges back the way an undo or a redo remembers them (phase 4).
+   *
+   * `target` is a whole `groupId -> { lat, lng, state, verify }` map -- what an inverse command remembers -- while a
+   * write is a per-cell statement (082). So "as it was" is not one payload: it is the cells that DIFFER from what the
+   * frame states at this moment. The ones that moved or appeared are placed; the ones that were taken away are
+   * unplaced. The comparison is against the live frame, not against the command's own other map, because a command
+   * remembers where the frame was and not what somebody else has done to it since -- so a badge taken away in the
+   * meantime comes back, which is what the planner asked for.
+   *
+   * Both directions go through ONE hold (usePlanLocks.rewrite): every cell the inverse touches is asked for in a
+   * single call first, so a badge somebody else is holding refuses the whole undo before a single row is written, and
+   * the command stays on the stack for when it is free.
+   */
+  async function rewriteCells(frameId, target) {
+    const empty = { placed: 0, removed: 0 }
+    if (!plan.value || !frameId) return empty
+    const frame = frames.value.find((f) => f.id === frameId)
+    if (!frame) throw new Error('That frame is no longer in the plan, so there is nothing to put back.')
+    const wanted = target || {}
+    const current = frame.positions || {}
+    const changed = {}
+    for (const [groupId, point] of Object.entries(wanted)) {
+      const was = current[groupId]
+      if (
+        !was ||
+        was.lat !== point.lat ||
+        was.lng !== point.lng ||
+        was.state !== point.state ||
+        was.verify !== point.verify
+      ) {
+        changed[groupId] = point
+      }
+    }
+    const gone = Object.keys(current).filter((groupId) => !(groupId in wanted))
+    const cells = Object.entries(changed).map(([group, at]) => ({
+      frame: frameId,
+      group,
+      lat: at.lat,
+      lng: at.lng,
+      ...(at.state ? { state: at.state } : {}),
+      ...(at.verify ? { verify: at.verify } : {}),
+    }))
+    if (!cells.length && !gone.length) return empty
+    busy.value = true
+    try {
+      const written = await locks.rewrite(
+        plan.value.id,
+        cells,
+        gone.map((group) => ({ frame: frameId, group })),
+      )
+      await loadFrames()
+      await loadPlans()
+      return written
     } finally {
       busy.value = false
     }
@@ -730,6 +831,7 @@ export function usePlan(eventId) {
       document.removeEventListener('visibilitychange', onVisibility)
     }
     locks.dispose()
+    stream.stop()
     clearTimeout(liveTimer)
     clearTimeout(livePauseTimer)
     supabase.removeChannel(liveChannel)
@@ -767,6 +869,12 @@ export function usePlan(eventId) {
     lockHolders,
     releaseAllHolds,
     onHoldLost,
+    rewriteCells,
+    startDrafts,
+    stopDrafts,
+    planDraft,
+    clearDrafts,
+    onDraft,
     moveFrame,
     deleteFrame,
     shiftFrom,

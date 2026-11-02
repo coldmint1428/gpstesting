@@ -173,28 +173,49 @@ export function usePlanLocks(call, opts = {}) {
   }
 
   /**
+   * Write several badges against ONE held breath: `cells` `[{ frame, group, lat, lng, state?, verify? }]` are placed,
+   * `gone` `[{ frame, group }]` are taken away (082's two doors, the shapes they take).
+   *
+   * The hold is asked for ONCE, for every cell of both directions, before anything is written. That is the whole
+   * point of doing it this way: a refusal is all-or-nothing (081), so a badge somebody else is holding stops the work
+   * before the first row rather than half-way through it -- which is what an undo needs, because a command that could
+   * not happen must not happen in part. The placements go first: an interrupted call has the badge back where it
+   * belongs and one row too many, which is nearer the truth than the other order.
+   */
+  async function rewrite(planId, cells, gone, options = {}) {
+    const placing = cells || []
+    const lifting = gone || []
+    const all = [...placing, ...lifting]
+    if (!all.length) return { placed: 0, removed: 0 }
+    await hold(planId, all, options)
+    try {
+      const placed = placing.length
+        ? await call('frame_place_many', { p_plan: planId, p_cells: placing, p_session: session() }, { quiet: true })
+        : 0
+      const removed = lifting.length
+        ? await call('frame_unplace_many', { p_plan: planId, p_cells: lifting, p_session: session() }, { quiet: true })
+        : 0
+      return { placed: placed || 0, removed: removed || 0 }
+    } finally {
+      await letGo(planId, all)
+    }
+  }
+
+  /**
    * Write one badge, or one gesture's badges, against the hold. `cells` is
    * `[{ frame, group, lat, lng, state?, verify? }]` -- 082's list, the same shape the hold takes.
    */
   async function place(planId, cells, options = {}) {
     if (!cells || !cells.length) return 0
-    await hold(planId, cells, options)
-    try {
-      return await call('frame_place_many', { p_plan: planId, p_cells: cells, p_session: session() }, { quiet: true })
-    } finally {
-      await letGo(planId, cells)
-    }
+    const written = await rewrite(planId, cells, [], options)
+    return written.placed
   }
 
   /** Take badges off the plan. The only way a position disappears (082). */
   async function unplace(planId, cells) {
     if (!cells || !cells.length) return 0
-    await hold(planId, cells)
-    try {
-      return await call('frame_unplace_many', { p_plan: planId, p_cells: cells, p_session: session() }, { quiet: true })
-    } finally {
-      await letGo(planId, cells)
-    }
+    const written = await rewrite(planId, [], cells)
+    return written.removed
   }
 
   /**
@@ -284,5 +305,5 @@ export function usePlanLocks(call, opts = {}) {
     moments.clear()
   }
 
-  return { session, hold, letGo, place, unplace, holders, releaseAll, withMoment, onLost, heldCells, dispose }
+  return { session, hold, letGo, place, unplace, rewrite, holders, releaseAll, withMoment, onLost, heldCells, dispose }
 }

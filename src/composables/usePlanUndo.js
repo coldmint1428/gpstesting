@@ -139,33 +139,15 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
    *
    * A badge is written on its own now (082), so "as it was" is not one payload: it is the cells that differ from
    * what the frame states at this moment -- the ones that moved or appeared are placed, the ones that were taken
-   * away are unplaced. The comparison is against the LIVE frame, not against the command's other map, because the
-   * command remembers where the frame was and not what somebody else has done to it since; a cell that has been
-   * taken away in the meantime therefore comes back, which is what the planner asked for.
+   * away are unplaced. That difference is the plan's to work out (usePlan.rewriteCells), and so is the one hold that
+   * covers both directions: every cell the inverse touches is asked for in a single call before anything is written,
+   * so an inverse refused by a badge somebody else is holding writes NOTHING and leaves the command on the stack
+   * (phase 4). Before that it was two calls with a hold each, and a refusal could arrive between them.
    */
   async function writePositions(frameId, positions) {
     const frame = liveFrame(frameId)
     if (!frame) throw missing()
-    const target = positions || {}
-    const current = frame.positions || {}
-    const changed = {}
-    for (const [groupId, point] of Object.entries(target)) {
-      const was = current[groupId]
-      if (
-        !was ||
-        was.lat !== point.lat ||
-        was.lng !== point.lng ||
-        was.state !== point.state ||
-        was.verify !== point.verify
-      ) {
-        changed[groupId] = point
-      }
-    }
-    const gone = Object.keys(current).filter((groupId) => !(groupId in target))
-    // The placements first: an undo interrupted after them has the badge back where it belongs and one row too many,
-    // which is nearer the truth than the other order. (Phase 4 makes this one call with every cell held at once.)
-    if (Object.keys(changed).length) await api.placeCells(frame.id, changed)
-    if (gone.length) await api.unplaceCells(frame.id, gone)
+    await api.rewriteCells(frame.id, positions || {})
   }
 
   async function writeNote(frameId, note) {

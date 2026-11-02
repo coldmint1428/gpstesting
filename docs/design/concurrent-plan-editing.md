@@ -1,6 +1,6 @@
 # Concurrent editing on the plan board
 
-**Status:** phases 1–3 built (081, 082, and the ownership UI). **Branch:** `concurrent-plan-editing`.
+**Status:** phases 1–4 built (081, 082, the ownership UI, live drafts, per-cell undo). **Branch:** `concurrent-plan-editing`.
 
 Two or more planners may edit one plan at the same time. They must not move each other's badges by
 accident, must not lose work to somebody else's save, and must not wait for a network round trip before
@@ -25,7 +25,7 @@ plan applies that doctrine to the plan board, where the unit of contention is sm
 | 8 | Offline | Keep the local move, banner, flush on reconnect. |
 | 9 | Incoming changes | Never applied to a cell I hold. |
 | 10 | Undo | Pre-acquire its cells in one call; refused means nothing happens, the command stays, the holder is named. |
-| 11 | Live drags | Streamed over a public broadcast channel, exactly as the bench's shapes are (see section 6). |
+| 11 | Live drags | Streamed over a public broadcast channel, exactly as the bench's shapes are (see "Live drafts"). |
 | 12 | Presence | A small stack of planners on the board; ring colour comes from it. |
 | 13 | Phase 1 scope | Badge positions only; frame time and structural ops follow. |
 | 14 | 25 m rule | Not enforced on a concurrent write; a violation is painted red by `plan_check`. |
@@ -129,33 +129,64 @@ anything — a ring is a courtesy, and the refusal is the fact.
 **`?concurrent=0`** turns off the rings, the stack and the gesture hold. It cannot turn off the rule: a write still
 goes through the per-cell doors and is still refused by the database.
 
+## Live drafts (phase 4, built)
+
+**A drag is published as a draft, not as a write.** `usePlanStream` joins the public broadcast channel
+`plan-cells-<planId>` and publishes `{ from, cell, seq, patch }` for every badge a gesture is moving: `cell` is
+`frame|group`, `patch` is `{ lat, lng }` and nothing else, `seq` is the sender's own number, and `from` is this page's
+tag — never the lock session (`pageSession.js`), which no message may carry.
+
+**The badge on your screen does not move until they let go.** It is drawn from the plan, and the plan has not changed,
+so their drag is drawn as a hollow ghost on a layer of its own, beside the ring that already says the badge is theirs.
+That pair is the honest picture: *that* is where the plan has the badge, and *this* is where somebody is taking it.
+
+**Nothing a draft says is written, and that is what makes an untrusted channel safe to draw on.** Every commit needs a
+hold the database checks, so a forged draft is a lie about a preview, not about the plan: the worst it can do is draw a
+ghost. `utils/planDraft.js` is the allow-list — two finite numbers inside `point_in_sg()`'s box, which now lives once in
+`utils/geo.js` — and it filters what is sent as well as what is drawn, so the two sides cannot drift apart. The name
+beside a ghost comes from `plan_lock_holders`, never from the message: a name in a broadcast is a name anybody can type.
+
+**Three bounds keep a cosmetic stream from costing anything.** One draft per badge per 50 ms, with the last place always
+sent (a trailing timer, so letting go publishes the place the hand let go at); a per-sender sequence number, so a
+message that arrived late is dropped rather than drawn; and a 2.5 s TTL, after which a ghost goes — that is the crashed
+tab, the closed lid, the socket that died mid-drag. The end of a gesture also publishes `patch: null`, so the ghost goes
+at once instead of waiting the TTL out. A broadcast that cannot be pushed is dropped rather than retried: at twenty a
+second the silent REST fallback would be a request storm, for a hint that is worth nothing once it is late.
+
+Known and accepted: the channel is public. Any authenticated user who knows a plan id can watch drafts and publish fake
+ones. This is the bench's existing posture for its shapes (`useBenchFrames`) and it is recorded here rather than
+discovered later.
+
+## Undo, under one hold (phase 4, built)
+
+Decision 10, literally. A command remembers a whole position map; a write is per cell (082). So `usePlan.rewriteCells`
+works out the difference against the **live** frame — the cells that moved or appeared are placed, the ones that were
+taken away are unplaced — and `usePlanLocks.rewrite` asks for every one of those cells in ONE `plan_lock_cells` call
+before anything is written, writes both directions under that one hold, and lets go.
+
+A refusal therefore happens before the first row: nothing moves, the command **stays on the stack** (so the same key
+works once the badge is free), and the strip says `Undo did not happen: Priya is editing Gate Crew at +1:00`. Before
+this it was `placeCells` and then `unplaceCells` — two calls with a hold each, where a refusal could arrive between
+them, which is an undo that half happened.
+
+The comparison is against the live frame, not against the command's other map, because a command remembers where the
+frame was and not what somebody else has done to it since: a badge taken away in the meantime comes back, which is what
+the planner asked for.
+
 ## Client
 
 | Module | Owns |
 |---|---|
-| `usePlanLocks` | ownership: hold, the 2 s heartbeat, release, release-all, loss detection (`onLost`), take-over, `holders(cell)`. Built |
-| `usePlanDraft` | the optimistic frame store: merge rows, never overwrite a cell I own |
-| `usePlanStream` | draft drags and lock hints on one broadcast channel; drafts render on an overlay |
-| `usePlanQueue` | per-cell serialised writes, coalesce, retries, rollback |
+| `usePlanLocks` | ownership: hold, the 2 s heartbeat, release, release-all, loss detection (`onLost`), take-over, `holders(cell)`, and `rewrite` (both directions under one hold). Built |
+| `usePlanStream` | where a badge somebody else is dragging is going: the public broadcast, its per-badge throttle, its sequence numbers and its TTL. Built |
+| `usePlanDraft` | **not built, and not needed for drafts**: a draft is drawn on an overlay and never merged into `frames`, so a peer's drag cannot become a position on this page before the database says it is one |
+| `usePlanQueue` | **not built**: per-cell serialised writes, coalescing, retries, rollback — decision 7's "retry 3× over ~5 s" is the outstanding half of that decision |
 
-`usePlan.js` changes in two places only: `loadFrames` merges instead of assigning, and a peer event no
-longer triggers a full-board reload. (Phase 2 already added `placeCells` / `unplaceCells` and the moment hold
-in `saveFrame`; the board's own calls at those five sites are the whole of its edit.)
-
-## Live stream
-
-Public broadcast channel `plan-cells-<planId>`, event `draft`, payload
-`{ from, cell, seq, patch }`, where `from` is the **presence tag**, never the session secret. Copied
-from the bench: `self: false`, a 50 ms trailing throttle per cell, per-sender sequence numbers, a
-`canPush()` gate (a broadcast that cannot push silently falls back to REST), and an allow-list patch
-filter.
-
-A received draft is **drawn, never written**. It cannot become a position, because every commit needs a
-lock the database checks. A forged draft is therefore a lie about a preview, not about the plan.
-
-Known and accepted: the channel is not private, so any authenticated user who knows the plan id can
-watch planned positions and send fake drafts. This is the bench's existing posture. It is recorded here
-deliberately rather than discovered later.
+`loadFrames` still assigns rather than merges, and a peer event still reloads the board: with drafts on an overlay there
+is no local picture to protect, and a reload after somebody else's write is the truth arriving rather than a clobber. A
+merge becomes necessary when the write queue lands — a queued write's own picture is what a background read would take
+away. (Phase 2 added `placeCells` / `unplaceCells` and the moment hold in `saveFrame`; phase 4 added `rewriteCells` and
+the five draft calls — `startDrafts`, `stopDrafts`, `planDraft`, `clearDrafts`, `onDraft`.)
 
 ## Refusals and errors
 
@@ -163,8 +194,8 @@ deliberately rather than discovered later.
 |---|---|
 | Grabbed a cell someone else holds | badge does not move; strip: "Priya is editing Gate Crew at +1:00" |
 | Lost the lock mid-drag | snap back to committed; "Error updating location: Priya has this badge" |
-| Save failed after retries | snap back + the same message with the reason (retries are phase 4) |
-| Undo refused | nothing moves; "Undo did not happen: Priya is editing Gate Crew at +1:00" |
+| Save failed | snap back + the same message with the reason (retries are the write queue, not built) |
+| Undo refused | nothing moves (one hold covers both directions, so nothing is written at all); "Undo did not happen: Priya is editing Gate Crew at +1:00"; the command stays on the stack |
 | Publish with someone mid-edit | two-step confirm naming them and their cells (phase 5) |
 
 Refusals use a board-level strip (`data-testid="plan-refusal"`, built in phase 3 rather than the confirm toast, which
@@ -177,7 +208,9 @@ is already used for successful moves and would collide). An undo refusal goes th
 | Frame deleted under a drag | `frame_place` refuses unknown frames. (`frame_save` still re-inserts a frame whose id it is handed — that is 041's restore — so the badge door is the one that refuses, and it is the one a drag uses.) |
 | Reload with locks held | release is best effort; a reclaimed grab may return `mine_elsewhere`; the reloaded page takes it back at once |
 | Crashed tab | steal after 7 s, expiry 12 s |
+| Crashed tab mid-drag | its ghost expires 2.5 s after its last draft; nothing else was ever written |
 | Peer edits another group | merged on apply; my cell untouched |
+| Peer drags a badge I am looking at | a ghost on the overlay; the badge stays where the plan has it until their write lands |
 | Import / delete plan while anyone holds | refused, holders named |
 | Clock skew | never decide "held" from a local timestamp; the server's `expires_at` decides |
 
@@ -193,7 +226,10 @@ is already used for successful moves and would collide). An undo refusal goes th
    idle release with a silent re-acquire, release on up / idle / hidden / unload / plan switch, the refusal strip
    (`plan-refusal`) with snap-back and "Error updating location: …", the ghost ring and the presence stack from
    `plan_lock_holders`, the take-over action for my own other window, badge test ids, and `?concurrent=0`.
-4. **Live drafts and undo** - `usePlanStream`, overlay rendering, per-cell undo with pre-acquire.
+4. **Live drafts and undo** — *done*. `usePlanStream` on `plan-cells-<planId>` (payload, 50 ms per-badge throttle,
+   per-sender sequence numbers, 2.5 s TTL, a let-go message), the ghost overlay drawn from it, `?concurrent=0` turning
+   it off, and per-cell undo with pre-acquire: one `plan_lock_cells` for every cell of both directions, then the two
+   writes, so a refusal writes nothing and the command stays.
 5. **Structural ops** - `083_frame_ops_locks.sql`, publish warning.
 
 ## Verification
@@ -203,14 +239,19 @@ is already used for successful moves and would collide). An undo refusal goes th
 | SQL rules, ownership | `node tools/pgtest.mjs plan-locks` | grab/refuse/steal/expire, all-or-nothing, holders, take-over, cascade, and that `authenticated` can reach the doors but not the tables (116 assertions) |
 | SQL rules, writes | `node tools/pgtest.mjs plan-place` | a write needs a hold; one cell is the only row written and the revision is untouched; a gesture is all or nothing; a new frame still takes its first cells; a stale rev is still PT409 (116 assertions) |
 | Full schema | `npm run test:db` | nothing else regressed (824 assertions) |
-| Unit | `npm run test:unit` | the hold-write-release order, a refusal writing nothing, one release for overlapping writes, the 2 s heartbeat and its stop, a hold the heartbeat says is gone, release-all, presence, take-over, one grab for a write inside a gesture (75 assertions, 17 in that file) |
-| Browser smoke | `npm run check:board` | the board works without logging in; a dragged badge stays where it was put and is let go; a badge a colleague holds is ringed, named, refused and snapped back; 5 s of stillness releases it and the next movement takes it back; `?concurrent=0` hides the picture and not the rule (49 assertions, 4 tabs) |
+| Unit | `npm run test:unit` | the hold-write-release order, a refusal writing nothing, one release for overlapping writes, the 2 s heartbeat and its stop, a hold the heartbeat says is gone, release-all, presence, take-over, one grab for a write inside a gesture, an undo asking for both directions in ONE hold and writing nothing when that hold is refused; the draft channel's join, its push gate, its per-badge throttle with the last place sent, an overtaken draft dropped, a draft from this page dropped, a draft outside the box dropped, a let-go, the TTL, and `stop()`; the allow-list on its own (94 assertions, 20 + 10 + 6 in those three files) |
+| Browser smoke | `npm run check:board` | the board works without logging in; a dragged badge stays where it was put and is let go; a badge a colleague holds is ringed, named, refused and snapped back; 5 s of stillness releases it and the next movement takes it back; a colleague's drag is a ghost drawn where it said, named from the holders read, with the badge itself unmoved, and the ghost goes when they let go; an undo refused by a held badge writes nothing and the same key works once the badge is free; `?concurrent=0` hides the picture (and the stream) and not the rule (60 assertions, 4 tabs) |
 | Two tabs | manual, one identity | streaming and release |
 | e2e | blocked: `.tmp/qa-accounts.json` and seven accounts | two real identities |
 
 PGlite is one connection, so it proves the **rules**, never the **race**. The race — two grabs in the same
 millisecond — is covered by the manual two-profile pass, and by nothing automated. That is stated rather
 than papered over: a script that "proves" arbitration on one connection would be proving a sequence.
+
+The same is true of the draft channel in a different way: the browser harness has no socket, so
+`check:board` drives the fixture's seam (the same rows, through the same renderer) and the unit suite drives
+`usePlanStream` against a fake client. What neither can show is two real browsers on one Realtime channel —
+the manual two-profile pass is the only thing that does, and it is the one piece of phase 4 still owed.
 
 ## Risks
 
@@ -226,7 +267,11 @@ than papered over: a script that "proves" arbitration on one connection would be
 - The 5 s mid-drag release is the product owner's decision and the main source of snap-backs; the
   mitigation is the silent re-acquire, not a change of rule. It is built, and the browser check holds a badge still
   for five seconds to prove it is released and taken back.
-- The broadcast channel is public (section "Live stream").
+- The broadcast channel is public (section "Live drafts"). A forged draft draws a ghost and nothing else: it cannot
+  become a position, because every commit needs a hold the database checks.
+- Retries are not built. Decision 7 said "retry 3× over ~5 s, then roll back"; today a failed write rolls back at
+  once with the reason in the strip. The rollback half is what the product asked for explicitly, and it is the half
+  that is there; the retry half is `usePlanQueue`, unbuilt, and belongs with decision 8's offline flush.
 - **A retime and a badge drag are independent, on purpose.** The first draft of 081 refused a retime while
   another session held a badge in that moment, on the theory that the badge would slide out from under the
   hand. It does not: a badge is a lat/lng, and a clock does not move one. What slides is the frame's tick

@@ -35,7 +35,14 @@ const zones = ref([
 
 let nextId = 1
 function frame(t_s, positions, note) {
-  return { id: `f${nextId++}`, t_s, note: note || null, rev: 1, positions }
+  // A position from the database always carries both flags (046 made them NOT NULL with defaults), and the board's
+  // inverse commands compare whole rows -- so a fixture that left them off would make an undo write badges that had
+  // not changed, which is a dev page that behaves worse than the app.
+  const map = {}
+  for (const [group, at] of Object.entries(positions || {})) {
+    map[group] = { lat: at.lat, lng: at.lng, state: at.state || 'on_site', verify: at.verify || 'auto' }
+  }
+  return { id: `f${nextId++}`, t_s, note: note || null, rev: 1, positions: map }
 }
 
 // A walk from the stage up to backstage in 20 m steps, then one deliberate 90 m jump so the warning styling
@@ -144,15 +151,95 @@ async function releaseAllHolds() {
   mine.clear()
 }
 
+// ---------- where a colleague's drag is going (phase 4) ----------
+//
+// The real stream is a Realtime broadcast (usePlanStream): a page publishes where the badge under its finger is going,
+// twenty times a second, and every other page draws it as a ghost. The fixture has no socket, so it keeps the board's
+// renderer and hands it whatever a check asks a "colleague" to publish -- the same rows, through the same seam the app
+// uses. Nothing here writes anything, which is the point of a draft.
+let draftHandler = null
+const draftRows = new Map()
+
+function startDrafts() {}
+
+function stopDrafts() {
+  draftRows.clear()
+  if (draftHandler) draftHandler([])
+}
+
+function planDraft() {} // this page has no colleague to tell
+
+function clearDrafts() {}
+
+function onDraft(fn) {
+  draftHandler = fn
+}
+
+/**
+ * The real one is 082's two doors under ONE hold (usePlanLocks.rewrite): every cell an inverse touches -- the ones to
+ * place and the ones to take away -- is checked before a single row is written, so a badge somebody else is holding
+ * refuses the whole undo. The fixture checks exactly that, first, and writes nothing at all when it is refused.
+ */
+async function rewriteCells(frameId, target) {
+  const frame = findFrame(frameId)
+  if (!frame) throw new Error('That frame is not in the plan, so there is nothing to put back.')
+  const wanted = target || {}
+  const current = frame.positions || {}
+  const changed = {}
+  for (const [group, at] of Object.entries(wanted)) {
+    const was = current[group]
+    if (!was || was.lat !== at.lat || was.lng !== at.lng || was.state !== at.state || was.verify !== at.verify) {
+      changed[group] = at
+    }
+  }
+  const gone = Object.keys(current).filter((group) => !(group in wanted))
+  for (const group of [...Object.keys(changed), ...gone]) {
+    const blocker = refusals.get(cellKey(frameId, group))
+    if (blocker) throw lockRefusal(`${blocker} is editing ${groupName(group)} at ${clockOf(frameId)}.`)
+  }
+  if (Object.keys(changed).length) await api.placeCells(frameId, changed)
+  if (gone.length) await api.unplaceCells(frameId, gone)
+  return { placed: Object.keys(changed).length, removed: gone.length }
+}
+
 // A seam for the browser checks (dev/checks/board-smoke.mjs): what this page is holding, so a gesture can be watched
 // taking a badge and giving it up without a database. In the app the answer is public.plan_cell_locks, which no page
 // reads directly -- it is the doors that read it -- so this exists only where the doors are faked.
 globalThis.__planPreview = {
   holds: () => ({ mine: [...mine].sort(), refusals: [...refusals.keys()].sort() }),
+  /** Where the fixture has a badge standing, so a check can aim a ghost at a place it can measure on screen. */
+  at: (frameId, groupId) => {
+    const f = findFrame(frameId)
+    const at = f && f.positions ? f.positions[groupId] : null
+    return at ? { lat: at.lat, lng: at.lng } : null
+  },
+  /** A "colleague" dragging a badge: the rows the stream would have delivered. No coordinates means "let go". */
+  draft: (frameId, groupId, lat, lng) => {
+    const key = cellKey(frameId, groupId)
+    if (lat == null || lng == null) draftRows.delete(key)
+    else draftRows.set(key, { cell: key, frame: frameId, group: groupId, lat, lng, from: 'peer-tag' })
+    if (draftHandler) draftHandler([...draftRows.values()])
+  },
+  /** Put a colleague's hand on a badge, or take it off: the refusal case, driven from a check. */
+  block: (key, name) => {
+    refusals.set(key, name || 'Priya')
+  },
+  unblock: (key) => {
+    refusals.delete(key)
+  },
 }
 
 function findFrame(id) {
   return frames.value.find((f) => f.id === id)
+}
+
+/**
+ * The real doors are followed by a read (usePlan's "a write is followed by a read"): `loadFrames` replaces the array,
+ * and that is what makes the board draw the new positions. The fixture's array IS its read, so a nested mutation alone
+ * would leave the markers where the hand put them -- a dev page disagreeing with the app about when a screen redraws.
+ */
+function reread() {
+  frames.value = frames.value.map((frame) => ({ ...frame }))
 }
 
 /** The position that stands at a moment: the last thing the group said at or before it (the database resolves the
@@ -225,6 +312,7 @@ const api = {
       }
       written += 1
     }
+    if (written) reread()
     return written
   },
   // The only way a position disappears (082).
@@ -238,6 +326,7 @@ const api = {
         removed += 1
       }
     }
+    if (removed) reread()
     return removed
   },
   // Ownership (081): the hold a gesture takes, the hold it gives up, who is editing, and the way out of it.
@@ -245,6 +334,15 @@ const api = {
   releaseCells,
   lockHolders,
   releaseAllHolds,
+  // Where a colleague's drag is going (phase 4): in the app a Realtime broadcast, here the board's renderer plus a
+  // seam a check can push a draft through. Nothing in this pair writes anything.
+  startDrafts,
+  stopDrafts,
+  planDraft,
+  clearDrafts,
+  onDraft,
+  // An undo or a redo of a badge map, under one hold for both directions (phase 4).
+  rewriteCells,
   async moveFrame(id, t_s) {
     const target = findFrame(id)
     if (target) {
@@ -295,7 +393,7 @@ const api = {
         frames.value.sort((a, b) => a.t_s - b.t_s)
         created = 1
       }
-      target.positions[id] = { lat: at.lat, lng: at.lng }
+      target.positions[id] = { lat: at.lat, lng: at.lng, state: at.state || 'on_site', verify: at.verify || 'auto' }
       written += 1
     }
     if (existed && written) target.rev += 1

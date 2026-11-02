@@ -858,6 +858,114 @@ if (api.onHoldLost) {
   })
 }
 
+// ---------- where somebody else's drag is going (phase 4) ----------
+
+/**
+ * A colleague's badge does NOT move on this screen while they drag it: it is drawn from the plan, and the plan has not
+ * changed yet. So their drag is drawn as a GHOST, on a layer of its own, at the place they are taking the badge --
+ * beside the ring that already says it is theirs. That pair is the honest picture: this is where the plan has the
+ * badge, and that is where somebody else is taking it.
+ *
+ * The ghost comes from a broadcast (usePlanStream) and is never a position: it cannot be written, and a forged one is
+ * a lie about a preview rather than about the plan (utils/planDraft.js). It goes when the sender says they let go,
+ * when they have not refreshed it for two and a half seconds, or when this page leaves the plan.
+ */
+const drafts = ref([]) // rows from the stream: { cell, frame, group, lat, lng, from }
+let draftLayer = null
+const ghosts = new Map() // cell -> the Leaflet marker drawing it
+
+function draftIcon(groupId) {
+  const group = groups.value.find((g) => g.id === groupId)
+  const color = colorOf.value.get(groupId) || '#0b3d2e'
+  return L.divIcon({
+    className: 'pv-ghost-wrap',
+    html: `<div class="pv-ghost" style="--pv-ghost-colour:${color}">${initials(group ? group.name : '?')}</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
+}
+
+/**
+ * Draw the ghosts of other planners' drags: only the open moment has a map, only a group this page can see has a
+ * badge, and only a badge that is being dragged has a ghost. Everything else about the plan is still drawn from the
+ * plan, which is why a ghost can never be confused with a position.
+ */
+function drawGhosts() {
+  if (!map || !draftLayer) return
+  const frame = selected.value
+  const keep = new Set()
+  if (OWNERSHIP_UI && frame && playhead.value == null) {
+    for (const row of drafts.value) {
+      if (row.frame !== frame.id) continue
+      if (!shownGroups.value.some((group) => group.id === row.group)) continue
+      keep.add(row.cell)
+      let ghost = ghosts.get(row.cell)
+      if (!ghost) {
+        // Under the badges: the plan's own position is the real one, and a ghost must never cover it.
+        ghost = L.marker([row.lat, row.lng], {
+          icon: draftIcon(row.group),
+          interactive: false,
+          keyboard: false,
+          zIndexOffset: -100,
+        }).addTo(draftLayer)
+        ghosts.set(row.cell, ghost)
+      } else {
+        ghost.setLatLng([row.lat, row.lng])
+      }
+      // The ids a browser check holds on to, and who the ghost is: the NAME comes from the holders read, not from the
+      // broadcast, because a name in a broadcast is a name anybody can type.
+      const element = ghost.getElement()
+      if (element) {
+        const named = busyCells.value.get(row.cell) || null
+        element.dataset.testid = 'plan-ghost'
+        element.dataset.group = row.group
+        element.dataset.cell = row.cell
+        element.dataset.by = named ? named.display_name || 'Somebody' : ''
+      }
+    }
+  }
+  for (const [cell, ghost] of ghosts) {
+    if (keep.has(cell)) continue
+    draftLayer.removeLayer(ghost)
+    ghosts.delete(cell)
+  }
+}
+
+/** Forget every ghost: the plan they were about is not on screen any more. */
+function clearGhosts() {
+  drafts.value = []
+  for (const ghost of ghosts.values()) if (draftLayer) draftLayer.removeLayer(ghost)
+  ghosts.clear()
+}
+
+/**
+ * Publish where this gesture's badges are going, per badge, for everybody else's screen. The throttle (one per badge
+ * per 50 ms, with the last place always sent) lives in usePlanStream, so this can be called on every drag step.
+ * Nothing is published for a gesture that has already been refused: it will never move anything, and a ghost heading
+ * somewhere no badge will ever stand is a lie about a preview.
+ */
+function publishDrafts(state) {
+  if (!OWNERSHIP_UI || !api.planDraft || !state) return
+  for (const row of state.roster) {
+    const marker = markers.get(row.id)
+    if (!marker) continue
+    const at = marker.getLatLng()
+    api.planDraft({ frame: state.frameId, group: row.id }, { lat: at.lat, lng: at.lng })
+    state.published = true
+  }
+}
+
+/**
+ * The gesture is over: the ghosts for its badges go now, whatever happened to the write. A gesture that never moved
+ * published nothing, so it has nothing to take back -- a click on a badge must not send a message about it.
+ */
+function releaseDrafts(state) {
+  if (!OWNERSHIP_UI || !api.clearDrafts || !state || !state.cells || !state.published) return
+  api.clearDrafts(state.cells)
+}
+
+if (OWNERSHIP_UI && api.onDraft) api.onDraft((rows) => (drafts.value = rows))
+
 /**
  * Drag a group on the map: that moment states a new position for it. When the group is ticked, every ticked group
  * standing at this frame comes with it — the gesture a planner makes for "the whole crew steps ten metres back".
@@ -882,6 +990,8 @@ function beginGroupDrag(leaderId) {
   if (!roster.length) return
   const state = {
     leaderId,
+    // The moment the gesture is about: the hold and the write both name it, and so does the draft a colleague draws.
+    frameId: frame.id,
     roster,
     // One gesture, one hold: every badge the drag will carry, all or none, so a colleague cannot grab a companion of
     // a group that is being moved (081's all-or-nothing).
@@ -891,6 +1001,7 @@ function beginGroupDrag(leaderId) {
     phase: OWNERSHIP_UI ? 'asking' : 'plain',
     grab: null,
     movedWhileReleasing: false,
+    published: false, // has this gesture told anybody else where the badges are going?
     refusal: '',
   }
   groupDrag = state
@@ -969,6 +1080,8 @@ function onGroupDrag(leaderId) {
   dragCompanions(leaderId)
   const state = groupDrag
   if (!state || state.leaderId !== leaderId) return
+  // Everybody else sees the badge moving, not just the position it lands on (phase 4).
+  if (state.phase !== 'refused') publishDrafts(state)
   if (state.phase === 'releasing') {
     state.movedWhileReleasing = true
     return
@@ -1045,6 +1158,16 @@ async function takeOver(frameId, changes, before, after) {
 
 async function endGroupDrag(leaderId) {
   const state = groupDrag
+  try {
+    await finishGroupDrag(leaderId, state)
+  } finally {
+    // Every way out of a gesture ends the ghost: a write that landed, a refusal, a click, a failure. The reload inside
+    // the write has already put the real badge where the plan has it, so the ghost goes as the badge arrives.
+    releaseDrafts(state)
+  }
+}
+
+async function finishGroupDrag(leaderId, state) {
   const frame = selected.value
   const leader = markers.get(leaderId)
   const origin = state ? state.roster.find((row) => row.id === leaderId) : null
@@ -2086,6 +2209,11 @@ async function choosePlan(id) {
   // looking at (and the strip and the rings are about the plan that is now open).
   if (api.releaseAllHolds) await api.releaseAllHolds()
   await api.openPlan(id)
+  // Where other planners' drags are going is about a plan too (phase 4): join that plan's channel, and leave whatever
+  // channel was open before. `?concurrent=0` turns the stream off with the rest of the ownership picture.
+  if (OWNERSHIP_UI && api.startDrafts) api.startDrafts(id)
+  else if (api.stopDrafts) api.stopDrafts()
+  clearGhosts()
   // The selection belongs to the plan that was open: ids from another plan mean nothing here.
   selectedGroups.value = new Set()
   await openFirstFrame()
@@ -2215,6 +2343,7 @@ async function removePlan() {
     // showing a name nothing was reading (finding 88, hit by step 23's wipe-and-import).
     const next = readablePlan.value
     if (next) await choosePlan(next.id)
+    else if (api.stopDrafts) api.stopDrafts() // nothing is open: the channel had one plan and that plan is gone
   } catch (error) {
     toast(planErrorMessage(error), 'danger', 5000)
   }
@@ -2381,11 +2510,15 @@ function initMap() {
   zoneLayer = L.layerGroup().addTo(map)
   lineLayer = L.layerGroup().addTo(map)
   markerLayer = L.layerGroup().addTo(map)
+  // The ghosts of other planners' drags live on a layer of their own, so drawing one can never disturb a badge (and
+  // a badge being dragged is never below a marker layer that just got cleared).
+  draftLayer = L.layerGroup().addTo(map)
   map.on('click', onMapClick)
   map.invalidateSize()
   drawZones()
   drawLines()
   drawMarkers()
+  drawGhosts()
   fitMap()
 }
 
@@ -2458,6 +2591,9 @@ onBeforeUnmount(() => {
   // A page that is going away is not dragging anything: give up whatever this page still holds rather than leave a
   // colleague waiting out the twelve seconds.
   if (api.releaseAllHolds) api.releaseAllHolds()
+  // And leave the draft channel: nothing this page is dragging should go on being drawn on anybody's screen.
+  if (api.stopDrafts) api.stopDrafts()
+  clearGhosts()
   haltPlay()
   if (map) {
     map.remove()
@@ -2478,10 +2614,20 @@ watch([frames, selectedId, () => zones.value.length], async () => {
 })
 
 watch(() => zones.value.length, () => { drawZones(); fitMap() })
-watch(selectedId, () => drawMarkers())
+watch(selectedId, () => {
+  drawMarkers()
+  drawGhosts() // what a colleague is dragging belongs to the moment that is open
+})
 // Who is on what changes the rings and the tooltips, never a position. drawMarkers() already refuses to run while a
 // hand is down, so a poll cannot pull the badge out from under a drag -- it is drawn on the redraw the drop makes.
-watch(holders, () => drawMarkers())
+// The ghosts are redrawn too: a holder's name is the only honest source for "who is moving that".
+watch(holders, () => {
+  drawMarkers()
+  drawGhosts()
+})
+// Other planners' drags arrive here: a broadcast, never a write (phase 4). drawGhosts() is the whole of what this page
+// does with one.
+watch(drafts, drawGhosts)
 // A tap waiting to place a group belongs to the frame it was armed on; another frame, or a run, puts it down.
 watch([selectedId, playhead], () => {
   if (placing.value && (playhead.value != null || !unplacedGroups.value.some((g) => g.id === placing.value))) {
@@ -2508,6 +2654,7 @@ watch(selectedGroups, () => {
 watch(shownGroups, () => {
   drawLines()
   drawMarkers()
+  drawGhosts()
 })
 
 // Another tab's change is already in `frames` (usePlan read it back, step 19). This only lets go of what that read
