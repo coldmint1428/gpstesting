@@ -35,6 +35,7 @@
 //   roles-077 supabase/tests/no_marshals_test.sql: one role fewer -- root, planner, group admin, member (074, 077)
 //   noise    supabase/tests/location_noise_test.sql: coarse fixes and repeated uploads are not stored (075)
 //   rehearsals supabase/tests/rehearsals_test.sql: everyone reads them, only root and planners schedule them (079)
+//             supabase/tests/rehearsal_absences_test.sql: "not available" requests the root or a planner decides (080)
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -815,11 +816,14 @@ await phase('rehearsals', {
     { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
     { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
     { name: '079_rehearsals.sql', sql: read('supabase/migrations/079_rehearsals.sql') },
+    { name: '080_rehearsal_details_absences.sql', sql: read('supabase/migrations/080_rehearsal_details_absences.sql') },
   ],
   body: async (db) => {
     await runSql(db, read('supabase/tests/rehearsals_test.sql'), 'rehearsals_test.sql')
+    await runSql(db, read('supabase/tests/rehearsal_absences_test.sql'), 'rehearsal_absences_test.sql')
     await runSql(db, read('supabase/migrations/079_rehearsals.sql'), '079 a second time')
-    return ['supabase/tests/rehearsals_test.sql passed, and 079 re-applies cleanly']
+    await runSql(db, read('supabase/migrations/080_rehearsal_details_absences.sql'), '080 a second time')
+    return ['the rehearsals and rehearsal_absences suites passed, and 079 and 080 re-apply cleanly']
   },
 })
 

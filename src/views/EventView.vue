@@ -222,12 +222,23 @@ async function onAttScan(text) {
   else scanMessage.value = result.message
 }
 
-// Rehearsals (079): a calendar for everyone, scheduled by the root and planners. The page emits what was asked.
+// Rehearsals (079, 080): a calendar for everyone, scheduled by the root and planners. Anyone can say they are not
+// available, and the root or a planner decides. The page emits what was asked.
 const rehearsals = useRehearsals(props.id)
 const rehearsalError = ref('')
-async function onRehearsalAdd(date) {
-  rehearsalError.value = await rehearsals.add(date)
-  if (!rehearsalError.value) toast('Rehearsal scheduled for ' + formatDayTime(date) + '.', 'success', 4000)
+async function onRehearsalAdd(details) {
+  rehearsalError.value = await rehearsals.add(details)
+  if (!rehearsalError.value) toast('Rehearsal scheduled for ' + formatDayTime(details.startsAt) + '.', 'success', 4000)
+}
+async function onAbsenceRequest({ rehearsalId, reason }) {
+  rehearsalError.value = await rehearsals.requestAbsence(rehearsalId, reason)
+  if (!rehearsalError.value) toast('Sent. The root or a planner needs to approve it.', 'success', 4000)
+}
+async function onAbsenceWithdraw(rehearsalId) {
+  rehearsalError.value = await rehearsals.withdrawAbsence(rehearsalId)
+}
+async function onAbsenceDecide({ id, approve }) {
+  rehearsalError.value = await rehearsals.decideAbsence(id, approve)
 }
 async function onRehearsalRemove(id) {
   const ok = await askConfirm({
@@ -532,7 +543,8 @@ const PAGE_INFO = computed(() => ({
       }
     : { hint: 'Your route', about: 'Where your group goes, and when it is due at each place.' },
   rehearsals: {
-    hint: modeOf('rehearsals') === 'edit' ? 'Schedule and calendar' : 'When to practise',
+    hint: modeOf('rehearsals') === 'edit' ? 'Schedule and requests' : 'When to practise',
+    badge: modeOf('rehearsals') === 'edit' ? rehearsals.absences.value.filter((a) => a.status === 'pending').length || '' : '',
     about: modeOf('rehearsals') === 'edit' ? 'Schedule rehearsals. Everyone in the event sees them on this calendar.' : 'When the event’s rehearsals are.',
   },
   people: {
@@ -973,14 +985,21 @@ async function removeEvent() {
         <RehearsalsPanel
           v-if="tab === 'rehearsals'"
           :rehearsals="rehearsals.rehearsals.value"
+          :absences="rehearsals.absences.value"
           :next="rehearsals.next.value"
           :can-edit="modeOf('rehearsals') === 'edit'"
+          :my-id="me ? me.id : null"
+          :members="members"
+          :groups="groups"
           :event-starts-at="event.starts_at"
           :now="rehearsals.now.value"
           :busy="rehearsals.busy.value"
           :error-msg="rehearsalError || rehearsals.errorMsg.value"
           @add="onRehearsalAdd"
           @remove="onRehearsalRemove"
+          @request-absence="onAbsenceRequest"
+          @withdraw-absence="onAbsenceWithdraw"
+          @decide-absence="onAbsenceDecide"
         />
 
         <AttendancePanel

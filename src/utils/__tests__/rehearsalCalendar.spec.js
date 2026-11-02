@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayKey, monthGrid, monthOf, monthTitle, shiftMonth } from '../rehearsalCalendar'
+import { dayKey, formatRehearsal, monthGrid, monthOf, monthTitle, shiftMonth } from '../rehearsalCalendar'
 
 describe('rehearsal calendar', () => {
   it('puts a moment on the day it is in Singapore', () => {
@@ -11,6 +11,13 @@ describe('rehearsal calendar', () => {
   it('moves between months across a year', () => {
     expect(shiftMonth({ year: 2026, month: 12 }, 1)).toEqual({ year: 2027, month: 1 })
     expect(shiftMonth({ year: 2026, month: 1 }, -1)).toEqual({ year: 2025, month: 12 })
+  })
+
+  it('says when a rehearsal runs', () => {
+    const startsAt = new Date('2026-11-05T10:00:00Z') // 6 pm in Singapore
+    expect(formatRehearsal({ startsAt, endsAt: null })).toMatch(/5 Nov, 6:00 pm$/i)
+    expect(formatRehearsal({ startsAt, endsAt: new Date('2026-11-05T12:30:00Z') })).toMatch(/5 Nov, 6:00 pm – 8:30 pm$/i)
+    expect(formatRehearsal({ startsAt, endsAt: new Date('2026-11-05T16:30:00Z') })).toMatch(/5 Nov, 6:00 pm – .*6 Nov, 12:30 am$/i)
   })
 
   it('names a month', () => {

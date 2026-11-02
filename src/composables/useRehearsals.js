@@ -1,12 +1,14 @@
-// useRehearsals - an event's rehearsal times (079), and which one is next.
-// Everyone in the event reads them; the database lets only the root and planners add or remove one.
+// useRehearsals - an event's rehearsals (079, 080), which one is next, and "not available" requests.
+// Everyone in the event reads the rehearsals; the database lets only the root and planners add or remove one. A person
+// reads their own requests and the root and planners read everyone's, so `absences` holds whatever this person may see.
 import { computed, onUnmounted, ref } from 'vue'
 import { supabase } from '../lib/supabase'
 
 const TICK_MS = 30000 // "next" moves on when a rehearsal's time passes
 
 export function useRehearsals(eventId) {
-  const rehearsals = ref([]) // soonest first: { id, startsAt: Date }
+  const rehearsals = ref([]) // soonest first: { id, startsAt: Date, endsAt: Date|null, note }
+  const absences = ref([]) // { id, rehearsalId, userId, reason, status, decidedBy, decidedAt: Date|null, createdAt: Date }
   const errorMsg = ref('')
   const busy = ref(false)
   const now = ref(Date.now())
@@ -14,23 +16,41 @@ export function useRehearsals(eventId) {
   const next = computed(() => rehearsals.value.find((r) => r.startsAt.getTime() > now.value) || null)
 
   async function load() {
-    const { data, error } = await supabase
-      .from('event_rehearsals')
-      .select('id, starts_at')
-      .eq('event_id', eventId)
-      .order('starts_at')
-    if (error) {
+    const [times, requests] = await Promise.all([
+      supabase.from('event_rehearsals').select('id, starts_at, ends_at, note').eq('event_id', eventId).order('starts_at'),
+      supabase
+        .from('rehearsal_absences')
+        .select('id, rehearsal_id, user_id, reason, status, decided_by, decided_at, created_at')
+        .eq('event_id', eventId),
+    ])
+    if (times.error || requests.error) {
       errorMsg.value = 'Could not load the rehearsals.'
       return
     }
     errorMsg.value = ''
     now.value = Date.now()
-    rehearsals.value = data.map((r) => ({ id: r.id, startsAt: new Date(r.starts_at) }))
+    rehearsals.value = times.data.map((r) => ({
+      id: r.id,
+      startsAt: new Date(r.starts_at),
+      endsAt: r.ends_at ? new Date(r.ends_at) : null,
+      note: r.note || '',
+    }))
+    absences.value = requests.data.map((a) => ({
+      id: a.id,
+      rehearsalId: a.rehearsal_id,
+      userId: a.user_id,
+      reason: a.reason,
+      status: a.status,
+      decidedBy: a.decided_by,
+      decidedAt: a.decided_at ? new Date(a.decided_at) : null,
+      createdAt: new Date(a.created_at),
+    }))
   }
 
   function messageOf(error) {
     if (error.code === '23505') return 'There is already a rehearsal at that time.'
-    if (error.code === '42501') return 'Only the root and planners can schedule a rehearsal, and only in the future.'
+    if (error.code === '23514') return 'The end time must be after the start, and notes can be up to 500 characters.'
+    if (error.code === '42501' && !error.message.includes('.')) return 'Only the root and planners can schedule a rehearsal, and only in the future.'
     return error.message
   }
 
@@ -46,12 +66,24 @@ export function useRehearsals(eventId) {
       busy.value = false
     }
   }
-  const add = (date) => write(supabase.from('event_rehearsals').insert({ event_id: eventId, starts_at: new Date(date).toISOString() }))
+  const add = ({ startsAt, endsAt, note }) =>
+    write(
+      supabase.from('event_rehearsals').insert({
+        event_id: eventId,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+        note: note || null,
+      }),
+    )
   const remove = (id) => write(supabase.from('event_rehearsals').delete().eq('id', id))
+  const requestAbsence = (rehearsalId, reason) => write(supabase.rpc('rehearsal_absence_request', { p_rehearsal: rehearsalId, p_reason: reason }))
+  const withdrawAbsence = (rehearsalId) => write(supabase.rpc('rehearsal_absence_withdraw', { p_rehearsal: rehearsalId }))
+  const decideAbsence = (id, approve) => write(supabase.rpc('rehearsal_absence_decide', { p_id: id, p_approve: approve }))
 
   const channel = supabase
     .channel('event-rehearsals-' + eventId + '-' + Math.random().toString(36).slice(2)) // unique name (see useEventData.js)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rehearsals', filter: 'event_id=eq.' + eventId }, load)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'rehearsal_absences', filter: 'event_id=eq.' + eventId }, load)
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') load() // (re)connected: nothing missed
     })
@@ -71,5 +103,5 @@ export function useRehearsals(eventId) {
     supabase.removeChannel(channel)
   })
 
-  return { rehearsals, next, errorMsg, busy, now, add, remove }
+  return { rehearsals, absences, next, errorMsg, busy, now, add, remove, requestAbsence, withdrawAbsence, decideAbsence }
 }
