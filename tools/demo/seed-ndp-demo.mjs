@@ -3,7 +3,7 @@
 //   node tools/demo/seed-ndp-demo.mjs        (after tools/demo/ndp-demo-plan.mjs has written docs/demo/)
 //
 // qa_root makes "NDP 2025 NE4 Rehearsal" with the demo's 13 groups (create_event_with_setup, the wizard's call):
-// qa_planner is a planner, qa_marshal a marshal, and P&C Contingent 3 has qa_ic1 as its IC and qa_member as a cadet.
+// qa_planner is a planner, and P&C Contingent 3 has qa_ic1 as its IC and qa_member as a cadet.
 // The Padang and the casing location are drawn on the event's map (save_object, the bench's own call), and an empty
 // plan is made for the video to import ndp-ne4-demo.csv into. Nothing is started or published: the video does that.
 // Run it again for a fresh event to retake on; delete old ones from their Overview page.
@@ -19,7 +19,7 @@ const must = (r, what) => {
 
 const { sb: root } = await clientFor('root')
 const id = async (name) => (await clientFor(name)).user.id
-const [planner, marshal, ic, cadet] = [await id('planner'), await id('marshal'), await id('ic1'), await id('member')]
+const [planner, ic, cadet] = [await id('planner'), await id('ic1'), await id('member')]
 
 // ---------- the event, its people and its groups ----------
 const start = new Date()
@@ -34,7 +34,6 @@ const eventId = must(
     },
     p_members: [
       { user_id: planner, role: 'planner' },
-      { user_id: marshal, role: 'marshal' },
       { user_id: ic, role: 'participant' },
       { user_id: cadet, role: 'participant' },
     ],

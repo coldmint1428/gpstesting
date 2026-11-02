@@ -175,7 +175,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="body">
         <h3>Design and tech stack</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Architecture slide: Vue app → Supabase (Postgres, Auth, Realtime, edge functions) → OneMap API; Capacitor app beside it; Vercel hosting</li><li>A small roles box: root, planner, group admin, member; IC and marshal as duties</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Architecture slide: Vue app → Supabase (Postgres, Auth, Realtime, edge functions) → OneMap API; Capacitor app beside it; Vercel hosting</li><li>A small roles box: root, planner, group admin, member; IC as a duty</li></ul></div>
           <div class="say"><div class="label">Say</div>
             <p>The front end is a Vue 3 single-page app with Vue Router and Pinia, styled with Bootstrap 5 under our own Kinetic theme. Maps use Leaflet.</p>
             <p>Our data store is Supabase: a PostgreSQL database with row-level security, so the database itself decides what each role can see and change. Realtime pushes new GPS readings and plan changes to every screen. Our external API is OneMap from the Singapore Land Authority: we use its map tiles, and its reverse-geocoding API, called asynchronously from an edge function, to turn coordinates into addresses.</p>
@@ -384,7 +384,7 @@ adb shell settings put system show_touches 0</pre>
       <div class="card">
         <h3>Set up before recording</h3>
         <ol>
-          <li><strong>Done:</strong> "NDP 2025 NE4 Rehearsal" is on the live site, join code <code>96DMR6</code>. It has 13 groups, the Padang and casing location drawn, and an empty plan "NE4 Rehearsal: Parade &amp; Ceremony" for segment 6 to import into. Root is qa_root, the planner qa_planner, the marshal qa_marshal. Contingent 3's IC is qa_ic1 and its cadet qa_member.</li>
+          <li><strong>Done:</strong> "NDP 2025 NE4 Rehearsal" is on the live site, join code <code>96DMR6</code>. It has 13 groups, the Padang and casing location drawn, and an empty plan "NE4 Rehearsal: Parade &amp; Ceremony" for segment 6 to import into. Root is qa_root and the planner qa_planner. Contingent 3's IC is qa_ic1 and its cadet qa_member.</li>
           <li>Phone: either sign the app in as qa_ic1, or join with <code>96DMR6</code> on your own account and have root make you Contingent 3's IC on the Groups page. Check Share works once beforehand.</li>
           <li>For a retake, run <code>node tools/demo/seed-ndp-demo.mjs</code> for a fresh copy, and delete used ones from their Overview page.</li>
           <li>The QA accounts show on screen as "QA Root", "QA Member" and so on. Mention that they're test accounts, or rename them on the Profile page before recording.</li>
