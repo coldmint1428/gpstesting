@@ -20,7 +20,7 @@
 // is drawing (live, or the last one that ended); the live map hands it the live session only, because a walk on the
 // Live page is a walk somebody is on now.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { supabase } from '../lib/supabase'
+import { readTimetable } from '../lib/timetableReader'
 import { planErrorMessage } from './usePlan'
 
 const POLL_MS = 30000 // the floor, not the point: the wake at each moment is what keeps a screen honest
@@ -86,10 +86,8 @@ export function usePlanWalk({ session, enabled = () => true, pollMs = POLL_MS, w
     running = true
     const at = endedAt.value
     try {
-      const args = { p_session: id }
-      if (at) args.p_at = at.toISOString()
-      const { data, error } = await supabase.rpc('session_timetable', args)
-      if (error) throw error
+      // The shared reader (lib/timetableReader.js): a wake or a poll inside 20 s of the last ask costs no request
+      const data = await readTimetable(id, at)
       if (sessionId.value !== id || endedAt.value !== at) {
         again = true
         return

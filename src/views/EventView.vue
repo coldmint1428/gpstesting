@@ -369,7 +369,7 @@ watch(
 
 // ---------- One-tap sharing (same tracker as the Share page and navbar) ----------
 const tracker = useLocationTracker()
-const { isTracking, sharingEventId, errorMsg: shareError } = tracker
+const { isTracking, sharingEventId, errorMsg: shareError, busy: shareBusy } = tracker
 const sharingHere = computed(() => isTracking.value && sharingEventId.value === props.id)
 const isIC = computed(() => !!(me.value && me.value.isIC && myGroup.value))
 
@@ -391,6 +391,18 @@ async function startSharing() {
   }
 }
 
+// Stop asks first, as the Me tab does. The Share button takes Stop's place the moment sharing stops, so a second tap
+// (or a tap while Stop was still working) started sharing again two seconds later (2 Nov).
+async function stopSharing() {
+  const ok = await askConfirm({
+    title: 'Stop sharing your location?',
+    message: 'Your planners and group will see you as stopped.',
+    confirmText: 'Stop sharing',
+    danger: true,
+  })
+  if (ok) await tracker.stop()
+}
+
 // Planner ended the event while I'm sharing: stop here too (the database already refuses
 // my uploads and left a "Stopped sharing" marker, so don't save another one)
 watch(isLive, (nowLive, wasLive) => {
@@ -408,6 +420,8 @@ watch(
     if (share === '1' && nowLive && ic && !sharingHere.value) {
       goToPage('live')
       startSharing()
+      // Once: left in the address, it could start sharing again after a Stop
+      router.replace({ query: { ...route.query, share: undefined } })
     }
   },
   { immediate: true },
@@ -699,9 +713,9 @@ async function removeEvent() {
           {{ ROLE_LABEL[topRole(me)] || 'Member' }}<template v-if="isMarshal(me)"> · Marshal</template><template v-if="myGroup"> · {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</template>
         </p>
       </div>
-      <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">LIVE</span>
-      <span v-else-if="event.is_simulation" class="pv-chip pv-chip-sim" data-testid="sim-badge">SIM</span>
-      <button type="button" class="btn btn-danger btn-sm sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
+      <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">Live</span>
+      <span v-else-if="event.is_simulation" class="pv-chip pv-chip-sim" data-testid="sim-badge">Sim</span>
+      <button type="button" class="btn btn-sm k-sos sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </header>
 
     <!-- Which event and its state, in the site's top bar (one bar, as in the design) -->
@@ -781,11 +795,11 @@ async function removeEvent() {
                   <template v-else>Sharing opens when the event starts</template>
                 </span>
               </span>
-              <button v-if="sharingHere" class="btn btn-sm btn-outline-secondary" data-testid="stop-share-btn" @click="tracker.stop()">
-                Stop sharing
+              <button v-if="sharingHere" class="btn btn-sm btn-outline-secondary" :disabled="shareBusy" data-testid="stop-share-btn" @click="stopSharing">
+                {{ shareBusy ? 'Stopping…' : 'Stop sharing' }}
               </button>
-              <button v-else-if="isLive" class="btn btn-sm btn-success" data-testid="share-btn" @click="startSharing">
-                Share my location
+              <button v-else-if="isLive" class="btn btn-sm btn-success" :disabled="shareBusy" data-testid="share-btn" @click="startSharing">
+                {{ shareBusy ? 'Please wait…' : 'Share my location' }}
               </button>
               <button v-else class="btn btn-sm btn-success" disabled data-testid="share-btn-locked">Share my location</button>
               <RouterLink :to="{ name: 'share', params: { id } }" class="btn btn-sm btn-ghost" data-testid="share-details-link">
@@ -826,8 +840,9 @@ async function removeEvent() {
         <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
         <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-        <!-- The page's title. Only the Live page adds a line: who this person can see on the map. -->
-        <div v-if="!native" class="ev-page-head">
+        <!-- The page's title. Only the Live page adds a line: who this person can see on the map. The phone app's
+             map and home tabs (Map, Ops, Now) go without one: the map needs the room, and the header names the event. -->
+        <div v-if="!native || !['live', 'ops', 'now'].includes(tab)" class="ev-page-head">
           <h2>{{ currentPage.label }}</h2>
           <p v-if="tab === 'live'" data-testid="view-scope">{{ viewText }}</p>
         </div>

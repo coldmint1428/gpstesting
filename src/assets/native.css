@@ -1,32 +1,31 @@
-/* The phone app's look (Android first): the Planova palette and type from the Figma prototype
-   (WAD2 → Prototype of App → "Phone app — native prototype"). Everything here is scoped to html.native-app, which
-   main.js sets only inside the Capacitor app, so the website is untouched. */
+/* The phone app's layout (Android first): bottom tabs that follow the role, sheets, one big action per screen, from
+   the Figma prototype (WAD2 → Prototype of App → "Phone app — native prototype"). Since 2 Nov it wears the website's
+   Kinetic look (kinetic-tokens.css): the same colours, type, buttons, fields and cards, so the app and the site are one
+   product. Everything here is scoped to html.native-app, which main.js sets only inside the Capacitor app. */
 
 html.native-app {
-  --pv-brand: var(--bg-chrome);
-  --pv-text: var(--text-primary);
-  --pv-muted: var(--text-secondary);
-  --pv-success: var(--status-success-fg);
-  --pv-warning: var(--status-warning-border);
-  --pv-error: var(--status-error-fg);
-  --pv-info: var(--status-info-fg);
-  --pv-main: var(--brand-primary);
-  --pv-highlight: var(--timeline-active);
-  --pv-accent: var(--status-warning-border);
+  /* The website's Kinetic tokens under the app's names */
+  --pv-brand: var(--forest);
+  --pv-text: var(--ink);
+  --pv-muted: var(--muted);
+  --pv-success: var(--live);
+  --pv-warning: var(--stale);
+  --pv-error: var(--danger);
+  --pv-info: var(--forest);
+  --pv-main: var(--ink);
+  --pv-highlight: var(--lime);
+  --pv-accent: var(--stale);
   --pv-accent-dull: var(--danger-strong);
-  --pv-card: var(--bg-surface);
-  --pv-ground: var(--bg-canvas);
-  --pv-line: var(--border-subtle);
-  --pv-tabbar-h: 72px;
+  --pv-card: var(--surface);
+  --pv-ground: var(--canvas);
+  --pv-line: var(--line);
+  --pv-tabbar-h: 78px; /* the floating bar (68) and the gap under it (10) */
   --pv-safe-top: env(safe-area-inset-top, 0px);
   --pv-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --bs-body-font-family: var(--font-ui);
-  --bs-primary: var(--forest);
-  --bs-primary-rgb: 36, 79, 63;
   -webkit-tap-highlight-color: transparent;
 }
 html.native-app body {
-  font-family: var(--font-ui);
+  font-family: var(--font-body);
   background: var(--pv-ground);
   color: var(--pv-text);
   overscroll-behavior-y: none;
@@ -43,97 +42,77 @@ html.native-app .pv-head {
 html.native-app .pv-has-tabs {
   padding-bottom: calc(var(--pv-tabbar-h) + var(--pv-safe-bottom) + 24px) !important;
 }
-html.native-app .btn {
-  border-radius: 14px;
-  min-height: 44px;
-  font-weight: 600;
-}
-html.native-app .btn-sm {
-  min-height: 36px;
-  border-radius: 10px;
-}
-html.native-app .btn-primary {
-  background: var(--pv-main);
-  border-color: var(--pv-main);
-}
-html.native-app .btn-success {
-  background: var(--pv-highlight);
-  border-color: var(--pv-highlight);
-}
+/* Buttons, fields and cards are the website's own (kinetic-bridge.css). Only this differs: 16 px text in fields,
+   so Android and iOS do not zoom the page when one is focused. */
 html.native-app .form-control,
-html.native-app .form-select {
-  border-radius: 14px;
-  min-height: 48px;
-  font-size: 16px; /* 16 px: Android and iOS do not zoom the page when a field is focused */
-}
-html.native-app .card {
-  border-radius: 20px;
-  border-color: var(--pv-line);
+html.native-app .form-select,
+html.native-app .kin {
+  font-size: 16px;
 }
 
-/* ---------- Bottom tabs (Material 3 navigation bar) ---------- */
+/* ---------- Bottom tabs: the website's floating ink bar on a phone (kinetic-bridge.css .ev-nav) ---------- */
 .pv-tabbar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: max(10px, env(safe-area-inset-left, 0px));
+  right: max(10px, env(safe-area-inset-right, 0px));
+  bottom: calc(10px + var(--pv-safe-bottom));
   z-index: 1030;
   display: flex;
-  background: var(--pv-card);
-  border-top: 1px solid var(--pv-line);
-  padding: 8px max(8px, env(safe-area-inset-left, 0px)) calc(10px + var(--pv-safe-bottom)) max(8px, env(safe-area-inset-right, 0px));
-  min-height: var(--pv-tabbar-h);
+  gap: 2px;
+  padding: 6px;
+  background: var(--ink);
+  border-radius: 24px;
+  box-shadow: 3px 4px 0 var(--lime-shadow);
 }
 .pv-tab {
   flex: 1 1 0;
   min-width: 0;
+  height: 56px;
   border: 0;
+  border-radius: 18px;
   background: transparent;
-  color: var(--pv-muted);
+  color: var(--on-ink-muted);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 0;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 4px;
+  font: 700 11px var(--font-body);
   text-decoration: none;
+  white-space: nowrap;
 }
 .pv-tab-pill {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 60px;
-  height: 32px;
-  border-radius: 999px;
   position: relative;
 }
 .pv-tab svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 .pv-tab[aria-current='page'] {
-  color: var(--pv-main);
-  font-weight: 600;
-}
-.pv-tab[aria-current='page'] .pv-tab-pill {
-  background: rgba(11, 61, 46, 0.12);
+  background: var(--lime);
+  color: var(--ink);
 }
 .pv-tab:focus-visible {
-  outline: 2px solid var(--pv-main);
+  outline: 2px solid var(--lime);
   outline-offset: -2px;
-  border-radius: 12px;
 }
 .pv-tab-dot {
   position: absolute;
-  top: 2px;
-  right: 14px;
+  top: -3px;
+  right: -7px;
   min-width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: var(--pv-error);
-  border: 2px solid var(--pv-card);
+  background: var(--lime);
+  border: 2px solid var(--ink);
+}
+.pv-tab[aria-current='page'] .pv-tab-dot {
+  background: var(--ink);
+  border-color: var(--lime);
 }
 
 /* ---------- Bottom sheet ---------- */
@@ -150,7 +129,7 @@ html.native-app .card {
   bottom: 0;
   z-index: 1050;
   background: var(--pv-card);
-  border-radius: 28px 28px 0 0;
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
   padding: 10px 20px calc(24px + var(--pv-safe-bottom));
   max-height: 88vh;
   overflow-y: auto;
@@ -167,9 +146,8 @@ html.native-app .card {
 
 /* ---------- Shared pieces ---------- */
 .pv-label {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font: 800 12px var(--font-body);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--pv-muted);
 }
@@ -177,17 +155,36 @@ html.native-app .card {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 13px;
-  font-weight: 600;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  padding: 0 11px;
+  font: 800 12px var(--font-body);
   white-space: nowrap;
+  background: var(--soft);
+  color: var(--ink);
 }
+/* "Live": the website's ink chip with a pulsing lime dot */
 .pv-chip-live {
-  background: var(--pv-error);
-  color: #fff;
-  font-size: 12px;
-  letter-spacing: 0.06em;
+  background: var(--ink);
+  color: var(--lime);
+}
+.pv-chip-live::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lime);
+  animation: pv-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pv-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-chip-live::before {
+    animation: none;
+  }
 }
 .pv-num {
   font-variant-numeric: tabular-nums;
@@ -195,7 +192,8 @@ html.native-app .card {
 
 /* ---------- Event page (phone) ---------- */
 html.native-app .ev {
-  font-family: var(--font-ui);
+  font-family: var(--font-body);
+  color: var(--ink);
   background: var(--pv-ground);
   min-height: 100vh;
 }
@@ -211,10 +209,11 @@ html.native-app .ops-num {
   z-index: 1020;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: var(--pv-brand);
-  color: #fff;
-  padding: calc(10px + var(--pv-safe-top)) 14px 12px 6px;
+  gap: 8px;
+  background: var(--canvas);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  padding: calc(10px + var(--pv-safe-top)) 12px 10px 4px;
 }
 .pv-back {
   flex: none;
@@ -223,7 +222,7 @@ html.native-app .ops-num {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--ink);
   border-radius: 999px;
 }
 .pv-back svg {
@@ -231,44 +230,49 @@ html.native-app .ops-num {
   height: 26px;
 }
 .pv-back:active {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover);
 }
 .pv-head-text {
   flex: 1 1 auto;
   min-width: 0;
 }
 .pv-title {
-  font-size: 19px;
-  font-weight: 600;
+  font: 700 18px/1.2 var(--font-display);
+  letter-spacing: -0.04em;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .pv-sub {
-  font-size: 13px;
+  font: 700 12px var(--font-body);
   margin: 0;
-  color: var(--text-on-chrome-muted);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .pv-chip-sim {
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
+  background: transparent;
+  color: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--ink) inset;
+}
+/* The page's title, as on the website, a size down for the phone */
+html.native-app .ev-native .ev-page-head h2 {
+  font-size: 26px;
 }
 html.native-app .ev-native .ev-main {
-  padding: 14px 14px 0;
+  padding: 16px 14px 0;
   gap: 14px;
 }
 .pv-card {
   background: var(--pv-card);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   padding: 16px;
 }
 .pv-empty {
   background: var(--pv-card);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   padding: 22px 18px;
   display: flex;
   flex-direction: column;
@@ -276,8 +280,8 @@ html.native-app .ev-native .ev-main {
   text-align: center;
 }
 .pv-empty strong {
-  font-size: 19px;
-  font-weight: 600;
+  font: 700 18px var(--font-display);
+  letter-spacing: -0.04em;
 }
 .pv-empty span {
   color: var(--pv-muted);
@@ -287,12 +291,13 @@ html.native-app .ev-native .ev-main {
   align-items: center;
   gap: 12px;
   width: 100%;
-  border: 1px solid var(--pv-line);
+  border: 0;
   background: var(--pv-card);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   padding: 12px 14px;
   min-height: 60px;
   font: inherit;
+  font-weight: 700;
   color: var(--pv-text);
 }
 .pv-chev {
@@ -304,18 +309,18 @@ html.native-app .ev-native .ev-main {
 html.native-app .ev-map-phone .live-map {
   height: calc(100vh - 64px - var(--pv-tabbar-h) - var(--pv-safe-bottom) - 40px);
   min-height: 360px;
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
 }
 /* The live show's bar and panel, Planova look on the phone. Not qualified by .ev-native any more: the page root that
    carried that class went with the merge, and these elements still exist. */
 html.native-app .show-bar {
-  background: var(--pv-brand);
-  border-radius: 20px;
+  background: var(--forest);
+  border-radius: var(--radius-xl);
 }
 html.native-app .show-panel,
 html.native-app .ops-summary,
 html.native-app .next-move {
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   border-color: var(--pv-line);
 }
 html.native-app .show-panel .btn-success,
@@ -339,26 +344,29 @@ html.native-app .next-move .btn-outline-success {
   padding: 4px 4px 0;
 }
 .pv-hello {
-  margin: 0;
-  color: var(--pv-muted);
+  margin: 0 0 4px;
+  font: 800 12px var(--font-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .pv-name {
   margin: 0;
-  font-size: 30px;
-  font-weight: 600;
+  font: 800 24px/1.1 var(--font-display);
+  letter-spacing: -0.06em;
 }
 .pv-avatar {
   flex: none;
   width: 48px;
   height: 48px;
   border-radius: 999px;
-  background: var(--pv-highlight);
-  color: #fff;
+  background: var(--lime);
+  color: var(--ink);
+  box-shadow: var(--outline);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 17px;
+  font: 800 16px var(--font-body);
   text-decoration: none;
 }
 .pv-live {
@@ -366,19 +374,26 @@ html.native-app .next-move .btn-outline-success {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  background: var(--pv-brand);
-  color: #fff;
-  border-radius: 24px;
-  padding: 18px;
+  background: var(--forest);
+  color: var(--on-forest);
+  border-radius: var(--radius-xl);
+  padding: 20px;
   text-decoration: none;
 }
+.pv-live .pv-chip-live {
+  background: var(--lime);
+  color: var(--ink);
+}
+.pv-live .pv-chip-live::before {
+  background: var(--ink);
+}
 .pv-live-name {
-  font-size: 23px;
-  font-weight: 600;
-  line-height: 1.2;
+  font: 800 26px/1.05 var(--font-display);
+  letter-spacing: -0.06em;
+  overflow-wrap: anywhere;
 }
 .pv-live-meta {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--on-forest-body);
 }
 .pv-live-share {
   display: flex;
@@ -386,57 +401,101 @@ html.native-app .next-move .btn-outline-success {
   gap: 8px;
   width: 100%;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
-  font-weight: 500;
+  font-weight: 700;
 }
 .pv-live-dot {
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: var(--status-success-border);
+  background: var(--lime);
 }
+/* The website's lime button */
 .pv-live-open {
   align-self: stretch;
+  margin-top: 6px;
   text-align: center;
-  background: var(--bg-canvas); /* a light button on the dark chrome card */
-  color: var(--bg-chrome);
-  border-radius: 16px;
-  padding: 14px;
-  font-weight: 600;
-  font-size: 17px;
+  background: var(--lime);
+  color: var(--ink);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 2px var(--ink) inset, 3px 4px 0 var(--ink);
+  padding: 13px;
+  font: 700 16px var(--font-body);
+}
+/* The other live events, compact rows under the one big card */
+.pv-also-live {
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  padding: 6px 14px;
+}
+.pv-also-title {
+  margin: 10px 2px 4px;
+  font: 800 12px var(--font-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pv-also-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 2px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+.pv-also-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pv-also-text strong {
+  font: 700 15px/1.25 var(--font-display);
+  letter-spacing: -0.03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv-also-text span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.pv-also-chev {
+  font-size: 24px;
+  color: var(--muted);
 }
 .pv-row {
   display: flex;
   align-items: center;
   gap: 14px;
   background: var(--pv-card);
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   padding: 12px 14px;
   color: var(--pv-text);
   text-decoration: none;
 }
 .pv-date {
   flex: none;
-  width: 56px;
-  height: 60px;
-  border-radius: 14px;
-  background: var(--pv-ground);
+  width: 52px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  background: var(--lime);
+  box-shadow: var(--outline), 2px 3px 0 var(--ink);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
 .pv-date-d {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--pv-brand);
-  line-height: 1.1;
+  font: 800 20px/1.1 var(--font-display);
+  color: var(--ink);
 }
 .pv-date-m {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--pv-muted);
+  font: 800 11px var(--font-body);
+  color: var(--ink);
   text-transform: uppercase;
 }
 .pv-row-text {
@@ -446,8 +505,8 @@ html.native-app .next-move .btn-outline-success {
   flex-direction: column;
 }
 .pv-row-text strong {
-  font-size: 17px;
-  font-weight: 600;
+  font: 700 16px/1.25 var(--font-display);
+  letter-spacing: -0.03em;
 }
 .pv-row-text span {
   font-size: 14px;
@@ -456,25 +515,29 @@ html.native-app .next-move .btn-outline-success {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Role chips: the website's (kinetic-bridge.css .k-you-pills) */
 .pv-role-root {
-  background: rgba(84, 134, 123, 0.14);
-  color: var(--pv-highlight);
+  background: var(--ink);
+  color: var(--lime);
 }
 .pv-role-planner {
-  background: rgba(11, 61, 46, 0.12);
-  color: var(--pv-main);
+  background: var(--mint);
+  color: var(--ink);
+  box-shadow: var(--outline);
 }
 .pv-role-marshal {
-  background: rgba(47, 107, 95, 0.12);
-  color: var(--pv-info);
+  background: var(--peach);
+  color: var(--ink);
+  box-shadow: var(--outline);
 }
 .pv-role-member {
-  background: var(--bg-inset);
-  color: var(--text-secondary);
+  background: var(--soft);
+  color: var(--ink);
 }
 .pv-role-sim {
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
+  background: transparent;
+  color: var(--ink);
+  box-shadow: 0 0 0 1.5px var(--ink) inset;
 }
 .pv-fab {
   position: fixed;
@@ -486,13 +549,11 @@ html.native-app .next-move .btn-outline-success {
   gap: 8px;
   border: 0;
   border-radius: 999px;
-  background: var(--brand-primary);
-  color: #fff;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  padding: 16px 22px 16px 18px;
-  box-shadow: 0 6px 16px rgba(10, 31, 23, 0.25);
+  background: var(--ink);
+  color: var(--on-forest);
+  font: 700 16px var(--font-body);
+  padding: 15px 22px 15px 18px;
+  box-shadow: 3px 4px 0 var(--lime-shadow);
 }
 .pv-fab svg {
   width: 22px;
@@ -503,7 +564,8 @@ html.native-app .next-move .btn-outline-success {
   text-transform: uppercase;
   font-size: 28px !important;
   letter-spacing: 0.4em;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-weight: 700;
   min-height: 60px !important;
 }
 .pv-or {
@@ -520,44 +582,8 @@ html.native-app .next-move .btn-outline-success {
   background: var(--pv-line);
 }
 
-/* ---------- Sign in (phone) ---------- */
-.pv-login {
-  min-height: 100vh;
-  background: var(--pv-brand);
-  display: flex;
-  flex-direction: column;
-}
-.pv-login-hero {
-  padding: calc(72px + var(--pv-safe-top)) 28px 40px;
-  color: #fff;
-}
-.pv-logo {
-  font-family: var(--font-brand);
-  font-weight: 700;
-  font-size: 48px;
-  line-height: 1;
-}
-.pv-login-hero p {
-  margin: 10px 0 0;
-  font-size: 17px;
-  color: rgba(255, 255, 255, 0.85);
-}
-.pv-login-sheet {
-  flex: 1;
-  background: var(--pv-card);
-  border-radius: 28px 28px 0 0;
-  padding: 24px 22px calc(32px + var(--pv-safe-bottom));
-}
-.pv-login-sheet .nav-pills .nav-link {
-  border-radius: 12px;
-  min-height: 44px;
-  font-weight: 600;
-}
-.pv-login-sheet .nav-pills .nav-link.active {
-  background: var(--pv-main);
-}
 .pv-code::placeholder {
-  color: var(--text-on-chrome-muted);
+  color: var(--placeholder);
   font-weight: 500;
 }
 
@@ -611,4 +637,9 @@ input.form-control-color {
 }
 html.native-app input.form-control-color {
   min-height: 48px;
+}
+
+/* ---------- Log in: the website's page; clear of the status bar ---------- */
+html.native-app .kg-app {
+  padding-top: var(--pv-safe-top);
 }

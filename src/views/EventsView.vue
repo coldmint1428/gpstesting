@@ -200,8 +200,8 @@ function roleTone(label) {
   <main v-if="native" class="pv-events pv-has-tabs" data-testid="phone-events">
     <header class="pv-events-head">
       <div class="min-w-0">
-        <p class="pv-hello">{{ greeting }}</p>
-        <h1 class="pv-name">{{ firstName }}</h1>
+        <p class="pv-hello">{{ today }}</p>
+        <h1 class="pv-name">{{ greeting.replace(',', '') }}<template v-if="firstName">, {{ firstName }}</template></h1>
       </div>
       <RouterLink :to="{ name: 'me' }" class="pv-avatar" aria-label="Me">{{ initials }}</RouterLink>
     </header>
@@ -216,7 +216,7 @@ function roleTone(label) {
       class="pv-live data-in"
       :data-testid="'live-' + ev.id"
     >
-      <span class="pv-chip pv-chip-live">LIVE</span>
+      <span class="pv-chip pv-chip-live">Live</span>
       <strong class="pv-live-name">{{ ev.name }}</strong>
       <span class="pv-live-meta">{{ ev.venue || 'Live now' }} · {{ roleLabel(ev) }}</span>
       <span v-if="tracker.isTracking.value && tracker.sharingEventId.value === ev.id" class="pv-live-share">
@@ -235,7 +235,7 @@ function roleTone(label) {
         class="pv-also-row"
         :data-testid="'live-' + ev.id"
       >
-        <span class="pv-chip pv-chip-live">LIVE</span>
+        <span class="pv-chip pv-chip-live">Live</span>
         <span class="pv-also-text">
           <strong>{{ ev.name }}</strong>
           <span>{{ ev.venue || 'Live now' }} · {{ roleLabel(ev) }}</span>

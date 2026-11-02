@@ -33,6 +33,7 @@
 //   sos      supabase/tests/sos_test.sql: anyone in an event can call for help (072)
 //   own-group supabase/tests/own_group_test.sql: ICs and members see only their own group (073)
 //   marshal-user supabase/tests/marshal_user_test.sql: a marshal sees what any other user sees (074)
+//   noise    supabase/tests/location_noise_test.sql: coarse fixes and repeated uploads are not stored (075)
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -777,6 +778,21 @@ await phase('marshal-user', {
     await runSql(db, read('supabase/tests/attendance_test.sql'), 'attendance_test.sql with 074')
     await runSql(db, read('supabase/migrations/074_marshals_are_users.sql'), '074 a second time')
     return ['marshal_user_test.sql and the roles, planners, SOS and attendance suites passed, and 074 re-applies cleanly']
+  },
+})
+
+// ---------- phase 16: a phone's coarse fixes and repeated uploads (075) ----------
+await phase('noise', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    named('003_stop_sharing.sql'),
+    { name: '075_location_noise.sql', sql: read('supabase/migrations/075_location_noise.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/location_noise_test.sql'), 'location_noise_test.sql')
+    await runSql(db, read('supabase/migrations/075_location_noise.sql'), '075 a second time')
+    return ['supabase/tests/location_noise_test.sql passed, and 075 re-applies cleanly']
   },
 })
 

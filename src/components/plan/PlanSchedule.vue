@@ -83,6 +83,7 @@ const errorSticky = ref(false) // an error a write made: a successful read must 
 let running = false
 let again = false // something changed while the read was in flight: the answer is stale, ask once more
 let wakeTimer = null
+let logReadAt = 0 // when the plan's log was last asked for
 let pollTimer = null
 let tickTimer = null
 
@@ -134,7 +135,11 @@ async function read() {
   try {
     // The plan's log is read beside the timetable (step 22): a message a planner sent, and the "your times changed"
     // row a publish wrote. A log that cannot be read keeps the last one and does not blank the schedule.
-    const logAsk = plan && api.readLog ? api.readLog(plan, 6).catch(() => null) : Promise.resolve([])
+    // At most every 25 s: the wake at each planned moment re-reads the timetable (from the copy, lib/timetableReader),
+    // and the log does not change with the clock (2 Nov load fixes)
+    const logDue = !logReadAt || Date.now() - logReadAt > 25000
+    const logAsk = plan && api.readLog && logDue ? api.readLog(plan, 6).catch(() => null) : Promise.resolve(null)
+    if (logDue) logReadAt = Date.now()
     const [answered, messages] = await Promise.all([api.readTimetable(id, at), logAsk])
     if (sessionId.value !== id || endedAt.value !== at) {
       again = true
@@ -386,7 +391,10 @@ watch(endedAt, () => read())
 // publish elsewhere is this screen's cue to ask again. The cue is not the answer — the read is.
 watch(
   () => (props.session ? props.session.planRev : null),
-  () => read(),
+  () => {
+    logReadAt = 0 // a publish writes "your times changed" into the log: read it now, not at the next 25 s
+    read()
+  },
 )
 </script>
 

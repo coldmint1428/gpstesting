@@ -8,7 +8,7 @@ import KLogo from '../components/kinetic/KLogo.vue'
 import KVenueMap from '../components/kinetic/KVenueMap.vue'
 import { isNativeApp } from '../lib/platform'
 
-const native = isNativeApp // phone app: brand header over the map, the form in a sheet (Figma screen 1)
+const native = isNativeApp // phone app: the same page, without the link back to the website's Home
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -34,8 +34,8 @@ async function submit() {
 </script>
 
 <template>
-  <!-- ===== Website: Planova Kinetic "Log in" (forest art panel beside the form) ===== -->
-  <div v-if="!native" class="k kq">
+  <!-- ===== Planova Kinetic "Log in" (forest art panel beside the form), on the website and in the phone app ===== -->
+  <div class="k kq" :class="{ 'kg-app': native }">
     <main class="kg">
       <aside class="kg-art">
         <RouterLink class="kl-brand" to="/" style="color: #fff; padding: 0; position: relative; z-index: 2"><KLogo on-forest /><span>planova</span></RouterLink>
@@ -44,7 +44,7 @@ async function submit() {
       </aside>
       <div class="kg-form">
         <form @submit.prevent="submit">
-          <RouterLink class="ks-crumb" to="/" style="margin-bottom: 26px"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Home</RouterLink>
+          <RouterLink v-if="!native" class="ks-crumb" to="/" style="margin-bottom: 26px"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Home</RouterLink>
           <h1>Welcome back</h1>
           <p class="mut" style="margin: 0 0 26px; font-size: 16px">Log in to see your events.</p>
           <p v-if="route.query.confirm" class="alert alert-info py-2 small" data-testid="confirm-email">
@@ -79,63 +79,4 @@ async function submit() {
     </main>
   </div>
 
-  <!-- ===== Phone app: brand header over the map, the form in a sheet (Figma screen 1) ===== -->
-  <main v-else class="pv-login">
-    <div class="pv-login-hero">
-      <div class="pv-logo">Planova</div>
-      <p>Every group in the right place, on time.</p>
-    </div>
-    <div class="pv-login-sheet">
-      <div>
-        <div>
-          <div>
-            <h1 class="h4 mb-3">Sign in</h1>
-            <p v-if="route.query.confirm" class="alert alert-info py-2 small" data-testid="confirm-email">
-              Account created. Check your email to confirm it, then sign in here.
-            </p>
-
-            <form @submit.prevent="submit">
-              <div class="mb-3">
-                <label for="identifier" class="form-label">Email or username</label>
-                <input
-                  id="identifier"
-                  v-model="identifier"
-                  class="form-control"
-                  autocomplete="username"
-                  autocapitalize="none"
-                  required
-                  data-testid="email"
-                />
-              </div>
-              <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input
-                  id="password"
-                  v-model="password"
-                  type="password"
-                  class="form-control"
-                  autocomplete="current-password"
-                  required
-                  data-testid="password"
-                />
-              </div>
-
-              <BenchAlert v-if="errorMsg" data-testid="auth-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
-
-              <button type="submit" class="btn btn-primary w-100 btn-lg" :disabled="busy" data-testid="auth-submit">
-                {{ busy ? 'Please wait...' : 'Sign in' }}
-              </button>
-            </form>
-
-            <p class="small text-center mt-3 mb-0">
-              No account yet?
-              <RouterLink :to="{ name: 'signup', query: route.query.redirect ? { redirect: route.query.redirect } : {} }" data-testid="to-signup">
-                Create one
-              </RouterLink>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
 </template>
