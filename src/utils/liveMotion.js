@@ -14,7 +14,9 @@
 // marker never jumps. Only when the map itself was not on screen (tab hidden) does it jump
 // straight to the present instead of replaying what you did not watch.
 // Readings are cleaned on the way in: GPS wobble while standing still is flattened, one bad
-// fix and impossible jumps are skipped.
+// fix, coarse fixes between good ones and impossible jumps are skipped.
+// When the newest reading is a Stop, the marker goes straight there (the person has stopped:
+// replaying their last 12 s would show them moving after their marker says "Stopped").
 
 export const LAG_MS = 12000 // draw people 12 s in the past (phones send every ~10 s)
 export const GAP_MS = 2 * 60 * 1000 // longer than this without readings = a real gap (dashed, no sliding)
@@ -23,6 +25,12 @@ export const SNAP_MS = 30 * 1000 // map was off screen and is this far behind: j
 const RESUME_MS = 15000 // after the map was off screen, readings fetched in this window may cause a jump
 const CATCH_UP_MS = 5000 // how quickly a late playhead catches up (bigger = gentler)
 const MAX_RATE = 20 // fast-forward limit: a 5 min dead zone replays in ~20 s
+// A fix this coarse (metres)... is skipped while one COARSE_RATIO times as accurate is at most COARSE_WINDOW_MS older.
+// Indoors an Android phone can send a GPS fix (±15 m) and a Wi-Fi / cell fix (±100 m, always the same point, 120 m
+// away) in turn, and the marker went back and forth between them (2 Nov). The database applies the same rule (075).
+export const COARSE_M = 50
+const COARSE_RATIO = 2.5
+const COARSE_WINDOW_MS = 60000
 
 // Movements smaller than this (metres) are GPS noise: half the accuracy, 4–15 m
 export function wobbleThreshold(accuracy) {
@@ -58,6 +66,8 @@ export function addReading(track, r) {
   if (prev && joined(prev, r)) {
     // One bad fix (reflections off buildings): much worse than the reading before it
     if (r.accuracy > 100 && prev.accuracy > 0 && prev.accuracy <= 50) return false
+    // A coarse fix between good ones (indoors: GPS and Wi-Fi in turn)
+    if (r.accuracy >= COARSE_M && prev.accuracy > 0 && prev.accuracy * COARSE_RATIO <= r.accuracy && r.t - prev.t <= COARSE_WINDOW_MS) return false
     // Impossible jump (faster than 70 m/s ≈ 250 km/h): skip it
     const seconds = (r.t - prev.t) / 1000
     if (seconds > 0 && seconds < 30 && metres(prev, r) / seconds > 70) return false
@@ -94,6 +104,11 @@ function delayOf(track) {
 export function advance(track, now, elapsed) {
   const pts = track.points
   if (!pts.length) return null
+  const last = pts[pts.length - 1]
+  if (last.source === 'stop') {
+    track.at = Math.max(track.at ?? last.t, last.t) // stopped: at the Stop now, and never back before it
+    return track.at
+  }
   const wanted = now - delayOf(track) - LAG_MS
   if (elapsed > 5000) track.resumedAt = now
   if (track.at === null || track.at > wanted + SNAP_MS) {

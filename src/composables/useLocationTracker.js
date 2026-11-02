@@ -90,6 +90,7 @@ function createTracker() {
   const savedCount = ref(0)
   const lastSavedAt = ref(null)
   const sharingEventId = ref(null) // which event I'm sharing for (null = not sharing)
+  const busy = ref(false) // a start or a stop is running (the Share / Stop buttons wait for it)
   // Phone app only: settings that can slow down or stop background tracking
   const powerSaveOn = ref(false) // Android battery saver / iOS Low Power Mode is on
   const batteryRestricted = ref(false) // Android: app is NOT set to "Unrestricted" battery use
@@ -119,9 +120,29 @@ function createTracker() {
   }
 
   // ---------- Start / stop (what the page calls) ----------
-  async function start(eventId, groupId) {
+  // One at a time, in the order asked. Both take a second or two (the plugin, the tracking pass), and a Share pressed
+  // while Stop was still running ended with Stop cancelling every pass of mine -- the new one too -- so the phone kept
+  // tracking while each upload was refused.
+  let turn = Promise.resolve()
+  function inTurn(job) {
+    const run = turn.then(async () => {
+      busy.value = true
+      try {
+        return await job()
+      } finally {
+        busy.value = false
+      }
+    })
+    turn = run.catch(() => {})
+    return run
+  }
+  const start = (eventId, groupId) => inTurn(() => startNow(eventId, groupId))
+  // recordStop = false when the database already refused us (not IC any more)
+  const stop = (recordStop = true) => inTurn(() => stopNow(recordStop))
+
+  async function startNow(eventId, groupId) {
     if (isTracking.value && ids.eventId === eventId && ids.groupId === groupId) return // already sharing here
-    if (isTracking.value) await stop() // sharing for another event/group: stop that first
+    if (isTracking.value) await stopNow() // sharing for another event/group: stop that first
 
     errorMsg.value = ''
     if (ids.eventId !== eventId) {
@@ -150,8 +171,7 @@ function createTracker() {
     else startWeb(session)
   }
 
-  // recordStop = false when the database already refused us (not IC any more)
-  async function stop(recordStop = true) {
+  async function stopNow(recordStop = true) {
     const wasTracking = isTracking.value
     isTracking.value = false
     sharingEventId.value = null
@@ -575,6 +595,7 @@ function createTracker() {
   return {
     isNative,
     isTracking,
+    busy,
     current,
     readings,
     errorMsg,
