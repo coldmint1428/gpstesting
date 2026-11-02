@@ -346,7 +346,7 @@ function paste() {
   flex: none;
 }
 .area-row-locked {
-  background: var(--bs-tertiary-bg, #f4f4f2);
+  background: var(--bs-tertiary-bg, var(--canvas));
 }
 
 .area-scroll {

@@ -219,7 +219,7 @@ onUnmounted(() => clearInterval(liveTimer))
 </script>
 
 <template>
-  <div data-testid="playback-panel">
+  <div class="kp-stack" data-testid="playback-panel">
     <div v-if="errorMsg" class="alert alert-danger py-2" role="alert" data-testid="playback-error">{{ errorMsg }}</div>
     <div v-if="infoMsg" class="alert alert-warning py-2" role="status" data-testid="playback-info">{{ infoMsg }}</div>
 
@@ -239,72 +239,44 @@ onUnmounted(() => clearInterval(liveTimer))
     />
 
     <template v-else>
-      <p class="small text-muted">
-        Recordings stay online until 11:59 pm, 7 days after the day they ended. Download a CSV to keep one longer.
-      </p>
-      <SkeletonLoader v-if="loadingList && !items.length" :rows="3" label="Loading recordings…" />
-      <p v-else-if="!items.length" class="text-muted small" data-testid="no-recordings">
-        No recordings yet. They appear here once the event has been started and ICs share their location.
-      </p>
+      <section class="kp-card">
+        <SkeletonLoader v-if="loadingList && !items.length" :rows="3" label="Loading recordings…" />
+        <p v-else-if="!items.length" class="kp-empty" data-testid="no-recordings">No recordings yet.</p>
 
-      <ul class="list-group mb-3" data-testid="recording-list">
-        <li v-for="item in items" :key="item.key" class="list-group-item" :data-testid="'recording-' + item.kind">
-          <div class="d-flex flex-wrap align-items-center gap-2">
-            <div class="flex-grow-1">
-              <span v-if="item.live" class="badge badge-live me-1">Live</span>
-              <strong>{{ item.title }}</strong>
-              <div class="small text-muted">
-                <template v-if="item.expired">Deleted after {{ untilText(item) }}. Replay it from your CSV file.</template>
+        <ul class="kp-list" data-testid="recording-list">
+          <li v-for="item in items" :key="item.key" class="kp-row" :data-testid="'recording-' + item.kind">
+            <div class="kp-row-main">
+              <strong><span v-if="item.live" class="kp-chip kp-chip-ink me-1"><span class="kp-dot kp-pulse"></span>Live</span>{{ item.title }}</strong>
+              <span>
+                <template v-if="item.expired">Deleted after {{ untilText(item) }}. Replay it from your CSV.</template>
                 <template v-else>
                   {{ item.people }} {{ item.people === 1 ? 'person' : 'people' }} · {{ item.readings.toLocaleString() }} {{ item.readings === 1 ? 'reading' : 'readings' }}
-                  <template v-if="item.availableUntil"> · available until {{ untilText(item) }}</template>
-                  <template v-if="item.endReason === 'auto'"> · ended automatically (no uploads for 24 h)</template>
+                  <template v-if="item.availableUntil"> · until {{ untilText(item) }}</template>
+                  <template v-if="item.endReason === 'auto'"> · ended automatically</template>
                 </template>
-                <span v-if="!item.expired && item.expiresSoon" class="badge text-bg-warning ms-1">Download to keep</span>
-              </div>
+              </span>
+              <span v-if="!item.expired && item.expiresSoon" class="kp-chip kp-chip-warn mt-1">Download to keep</span>
             </div>
-            <template v-if="!item.expired">
-              <span v-if="busyKey === item.key" class="small text-muted">{{ progress }}</span>
-              <button
-                class="btn btn-sm"
-                :class="item.live ? 'btn-outline-primary' : 'btn-primary'"
-                :disabled="busyKey !== null || item.readings === 0"
-                data-testid="play-recording-btn"
-                @click="play(item)"
-              >
-                {{ item.live ? 'Rewind' : '▶ Play' }}
-              </button>
-              <button
-                v-if="!item.live"
-                class="btn btn-sm btn-outline-secondary"
-                :disabled="busyKey !== null || item.readings === 0"
-                data-testid="download-csv-btn"
-                @click="download(item)"
-              >
-                Download CSV
-              </button>
-            </template>
-            <button
-              v-if="!item.live"
-              class="btn btn-sm btn-outline-danger"
-              :disabled="busyKey !== null"
-              title="Delete this recording"
-              data-testid="delete-recording-btn"
-              @click="remove(item)"
-            >
-              Delete
-            </button>
-          </div>
-        </li>
-      </ul>
+            <div class="kp-row-actions">
+              <template v-if="!item.expired">
+                <span v-if="busyKey === item.key" class="small text-muted">{{ progress }}</span>
+                <button class="btn btn-sm" :class="item.live ? 'btn-outline-secondary' : 'btn-success'" :disabled="busyKey !== null || item.readings === 0" data-testid="play-recording-btn" @click="play(item)">
+                  {{ item.live ? 'Rewind' : '▶ Play' }}
+                </button>
+                <button v-if="!item.live" class="btn btn-sm btn-ghost" :disabled="busyKey !== null || item.readings === 0" data-testid="download-csv-btn" @click="download(item)">CSV</button>
+              </template>
+              <button v-if="!item.live" class="btn btn-sm btn-ghost-danger" :disabled="busyKey !== null" title="Delete this recording" data-testid="delete-recording-btn" @click="remove(item)">Delete</button>
+            </div>
+          </li>
+        </ul>
+        <p class="kp-note mb-0">Recordings stay online for 7 days after the event. Download a CSV to keep one longer.</p>
+      </section>
 
-      <div class="card">
-        <div class="card-body py-2">
-          <h3 class="h6 mb-1">Replay from a CSV file</h3>
-          <p class="small text-muted mb-2">For recordings older than 7 days. The file is read on this computer, not uploaded.</p>
-          <input ref="fileInput" type="file" accept=".csv,text/csv" class="form-control form-control-sm" data-testid="csv-input" @change="openFile" />
-        </div>
-      </div>
+      <section class="kp-card">
+        <h3 class="kp-title mb-2" style="font-size: 16px">Replay a CSV</h3>
+        <input ref="fileInput" type="file" accept=".csv,text/csv" class="form-control" aria-label="CSV file to replay" data-testid="csv-input" @change="openFile" />
+        <p class="kp-note mb-0">It stays on this computer.</p>
+      </section>
     </template>
   </div>
 </template>

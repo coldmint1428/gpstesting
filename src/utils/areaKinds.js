@@ -8,11 +8,11 @@
 // failing with "The layout data is not valid".
 
 export const AREA_KINDS = [
-  { value: 'zone', label: 'Zone', colour: '#5F6B65', icon: 'square' },
-  { value: 'no_go', label: 'No-Go', colour: '#C4321F', icon: 'square' },
-  { value: 'obstacle', label: 'Obstacle', colour: '#9A5200', icon: 'square' },
-  { value: 'stage', label: 'Stage', colour: '#3D5A99', icon: 'square' },
-  { value: 'entrance', label: 'Entrance', colour: '#0F5C50', icon: 'triangle' },
+  { value: 'zone', label: 'Zone', colour: '#0B3D2E', icon: 'square' },
+  { value: 'no_go', label: 'No-Go', colour: '#C2410C', icon: 'square' },
+  { value: 'obstacle', label: 'Obstacle', colour: '#56685F', icon: 'square' },
+  { value: 'stage', label: 'Stage', colour: '#0A1F17', icon: 'square' },
+  { value: 'entrance', label: 'Entrance', colour: '#14523E', icon: 'triangle' },
 ]
 
 export const AREA_NAME_MAX = 50

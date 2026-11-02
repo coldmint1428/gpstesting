@@ -130,83 +130,58 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="d-grid gap-3" data-testid="simulator-panel" :aria-busy="busy ? 'true' : null">
-    <div class="card">
-      <div class="card-body d-flex flex-wrap align-items-center gap-3">
-        <span
-          class="badge"
-          :class="{ 'text-bg-success': status === 'running', 'text-bg-warning': status === 'paused', 'text-bg-secondary': status === 'ready' || status === 'empty' }"
-          data-testid="sim-status"
-        >{{ statusText }}</span>
-        <span class="small text-muted sim-nums">
+  <div class="kp-stack" data-testid="simulator-panel" :aria-busy="busy ? 'true' : null">
+    <section class="kp-status">
+      <div class="kp-status-bar">
+        <span class="kp-chip" :class="{ 'kp-chip-mint': status === 'running', 'kp-chip-warn': status === 'paused' }" data-testid="sim-status">{{ statusText }}</span>
+        <span class="kp-status-text kp-mono">
           {{ groupCount }} groups · {{ icCount }} virtual ICs
           <template v-if="run"> · {{ run.ticks }} ticks · {{ run.readings }} readings</template>
+          <span v-if="livePlan" class="text-muted" data-testid="sim-plan-name"> · plan “{{ livePlan.name }}”</span>
+          <span v-else class="text-danger" data-testid="sim-plan-missing"> · publish a plan first</span>
         </span>
-        <span v-if="livePlan" class="small text-muted" data-testid="sim-plan-name"> · walking the plan "{{ livePlan.name }}"</span>
-        <span v-else class="small text-danger" data-testid="sim-plan-missing"> · publish a plan first</span>
-        <div class="ms-auto d-flex flex-wrap gap-2">
-          <button v-if="status !== 'running'" class="btn btn-success btn-sm" :disabled="busy || !groupCount || !livePlan" data-testid="sim-start" @click="start">
-            Start
-          </button>
-          <button v-else class="btn btn-warning btn-sm" :disabled="busy" data-testid="sim-pause" @click="pause">Pause</button>
-          <button class="btn btn-outline-danger btn-sm" :disabled="busy || !groupCount" data-testid="sim-reset" @click="reset">Reset</button>
-        </div>
+        <button v-if="status !== 'running'" class="btn btn-sm btn-success" :disabled="busy || !groupCount || !livePlan" data-testid="sim-start" @click="start">Start</button>
+        <button v-else class="btn btn-sm btn-primary" :disabled="busy" data-testid="sim-pause" @click="pause">Pause</button>
+        <button class="btn btn-sm btn-ghost-danger" :disabled="busy || !groupCount" data-testid="sim-reset" @click="reset">Reset</button>
       </div>
-      <div v-if="groupCount" class="card-body pt-0 small text-muted">
-        <span v-for="s in scripts" :key="s.key" class="me-3">{{ s.label }}: <strong>{{ byScript[s.key] || 0 }}</strong></span>
+      <div v-if="groupCount" class="kp-chips kp-status-extra">
+        <span v-for="s in scripts" :key="s.key" class="kp-chip">{{ s.label }}: {{ byScript[s.key] || 0 }}</span>
       </div>
-    </div>
+    </section>
 
-    <form class="card" @submit.prevent="setUp">
-      <div class="card-body d-grid gap-3">
-        <div>
-          <h2 class="h6 mb-1">Add virtual groups</h2>
-          <p class="small text-muted mb-0">
-            Each group starts at a random spot 200–600 m from one of this event's zones (Zones tab) and then walks to its
-            own moments in the published plan, leaving late enough to arrive a minute early. Its virtual ICs send a
-            reading every 10 s with 5–15 m of GPS noise. Virtual ICs are fake accounts that cannot sign in; Reset
-            removes them.
-          </p>
-        </div>
-        <div class="d-flex flex-wrap gap-3">
-          <label class="form-label mb-0 small">Groups
-            <input id="sim-groups" v-model.number="groups" type="number" min="1" max="150" class="form-control form-control-sm sim-num" required />
-          </label>
-          <label class="form-label mb-0 small">ICs per group, from
-            <input id="sim-ics-min" v-model.number="icsMin" type="number" min="1" max="3" class="form-control form-control-sm sim-num" />
-          </label>
-          <label class="form-label mb-0 small">to
-            <input id="sim-ics-max" v-model.number="icsMax" type="number" min="1" max="3" class="form-control form-control-sm sim-num" />
-          </label>
-        </div>
-        <div>
-          <div class="small fw-semibold mb-1">Behaviour mix (%) <span class="text-muted fw-normal">· total {{ mixTotal }} %</span></div>
-          <div class="d-grid gap-2">
-            <label v-for="s in scripts" :key="s.key" class="d-flex flex-wrap align-items-center gap-2 small">
-              <input :id="'sim-mix-' + s.key" v-model.number="mix[s.key]" type="number" min="0" max="100" class="form-control form-control-sm sim-num" />
+    <form class="kp-card kp-fields" @submit.prevent="setUp">
+      <div>
+        <h2 class="kp-title">Add virtual groups</h2>
+        <p class="kp-sub">They walk the published plan and send a reading every 10 s. Reset removes them.</p>
+      </div>
+      <div class="kp-actions" style="align-items: flex-end; gap: 12px">
+        <label class="form-label mb-0">Groups
+          <input id="sim-groups" v-model.number="groups" type="number" min="1" max="150" class="form-control form-control-sm" style="width: 6rem" required />
+        </label>
+        <label class="form-label mb-0">ICs per group: min
+          <input id="sim-ics-min" v-model.number="icsMin" type="number" min="1" max="3" class="form-control form-control-sm" style="width: 6rem" />
+        </label>
+        <label class="form-label mb-0">max
+          <input id="sim-ics-max" v-model.number="icsMax" type="number" min="1" max="3" class="form-control form-control-sm" style="width: 6rem" />
+        </label>
+      </div>
+      <div>
+        <h3 class="kp-label">Behaviour mix · {{ mixTotal }} %</h3>
+        <ul class="kp-list">
+          <li v-for="s in scripts" :key="s.key" class="kp-row py-2">
+            <input :id="'sim-mix-' + s.key" v-model.number="mix[s.key]" type="number" min="0" max="100" class="form-control form-control-sm" style="width: 5.5rem" :aria-label="s.label + ' percent'" />
+            <label class="kp-row-main mb-0" :for="'sim-mix-' + s.key">
               <strong>{{ s.label }}</strong>
-              <span class="text-muted">{{ s.description }}</span>
+              <span>{{ s.description }}</span>
             </label>
-          </div>
-          <div class="form-text">"Wrong zone" needs a No-Go zone in the Zones tab; without one those groups walk to a normal zone.</div>
-        </div>
-        <div>
-          <button class="btn btn-primary btn-sm" type="submit" :disabled="busy || status === 'running'" data-testid="sim-setup">
-            Add {{ groups }} groups
-          </button>
-          <span v-if="status === 'running'" class="small text-muted ms-2">Pause to add more.</span>
-        </div>
+          </li>
+        </ul>
+        <p class="kp-note mb-0">"Wrong zone" needs a No-Go zone on the Map page.</p>
+      </div>
+      <div class="kp-actions">
+        <button class="btn btn-primary" type="submit" :disabled="busy || status === 'running'" data-testid="sim-setup">Add {{ groups }} groups</button>
+        <span v-if="status === 'running'" class="small text-muted">Pause to add more.</span>
       </div>
     </form>
   </div>
 </template>
-
-<style scoped>
-.sim-num {
-  width: 5.5rem;
-  display: inline-block;
-}
-.sim-nums {
-  font-variant-numeric: tabular-nums;
-}
-</style>

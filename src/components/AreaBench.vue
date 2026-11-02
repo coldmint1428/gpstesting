@@ -2748,12 +2748,12 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 <template>
   <div class="row g-3">
     <!-- ============ The map ============ -->
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-xl-7">
       <div
         class="bench-wrap position-relative"
         :class="{ 'bench-drawing': mode === 'polygons' }"
       >
-        <div ref="mapEl" class="bench-map rounded border" data-testid="bench-map"></div>
+        <div ref="mapEl" class="bench-map" data-testid="bench-map"></div>
 
         <!-- Undo and redo are NOT here. They act on the whole document, not on the map, so they
              live on the page next to the other document-wide controls -- see
@@ -2850,10 +2850,9 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
     </div>
 
     <!-- ============ Controls ============ -->
-    <div class="col-12 col-lg-6">
-      <!-- The controls take the right half of a large screen, split in two: the areas being
-           drawn, and the pictures they are drawn over. Below lg the split collapses and
-           everything stacks in this order. -->
+    <div class="col-12 col-xl-5">
+      <!-- Under the map on a tablet and a small laptop, split in two: the areas being drawn, and the pictures they are
+           drawn over. Beside the map from xl, where they stack; on a phone they stack too. -->
       <div class="row g-3">
         <!-- Looking, not editing: the map moves, nothing else does. -->
         <div v-if="!canEdit" class="col-12">
@@ -2875,7 +2874,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 
         <!-- The areas come first: drawing them is what the bench is for, and the list of them
              is what the planner keeps coming back to. -->
-        <div class="col-12" :class="{ 'col-lg-6': canEdit }">
+        <div class="col-12" :class="{ 'col-md-6 col-xl-12': canEdit }">
           <!-- Drawing -->
           <div v-if="canEdit" class="card mb-3">
             <div class="card-body">
@@ -2973,7 +2972,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
 
         <!-- Floor plans. One card each, because each one has its own name, its own show/hide
              and its own placement. -->
-        <div v-if="canEdit" class="col-12 col-lg-6">
+        <div v-if="canEdit" class="col-12 col-md-6 col-xl-12">
           <div class="card">
             <div class="card-body">
               <!-- How full the bench is, against the 4 MB the database enforces, as a ring. This is
@@ -3196,7 +3195,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   flex: none;
 }
 .plan-row.is-locked {
-  background: var(--bs-tertiary-bg, #f4f4f2);
+  background: var(--bs-tertiary-bg, var(--canvas));
 }
 
 /* The list of floor plans, capped. A bench with a dozen plans used to grow this column until
@@ -3263,7 +3262,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   height: 14px;
   margin: -7px 0 0 -7px;
   background: #fff;
-  border: 2px solid #0d6efd;
+  border: 2px solid var(--forest);
   border-radius: 2px;
   cursor: nwse-resize;
   touch-action: none;
@@ -3289,7 +3288,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #0d6efd;
+  background: var(--forest);
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
@@ -3301,7 +3300,7 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
   height: 16px;
   border-radius: 50%;
   background: #fff;
-  border: 2px solid #fd7e14;
+  border: 2px solid var(--stale);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   /* A bin: clicking a dot removes it (dragging still moves it) */
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M4 6h12M8 6V4h4v2M6 6l1 11h6l1-11' fill='white' stroke='black' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E") 10 10, pointer;

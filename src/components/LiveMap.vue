@@ -891,7 +891,7 @@ onUnmounted(() => {
   <div>
     <BenchAlert v-if="errorMsg && errorMsg !== dismissedError" @dismiss="dismissedError = errorMsg">{{ errorMsg }}</BenchAlert>
     <div class="position-relative mb-3">
-      <div ref="mapEl" class="live-map rounded border" data-testid="live-map"></div>
+      <div ref="mapEl" class="live-map" data-testid="live-map"></div>
       <!-- Connection dropped (tab was in the background, network changed): retrying by itself -->
       <div v-if="reconnecting" class="reconnect-pill shadow-sm" role="status" data-testid="reconnecting">
         <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Reconnecting…
@@ -911,10 +911,9 @@ onUnmounted(() => {
       <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
       <!-- The plan under the people (step 30): what a dashed line is, and which one is loud. -->
       <span v-if="planLine" data-testid="map-plan-legend">
-        <span class="plan-swatch" aria-hidden="true"></span>a group’s plan · the bold one is due now
+        <span class="plan-swatch" aria-hidden="true"></span>Plan · bold is due now
       </span>
       <span v-if="sosAlerts.length" class="text-danger fw-semibold"><span class="dot d-inline-block align-middle me-1" style="background-color: #dc3545"></span>SOS</span>
-      <span v-if="liveSince">Tap a marker to see their trail · tap the trail for times</span>
       <label v-if="zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
         <input v-model="showZones" class="form-check-input" type="checkbox" />
         <span class="form-check-label">Zones ({{ zoneCount }})</span>
@@ -930,10 +929,9 @@ onUnmounted(() => {
       </label>
     </div>
 
-    <h2 class="h6 mb-0">People on the map</h2>
-    <p class="small text-muted mb-2">Tap a person to follow them and see their trail.</p>
-    <p v-if="people.length === 0" class="text-muted small" data-testid="no-positions">
-      No one is sharing yet. Only ICs share their location.
+    <h2 class="kp-title mb-2" style="font-size: 16px">People on the map</h2>
+        <p v-if="people.length === 0" class="text-muted small" data-testid="no-positions">
+      No one is sharing yet.
     </p>
     <ul v-else class="list-group small" data-testid="people-list">
       <li
@@ -1004,11 +1002,11 @@ onUnmounted(() => {
   opacity: 0.5;
 }
 .dot-offline {
-  background-color: #adb5bd !important;
+  background-color: var(--stopped) !important;
 }
 .dot-stopped {
   background-color: transparent !important;
-  border: 2px dashed #6c757d;
+  border: 2px dashed var(--muted);
 }
 /* The plan's line in the legend: the same dashed stroke the map draws it with. */
 .plan-swatch {
@@ -1017,7 +1015,7 @@ onUnmounted(() => {
   height: 0;
   margin-right: 0.25rem;
   vertical-align: middle;
-  border-top: 2px dashed #244f3f;
+  border-top: 2px dashed var(--forest);
 }
 :global(.trail-hover) {
   cursor: pointer;
@@ -1028,7 +1026,7 @@ onUnmounted(() => {
   box-shadow: none;
   padding: 0 4px;
   font-size: 11px;
-  color: #212529;
+  color: var(--ink);
 }
 :global(.zone-label::before) {
   display: none;

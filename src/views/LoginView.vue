@@ -4,6 +4,8 @@ import { ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import BenchAlert from '../components/BenchAlert.vue'
+import KLogo from '../components/kinetic/KLogo.vue'
+import KVenueMap from '../components/kinetic/KVenueMap.vue'
 import { isNativeApp } from '../lib/platform'
 
 const native = isNativeApp // phone app: brand header over the map, the form in a sheet (Figma screen 1)
@@ -14,6 +16,7 @@ const router = useRouter()
 
 const identifier = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const errorMsg = ref('')
 const busy = ref(false)
 
@@ -31,76 +34,50 @@ async function submit() {
 </script>
 
 <template>
-  <!-- ===== Website: Planova "Log in" (dark brand panel beside the form) ===== -->
-  <main v-if="!native" class="pl-login">
-    <section class="pl-login__brand">
-      <h1>Plan the venue. Move every group on time.</h1>
-      <ul class="pl-login__points">
-        <li>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6m6-3v15m6-12v15" /></svg>
-          <div><b>Draw zones on the venue map</b><span>Stage, entrances, assembly areas and no-go zones, sized to the real site.</span></div>
-        </li>
-        <li>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2m7-2a10 10 0 1 1-20 0 10 10 0 1 1 20 0" /></svg>
-          <div><b>Schedule where each group should be</b><span>A time-by-time run sheet every group can follow.</span></div>
-        </li>
-        <li>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22S4 16 4 10a8 8 0 1 1 16 0c0 6-8 12-8 12ZM15 10a3 3 0 1 1-6 0 3 3 0 1 1 6 0Z" /></svg>
-          <div><b>Follow one IC per group live</b><span>A clear map, not hundreds of dots, then replay the day afterwards.</span></div>
-        </li>
-      </ul>
-    </section>
-    <section class="pl-login__form">
-      <div class="pl-login__card">
-        <h2 class="pl-h-page mb-1">Log in</h2>
-        <p class="pl-meta mb-3">Use your email or username.</p>
-        <p v-if="route.query.confirm" class="alert alert-info py-2 small" data-testid="confirm-email">
-          Account created. Check your email to confirm it, then log in here.
-        </p>
-
+  <!-- ===== Website: Planova Kinetic "Log in" (forest art panel beside the form) ===== -->
+  <div v-if="!native" class="k kq">
+    <main class="kg">
+      <aside class="kg-art">
+        <RouterLink class="kl-brand" to="/" style="color: #fff; padding: 0; position: relative; z-index: 2"><KLogo on-forest /><span>planova</span></RouterLink>
+        <div class="kl-stage kl-spin" aria-hidden="true"><KVenueMap /></div>
+        <h2>Right place.<br /><em>Right time.</em></h2>
+      </aside>
+      <div class="kg-form">
         <form @submit.prevent="submit">
-          <div class="mb-3">
-            <label for="identifier" class="form-label">Email or username</label>
-            <input
-              id="identifier"
-              v-model="identifier"
-              class="form-control"
-              autocomplete="username"
-              autocapitalize="none"
-              required
-              data-testid="email"
-            />
-          </div>
-          <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              class="form-control"
-              autocomplete="current-password"
-              required
-              data-testid="password"
-            />
+          <RouterLink class="ks-crumb" to="/" style="margin-bottom: 26px"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Home</RouterLink>
+          <h1>Welcome back</h1>
+          <p class="mut" style="margin: 0 0 26px; font-size: 16px">Log in to see your events.</p>
+          <p v-if="route.query.confirm" class="alert alert-info py-2 small" data-testid="confirm-email">
+            Account created. Check your email to confirm it, then log in here.
+          </p>
+
+          <label for="identifier" class="lab">Email or username</label>
+          <input id="identifier" v-model="identifier" class="kin" autocomplete="username" autocapitalize="none" required data-testid="email" />
+
+          <label for="password" class="lab">Password</label>
+          <div class="kg-pw">
+            <input id="password" v-model="password" :type="showPassword ? 'text' : 'password'" class="kin" autocomplete="current-password" required data-testid="password" style="padding-right: 52px" />
+            <button type="button" class="ib" :aria-label="showPassword ? 'Hide password' : 'Show password'" :aria-pressed="showPassword ? 'true' : 'false'" @click="showPassword = !showPassword">
+              <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path></svg>
+            </button>
           </div>
 
-          <BenchAlert v-if="errorMsg" data-testid="auth-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
+          <div v-if="errorMsg" style="margin-top: 14px">
+            <BenchAlert data-testid="auth-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
+          </div>
 
-          <button type="submit" class="btn btn-primary btn-lg w-100" :disabled="busy" data-testid="auth-submit">
+          <button type="submit" class="kb kb-lime kb-lg" style="width: 100%; margin-top: 26px" :disabled="busy" data-testid="auth-submit">
             {{ busy ? 'Please wait...' : 'Log in' }}
           </button>
+          <div class="kg-or">or</div>
+          <p style="text-align: center; margin: 0; font-size: 15px">
+            New to Planova?
+            <RouterLink class="link" :to="{ name: 'signup', query: route.query.redirect ? { redirect: route.query.redirect } : {} }" data-testid="to-signup">Create an account</RouterLink>
+          </p>
         </form>
-
-        <hr class="my-4" />
-        <p class="pl-meta mb-0">
-          New to Planova?
-          <RouterLink :to="{ name: 'signup', query: route.query.redirect ? { redirect: route.query.redirect } : {} }" data-testid="to-signup">
-            Create an account
-          </RouterLink>
-        </p>
       </div>
-    </section>
-  </main>
+    </main>
+  </div>
 
   <!-- ===== Phone app: brand header over the map, the form in a sheet (Figma screen 1) ===== -->
   <main v-else class="pv-login">

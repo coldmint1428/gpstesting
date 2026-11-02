@@ -59,57 +59,38 @@ function roleChanged(p) {
 
 <template>
   <section>
-    <h2 class="h5 mb-1">Add people</h2>
-    <p class="text-muted small mb-3">You are the event's Root automatically. People can also join later with the event's code.</p>
+    <div class="kp-card-head">
+      <h2 class="kp-title">Add people</h2>
+      <span class="kp-chip">{{ wizard.people.length }} added</span>
+    </div>
 
-    <label for="people-email" class="form-label">Add by email</label>
-    <form class="d-flex gap-2" @submit.prevent="addByEmail">
-      <input
-        id="people-email"
-        v-model="email"
-        type="email"
-        class="form-control"
-        placeholder="name@example.com"
-        autocomplete="off"
-        autocapitalize="off"
-        spellcheck="false"
-        inputmode="email"
-        data-testid="wiz-email"
-      />
-      <button type="submit" class="btn btn-primary flex-shrink-0" :disabled="!canFind" data-testid="wiz-email-add">
+    <label for="people-email" class="form-label">Add by exact email</label>
+    <form class="kp-inline" @submit.prevent="addByEmail">
+      <input id="people-email" v-model="email" type="email" class="form-control" placeholder="name@example.com" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="email" data-testid="wiz-email" />
+      <button type="submit" class="btn btn-primary" :disabled="!canFind" data-testid="wiz-email-add">
         {{ finding ? 'Checking...' : 'Add' }}
       </button>
     </form>
-    <div class="form-text">Type their full email address. For privacy, nobody is suggested and no one's email is shown.</div>
-    <p
-      v-if="message"
-      class="small mt-2 mb-0"
-      :class="messageKind === 'error' ? 'text-danger' : 'text-success'"
-      role="status"
-      data-testid="wiz-email-result"
-    >
+    <p class="kp-note">People can also join later with the event code.</p>
+    <p v-if="message" class="small mt-2 mb-0" :class="messageKind === 'error' ? 'text-danger' : 'text-success'" role="status" data-testid="wiz-email-result">
       {{ message }}
     </p>
 
-    <h3 class="h6 mt-4">Added ({{ wizard.people.length }})</h3>
-    <p v-if="wizard.people.length === 0" class="text-muted small">No one yet.</p>
-    <ul v-else class="list-group" data-testid="wiz-people">
-      <li v-for="p in wizard.people" :key="p.id" class="list-group-item">
-        <div class="d-flex flex-wrap align-items-center gap-2">
-          <span class="me-auto text-truncate">
-            {{ p.display_name }} <span v-if="p.email" class="text-muted small">{{ p.email }}</span>
-          </span>
+    <p v-if="wizard.people.length === 0" class="kp-empty">No one yet.</p>
+    <ul v-else class="kp-list mt-3" data-testid="wiz-people">
+      <li v-for="p in wizard.people" :key="p.id" class="kp-row">
+        <div class="kp-row-main">
+          <strong>{{ p.display_name }}</strong>
+          <span v-if="p.email">{{ p.email }}</span>
+        </div>
+        <div class="kp-row-actions">
           <label class="visually-hidden" :for="'role-' + p.id">Role for {{ p.display_name }}</label>
-          <select :id="'role-' + p.id" v-model="p.role" class="form-select form-select-sm w-auto" @change="roleChanged(p)">
+          <select :id="'role-' + p.id" v-model="p.role" class="form-select form-select-sm kp-stepped" @change="roleChanged(p)">
             <option v-for="r in ROLE_OPTIONS" :key="r.value" :value="r.value">{{ r.label }}</option>
           </select>
-          <button type="button" class="btn btn-sm btn-outline-danger" @click="wizard.removePerson(p.id)">Remove</button>
+          <button type="button" class="btn btn-sm btn-ghost-danger" @click="wizard.removePerson(p.id)">Remove</button>
         </div>
       </li>
     </ul>
-    <p class="form-text">
-      Planners set up the map and timings, and are not in a group. Marshals see every group on the live map.
-      Group Admin and IC are chosen in the next step.
-    </p>
   </section>
 </template>

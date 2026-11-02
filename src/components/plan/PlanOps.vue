@@ -492,7 +492,7 @@ watch(
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the ops board…" data-testid="ops-loading" />
       <p v-else-if="!groups.length" class="pv-ops-empty" data-testid="ops-empty">
-        This plan has no moments in it yet, so there is nothing for anyone to be doing.
+        This plan has no moments yet.
       </p>
 
       <ul v-else class="pv-ops-list">
@@ -545,27 +545,15 @@ watch(
       <div v-if="groups.length" class="pv-ops-hand">
         <span class="pv-ops-with" data-testid="ops-handback">{{ handText }}</span>
         <button type="button" class="pv-ops-act" data-testid="ops-take" :disabled="busy === 'take'" @click="takeBoard">
-          Take the board
+          Take board
         </button>
       </div>
-
-      <p v-if="groups.length" class="pv-ops-foot">
-        Times are the plan's own clock, T+0 at {{ t0Text }}. <em>Travel</em> is the time the strip gives a group
-        between one moment and its next; the distance is how far its ICs are from where the walk has it now, from
-        the midpoint of their newest readings. A moment marked <em>auto</em> closes itself when an IC is inside the
-        zone its point stands in, or within that IC's own arrival radius of it; the group's IC can also say
-        <em>We’re here</em> from their own schedule, and a second person cannot replace a mark somebody else made.
-        Take the board when you take over so the next person knows who to ask.
-      </p>
 
       <!-- The plan's own log (step 22). Messages a planner sends, and the changes the plan itself made, with the one
            tally that matters during a show: who has it and who to radio. -->
       <section v-if="planId" class="pv-log" data-testid="plan-log">
         <header class="pv-log-head">
           <h3 class="pv-log-title">Plan log</h3>
-          <span class="pv-log-note" data-testid="log-note">
-            What the plan's groups were told. People ack a message on their own schedule, with one tap.
-          </span>
         </header>
 
         <form class="pv-log-form" @submit.prevent="send">
@@ -579,7 +567,7 @@ watch(
             class="pv-input"
             data-testid="log-draft"
             maxlength="300"
-            placeholder="Say something to the plan — 300 characters"
+            placeholder="Message"
             aria-label="Message"
             @keyup.enter="send"
           />
@@ -588,7 +576,7 @@ watch(
           </button>
         </form>
 
-        <p v-if="!log.length" class="pv-log-empty" data-testid="log-empty">Nothing has been sent on this plan yet.</p>
+        <p v-if="!log.length" class="pv-log-empty" data-testid="log-empty">Nothing sent yet.</p>
         <ul v-else class="pv-log-list">
           <li
             v-for="row in log"

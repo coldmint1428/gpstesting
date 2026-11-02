@@ -15,21 +15,21 @@ html {
   --bs-border-color: var(--border-subtle);
   --bs-border-radius: var(--radius-md);
   --bs-border-radius-lg: var(--radius-lg);
-  --bs-primary: #244f3f;
+  --bs-primary: var(--forest);
   --bs-primary-rgb: 36, 79, 63;
-  --bs-success: #1e6b43;
+  --bs-success: var(--forest-2);
   --bs-success-rgb: 30, 107, 67;
-  --bs-danger: #b42318;
+  --bs-danger: var(--danger);
   --bs-danger-rgb: 180, 35, 24;
-  --bs-warning: #d15d0f;
+  --bs-warning: var(--danger);
   --bs-warning-rgb: 209, 93, 15;
-  --bs-info: #54867b;
+  --bs-info: var(--forest-2);
   --bs-info-rgb: 84, 134, 123;
-  --bs-link-color: #244f3f;
+  --bs-link-color: var(--forest);
   --bs-link-color-rgb: 36, 79, 63;
-  --bs-link-hover-color: #153329;
+  --bs-link-hover-color: var(--forest-2);
   --bs-link-hover-color-rgb: 21, 51, 41;
-  --bs-focus-ring-color: rgba(36, 79, 63, 0.35);
+  --bs-focus-ring-color: rgba(11, 61, 46, 0.35);
 }
 
 html body {
@@ -126,23 +126,23 @@ html .btn-warning {
   --bs-btn-color: var(--text-primary);
   --bs-btn-bg: var(--status-warning-bg);
   --bs-btn-border-color: var(--status-warning-border);
-  --bs-btn-hover-bg: #ffe9d2;
+  --bs-btn-hover-bg: var(--danger-bg);
   --bs-btn-hover-border-color: var(--status-warning-border);
   --bs-btn-hover-color: var(--text-primary);
-  --bs-btn-active-bg: #ffe9d2;
+  --bs-btn-active-bg: var(--danger-bg);
   --bs-btn-active-border-color: var(--status-warning-border);
   --bs-btn-active-color: var(--text-primary);
   border-width: 1.5px;
 }
 /* Warning orange is for borders and icons; the label stays readable */
 html .btn-outline-warning {
-  --bs-btn-color: #a8480c;
+  --bs-btn-color: var(--danger-strong);
   --bs-btn-border-color: var(--status-warning-border);
   --bs-btn-hover-bg: var(--status-warning-bg);
-  --bs-btn-hover-color: #7a3508;
+  --bs-btn-hover-color: var(--danger-strong);
   --bs-btn-hover-border-color: var(--status-warning-border);
   --bs-btn-active-bg: var(--status-warning-bg);
-  --bs-btn-active-color: #7a3508;
+  --bs-btn-active-color: var(--danger-strong);
   --bs-btn-active-border-color: var(--status-warning-border);
   border-width: 1.5px;
 }
@@ -297,7 +297,7 @@ html .ev {
   --ev-muted: var(--text-secondary);
   --ev-head-muted: var(--text-on-chrome-muted);
   --ev-teal: var(--status-info-fg);
-  --ev-amber: #a8480c;
+  --ev-amber: var(--danger-strong);
   --ev-red: var(--status-error-fg);
   --ev-blue: var(--brand-primary);
   font-family: var(--font-ui);
@@ -435,7 +435,7 @@ html .ev .ev-surface {
 
 /* ---------- Ops statuses: text keeps 4.5:1 on white, symbol and word still carry the meaning ---------- */
 html .ops-late { color: var(--status-error-fg); }
-html .ops-risk { color: #a8480c; }
+html .ops-risk { color: var(--danger-strong); }
 html .ops-ok { color: var(--status-info-fg); }
 html .ops-done { color: var(--status-success-fg); }
 html .ops-pill.ops-late,
@@ -883,7 +883,7 @@ html .text-danger {
   color: var(--status-error-fg) !important;
 }
 html .text-warning-emphasis {
-  color: #a8480c !important;
+  color: var(--danger-strong) !important;
 }
 html .btn-link {
   color: var(--text-link);
@@ -916,7 +916,7 @@ html .modal-content {
   box-shadow: var(--elevation-3);
 }
 html .modal-backdrop {
-  --bs-backdrop-bg: #1d1f1d;
+  --bs-backdrop-bg: var(--ink);
   --bs-backdrop-opacity: 0.6;
 }
 html .modal-title {

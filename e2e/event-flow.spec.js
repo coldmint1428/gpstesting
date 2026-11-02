@@ -213,6 +213,7 @@ test('the planner replays the session and downloads it as CSV', async ({ browser
 test('someone outside joins with the code and lands in the event as a member', async ({ browser }) => {
   const page = await as(browser, 'outsider')
   await page.goto('/events')
+  await page.getByTestId('join-open').click()
   const code = page.getByTestId('join-code').first()
   await code.fill(ev.joinCode) // (the pasted-with-a-dash case is public.spec's, QA-01)
   await code.press('Enter')

@@ -356,11 +356,11 @@ let fittedWithFrames = false
 let zoneBounds = null
 
 const ZONE_STYLE = {
-  zone: { color: '#244f3f', weight: 1.5, fillOpacity: 0.06, fillColor: '#244f3f' },
-  no_go: { color: '#a63a2f', weight: 2, dashArray: '6 4', fillOpacity: 0.1, fillColor: '#a63a2f' },
-  obstacle: { color: '#6d6a62', weight: 1.5, dashArray: '3 3', fillOpacity: 0.16, fillColor: '#6d6a62' },
-  stage: { color: '#163026', weight: 2, fillOpacity: 0.12, fillColor: '#163026' },
-  entrance: { color: '#3d6ea8', weight: 1.5, fillOpacity: 0.08, fillColor: '#3d6ea8' },
+  zone: { color: '#0b3d2e', weight: 2.5, fillOpacity: 0.6, fillColor: '#9be7c4' },
+  no_go: { color: '#c2410c', weight: 2.5, dashArray: '10 7', fillOpacity: 0.35, fillColor: '#ff8a65' },
+  obstacle: { color: '#56685f', weight: 1.5, dashArray: '3 3', fillOpacity: 0.16, fillColor: '#56685f' },
+  stage: { color: '#0a1f17', weight: 2.5, fillOpacity: 0.75, fillColor: '#c6f36b' },
+  entrance: { color: '#14523e', weight: 1.5, fillOpacity: 0.08, fillColor: '#14523e' },
 }
 
 function drawZones() {
@@ -541,7 +541,7 @@ function drawLines() {
     const line = (run) => {
       if (run.length < 2) return
       L.polyline(run, {
-        color: colorOf.value.get(groupId) || '#244f3f',
+        color: colorOf.value.get(groupId) || '#0b3d2e',
         weight: 2,
         // A group that is not ticked steps back so the ticked ones read as the subject.
         opacity: selectedGroups.value.size && !selectedGroups.value.has(groupId) ? 0.12 : 0.55,
@@ -567,7 +567,7 @@ function drawLines() {
         [gap.from.lat, gap.from.lng],
         [gap.to.lat, gap.to.lng],
       ],
-      { color: '#a63a2f', weight: 3, opacity: 0.9, interactive: false },
+      { color: '#c2410c', weight: 3, opacity: 0.9, interactive: false },
     ).addTo(lineLayer)
   }
   // The stretches the database refuses that the walk above does not report: a line through a zone, or a hop too
@@ -583,7 +583,7 @@ function drawLines() {
         [from.lat, from.lng],
         [to.lat, to.lng],
       ],
-      { color: '#a63a2f', weight: 3, opacity: 0.9, dashArray: '2 4', interactive: false },
+      { color: '#c2410c', weight: 3, opacity: 0.9, dashArray: '2 4', interactive: false },
     ).addTo(lineLayer)
   }
 }
@@ -609,7 +609,7 @@ function drawMarkers() {
     // the inspector lists it and calls it "off site" — but nobody is standing there, so a marker would be a person
     // the map is drawing who is not there. Step 10's Done-when is the words: "one fewer marker, still listed".
     if (!point || point.state === 'off_site') continue
-    const color = colorOf.value.get(group.id) || '#244f3f'
+    const color = colorOf.value.get(group.id) || '#0b3d2e'
     const dim = selectedGroups.value.size > 0 && !selectedGroups.value.has(group.id)
     // This badge is an end of a stretch the database refuses: same red ring the bar and the lane use.
     const bad = !run && flaggedCells.value.has(`${group.id}|${frame.id}`)
@@ -2136,21 +2136,18 @@ watch(
       </div>
       <div class="pv-board-empty" data-testid="plan-empty">
         <template v-if="props.onlyGroupId === 'none'">
-          You are not in a group yet. Ask the root, a planner or a group admin to add you, and your group's part of
-          the plan will appear here.
+          You are not in a group yet.
         </template>
         <template v-else-if="props.onlyGroupId">
-          No plan is published yet. When a planner publishes the plan for the run, your group's part of it appears
-          here — nothing before that is yours to follow.
+          No plan is published yet.
         </template>
         <template v-else>
-          No plans yet. A plan is a strip of frames: at each one you place every group, and the app works out the
-          movement in between.
+          No plans yet. Create one, then place each group frame by frame.
         </template>
       </div>
       <div class="pv-inspector">
         <p v-if="props.canEdit" class="pv-note">
-          Draw your areas on the Map page first. Planning uses the same polygons, locked.
+          Draw your areas on the Map page first.
         </p>
       </div>
     </div>
@@ -2181,28 +2178,9 @@ watch(
         <span class="pv-spacer"></span>
 
         <template v-if="props.canEdit">
-          <button
-            class="pv-btn is-quiet"
-            data-testid="undo"
-            :disabled="busy || !canUndo"
-            title="Undo the last change (Ctrl+Z)"
-            @click="runUndo"
-          >
-            Undo
-          </button>
-          <button
-            class="pv-btn is-quiet"
-            data-testid="redo"
-            :disabled="busy || !canRedo"
-            title="Put it back (Ctrl+Y, or Ctrl+Shift+Z)"
-            @click="runRedo"
-          >
-            Redo
-          </button>
+          <button class="pv-btn is-quiet" data-testid="undo" :disabled="busy || !canUndo" title="Undo the last change (Ctrl+Z)" @click="runUndo">Undo</button>
+          <button class="pv-btn is-quiet" data-testid="redo" :disabled="busy || !canRedo" title="Put it back (Ctrl+Y, or Ctrl+Shift+Z)" @click="runRedo">Redo</button>
           <button class="pv-btn" data-testid="frame-add" :disabled="busy" @click="addFrame">Add frame</button>
-          <button class="pv-btn" data-testid="frame-copy" :disabled="busy || !selected" title="Copy this frame (Ctrl+C)" @click="copyFrame">Copy</button>
-          <button class="pv-btn" data-testid="frame-paste" :disabled="busy || !clipboard" title="Paste it as a new frame (Ctrl+V)" @click="pasteFrame">Paste</button>
-          <button class="pv-btn" :disabled="busy" @click="fork">Copy plan</button>
           <button
             class="pv-btn is-primary"
             :disabled="busy"
@@ -2215,7 +2193,6 @@ watch(
           >
             {{ plan && plan.status === 'live' ? 'Publish again' : 'Publish' }}
           </button>
-          <button class="pv-btn is-quiet" :disabled="busy" @click="removePlan">Delete plan</button>
         </template>
       </div>
 
@@ -2239,6 +2216,10 @@ watch(
           @change="renameTo($event.target.value)"
         />
         <button class="pv-btn is-quiet" :disabled="busy" @click="startCreate">New plan</button>
+        <span class="pv-sep" aria-hidden="true"></span>
+        <button class="pv-btn is-quiet" data-testid="frame-copy" :disabled="busy || !selected" title="Copy this frame (Ctrl+C)" @click="copyFrame">Copy</button>
+        <button class="pv-btn is-quiet" data-testid="frame-paste" :disabled="busy || !clipboard" title="Paste it as a new frame (Ctrl+V)" @click="pasteFrame">Paste</button>
+        <button class="pv-btn is-quiet" :disabled="busy" @click="fork">Copy plan</button>
         <span class="pv-spacer"></span>
         <!-- The whole plan as a file (step 23). One control each: the button opens a picker nobody would design
              themselves, so the picker is hidden and the button is the product's own. -->
@@ -2268,6 +2249,7 @@ watch(
           data-testid="sheet-file"
           @change="onSheetPicked"
         />
+        <button class="pv-btn is-quiet" :disabled="busy" @click="removePlan">Delete plan</button>
       </div>
       </header>
 
@@ -2718,16 +2700,10 @@ watch(
         </div>
 
         <p v-if="props.canEdit" class="pv-note">
-          Ctrl+C copies the open frame; Ctrl+V pastes it as a new one at the end; Delete removes it, after asking.
-          Ctrl+Z takes the last change back and Ctrl+Y puts it back; the stack survives a reload and starts again at
-          a publish. Shift+click a second dot, or sweep across the bar, to select a stretch — dragging one of them
-          pushes them all. Tick groups in the list and dragging any one of their badges carries the rest by the same
-          distance. The chips under a group take it off the map, or say somebody has to confirm where it is.
+          Ctrl+C / V copy and paste a frame. Ctrl+Z / Y undo and redo. Shift+click two dots to select a stretch.
         </p>
         <p class="pv-note" style="margin-top: auto">
-          {{ formatOffset(0) }} is the start of the run. Times on the bar are offsets from T+0; the clock is added
-          when the plan goes live, and the strip above then says which revision of the running plan this page is
-          showing.
+          {{ formatOffset(0) }} is the start of the run.
         </p>
       </div>
       </div>

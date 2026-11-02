@@ -1,0 +1,1144 @@
+/* Planova Kinetic: the app's inner pages (event workspace, create event, profile, share, phone check).
+   Loaded after kinetic-bridge.css. One white card per job, hairlines inside it, status colour only for a status.
+   Breakpoints follow Bootstrap: sm 576, md 768, lg 992, xl 1200, xxl 1400. Mobile first unless a rule says otherwise. */
+
+/* ---------- Page frame ---------- */
+.kp-page {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 14px 56px;
+}
+.kp-page-wide {
+  max-width: 1240px;
+}
+.kp-page-sm {
+  max-width: 480px;
+}
+.kp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 20px;
+}
+.kp-head h1 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font: 800 28px/1.05 var(--font-display);
+  letter-spacing: -0.06em;
+}
+.kp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+  font: 700 14px var(--font-body);
+  color: var(--muted);
+  text-decoration: none;
+}
+.kp-back:hover {
+  color: var(--ink);
+}
+.kp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.kp-sub {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.kp-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.kp-empty {
+  margin: 0;
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--muted);
+}
+.kp-mono {
+  font-variant-numeric: tabular-nums;
+}
+.kp-spacer {
+  flex: 1 1 auto;
+}
+.kp-minw0 {
+  min-width: 0;
+}
+.kp-prewrap {
+  white-space: pre-line;
+}
+
+/* ---------- Cards and headings ---------- */
+.kp-card {
+  min-width: 0;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--surface);
+}
+.kp-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+html body .kp-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font: 700 18px/1.2 var(--font-display);
+  letter-spacing: -0.04em;
+}
+html body .kp-label {
+  margin: 0 0 8px;
+  font: 800 12px var(--font-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kp-fields {
+  display: grid;
+  gap: 14px;
+}
+.kp-fields-2 {
+  display: grid;
+  gap: 14px;
+}
+.kp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.kp-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.kp-inline > .form-control,
+.kp-inline > .form-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.kp-inline > .btn {
+  flex: none;
+}
+.kp-addbar {
+  display: grid;
+  gap: 10px;
+}
+html body .kp-colour {
+  flex: none;
+  width: 46px;
+  min-height: 46px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+html body .btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+}
+html body .btn-ghost:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+html body .btn-ghost-danger {
+  background: transparent;
+  color: var(--danger);
+  box-shadow: none;
+}
+html body .btn-ghost-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+
+/* ---------- Chips and avatars ---------- */
+.kp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font: 800 12px var(--font-body);
+  white-space: nowrap;
+}
+.kp-chip-ink {
+  background: var(--ink);
+  color: var(--lime);
+}
+.kp-chip-mint {
+  background: var(--mint);
+}
+.kp-chip-lime {
+  background: var(--lime);
+}
+.kp-chip-peach {
+  background: var(--peach);
+}
+.kp-chip-warn {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.kp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.kp-dot {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.kp-pulse {
+  background: var(--lime);
+  animation: kp-pulse 1.6s infinite;
+}
+@keyframes kp-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(198, 243, 107, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 9px rgba(198, 243, 107, 0);
+  }
+}
+.kp-av {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--soft);
+  color: var(--ink);
+  font: 700 12px var(--font-display);
+  box-shadow: inset 0 0 0 2px rgba(10, 31, 23, 0.12);
+}
+.kp-av-sm {
+  width: 30px;
+  height: 30px;
+  font-size: 10px;
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.kp-av-sm:first-child {
+  margin-left: 0;
+}
+.kp-av-lg {
+  width: 64px;
+  height: 64px;
+  background: var(--lime);
+  font-size: 20px;
+  box-shadow: 0 0 0 2px var(--ink) inset;
+}
+
+/* ---------- Lists: rows split by hairlines, never a box per row ---------- */
+.kp-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.kp-row:first-child {
+  border-top: 0;
+}
+.kp-row-main {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.kp-row-main strong {
+  display: block;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.kp-row-main > span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.kp-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.kp-dl {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  margin: 0;
+}
+.kp-dl dt,
+.kp-dl dd {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+}
+.kp-dl dt {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.kp-dl dd {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.kp-dl > :nth-child(-n + 2) {
+  border-top: 0;
+}
+
+/* ---------- The event workspace ---------- */
+html body .ev-page-head {
+  margin: 2px 0 0;
+}
+html body .ev-page-head h2 {
+  margin: 0;
+}
+html body .ev-page-head p {
+  margin-top: 6px;
+}
+html body .ev:not(.ev-native) .ev-main {
+  max-width: 1520px;
+}
+html body .ev .alert {
+  margin-bottom: 0;
+}
+
+/* The status strip: state on the left, the one thing to do on the right */
+.kp-status {
+  padding: 12px 14px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+.kp-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.kp-status-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 14px;
+}
+.kp-status-panel {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.kp-status-extra {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.kp-opt {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--soft);
+  color: var(--ink);
+  font: 700 14px var(--font-body);
+}
+.kp-opt:hover {
+  background: var(--track-off);
+}
+.kp-opt.is-on {
+  background: var(--ink);
+  color: var(--lime);
+}
+
+/* Banners */
+.kp-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: var(--soft);
+  font-size: 15px;
+}
+.kp-banner-danger {
+  background: var(--danger-bg);
+  color: var(--danger-strong);
+}
+.kp-banner-text {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.kp-banner-text small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+/* Overview */
+.kp-overview {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+.kp-invite {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 26px;
+  background: var(--forest);
+  color: var(--on-forest);
+}
+html body .kp-invite .kp-label {
+  color: var(--lime);
+}
+.kp-invite-code {
+  margin: 0;
+  font: 800 clamp(32px, 4vw, 46px)/1.1 var(--font-display);
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+.kp-invite-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.1);
+}
+html body .kp-invite-link input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--on-forest-body);
+  font: 600 14px var(--font-body);
+  text-overflow: ellipsis;
+}
+html body .kp-invite .btn-lime,
+html body .btn-lime {
+  background: var(--lime);
+  color: var(--ink);
+  box-shadow: none;
+}
+html body .kp-invite .btn-paper {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+}
+html body .kp-invite .btn-paper:hover,
+html body .btn-lime:hover {
+  background: var(--surface);
+  color: var(--ink);
+  transform: translate(-1px, -1px);
+  box-shadow: var(--offset-lime);
+}
+html body .kp-invite :focus-visible {
+  outline-color: var(--lime);
+}
+.kp-invite-qr {
+  justify-self: start;
+  width: 148px;
+  height: 148px;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--offset-lime);
+}
+.kp-invite-qr img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.kp-invite-warn {
+  margin: 0;
+  font-size: 13px;
+  color: var(--on-forest-muted);
+}
+
+/* Groups */
+.kp-groups {
+  display: grid;
+  gap: 14px;
+}
+.kp-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px 20px 18px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: transform var(--dur-press) ease, box-shadow var(--dur-press) ease;
+}
+html body a.kp-group {
+  color: var(--ink);
+}
+.kp-group::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 8px;
+  background: var(--c, var(--track-off));
+}
+.kp-group:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--outline), var(--offset-sm);
+}
+.kp-group-empty {
+  background: transparent;
+  box-shadow: 0 0 0 1.5px var(--line) inset;
+}
+.kp-group-empty::before {
+  display: none;
+}
+.kp-group-name {
+  margin: 0;
+  font: 700 18px/1.2 var(--font-display);
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+.kp-group-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+}
+.kp-group-facts dt {
+  font-weight: 500;
+  color: var(--muted);
+}
+.kp-group-facts dd {
+  margin: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kp-group-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+.kp-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+html body .kp-switches .form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  margin: 0;
+  padding: 0;
+}
+html body .kp-switches .form-check-input {
+  float: none;
+  margin: 0;
+}
+html body .kp-switches .form-check-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+.kp-tol {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+html body .kp-tol input {
+  width: 76px;
+}
+.kp-stepped {
+  width: auto;
+  max-width: 100%;
+}
+
+/* Roll call */
+.kp-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: 22px;
+  background: var(--soft);
+}
+.kp-seg input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.kp-seg label {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font: 700 14px var(--font-body);
+  cursor: pointer;
+}
+.kp-seg input:checked + label {
+  background: var(--ink);
+  color: var(--lime);
+}
+.kp-seg input:focus-visible + label {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+.kp-seg input:disabled + label {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.kp-roster {
+  display: grid;
+  gap: 18px;
+  margin-top: 16px;
+}
+.kp-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--canvas);
+  color: var(--ink);
+  text-align: center;
+}
+.kp-qr-img {
+  width: min(100%, 18rem);
+  aspect-ratio: 1;
+  image-rendering: pixelated;
+}
+.kp-qr-wait {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.kp-qr-bar {
+  width: 100%;
+  max-width: 16rem;
+  height: 6px;
+}
+.kp-qr-bar .progress-bar {
+  background: var(--forest);
+  transition: width 1s linear;
+}
+/* "Show big": the QR fills the screen, easier to scan from a few steps away */
+.kp-qr-big {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  justify-content: center;
+  border-radius: 0;
+  background: var(--surface);
+}
+.kp-qr-big .kp-qr-img {
+  width: min(90vw, 70vh);
+}
+.kp-qr-big .kp-qr-bar {
+  width: min(90vw, 70vh);
+  max-width: none;
+  height: 12px;
+}
+
+/* Create event */
+.kp-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+.kp-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 700 13px var(--font-body);
+  text-align: left;
+}
+.kp-step::before {
+  content: '';
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track-off);
+}
+.kp-step.is-done::before,
+.kp-step.is-current::before {
+  background: var(--forest);
+}
+.kp-step.is-current,
+.kp-step.is-done {
+  color: var(--ink);
+}
+.kp-step:disabled {
+  cursor: default;
+}
+.kp-wizard-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+.kp-wizard-foot > :last-child {
+  margin-left: auto;
+}
+html body .kp-group-row {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+html body .kp-group-row:first-child {
+  border-top: 0;
+}
+.kp-pick {
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+/* Share page */
+.kp-share {
+  display: grid;
+  gap: 16px;
+}
+html body .gps-map {
+  height: clamp(280px, 56vh, 640px);
+  min-height: 0;
+  border: 0 !important;
+  border-radius: 22px !important;
+}
+.kp-readings summary {
+  font: 700 14px var(--font-body);
+  cursor: pointer;
+}
+
+/* Step-by-step phone set-up */
+.kp-setup {
+  text-align: center;
+}
+.kp-setup-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin-bottom: 16px;
+  border-radius: 28px;
+  background: var(--lime);
+  color: var(--ink);
+  font-size: 40px;
+  box-shadow: 0 0 0 2px var(--ink) inset, var(--offset-sm);
+}
+.kp-progress {
+  height: 6px;
+  margin-bottom: 24px;
+  border-radius: 3px;
+  background: var(--track-off);
+  overflow: hidden;
+}
+.kp-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--forest);
+}
+html body .kp-setup h1 {
+  margin: 0 0 8px;
+  font: 800 26px/1.1 var(--font-display);
+  letter-spacing: -0.05em;
+}
+.kp-done-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: var(--z-toast);
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--on-forest);
+  font-weight: 700;
+  box-shadow: var(--offset-lime);
+  transform: translateX(-50%);
+}
+
+/* ---------- Live ---------- */
+.kp-live {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.kp-live > * {
+  min-width: 0;
+}
+.kp-live-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.kp-live-side:empty {
+  display: none;
+}
+html body .live-map {
+  height: clamp(340px, 62vh, 780px);
+  border: 0 !important;
+  border-radius: 22px !important;
+}
+html body .bc-panel .card-body {
+  padding: 18px;
+}
+html body .bc-panel .btn-group {
+  flex-wrap: wrap;
+}
+html body [data-testid='map-legend'] {
+  gap: 6px 14px !important;
+  font-size: 13px;
+}
+html body [data-testid='people-list'] .list-group-item {
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+}
+html body [data-testid='people-list'] .list-group-item:first-child {
+  border-top: 0;
+}
+html body .list-group-item.active,
+html body .list-group-item.list-group-item-action.active {
+  background: var(--soft);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--forest);
+}
+html body .list-group-item-action:hover {
+  background: var(--hover);
+}
+
+/* ---------- Plan pages: Kinetic cards around the older pv-* markup ---------- */
+html body .ev .pv-sched,
+html body .ev .pv-route,
+html body .ev .pv-ops {
+  padding: 18px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: none;
+}
+html body .ev .pv-sched-title,
+html body .ev .pv-route-title,
+html body .ev .pv-ops-title {
+  font: 700 20px/1.2 var(--font-display);
+  letter-spacing: -0.04em;
+}
+html body .ev .pv-log-title {
+  font: 700 16px/1.2 var(--font-display);
+  letter-spacing: -0.04em;
+}
+html body .ev .pv-route-stage {
+  overflow: hidden;
+  border-radius: 20px;
+}
+html body .ev .pv-board {
+  border: 0;
+  border-radius: 22px;
+  overflow: hidden;
+}
+html body .ev .pv-board-head {
+  gap: 0;
+}
+html body .ev .pv-toolbar {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+html body .ev .pv-toolbar .pv-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 4px;
+  background: var(--line);
+}
+html body .ev .pv-name-field {
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 340px;
+}
+
+/* ---------- Map page: zones at a glance, then the bench ---------- */
+.kp-zones {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.kp-zone {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 700;
+}
+.kp-zone code {
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--soft);
+  color: var(--muted);
+  font: 700 11px var(--font-body);
+}
+.kp-zone-sw {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+}
+html body .ev-surface {
+  padding: 16px;
+  border-radius: 22px;
+}
+html body .ev-surface .card {
+  background: transparent;
+}
+html body .ev-surface .card-body {
+  padding: 0;
+}
+html body .bench-map {
+  height: clamp(340px, 66vh, 780px);
+  border: 0 !important;
+  border-radius: 18px !important;
+}
+
+/* ---------- Dialogs ---------- */
+html body .modal-header.bg-danger {
+  background: transparent !important;
+  color: var(--danger) !important;
+}
+html body .modal-header.bg-danger .btn-close {
+  filter: none;
+}
+
+/* ---------- Breakpoints ---------- */
+
+/* sm: two-up fields, and a form on one line */
+@media (min-width: 576px) {
+  .kp-page {
+    padding: 24px 24px 64px;
+  }
+  .kp-fields-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kp-card {
+    padding: 22px;
+  }
+  .kp-addbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .kp-addbar.has-group {
+    grid-template-columns: minmax(0, 1fr) 200px auto;
+  }
+  .kp-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kp-invite {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+}
+
+/* md: the rail takes over from the bottom bar */
+@media (min-width: 768px) {
+  .kp-head h1 {
+    font-size: 40px;
+  }
+  .kp-card {
+    padding: 24px;
+    border-radius: 26px;
+  }
+  .kp-roster {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kp-dl {
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+  html body .ev-surface {
+    padding: 20px;
+  }
+  html body .ev .pv-sched,
+  html body .ev .pv-route,
+  html body .ev .pv-ops {
+    padding: 24px;
+    border-radius: 26px;
+  }
+}
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  html body .ev:not(.ev-native) .ev-body {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+  html body .ev:not(.ev-native) .ev-main {
+    padding: 22px 22px 56px 6px;
+  }
+  html body .ev-nav {
+    padding: 16px 8px;
+  }
+  html body .ev-nav-btn {
+    position: relative;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    min-height: 58px;
+    padding: 0 2px;
+    font-size: 11px;
+    text-align: center;
+  }
+  html body .ev-nav-text {
+    flex: none;
+  }
+  html body .ev-nav-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    margin: 0;
+    padding: 0 5px;
+    font-size: 10px;
+  }
+  html body .k-you {
+    display: none;
+  }
+}
+
+/* lg: side by side */
+@media (min-width: 992px) {
+  .kp-overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 24px;
+  }
+  .kp-share {
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+    align-items: start;
+  }
+}
+
+/* xl: three group columns, the live map beside its board */
+@media (min-width: 1200px) {
+  .kp-groups {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .kp-live.has-side {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
+    align-items: start;
+  }
+  .kp-live.has-side .kp-live-side {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .kp-live.has-side .kp-live-map {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+
+/* Down to a phone: tidy what the older rules leave */
+@media (max-width: 767.98px) {
+  html body .ev:not(.ev-native) .ev-page-head h2 {
+    font-size: 26px;
+  }
+  .kp-status-bar .btn {
+    flex: 1 1 auto;
+  }
+  .kp-wizard-foot .btn {
+    flex: 1 1 0;
+  }
+  html body .ev .pv-name-field {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}
+@media (max-width: 575.98px) {
+  html body .kp-row-actions {
+    flex: 1 1 100%;
+  }
+  html body .kp-row-actions .form-select {
+    flex: 1 1 140px;
+    width: auto;
+  }
+  .kp-step-word {
+    font-size: 12px;
+  }
+}
+
+/* ---------- Small fixes across widths ---------- */
+/* The plan cards' rows and headers carry their own side padding */
+html body .ev .pv-sched,
+html body .ev .pv-route,
+html body .ev .pv-ops {
+  padding: 8px 10px 14px;
+}
+html body input[type='file'].form-control {
+  padding: 0;
+  overflow: hidden;
+  line-height: 43px;
+}
+html body input[type='file'].form-control::file-selector-button {
+  height: 46px;
+  margin: 0 12px 0 0;
+  padding: 0 16px;
+  font-weight: 700;
+}
+@media (max-width: 575.98px) {
+  /* The logo already goes home; the bar has to fit the account button on the narrowest phones */
+  .k-nav-tabs .tab:first-child {
+    display: none !important;
+  }
+  .kp-head h1 {
+    flex-basis: 100%;
+    font-size: 26px;
+  }
+}
+@media (max-width: 575.98px) {
+  /* A title with one action keeps it on the same line; only a crowded header gives the title its own */
+  .kp-head:not(:has(> :nth-child(3))) h1 {
+    flex-basis: 0;
+    flex-grow: 1;
+  }
+}

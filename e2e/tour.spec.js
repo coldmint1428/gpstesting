@@ -112,7 +112,7 @@ test('a visitor: home, sign in, create an account, and an invite link that asks 
   await expect(page.getByRole('link', { name: /log in/i }).first()).toBeVisible()
   await shot(page, 'tour-visitor-home', { fullPage: true })
   await page.goto('/login')
-  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
   await shot(page, 'tour-visitor-login')
   await page.goto('/signup')
   await expect(page.getByRole('heading', { name: /create|sign up/i }).first()).toBeVisible()

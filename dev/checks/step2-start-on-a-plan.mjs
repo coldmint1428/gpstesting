@@ -110,7 +110,7 @@ export default {
     await tab.waitFor('[data-testid=status-tracking-only]', { timeout: 15000 })
     const tracking = (await tab.text('[data-testid=status-tracking-only]')).replace(/\s+/g, ' ').trim()
     tab.pass(`a session started on nothing says: "${tracking}"`)
-    await tab.assertThat('a session started on nothing says so', /running nothing \(tracking only\)/.test(tracking))
+    await tab.assertThat('a session started on nothing says so', /tracking only/.test(tracking))
     await tab.assertThat('and claims no plan', `!document.querySelector('[data-testid=status-plan]')`)
 
     // ---------- put the bench back: end the event ----------

@@ -6,23 +6,23 @@
  */
 
 .pv {
-  --pv-primary: #244f3f;
-  --pv-primary-deep: #163026;
-  --pv-chrome: #213322;
-  --pv-canvas: #f5f7f5;
+  --pv-primary: var(--forest);
+  --pv-primary-deep: var(--forest);
+  --pv-chrome: var(--forest);
+  --pv-canvas: var(--canvas);
   --pv-surface: #ffffff;
-  --pv-ink: #1b241f;
-  --pv-ink-soft: #5d6c63;
-  --pv-ink-faint: #8b978f;
-  --pv-line: #e0e6e2;
-  --pv-line-strong: #c3cfc8;
-  --pv-danger: #a63a2f;
-  --pv-danger-soft: #f7e7e4;
-  --pv-warn: #a9721c;
-  --pv-ok: #2f6b4f;
+  --pv-ink: var(--ink);
+  --pv-ink-soft: var(--muted);
+  --pv-ink-faint: var(--muted);
+  --pv-line: var(--line);
+  --pv-line-strong: var(--line);
+  --pv-danger: var(--danger);
+  --pv-danger-soft: var(--danger-bg);
+  --pv-warn: var(--danger);
+  --pv-ok: var(--forest-2);
   --pv-radius: 10px;
   --pv-radius-sm: 6px;
-  --pv-shadow: 0 1px 2px rgba(20, 35, 28, 0.06), 0 8px 22px rgba(20, 35, 28, 0.06);
+  --pv-shadow: 0 1px 2px rgba(10, 31, 23, 0.06), 0 8px 22px rgba(10, 31, 23, 0.06);
 
   color: var(--pv-ink);
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -133,7 +133,7 @@
 
 .pv-btn:hover:not(:disabled) {
   border-color: var(--pv-primary);
-  background: #f2f6f4;
+  background: var(--canvas);
 }
 
 .pv-btn:disabled {
@@ -144,7 +144,7 @@
 .pv-btn.is-primary {
   background: var(--pv-primary);
   border-color: var(--pv-primary);
-  color: #f4f8f6;
+  color: var(--canvas);
 }
 
 .pv-btn.is-primary:hover:not(:disabled) {
@@ -159,7 +159,7 @@
 
 .pv-btn.is-danger {
   color: var(--pv-danger);
-  border-color: #e4c6c1;
+  border-color: var(--danger-bg);
 }
 
 .pv-select,
@@ -184,12 +184,12 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  background: #eef2f0;
+  background: var(--canvas);
   color: var(--pv-ink-soft);
 }
 
 .pv-badge.is-live {
-  background: #e2f0e8;
+  background: var(--mint);
   color: var(--pv-ok);
 }
 
@@ -215,7 +215,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 7px 12px;
-  background: #eef4ef;
+  background: var(--canvas);
   border-bottom: 1px solid var(--pv-line);
   font-size: 13px;
   color: var(--pv-ink-soft);
@@ -247,7 +247,7 @@
 }
 
 .pv-run.is-stale {
-  background: #fdf4e4;
+  background: var(--danger-bg);
 }
 
 .pv-run-warn {
@@ -267,7 +267,7 @@
 }
 
 .pv-run-warn .pv-btn:hover:not(:disabled) {
-  background: #8d5f14;
+  background: var(--danger);
 }
 
 /* ---------- stage (map) ---------- */
@@ -276,7 +276,7 @@
   position: relative;
   flex: 1 1 auto;
   min-height: 340px;
-  background: #e8ece9;
+  background: var(--line);
 }
 
 .pv-map {
@@ -285,7 +285,7 @@
 }
 
 .pv-map .leaflet-container {
-  background: #e8ece9;
+  background: var(--line);
   font-family: inherit;
 }
 
@@ -318,7 +318,7 @@
   height: 26px;
   border-radius: 50%;
   border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(15, 30, 22, 0.4);
+  box-shadow: 0 1px 4px rgba(10, 31, 23, 0.4);
   display: grid;
   place-items: center;
   font-size: 11px;
@@ -485,8 +485,8 @@
   top: 44px;
   height: 16px;
   border-radius: 8px;
-  background: rgba(36, 79, 63, 0.1);
-  border: 1px solid rgba(36, 79, 63, 0.28);
+  background: rgba(11, 61, 46, 0.1);
+  border: 1px solid rgba(11, 61, 46, 0.28);
   pointer-events: none;
 }
 
@@ -495,9 +495,9 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background: rgba(36, 79, 63, 0.08);
-  border-left: 1px solid rgba(36, 79, 63, 0.35);
-  border-right: 1px solid rgba(36, 79, 63, 0.35);
+  background: rgba(11, 61, 46, 0.08);
+  border-left: 1px solid rgba(11, 61, 46, 0.35);
+  border-right: 1px solid rgba(11, 61, 46, 0.35);
   pointer-events: none;
 }
 
@@ -584,16 +584,16 @@
 }
 
 .pv-group-row:hover {
-  background: rgba(36, 79, 63, 0.04);
+  background: rgba(11, 61, 46, 0.04);
 }
 
 .pv-group-row.is-selected {
   border-color: var(--pv-primary-deep);
-  background: rgba(36, 79, 63, 0.08);
+  background: rgba(11, 61, 46, 0.08);
 }
 
 .pv-group-row.is-bad {
-  border-color: #e4c6c1;
+  border-color: var(--danger-bg);
   background: var(--pv-danger-soft);
 }
 
@@ -607,7 +607,7 @@
 .pv-marker.is-bad {
   box-shadow:
     0 0 0 3px rgba(166, 58, 47, 0.5),
-    0 1px 4px rgba(15, 30, 22, 0.4);
+    0 1px 4px rgba(10, 31, 23, 0.4);
 }
 
 .pv-swatch {
@@ -668,7 +668,7 @@
 .pv-seg-btn.is-on {
   background: var(--pv-primary);
   border-color: var(--pv-primary);
-  color: #f4f8f6;
+  color: var(--canvas);
 }
 
 /* Off site drawn hollow and dashed, the way the plan draws a place nobody is: the same shape the badge used to have. */
@@ -714,9 +714,9 @@
   padding: 8px;
   border-radius: var(--pv-radius-sm);
   background: var(--pv-danger-soft);
-  border: 1px solid #ecd3ce;
+  border: 1px solid var(--danger-bg);
   font-size: 12px;
-  color: #6d2b23;
+  color: var(--danger-strong);
 }
 
 /* One warning plus the button that fixes it. The text takes the width and wraps; the button keeps its size. */
@@ -745,7 +745,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  border-top: 1px dashed #ecd3ce;
+  border-top: 1px dashed var(--danger-bg);
   padding-top: 4px;
   margin-top: 2px;
 }
@@ -845,7 +845,7 @@
   padding: 4px 10px;
   border: 1px solid var(--pv-line);
   border-radius: var(--pv-radius);
-  background: #f7f9f7;
+  background: var(--canvas);
   font-variant-numeric: tabular-nums;
 }
 
@@ -872,12 +872,12 @@
   padding: 8px 14px;
   font-size: 13px;
   color: var(--pv-ink-soft);
-  background: #eef4ef;
+  background: var(--canvas);
   border-bottom: 1px solid var(--pv-line);
 }
 
 .pv-sched-line.is-warn {
-  background: #fdf4e4;
+  background: var(--danger-bg);
   color: var(--pv-warn);
 }
 
@@ -911,7 +911,7 @@
 }
 
 .pv-sched-moment.is-next {
-  background: #f2f7f3;
+  background: var(--canvas);
 }
 
 .pv-sched-moment.is-next::before {
@@ -976,7 +976,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  background: #eef2f0;
+  background: var(--canvas);
   color: var(--pv-ink-soft);
 }
 
@@ -1035,12 +1035,12 @@
 /* The five words, coloured so a glance reads the night: arrived is done, late is amber, missed is the one to look
    at, and not required is deliberately grey -- nobody is expected anywhere. */
 .pv-sched-row.is-arrived .pv-sched-state {
-  background: #e2f0e8;
+  background: var(--mint);
   color: var(--pv-ok);
 }
 
 .pv-sched-row.is-late .pv-sched-state {
-  background: #fdf0dc;
+  background: var(--danger-bg);
   color: var(--pv-warn);
 }
 
@@ -1143,7 +1143,7 @@
   padding: 4px 10px;
   border: 1px solid var(--pv-line);
   border-radius: var(--pv-radius);
-  background: #f7f9f7;
+  background: var(--canvas);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1170,7 +1170,7 @@
   padding: 8px 14px;
   font-size: 13px;
   color: var(--pv-warn);
-  background: #fdf4e4;
+  background: var(--danger-bg);
   border-bottom: 1px solid var(--pv-line);
 }
 
@@ -1223,7 +1223,7 @@
 
 .pv-ops-row.is-active {
   border-left-color: var(--pv-ok);
-  background: #f4f8f5;
+  background: var(--canvas);
 }
 
 .pv-ops-row.is-done {
@@ -1383,7 +1383,7 @@
   font-size: 12px;
   line-height: 1.45;
   color: var(--pv-ink-faint);
-  background: #f7f9f7;
+  background: var(--canvas);
   border-top: 1px solid var(--pv-line);
 }
 
@@ -1439,7 +1439,7 @@
 }
 
 .pv-marker.is-walking {
-  box-shadow: 0 0 0 3px rgba(36, 79, 63, 0.18);
+  box-shadow: 0 0 0 3px rgba(11, 61, 46, 0.18);
 }
 
 /* ---------- the plan log (step 22) ----------
@@ -1507,7 +1507,7 @@
 }
 
 .pv-log-row.is-timeline {
-  background: #f7f9f7;
+  background: var(--canvas);
 }
 
 .pv-log-line {
@@ -1576,7 +1576,7 @@
 }
 
 .pv-sched-msg.is-timeline {
-  background: #f7f9f7;
+  background: var(--canvas);
 }
 
 .pv-sched-msg-line {
@@ -1695,7 +1695,7 @@
   margin: 0;
   padding: 9px 14px;
   border-bottom: 1px solid var(--pv-line);
-  background: #f7f9f7;
+  background: var(--canvas);
   font-size: 13px;
   color: var(--pv-ink-soft);
 }
@@ -1709,7 +1709,7 @@
 .pv-route-stage {
   position: relative;
   height: clamp(340px, 58vh, 560px);
-  background: #e8ece9;
+  background: var(--line);
   border-bottom: 1px solid var(--pv-line);
 }
 
@@ -1815,7 +1815,7 @@
   border-radius: 50%;
   border: 2px solid #fff;
   background: var(--pv-dot, var(--pv-primary));
-  box-shadow: 0 1px 3px rgba(15, 30, 22, 0.45);
+  box-shadow: 0 1px 3px rgba(10, 31, 23, 0.45);
 }
 
 /* The moment the clock is on: bigger, with the ring a person's eye lands on. */
@@ -1826,7 +1826,7 @@
 
 /* The moment that has not happened yet: the one the card names. */
 .pv-route-dot.is-next .pv-route-dot-mark {
-  box-shadow: 0 0 0 3px rgba(36, 79, 63, 0.16), 0 1px 3px rgba(15, 30, 22, 0.45);
+  box-shadow: 0 0 0 3px rgba(11, 61, 46, 0.16), 0 1px 3px rgba(10, 31, 23, 0.45);
 }
 
 .pv-route-dot-label {

@@ -172,87 +172,66 @@ async function changeTolerance(m, input) {
 </script>
 
 <template>
-  <div :aria-busy="busy ? 'true' : null">
-    <p class="small text-muted mb-2" data-testid="people-scope">{{ myScope }}</p>
+  <div class="kp-stack" :aria-busy="busy ? 'true' : null">
     <BenchAlert v-if="errorMsg" data-testid="people-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
     <!-- Add an existing account by their full email: nothing suggested, no one's email shown -->
-    <div v-if="canAddPeople" class="card mb-3" data-testid="add-person">
-      <div class="card-body">
-        <h2 class="h6">Add a person</h2>
-        <form class="row g-2" @submit.prevent="addByEmail">
-          <div class="col-12 col-sm">
-            <label for="add-email" class="visually-hidden">Their email address</label>
-            <input
-              id="add-email"
-              v-model="addEmail"
-              type="email"
-              class="form-control"
-              placeholder="Their full email address"
-              autocomplete="off"
-              autocapitalize="off"
-              spellcheck="false"
-              inputmode="email"
-              data-testid="add-email"
-            />
-          </div>
-          <div v-if="managesAll" class="col-12 col-sm-4">
-            <select v-model="addGroupId" class="form-select" aria-label="Group" data-testid="add-group">
-              <option value="">No group yet</option>
-              <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-            </select>
-          </div>
-          <div class="col-12 col-sm-auto">
-            <button type="submit" class="btn btn-primary w-100" :disabled="!canFind" data-testid="add-email-btn">
-              {{ finding ? 'Checking...' : 'Add' }}
-            </button>
-          </div>
-        </form>
-        <p v-if="addMessage" class="text-danger small mt-2 mb-0" role="status" data-testid="add-none">{{ addMessage }}</p>
-        <div class="form-text">For privacy, people are added by their exact email only; nobody is suggested.</div>
-        <div v-if="!managesAll" class="form-text">They will be added to {{ myAdminGroupName }}.</div>
-      </div>
+    <div v-if="canAddPeople" class="kp-card" data-testid="add-person">
+      <form class="kp-addbar" :class="{ 'has-group': managesAll }" @submit.prevent="addByEmail">
+        <div>
+          <label for="add-email" class="visually-hidden">Their email address</label>
+          <input id="add-email" v-model="addEmail" type="email" class="form-control" placeholder="Add by exact email" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="email" data-testid="add-email" />
+        </div>
+        <div v-if="managesAll">
+          <select v-model="addGroupId" class="form-select" aria-label="Group" data-testid="add-group">
+            <option value="">No group yet</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" :disabled="!canFind" data-testid="add-email-btn">
+          {{ finding ? 'Checking...' : 'Add' }}
+        </button>
+      </form>
+      <p v-if="addMessage" class="text-danger small mt-2 mb-0" role="status" data-testid="add-none">{{ addMessage }}</p>
+      <p v-if="!managesAll" class="kp-note mb-0">They join {{ myAdminGroupName }}.</p>
     </div>
 
-    <div class="row g-2 mb-3">
-      <div class="col-12 col-sm-7">
-        <label for="people-search" class="visually-hidden">Search by name</label>
-        <input id="people-search" v-model="search" type="search" class="form-control" placeholder="Search by name" data-testid="people-search" />
+    <div class="kp-card">
+      <div class="kp-fields-2 mb-2">
+        <div>
+          <label for="people-search" class="visually-hidden">Search by name</label>
+          <input id="people-search" v-model="search" type="search" class="form-control" placeholder="Search by name" data-testid="people-search" />
+        </div>
+        <div>
+          <label for="people-group" class="visually-hidden">Filter by group</label>
+          <select id="people-group" v-model="groupFilter" class="form-select" data-testid="people-group-filter">
+            <option value="">All groups</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+            <option value="none">No group</option>
+          </select>
+        </div>
       </div>
-      <div class="col-12 col-sm-5">
-        <label for="people-group" class="visually-hidden">Filter by group</label>
-        <select id="people-group" v-model="groupFilter" class="form-select" data-testid="people-group-filter">
-          <option value="">All groups</option>
-          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-          <option value="none">No group</option>
-        </select>
-      </div>
-    </div>
 
-    <p v-if="!rows.length" class="text-muted" data-testid="people-empty">No one matches.</p>
-    <ul class="list-unstyled d-grid gap-2 mb-0" data-testid="people-list">
-      <li v-for="r in rows" :key="r.m.id" class="card" :data-testid="'person-' + r.m.username">
-        <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
-          <span class="avatar" :style="{ backgroundColor: groupColour(r.m.groupId) }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
-          <div class="flex-grow-1 min-w-0">
-            <div class="text-truncate">
-              <strong>{{ r.m.display_name }}</strong>
-              <span v-if="r.isMe" class="text-muted small"> (you)</span>
-            </div>
-            <div class="small text-muted text-truncate">{{ groupName(r.m.groupId) }}</div>
-            <div>
-              <span class="badge text-bg-secondary me-1" :data-testid="'person-role-' + r.m.username">{{ ROLE_LABEL[r.role] }}</span>
-              <span v-if="r.m.isAdmin && r.role !== 'admin'" class="badge text-bg-info me-1">Group admin</span>
-              <span v-if="isMarshal(r.m)" class="badge text-bg-dark me-1" :data-testid="'person-marshal-' + r.m.username">Marshal</span>
-              <span v-if="r.m.isIC" class="badge text-bg-success me-1" :data-testid="'person-ic-' + r.m.username">IC</span>
-            </div>
+      <p v-if="!rows.length" class="kp-empty" data-testid="people-empty">No one matches.</p>
+      <ul class="kp-list" data-testid="people-list">
+        <li v-for="r in rows" :key="r.m.id" class="kp-row" :data-testid="'person-' + r.m.username">
+          <span class="kp-av" :style="{ backgroundColor: groupColour(r.m.groupId), color: '#fff' }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
+          <div class="kp-row-main">
+            <strong>{{ r.m.display_name }}<span v-if="r.isMe" class="text-muted fw-normal"> (you)</span></strong>
+            <span>{{ groupName(r.m.groupId) }}</span>
+          </div>
+          <div class="kp-chips">
+            <span class="kp-chip" :class="{ 'kp-chip-ink': r.role === 'root', 'kp-chip-mint': r.role === 'planner', 'd-md-none': r.any && r.actions.role }" :data-testid="'person-role-' + r.m.username">{{ ROLE_LABEL[r.role] }}</span>
+            <span v-if="r.m.isAdmin && r.role !== 'admin'" class="kp-chip">Group admin</span>
+            <span v-if="isMarshal(r.m)" class="kp-chip" :data-testid="'person-marshal-' + r.m.username">Marshal</span>
+            <span v-if="r.m.isIC" class="kp-chip kp-chip-peach" :data-testid="'person-ic-' + r.m.username">IC</span>
           </div>
 
           <!-- Phone: the actions open from this button; wider screens show them inline -->
           <button
             v-if="r.any"
             type="button"
-            class="btn btn-sm btn-outline-secondary d-md-none"
+            class="btn btn-sm btn-ghost d-md-none"
             :aria-expanded="open === r.m.id ? 'true' : 'false'"
             :aria-controls="'actions-' + r.m.id"
             :data-testid="'person-menu-' + r.m.username"
@@ -260,85 +239,26 @@ async function changeTolerance(m, input) {
           >
             Manage <span aria-hidden="true">{{ open === r.m.id ? '▴' : '▾' }}</span>
           </button>
-          <div
-            v-if="r.any"
-            :id="'actions-' + r.m.id"
-            class="actions align-items-center gap-3 flex-wrap reveal-in"
-            :class="open === r.m.id ? 'd-flex' : 'd-none d-md-flex'"
-          >
-            <div v-if="r.actions.role">
+          <div v-if="r.any" :id="'actions-' + r.m.id" class="kp-row-actions reveal-in" :class="open === r.m.id ? 'd-flex' : 'd-none d-md-flex'">
+            <template v-if="r.actions.role">
               <label :for="'role-' + r.m.id" class="visually-hidden">Role of {{ r.m.display_name }}</label>
-              <select
-                :id="'role-' + r.m.id"
-                class="form-select form-select-sm"
-                :value="r.role"
-                :disabled="busy"
-                :data-testid="'person-role-select-' + r.m.username"
-                @change="changeRole(r.m, $event.target)"
-              >
+              <select :id="'role-' + r.m.id" class="form-select form-select-sm kp-stepped" :value="r.role" :disabled="busy" :data-testid="'person-role-select-' + r.m.username" @change="changeRole(r.m, $event.target)">
                 <option v-for="role in myRoleOptions" :key="role" :value="role" :disabled="role === 'admin' && !r.m.groupId">
                   {{ ROLE_LABEL[role] }}{{ role === 'admin' && !r.m.groupId ? ' (needs a group)' : '' }}
                 </option>
               </select>
-            </div>
+            </template>
             <!-- An IC's arrival radius: how close their phone must be for a moment to close itself (063). -->
-            <div v-if="r.actions.radius" class="d-flex align-items-center gap-1">
-              <label :for="'tol-' + r.m.id" class="small text-muted mb-0">Radius</label>
-              <input
-                :id="'tol-' + r.m.id"
-                type="number"
-                min="5"
-                max="100"
-                step="5"
-                class="form-control form-control-sm people-tol"
-                :value="r.m.toleranceM"
-                :disabled="busy"
-                :data-testid="'person-tolerance-' + r.m.username"
-                @change="changeTolerance(r.m, $event.target)"
-              />
-              <span class="small text-muted">m</span>
+            <div v-if="r.actions.radius" class="kp-tol">
+              <label :for="'tol-' + r.m.id" class="mb-0">Radius</label>
+              <input :id="'tol-' + r.m.id" type="number" min="5" max="100" step="5" class="form-control form-control-sm" :value="r.m.toleranceM" :disabled="busy" :data-testid="'person-tolerance-' + r.m.username" @change="changeTolerance(r.m, $event.target)" />
+              <span>m</span>
             </div>
-            <button
-              v-if="r.actions.remove"
-              type="button"
-              class="btn btn-sm btn-outline-danger"
-              :disabled="busy"
-              :data-testid="'person-remove-' + r.m.username"
-              @click="remove(r.m)"
-            >
-              Remove
-            </button>
+            <button v-if="r.actions.remove" type="button" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'person-remove-' + r.m.username" @click="remove(r.m)">Remove</button>
           </div>
-        </div>
-      </li>
-    </ul>
+        </li>
+      </ul>
+      <p v-if="rows.length" class="kp-note mb-0" data-testid="people-scope">{{ myScope }}</p>
+    </div>
   </div>
 </template>
-
-<style scoped>
-.avatar {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.min-w-0 {
-  min-width: 0;
-}
-/* the arrival radius is a number of metres, not a paragraph */
-.people-tol {
-  width: 5rem;
-}
-/* phone: the opened actions take the card's full width under the name */
-@media (max-width: 767.98px) {
-  .actions {
-    flex-basis: 100%;
-  }
-}
-</style>

@@ -21,16 +21,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="pl-join">
-    <div class="card">
-      <div class="card-body p-4">
-        <h1 class="h4 mb-2">Join event</h1>
-        <BenchAlert v-if="errorMsg" data-testid="join-error" @dismiss="errorMsg = ''">
-          Could not join: {{ errorMsg }}
-          <div class="mt-2"><RouterLink to="/events">Back to my events</RouterLink></div>
-        </BenchAlert>
-        <p v-else class="pl-meta mb-0">Joining event <strong>{{ code }}</strong>...</p>
-      </div>
+  <main class="kp-page kp-page-sm">
+    <div class="kp-card kp-setup">
+      <h1>Join event</h1>
+      <BenchAlert v-if="errorMsg" class="text-start" data-testid="join-error" @dismiss="errorMsg = ''">
+        Could not join: {{ errorMsg }}
+        <div class="mt-2"><RouterLink to="/events">Back to events</RouterLink></div>
+      </BenchAlert>
+      <p v-else class="kp-sub mb-0" role="status">Joining <strong>{{ code }}</strong>…</p>
     </div>
   </main>
 </template>

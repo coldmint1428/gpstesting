@@ -7,7 +7,7 @@ const visible = (page, id) => page.locator(`[data-testid="${id}"]:visible`).firs
 test.describe('Visitor', () => {
   test('sees the landing page, with no Events link in the nav', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Every group in the right place')
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Right place.')
     await expect(page.getByRole('link', { name: 'Events', exact: true })).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible()
     await shot(page, 'pub-01-landing', { fullPage: true })

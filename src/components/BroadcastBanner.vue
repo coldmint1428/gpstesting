@@ -27,46 +27,21 @@ onUnmounted(() => document.removeEventListener('visibilitychange', markVisible))
 </script>
 
 <template>
-  <div
-    v-if="top"
-    class="alert py-2 mb-0 bc-banner"
-    :class="top.urgent ? 'alert-danger' : 'alert-warning'"
-    role="alert"
-    aria-live="assertive"
-    data-testid="broadcast-banner"
-  >
-    <div class="d-flex align-items-start gap-2">
-      <span class="flex-grow-1 min-w-0">
-        <strong>{{ top.urgent ? '⚠ Urgent message' : 'Message' }} from {{ top.from }}</strong>
+  <div v-if="top" class="kp-stack" style="gap: 8px" role="alert" aria-live="assertive" data-testid="broadcast-banner">
+    <div class="kp-banner" :class="{ 'kp-banner-danger': top.urgent }">
+      <div class="kp-banner-text">
+        <strong>{{ top.urgent ? '⚠ ' : '' }}{{ top.from }}</strong>
         <span class="small opacity-75"> · {{ formatTimeSeconds(top.at) }}</span>
-        <span class="d-block bc-body" data-testid="broadcast-body">{{ top.body }}</span>
-      </span>
-      <button
-        type="button"
-        class="btn btn-sm flex-shrink-0"
-        :class="top.urgent ? 'btn-danger' : 'btn-dark'"
-        data-testid="broadcast-ack"
-        @click="broadcasts.ack(top.id)"
-      >
-        Got it
-      </button>
+        <div data-testid="broadcast-body">{{ top.body }}</div>
+      </div>
+      <button type="button" class="btn btn-sm" :class="top.urgent ? 'btn-danger' : 'btn-primary'" data-testid="broadcast-ack" @click="broadcasts.ack(top.id)">Got it</button>
     </div>
-    <div v-for="b in more" :key="b.id" class="d-flex align-items-start gap-2 border-top mt-2 pt-2 small">
-      <span class="flex-grow-1 min-w-0">
-        <strong>{{ b.urgent ? '⚠ ' : '' }}{{ b.from }}</strong> · {{ formatTimeSeconds(b.at) }}<br />{{ b.body }}
-      </span>
-      <button type="button" class="btn btn-sm btn-outline-dark flex-shrink-0" @click="broadcasts.ack(b.id)">Got it</button>
+    <div v-for="b in more" :key="b.id" class="kp-banner" :class="{ 'kp-banner-danger': b.urgent }">
+      <div class="kp-banner-text small">
+        <strong>{{ b.urgent ? '⚠ ' : '' }}{{ b.from }}</strong> · {{ formatTimeSeconds(b.at) }}
+        <div>{{ b.body }}</div>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="broadcasts.ack(b.id)">Got it</button>
     </div>
   </div>
 </template>
-
-<style scoped>
-.bc-body {
-  font-size: 1.05rem;
-  margin-top: 2px;
-  overflow-wrap: anywhere;
-}
-.min-w-0 {
-  min-width: 0;
-}
-</style>

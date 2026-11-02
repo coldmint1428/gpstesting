@@ -11,21 +11,21 @@
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
 }
 .pm-me {
-  border-color: #212529;
+  border-color: var(--ink);
 }
 .pm-stale {
   opacity: 0.55;
 }
 .pm-offline {
-  background: #adb5bd !important;
+  background: var(--stopped) !important;
   opacity: 0.8;
 }
 .pm-stopped {
   /* Pressed Stop: white with a dashed outline (different from grey "lost contact") */
   background: #fff !important;
-  color: #495057;
+  color: var(--muted);
   text-shadow: none;
-  border: 2px dashed #6c757d;
+  border: 2px dashed var(--muted);
 }
 .gm {
   width: 18px;
@@ -39,7 +39,7 @@
   opacity: 0.35;
 }
 .pm-selected {
-  box-shadow: 0 0 0 3px #212529, 0 1px 6px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px var(--ink), 0 1px 6px rgba(0, 0, 0, 0.5);
 }
 
 /* SOS (038): a red pin that pulses, on top of everything (LiveMap.vue) */
@@ -47,7 +47,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #dc3545;
+  background: var(--danger);
   border: 3px solid #fff;
   color: #fff;
   font: 700 12px/38px system-ui, sans-serif;

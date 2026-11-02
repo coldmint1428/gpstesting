@@ -706,36 +706,20 @@ async function removeEvent() {
       <button type="button" class="btn btn-danger btn-sm sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </header>
 
-    <!-- Header: which event, when, its state, my role -->
-    <header v-if="!native" class="ev-head">
-      <div class="ev-head-inner">
-        <div class="flex-grow-1" style="min-width: 0">
-          <RouterLink to="/events" class="ev-back" data-testid="back-to-events">← My events</RouterLink>
-          <h1 class="ev-title" data-testid="event-name">{{ event.name }}</h1>
-          <div class="ev-meta mt-1">
-            <span v-if="isLive" class="ev-chip ev-chip-live" data-testid="head-live">LIVE</span>
-            <span v-else-if="scheduledStart" class="ev-chip ev-chip-sched">Starts {{ formatDayTime(scheduledStart) }}</span>
-            <span v-else class="ev-chip ev-chip-off">Not live</span>
-            <span v-if="event.is_simulation" class="ev-chip ev-chip-sim" data-testid="sim-badge">SIMULATION</span>
-            <span v-if="event.starts_at || event.venue" data-testid="event-when">
-              <template v-if="event.starts_at">{{ formatDayTime(event.starts_at) }} – {{ formatDayTime(event.ends_at) }}</template>
-              <template v-if="event.starts_at && event.venue"> · </template>
-              <template v-if="event.venue">{{ event.venue }}</template>
-            </span>
-            <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
-            <span class="ev-chip ev-chip-role" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
-            <span v-if="isMarshal(me)" class="ev-chip ev-chip-role" data-testid="event-marshal-badge">Marshal</span>
-            <span v-if="myGroup" class="ev-chip ev-chip-role" data-testid="group-role-badge">
-              {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}
-            </span>
-          </div>
-          <p v-if="event.description" class="ev-desc">{{ event.description }}</p>
-        </div>
-        <button type="button" class="btn btn-danger sos-btn align-self-center" data-testid="sos-btn" @click="sosDialogOpen = true">
-          SOS
-        </button>
+    <!-- Which event and its state, in the site's top bar (one bar, as in the design) -->
+    <Teleport v-if="!native" to="#k-nav-context">
+      <div class="ks-ev">
+        <RouterLink to="/events" class="ks-crumb" data-testid="back-to-events"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Events</RouterLink>
+        <h1 class="k-ev-name text-truncate" data-testid="event-name">{{ event.name }}</h1>
+        <span v-if="isLive" class="chip chip-ink ks-hide-m" data-testid="head-live"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+        <span v-else-if="scheduledStart" class="chip chip-mint ks-hide-m">Starts {{ formatDayTime(scheduledStart) }}</span>
+        <span v-else class="chip chip-soft ks-hide-m">Not live</span>
+        <span v-if="event.is_simulation" class="chip rl-sim ks-hide-m" data-testid="sim-badge">Sim</span>
       </div>
-    </header>
+    </Teleport>
+    <Teleport v-if="!native" to="#k-nav-actions">
+      <button type="button" class="kb kb-sm k-sos sos-btn" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
+    </Teleport>
 
     <div class="ev-body">
       <!-- Every page of the event, always in view -->
@@ -752,14 +736,20 @@ async function removeEvent() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" />
               </svg>
-              <span class="ev-nav-text">
-                <span>{{ p.label }}</span>
-                <span class="ev-nav-hint">{{ p.hint }}</span>
-              </span>
+              <span class="ev-nav-text">{{ p.label }}</span>
               <span v-if="p.badge" class="ev-nav-badge" :class="{ 'ev-nav-badge-live': p.badgeLive }">{{ p.badge }}</span>
             </RouterLink>
           </li>
         </ul>
+        <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
+        <div class="ks-me k-you">
+          <span>You</span>
+          <div class="k-you-pills">
+            <span class="chip" :class="topRole(me) === 'root' ? 'rl-root' : topRole(me) === 'planner' ? 'rl-planner' : 'chip-soft'" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
+            <span v-if="isMarshal(me)" class="chip chip-soft" data-testid="event-marshal-badge">Marshal</span>
+            <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
+          </div>
+        </div>
       </nav>
 
       <section ref="mainEl" class="ev-main" :class="{ 'pv-has-tabs': native }" :aria-label="currentPage.label">
@@ -780,22 +770,19 @@ async function removeEvent() {
         />
 
         <!-- The event's state and the Start / Schedule / End / Share controls: on every page (phone: on Ops, and on Now for ICs) -->
-        <EventStatus v-if="!native || tab === 'ops' || (tab === 'now' && isIC)" :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount"
+        <EventStatus v-if="showStatusCard" :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount"
           :plans="seesWholeEvent ? startPlans.plans.value : []"
           :plans-ready="!seesWholeEvent || plansReady"
           :planned-start="event.starts_at" :planned-end="event.ends_at">
           <!-- Only the group's IC shares, and only while the event is live. One tap starts sharing. -->
           <template v-if="isIC" #sharing>
             <div class="d-flex flex-wrap align-items-center gap-2">
-              <span class="small flex-grow-1">
-                <strong>Your location:</strong>
-                <span v-if="sharingHere" class="text-success" data-testid="sharing-banner">
-                  ● Sharing with this event's planners and your group.
-                </span>
-                <span v-else-if="isLive" class="text-muted"> not shared yet.</span>
+              <span class="kp-status-text">
+                <span v-if="sharingHere" class="fw-bold" data-testid="sharing-banner">Sharing your location</span>
+                <span v-else-if="isLive" class="text-muted">Location not shared yet</span>
                 <span v-else class="text-muted" data-testid="share-locked-text">
-                  <template v-if="scheduledStart"> sharing opens at {{ formatDayTime(scheduledStart) }}.</template>
-                  <template v-else> sharing opens when a planner starts the event.</template>
+                  <template v-if="scheduledStart">Sharing opens {{ formatDayTime(scheduledStart) }}</template>
+                  <template v-else>Sharing opens when the event starts</template>
                 </span>
               </span>
               <button v-if="sharingHere" class="btn btn-sm btn-outline-secondary" data-testid="stop-share-btn" @click="tracker.stop()">
@@ -805,26 +792,25 @@ async function removeEvent() {
                 Share my location
               </button>
               <button v-else class="btn btn-sm btn-success" disabled data-testid="share-btn-locked">Share my location</button>
-              <RouterLink :to="{ name: 'share', params: { id } }" class="btn btn-sm btn-outline-secondary" data-testid="share-details-link">
-                My GPS details
+              <RouterLink :to="{ name: 'share', params: { id } }" class="btn btn-sm btn-ghost" data-testid="share-details-link">
+                My GPS
               </RouterLink>
             </div>
           </template>
         </EventStatus>
 
-        <div v-if="event.is_simulation && (native ? tab === 'ops' : tab === 'overview' || tab === 'live')" class="alert alert-warning py-2 small mb-0" data-testid="sim-banner">
-          <strong>Simulation event.</strong> Groups named SIM-… and their ICs are not real people. The server moves them
-          every 10 seconds to test zones and alerts with many groups.
+        <div v-if="event.is_simulation && (native ? tab === 'ops' : tab === 'overview' || tab === 'live')" class="kp-banner" data-testid="sim-banner">
+          <span class="kp-banner-text"><strong>Simulation.</strong> SIM- groups are not real people.</span>
         </div>
 
-        <div v-if="isIC && scheduledStart && tracker.isNative && !exactAllowed" class="alert alert-light border py-2 small mb-0">
-          We will remind you to share at the start time. To get the reminder on time, allow alarms for this app.
-          <button class="btn btn-sm btn-outline-primary ms-1" @click="allowExact">Allow alarms</button>
+        <div v-if="isIC && scheduledStart && tracker.isNative && !exactAllowed" class="kp-banner">
+          <span class="kp-banner-text">Allow alarms to get your reminder on time.</span>
+          <button class="btn btn-sm btn-outline-secondary" @click="allowExact">Allow alarms</button>
         </div>
 
         <!-- I (an IC) am inside a No-Go area right now -->
-        <div v-if="myNoGo.length" class="alert alert-danger py-2 mb-0" role="alert" data-testid="my-no-go">
-          <strong>You are inside a No-Go area:</strong> {{ myNoGo.map((z) => z.name).join(', ') }}. Please leave it now.
+        <div v-if="myNoGo.length" class="kp-banner kp-banner-danger" role="alert" data-testid="my-no-go">
+          <span class="kp-banner-text"><strong>You are in a No-Go area:</strong> {{ myNoGo.map((z) => z.name).join(', ') }}. Please leave now.</span>
         </div>
 
         <!-- A message from the planners to many groups at once (032): stays until Got it -->
@@ -834,11 +820,9 @@ async function removeEvent() {
              `message_group`, which step 25 deleted with the run sheet engine and which nothing else wrote, so the
              banner that could never receive a message went with it. "Message everyone" (032) is the one left. -->
         <!-- A QR roll call is open for my group and I have not scanned in (071) -->
-        <div v-if="showAttendanceBanner" class="alert alert-info py-2 d-flex align-items-center gap-2 mb-0" role="alert" data-testid="attendance-banner">
-          <span class="flex-grow-1">
-            <strong>Roll call open: {{ attendance.myOpen.value.title }}.</strong> Scan the QR code on your IC's screen.
-          </span>
-          <button type="button" class="btn btn-sm btn-primary flex-shrink-0" @click="openPage('attendance')">Scan</button>
+        <div v-if="showAttendanceBanner" class="kp-banner" role="alert" data-testid="attendance-banner">
+          <span class="kp-banner-text"><strong>Roll call open: {{ attendance.myOpen.value.title }}</strong></span>
+          <button type="button" class="btn btn-sm btn-primary" @click="openPage('attendance')">Scan</button>
         </div>
 
 
@@ -846,45 +830,45 @@ async function removeEvent() {
         <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
         <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-        <!-- The page's title and what it is for -->
+        <!-- The page's title. Only the Live page adds a line: who this person can see on the map. -->
         <div v-if="!native" class="ev-page-head">
           <h2>{{ currentPage.label }}</h2>
-          <p data-testid="view-scope">{{ currentPage.about }}</p>
+          <p v-if="tab === 'live'" data-testid="view-scope">{{ viewText }}</p>
         </div>
 
         <!-- ===== Live map: v-show keeps the map (and its live connection) alive on the other pages ===== -->
-        <div v-show="tab === 'live'">
-          <div class="d-flex flex-column gap-3">
+        <div v-show="tab === 'live'" class="kp-live" :class="{ 'has-side': !native && canManage }">
+          <div class="kp-live-map" :class="native ? 'ev-map-phone' : 'ev-map-only'">
+            <div style="min-width: 0">
+              <LiveMap
+                ref="liveMap"
+                :active="tab === 'live'"
+                :event-id="id"
+                :positions="live.positions.value"
+                :live-since="liveSession ? liveSession.startsAt.getTime() : null"
+                :session="liveSession"
+                :on-reading="live.onReading"
+                :now="live.now.value"
+                :live-error="live.errorMsg.value"
+                :reconnecting="live.reconnecting.value"
+                :members="members"
+                :groups="groups"
+                :my-user-id="auth.user ? auth.user.id : null"
+                :zone-stays="zoneActivity.staysByUser.value"
+                :zone-counts="zoneActivity.countsByZone.value"
+                :no-go-occupied="zoneActivity.noGoOccupied.value"
+                :group-positions="zoneActivity.groupPositions.value"
+                :sos-alerts="sosOnMap"
+              />
+            </div>
+          </div>
+          <div v-if="!native" class="kp-live-side">
             <!-- "Message everyone" (032): planners send one message to many groups at once (phone: on the Ops tab) -->
-            <BroadcastPanel v-if="!native && canManage" :broadcasts="broadcasts" :groups="groups" />
+            <BroadcastPanel v-if="canManage" :broadcasts="broadcasts" :groups="groups" />
             <!-- A plan session's staff picture of the walk: a row per group, its moment, its leg and where its ICs are
                  (step 20). Mounted only while the Live page is shown: the page itself is kept alive by v-show for the
                  map, and a panel that polls every five seconds must not run behind a planner who is drawing the plan. -->
-            <PlanOps v-if="!native && tab === 'live' && planSession && seesWholeEvent" :session="liveSession" />
-            <div :class="native ? 'ev-map-phone' : 'ev-map-only'">
-              <div style="min-width: 0">
-                <LiveMap
-                  ref="liveMap"
-                  :active="tab === 'live'"
-                  :event-id="id"
-                  :positions="live.positions.value"
-                  :live-since="liveSession ? liveSession.startsAt.getTime() : null"
-                  :session="liveSession"
-                  :on-reading="live.onReading"
-                  :now="live.now.value"
-                  :live-error="live.errorMsg.value"
-                  :reconnecting="live.reconnecting.value"
-                  :members="members"
-                  :groups="groups"
-                  :my-user-id="auth.user ? auth.user.id : null"
-                  :zone-stays="zoneActivity.staysByUser.value"
-                  :zone-counts="zoneActivity.countsByZone.value"
-                  :no-go-occupied="zoneActivity.noGoOccupied.value"
-                  :group-positions="zoneActivity.groupPositions.value"
-                  :sos-alerts="sosOnMap"
-                />
-              </div>
-            </div>
+            <PlanOps v-if="tab === 'live' && planSession && seesWholeEvent" :session="liveSession" />
           </div>
         </div>
 

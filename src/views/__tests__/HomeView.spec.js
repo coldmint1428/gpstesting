@@ -53,7 +53,7 @@ beforeEach(() => {
 describe('HomeView for a visitor', () => {
   it('shows the landing page and loads no events', async () => {
     const { wrapper } = await mountHome()
-    expect(wrapper.text()).toContain('Every group in the right place, right on time.')
+    expect(wrapper.find('h1').text()).toContain('Right place.')
     expect(service.getMyEvents).not.toHaveBeenCalled()
   })
 
@@ -62,8 +62,6 @@ describe('HomeView for a visitor', () => {
     const input = wrapper.find('[data-testid=visitor-join-code]')
     await input.setValue('9z8-gg!xq')
     expect(input.element.value).toBe('9Z8GGX')
-    const filled = wrapper.findAll('.hm-box').map((b) => b.text())
-    expect(filled).toEqual(['9', 'Z', '8', 'G', 'G', 'X'])
   })
 
   it('sends a visitor with a full code to the join page (which asks them to sign in)', async () => {

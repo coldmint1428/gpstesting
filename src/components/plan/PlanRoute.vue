@@ -386,10 +386,10 @@ watch(
       </header>
 
       <p v-if="phase === 'scheduled'" class="pv-route-line" data-testid="route-scheduled">
-        The event starts {{ formatDayTime(session.startsAt) }}. This is the walk as planned; nothing has been walked yet.
+        Starts {{ formatDayTime(session.startsAt) }}.
       </p>
       <p v-if="phase === 'ended'" class="pv-route-line" data-testid="route-ended">
-        The event ended {{ formatTime(endedAt) }}. This is the walk as it stood when it closed.
+        Ended {{ formatTime(endedAt) }}.
       </p>
 
       <!-- A read that failed says so and keeps the last answer: a map that blanks itself is worse than an old one. -->
@@ -421,30 +421,22 @@ watch(
 
       <div v-else-if="!rows.length" class="pv-route-empty" data-testid="route-empty">
         <template v-if="phase === 'none'">
-          No schedule yet, so there is no walk to draw. It appears here when a planner starts the event on a plan.
+          No route yet.
         </template>
         <template v-else-if="!session.planId">
-          This event is running without a plan, so there is no route to show.
+          This event is running without a plan.
         </template>
         <template v-else-if="!whole && !groupName">
-          You are not in a group yet. Ask the root, a planner or a group admin to add you, and your walk appears here.
+          You are not in a group yet.
         </template>
         <template v-else-if="phase === 'live'">
-          Nothing to draw. This plan has no moments for {{ whole ? 'any group' : groupName }} — or the plan the session
-          was running has been removed.
+          This plan has no moments for {{ whole ? 'any group' : groupName }}.
         </template>
         <template v-else>This plan has no moments for {{ whole ? 'any group' : groupName }}.</template>
       </div>
 
       <p v-else-if="!tracks.size || ![...tracks.values()].some((t) => t.points.length)" class="pv-route-note" data-testid="route-nopoints">
         {{ whole ? 'No group has a stated point yet.' : 'Your group has no stated points yet.' }}
-        A moment that only carries the group forward, or an off-site moment, is not a point on the map.
-      </p>
-
-      <p v-else class="pv-route-foot">
-        The line joins the moments of {{ whole ? 'each group' : 'your group' }}; a dashed line is the plan, not a
-        route to be navigated. It breaks where {{ whole ? 'a group is' : 'you are' }} off site, because that is not a
-        place on the map. Positions on the Live page are where people are now; this is where the plan says to be.
       </p>
     </section>
   </div>

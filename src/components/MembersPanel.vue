@@ -325,7 +325,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
 </script>
 
 <template>
-  <div :aria-busy="busy ? 'true' : null">
+  <div class="kp-stack" :aria-busy="busy ? 'true' : null">
     <BenchAlert v-if="errorMsg" data-testid="members-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
     <datalist :id="'sectors-' + eventId">
@@ -334,399 +334,212 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
 
     <!-- ========== One group in full (?group=) ========== -->
     <template v-if="openGroup">
-      <RouterLink :to="{ query: {} }" class="btn btn-sm btn-link px-0 mb-2" data-testid="group-back">‹ All groups</RouterLink>
-      <!-- Name and colour (root / planner) -->
-      <form v-if="editingGroup" class="card mb-3" data-testid="group-edit" @submit.prevent="saveGroup">
-        <div class="card-body">
-          <h2 class="h6">Name and colour</h2>
-          <div class="input-group">
-            <input
-              v-model="editColour"
-              type="color"
-              class="form-control form-control-color flex-grow-0"
-              title="Group colour"
-              aria-label="Group colour"
-              data-testid="group-edit-colour"
-            />
+      <div>
+        <RouterLink :to="{ query: {} }" class="kp-back" data-testid="group-back">‹ All groups</RouterLink>
+        <!-- Name and colour (root / planner) -->
+        <form v-if="editingGroup" class="kp-card" data-testid="group-edit" @submit.prevent="saveGroup">
+          <h2 class="kp-label">Name and colour</h2>
+          <div class="kp-inline">
+            <input v-model="editColour" type="color" class="form-control form-control-color kp-colour" title="Group colour" aria-label="Group colour" data-testid="group-edit-colour" />
             <input v-model="editName" class="form-control" maxlength="50" required aria-label="Group name" data-testid="group-edit-name" />
           </div>
-          <div class="d-flex gap-2 mt-2">
-            <button type="submit" class="btn btn-sm btn-primary" :disabled="busy || !editName.trim() || !groupEdited" data-testid="group-edit-save">
-              Save
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="editingGroup = false">Cancel</button>
+          <div class="kp-actions mt-3">
+            <button type="submit" class="btn btn-sm btn-primary" :disabled="busy || !editName.trim() || !groupEdited" data-testid="group-edit-save">Save</button>
+            <button type="button" class="btn btn-sm btn-ghost" :disabled="busy" @click="editingGroup = false">Cancel</button>
           </div>
+        </form>
+        <div v-else class="kp-inline" :data-testid="'group-view-' + openGroup.name">
+          <span class="kp-dot" :style="{ backgroundColor: openGroup.colour, width: '16px', height: '16px' }" aria-hidden="true"></span>
+          <h2 class="kp-title text-truncate" style="flex: 0 1 auto; font-size: 22px">{{ openGroup.name }}</h2>
+          <span class="kp-chip">{{ openCountText }}</span>
+          <span class="kp-spacer"></span>
+          <button v-if="canManage && openGroup.id !== 'none'" type="button" class="btn btn-sm btn-outline-secondary" data-testid="group-edit-btn" @click="startEditGroup">Edit</button>
         </div>
-      </form>
-      <div v-else class="d-flex align-items-center gap-2 mb-3" :data-testid="'group-view-' + openGroup.name">
-        <span class="dot" :style="{ backgroundColor: openGroup.colour }" aria-hidden="true"></span>
-        <h2 class="h5 mb-0 text-truncate">{{ openGroup.name }}</h2>
-        <span class="text-muted text-nowrap">· {{ openCountText }}</span>
-        <button
-          v-if="canManage && openGroup.id !== 'none'"
-          type="button"
-          class="btn btn-sm btn-outline-secondary ms-auto flex-shrink-0"
-          data-testid="group-edit-btn"
-          @click="startEditGroup"
-        >
-          Edit name and colour
-        </button>
+        <p v-if="!editingGroup && openLine && !(canManage && details[openGroup.id])" class="kp-sub">{{ openLine }}</p>
       </div>
 
-      <!-- Details (root / planner): code, category, sector, headcount -->
-      <form
-        v-if="canManage && details[openGroup.id]"
-        class="card mb-3"
-        data-testid="group-view-details"
-        @submit.prevent="saveDetails(openGroup)"
-      >
-        <div class="card-body">
-          <h3 class="h6">Details</h3>
-          <datalist id="group-categories-one"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
-          <div class="row g-2">
-            <div class="col-6 col-md">
-              <label class="form-label small mb-0" for="gv-category">Category</label>
-              <input id="gv-category" v-model="details[openGroup.id].category" class="form-control form-control-sm" list="group-categories-one" maxlength="50" />
-            </div>
-            <div class="col-6 col-md">
-              <label class="form-label small mb-0" for="gv-code">Code</label>
-              <input id="gv-code" v-model="details[openGroup.id].code" class="form-control form-control-sm" maxlength="40" />
-            </div>
-            <div class="col-6 col-md">
-              <label class="form-label small mb-0" for="gv-sector">Sector</label>
-              <input id="gv-sector" v-model="details[openGroup.id].sector" class="form-control form-control-sm" maxlength="50" />
-            </div>
-            <div class="col-6 col-md">
-              <label class="form-label small mb-0" for="gv-radio">Radio</label>
-              <input id="gv-radio" v-model="details[openGroup.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" />
-            </div>
-            <div class="col-12 col-md-auto d-flex align-items-end">
-              <span v-if="detailSaved === openGroup.id" class="small text-success">Saved ✓</span>
-              <button v-else type="submit" class="btn btn-sm btn-outline-primary w-100" :disabled="busy || !detailsChanged(openGroup)">Save</button>
-            </div>
+      <!-- Details (root / planner): code, category, sector, radio -->
+      <form v-if="canManage && details[openGroup.id]" class="kp-card" data-testid="group-view-details" @submit.prevent="saveDetails(openGroup)">
+        <datalist id="group-categories-one"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
+        <div class="row g-2 align-items-end">
+          <div class="col-6 col-lg">
+            <label class="form-label" for="gv-category">Category</label>
+            <input id="gv-category" v-model="details[openGroup.id].category" class="form-control form-control-sm" list="group-categories-one" maxlength="50" />
           </div>
-        </div>
-      </form>
-      <p v-else-if="openLine" class="small text-muted">{{ openLine }}</p>
-
-      <!-- Put someone in (root / planners: anyone not in it; this group's admin: people without a group) -->
-      <form v-if="addCandidates.length" class="card mb-3" @submit.prevent="addToOpenGroup">
-        <div class="card-body">
-          <label class="h6 d-block" for="gv-add">{{ canManage ? 'Add a person to this group' : 'Add someone without a group' }}</label>
-          <div class="input-group">
-            <select id="gv-add" v-model="addToGroupId" class="form-select" data-testid="group-view-add">
-              <option value="" disabled>Choose a person</option>
-              <option v-for="m in addCandidates" :key="m.id" :value="m.id">
-                {{ m.display_name }}{{ m.groupId ? ' (now in ' + groupNameOf(m.groupId) + ')' : '' }}
-              </option>
-            </select>
-            <button class="btn btn-primary" type="submit" :disabled="busy || !addToGroupId">Add</button>
+          <div class="col-6 col-lg">
+            <label class="form-label" for="gv-code">Code</label>
+            <input id="gv-code" v-model="details[openGroup.id].code" class="form-control form-control-sm" maxlength="40" />
+          </div>
+          <div class="col-6 col-lg">
+            <label class="form-label" for="gv-sector">Sector</label>
+            <input id="gv-sector" v-model="details[openGroup.id].sector" class="form-control form-control-sm" maxlength="50" />
+          </div>
+          <div class="col-6 col-lg">
+            <label class="form-label" for="gv-radio">Radio</label>
+            <input id="gv-radio" v-model="details[openGroup.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" />
+          </div>
+          <div class="col-12 col-lg-auto">
+            <span v-if="detailSaved === openGroup.id" class="small text-success">Saved ✓</span>
+            <button v-else type="submit" class="btn btn-sm btn-outline-secondary w-100" :disabled="busy || !detailsChanged(openGroup)">Save</button>
           </div>
         </div>
       </form>
 
-      <p v-if="!openMembers.length" class="text-muted">No one {{ openGroup.id === 'none' ? 'without a group' : 'in this group yet' }}.</p>
-      <div class="row g-2" data-testid="member-list">
-        <div v-for="m in openMembers" :key="m.id" class="col-12 col-md-6">
-            <div class="card h-100" :data-testid="'member-' + m.username">
-              <div class="card-body py-2">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                  <span class="avatar" :style="{ backgroundColor: groupColour(m.groupId), color: textOn(groupColour(m.groupId)) }">
-                    {{ initials(m.display_name) }}
-                  </span>
-                  <div class="flex-grow-1 text-truncate">
-                    <strong>{{ m.display_name }}</strong>
-                    <span v-if="me && m.id === me.id" class="text-muted small"> (you)</span>
-                  </div>
-                </div>
+      <div class="kp-card">
+        <!-- Put someone in (root / planners: anyone not in it; this group's admin: people without a group) -->
+        <form v-if="addCandidates.length" class="kp-inline mb-2" @submit.prevent="addToOpenGroup">
+          <label class="visually-hidden" for="gv-add">{{ canManage ? 'Add a person to this group' : 'Add someone without a group' }}</label>
+          <select id="gv-add" v-model="addToGroupId" class="form-select" data-testid="group-view-add">
+            <option value="" disabled>Add a person</option>
+            <option v-for="m in addCandidates" :key="m.id" :value="m.id">
+              {{ m.display_name }}{{ m.groupId ? ' (now in ' + groupNameOf(m.groupId) + ')' : '' }}
+            </option>
+          </select>
+          <button class="btn btn-primary" type="submit" :disabled="busy || !addToGroupId">Add</button>
+        </form>
 
-                <div class="mb-2">
-                  <span class="badge text-bg-secondary me-1" :data-testid="'role-badge-' + m.username">{{ ROLE_LABEL[topRole(m)] }}</span>
-                  <span v-if="m.isAdmin && topRole(m) !== 'admin'" class="badge text-bg-info me-1">Group admin</span>
-                  <span v-if="isMarshal(m)" class="badge text-bg-dark me-1">Marshal</span>
-                  <span v-if="m.isIC" class="badge text-bg-success me-1">IC</span>
-                  <span v-if="sharingStatus[m.id] === true" class="badge text-bg-light border border-success text-success me-1" data-testid="badge-sharing">
-                    ● Sharing
-                  </span>
-                  <span v-else-if="sharingStatus[m.id] === false" class="badge text-bg-warning me-1" :data-testid="'badge-not-sharing-' + m.username">
-                    Not sharing yet
-                  </span>
-                </div>
-
-                <!-- Group (root / planner); planners are never in a group -->
-                <p v-if="canManage && isPlanner(m)" class="small text-muted mb-2">Planners are not in a group.</p>
-                <select
-                  v-else-if="canManage"
-                  class="form-select form-select-sm mb-2"
-                  :value="m.groupId || ''"
-                  :disabled="busy"
-                  aria-label="Group"
-                  :data-testid="'group-select-' + m.username"
-                  @change="assignGroup(m, $event.target.value)"
-                >
-                  <option value="">No group</option>
-                  <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-                </select>
-                <!-- Group admin: add to / remove from own group -->
-                <button v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-primary mb-2 me-1" :disabled="busy" @click="assignGroup(m, myAdminGroupId)">
-                  Add to my group
-                </button>
-                <button v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-outline-secondary mb-2 me-1" :disabled="busy" @click="assignGroup(m, null)">
-                  Remove from my group
-                </button>
-
-                <!-- IC (shares GPS) and marshal duties -->
-                <div v-if="canSetIC(me, m) || canSetMarshal(me, m)" class="d-flex flex-wrap gap-3 mb-2">
-                  <div v-if="canSetIC(me, m)" class="form-check form-switch mb-0">
-                    <input
-                      :id="'gv-ic-' + m.id"
-                      class="form-check-input"
-                      type="checkbox"
-                      :checked="m.isIC"
-                      :disabled="busy"
-                      :data-testid="'group-ic-toggle-' + m.username"
-                      @change="toggleIC(m, $event.target)"
-                    />
-                    <label class="form-check-label small" :for="'gv-ic-' + m.id">IC (shares GPS)</label>
-                  </div>
-                  <div v-if="canSetMarshal(me, m)" class="form-check form-switch mb-0">
-                    <input
-                      :id="'gv-marshal-' + m.id"
-                      class="form-check-input"
-                      type="checkbox"
-                      :checked="isMarshal(m)"
-                      :disabled="busy"
-                      :data-testid="'group-marshal-toggle-' + m.username"
-                      @change="toggleMarshal(m, $event.target)"
-                    />
-                    <label class="form-check-label small" :for="'gv-marshal-' + m.id">Marshal</label>
-                  </div>
-                </div>
-
-                <!-- A marshal's sector (root / planners): the ops view opens filtered to it -->
-                <div v-if="canManage && m.roles.includes('marshal')" class="input-group input-group-sm mt-2 sector-input">
-                  <span class="input-group-text">Sector</span>
-                  <input
-                    class="form-control"
-                    :value="m.sector || ''"
-                    :list="'sectors-' + eventId"
-                    maxlength="50"
-                    placeholder="All sectors"
-                    :disabled="busy"
-                    :aria-label="'Sector that ' + m.display_name + ' marshals'"
-                    :data-testid="'sector-' + m.username"
-                    @change="setSector(m, $event.target.value)"
-                  />
-                </div>
-                <div v-else-if="m.roles.includes('marshal') && m.sector" class="small text-muted mt-1">Sector: {{ m.sector }}</div>
-
-                <button
-                  v-if="canStopSharing(m)"
-                  class="btn btn-sm btn-outline-danger mt-2 me-2"
-                  :disabled="busy"
-                  :data-testid="'stop-sharing-' + m.username"
-                  @click="stopSharing(m)"
-                >
-                  Stop sharing
-                </button>
+        <p v-if="!openMembers.length" class="kp-empty">No one {{ openGroup.id === 'none' ? 'without a group' : 'in this group yet' }}.</p>
+        <ul class="kp-list" data-testid="member-list">
+          <li v-for="m in openMembers" :key="m.id" class="kp-row" :data-testid="'member-' + m.username">
+            <span class="kp-av" :style="{ backgroundColor: groupColour(m.groupId), color: textOn(groupColour(m.groupId)) }">{{ initials(m.display_name) }}</span>
+            <div class="kp-row-main">
+              <strong>{{ m.display_name }}<span v-if="me && m.id === me.id" class="text-muted fw-normal"> (you)</span></strong>
+              <div class="kp-chips mt-1">
+                <span class="kp-chip" :data-testid="'role-badge-' + m.username">{{ ROLE_LABEL[topRole(m)] }}</span>
+                <span v-if="m.isAdmin && topRole(m) !== 'admin'" class="kp-chip">Group admin</span>
+                <span v-if="isMarshal(m)" class="kp-chip">Marshal</span>
+                <span v-if="m.isIC" class="kp-chip kp-chip-peach">IC</span>
+                <span v-if="sharingStatus[m.id] === true" class="kp-chip kp-chip-mint" data-testid="badge-sharing">Sharing</span>
+                <span v-else-if="sharingStatus[m.id] === false" class="kp-chip kp-chip-warn" :data-testid="'badge-not-sharing-' + m.username">Not sharing</span>
               </div>
             </div>
-        </div>
+
+            <div class="kp-row-actions">
+              <!-- IC (shares GPS) and marshal duties -->
+              <div v-if="canSetIC(me, m) || canSetMarshal(me, m)" class="kp-switches">
+                <div v-if="canSetIC(me, m)" class="form-check form-switch">
+                  <input :id="'gv-ic-' + m.id" class="form-check-input" type="checkbox" :checked="m.isIC" :disabled="busy" :data-testid="'group-ic-toggle-' + m.username" @change="toggleIC(m, $event.target)" />
+                  <label class="form-check-label" :for="'gv-ic-' + m.id">IC</label>
+                </div>
+                <div v-if="canSetMarshal(me, m)" class="form-check form-switch">
+                  <input :id="'gv-marshal-' + m.id" class="form-check-input" type="checkbox" :checked="isMarshal(m)" :disabled="busy" :data-testid="'group-marshal-toggle-' + m.username" @change="toggleMarshal(m, $event.target)" />
+                  <label class="form-check-label" :for="'gv-marshal-' + m.id">Marshal</label>
+                </div>
+              </div>
+
+              <!-- Group (root / planner); planners are never in a group -->
+              <span v-if="canManage && isPlanner(m)" class="small text-muted">No group</span>
+              <select v-else-if="canManage" class="form-select form-select-sm kp-stepped" :value="m.groupId || ''" :disabled="busy" aria-label="Group" :data-testid="'group-select-' + m.username" @change="assignGroup(m, $event.target.value)">
+                <option value="">No group</option>
+                <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+              </select>
+              <!-- Group admin: add to / remove from own group -->
+              <button v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="assignGroup(m, myAdminGroupId)">Add</button>
+              <button v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-ghost" :disabled="busy" @click="assignGroup(m, null)">Remove</button>
+
+              <!-- A marshal's sector (root / planners): the ops view opens filtered to it -->
+              <input
+                v-if="canManage && m.roles.includes('marshal')"
+                class="form-control form-control-sm kp-stepped"
+                style="width: 9rem"
+                :value="m.sector || ''"
+                :list="'sectors-' + eventId"
+                maxlength="50"
+                placeholder="All sectors"
+                :disabled="busy"
+                :aria-label="'Sector that ' + m.display_name + ' marshals'"
+                :data-testid="'sector-' + m.username"
+                @change="setSector(m, $event.target.value)"
+              />
+              <span v-else-if="m.roles.includes('marshal') && m.sector" class="small text-muted">Sector: {{ m.sector }}</span>
+
+              <button v-if="canStopSharing(m)" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'stop-sharing-' + m.username" @click="stopSharing(m)">Stop sharing</button>
+            </div>
+          </li>
+        </ul>
       </div>
     </template>
 
     <!-- ========== Every group, one card each ========== -->
     <template v-else>
       <!-- Create group (root / planner) -->
-      <form v-if="canManage" class="card mb-3" @submit.prevent="createGroup">
-        <div class="card-body">
-          <h2 class="h6">Create a group</h2>
-          <div class="input-group">
-            <input
-              v-model="newGroupColour"
-              type="color"
-              class="form-control form-control-color flex-grow-0"
-              title="Group colour"
-              aria-label="Group colour"
-            />
-            <input
-              v-model="newGroupName"
-              class="form-control"
-              placeholder="e.g. Contingent A"
-              maxlength="50"
-              required
-              aria-label="Group name"
-              data-testid="new-group-name"
-            />
-            <button class="btn btn-success" type="submit" :disabled="busy" data-testid="create-group-btn">Add</button>
-          </div>
-        </div>
-      </form>
-
-      <p v-if="onlyGroupId === 'none'" class="text-muted" data-testid="no-group">
-        You are not in a group. Ask a planner or a group admin to add you.
-      </p>
-      <p v-else-if="!shownGroups.length" class="text-muted">No groups yet.</p>
-
-      <div v-if="canManage && groups.length" class="text-end mb-2">
-        <button class="btn btn-sm btn-link" data-testid="group-details-btn" @click="openDetails">
-          {{ showDetails ? 'Hide group details' : 'Edit all group details' }}
+      <div v-if="canManage" class="kp-inline" style="flex-wrap: wrap">
+        <form class="kp-inline" style="flex: 1 1 280px" @submit.prevent="createGroup">
+          <input v-model="newGroupColour" type="color" class="form-control form-control-color kp-colour" title="Group colour" aria-label="Group colour" />
+          <input v-model="newGroupName" class="form-control" placeholder="New group name" maxlength="50" required aria-label="Group name" data-testid="new-group-name" />
+          <button class="btn btn-primary" type="submit" :disabled="busy" data-testid="create-group-btn">Add</button>
+        </form>
+        <button v-if="groups.length" class="btn btn-sm btn-ghost" data-testid="group-details-btn" @click="openDetails">
+          {{ showDetails ? 'Hide details' : 'Edit all details' }}
         </button>
       </div>
+
+      <p v-if="onlyGroupId === 'none'" class="kp-empty" data-testid="no-group">You are not in a group yet.</p>
+      <p v-else-if="!shownGroups.length" class="kp-empty">No groups yet.</p>
+
       <!-- Group details (root / planner): category, code, sector, headcount -->
-      <div v-if="canManage && showDetails && groups.length" class="card mb-3" data-testid="group-details">
-        <div class="card-body">
-          <p class="small text-muted mb-2">
-            A message can go to a whole <strong>category</strong> (for example every "Contingent" group) or a whole
-            sector. Code is for reference. Headcount is counted automatically.
-          </p>
-          <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0 pv-stack">
-              <thead>
-                <tr>
-                  <th scope="col">Group</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Code</th>
-                  <th scope="col">Sector</th>
-                  <th scope="col">Headcount</th>
-                  <th scope="col">Radio</th>
-                  <th scope="col"><span class="visually-hidden">Save</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="g in groups.filter((x) => details[x.id])" :key="g.id" :data-testid="'group-details-' + g.name">
-                  <td class="text-nowrap"><span class="dot-sm" :style="{ backgroundColor: g.colour }"></span>{{ g.name }}</td>
-                  <td data-label="Category"><input v-model="details[g.id].category" class="form-control form-control-sm" list="group-categories" maxlength="50" :aria-label="'Category of ' + g.name" data-testid="gd-category" /></td>
-                  <td data-label="Code"><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
-                  <td data-label="Sector"><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
-                  <td data-label="Headcount" class="headcount-cell" data-testid="gd-headcount">{{ membersOf(g.id).length }}</td>
-                  <td data-label="Radio"><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
-                  <td class="text-nowrap">
-                    <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
-                    <button v-else class="btn btn-sm btn-outline-primary" :disabled="busy || !detailsChanged(g)" data-testid="gd-save" @click="saveDetails(g)">Save</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <div v-if="canManage && showDetails && groups.length" class="kp-card" data-testid="group-details">
+        <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0 pv-stack">
+            <thead>
+              <tr>
+                <th scope="col">Group</th>
+                <th scope="col">Category</th>
+                <th scope="col">Code</th>
+                <th scope="col">Sector</th>
+                <th scope="col">People</th>
+                <th scope="col">Radio</th>
+                <th scope="col"><span class="visually-hidden">Save</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="g in groups.filter((x) => details[x.id])" :key="g.id" :data-testid="'group-details-' + g.name">
+                <td class="text-nowrap"><span class="kp-dot me-2" :style="{ backgroundColor: g.colour }"></span>{{ g.name }}</td>
+                <td data-label="Category"><input v-model="details[g.id].category" class="form-control form-control-sm" list="group-categories" maxlength="50" :aria-label="'Category of ' + g.name" data-testid="gd-category" /></td>
+                <td data-label="Code"><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
+                <td data-label="Sector"><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
+                <td data-label="People" data-testid="gd-headcount">{{ membersOf(g.id).length }}</td>
+                <td data-label="Radio"><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
+                <td class="text-nowrap">
+                  <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
+                  <button v-else class="btn btn-sm btn-outline-secondary" :disabled="busy || !detailsChanged(g)" data-testid="gd-save" @click="saveDetails(g)">Save</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div class="row g-2" data-testid="group-list">
-        <div v-for="c in cards" :key="c.g.id" class="col-12 col-md-6 col-xl-4">
-          <RouterLink
-            :to="{ query: { group: c.g.id } }"
-            class="card h-100 group-card text-reset text-decoration-none"
-            :style="{ borderLeftColor: c.g.colour }"
-            :data-testid="'group-card-' + c.g.name"
-          >
-            <div class="card-body">
-              <div class="d-flex align-items-center gap-2">
-                <strong class="text-truncate me-auto">{{ c.g.name }}</strong>
-                <span class="badge text-bg-light border text-nowrap">{{ c.countText }}</span>
-              </div>
-              <div v-if="c.line" class="small text-muted text-truncate">{{ c.line }}</div>
-              <dl class="summary small mt-2 mb-2">
-                <dt>IC</dt>
-                <dd class="text-truncate">{{ c.icNames }}</dd>
-                <dt>Admin</dt>
-                <dd class="text-truncate">{{ c.adminNames }}</dd>
-              </dl>
-              <div class="d-flex align-items-center gap-1">
-                <span
-                  v-for="m in c.preview"
-                  :key="m.id"
-                  class="avatar avatar-sm"
-                  :style="{ backgroundColor: c.g.colour }"
-                  :title="m.display_name"
-                  aria-hidden="true"
-                >{{ initials(m.display_name) }}</span>
-                <span v-if="c.more" class="small text-muted">+{{ c.more }}</span>
-                <span v-if="c.live" class="small ms-auto" :class="c.allSharing ? 'text-success' : 'text-warning'">● {{ c.sharingText }}</span>
-              </div>
-            </div>
-          </RouterLink>
-        </div>
+      <div class="kp-groups" data-testid="group-list">
+        <RouterLink v-for="c in cards" :key="c.g.id" :to="{ query: { group: c.g.id } }" class="kp-group" :style="{ '--c': c.g.colour }" :data-testid="'group-card-' + c.g.name">
+          <div class="kp-inline" style="align-items: flex-start">
+            <h3 class="kp-group-name me-auto">{{ c.g.name }}</h3>
+            <span class="kp-chip">{{ c.countText }}</span>
+          </div>
+          <div v-if="c.line" class="small text-muted text-truncate">{{ c.line }}</div>
+          <dl class="kp-group-facts">
+            <dt>IC</dt>
+            <dd>{{ c.icNames }}</dd>
+            <dt>Admin</dt>
+            <dd>{{ c.adminNames }}</dd>
+          </dl>
+          <div class="kp-group-foot">
+            <span v-for="m in c.preview" :key="m.id" class="kp-av kp-av-sm" :style="{ backgroundColor: c.g.colour, color: '#fff' }" :title="m.display_name" aria-hidden="true">{{ initials(m.display_name) }}</span>
+            <span v-if="c.more" class="small text-muted">+{{ c.more }}</span>
+            <span v-if="c.live" class="small ms-auto fw-bold" :class="c.allSharing ? 'text-success' : 'text-warning'">{{ c.sharingText }}</span>
+          </div>
+        </RouterLink>
 
         <!-- People without a group (root / planners) -->
-        <div v-if="canManage && unassigned.length" class="col-12 col-md-6 col-xl-4">
-          <RouterLink :to="{ query: { group: 'none' } }" class="card h-100 group-card text-reset text-decoration-none border-dashed" data-testid="group-card-none">
-            <div class="card-body">
-              <div class="d-flex align-items-center gap-2">
-                <strong class="me-auto">No group</strong>
-                <span class="badge text-bg-light border">{{ unassignedText }}</span>
-              </div>
-              <p class="small text-muted mb-0 mt-1">People in the event without a group. Open this to add them to a group.</p>
-            </div>
-          </RouterLink>
-        </div>
+        <RouterLink v-if="canManage && unassigned.length" :to="{ query: { group: 'none' } }" class="kp-group kp-group-empty" data-testid="group-card-none">
+          <div class="kp-inline">
+            <h3 class="kp-group-name me-auto">No group</h3>
+            <span class="kp-chip">{{ unassignedText }}</span>
+          </div>
+          <p class="small text-muted mb-0">Open to add them to a group.</p>
+        </RouterLink>
       </div>
     </template>
   </div>
 </template>
-
-<style scoped>
-.dot-sm {
-  display: inline-block;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  margin-right: 0.35rem;
-}
-.sector-input {
-  max-width: 18rem;
-}
-.headcount-cell {
-  max-width: 6rem;
-}
-.dot {
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.group-card {
-  border-left-width: 0.35rem;
-  transition: box-shadow 0.15s;
-}
-.group-card:hover,
-.group-card:focus-visible {
-  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
-}
-.border-dashed {
-  border-style: dashed;
-}
-.summary {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 0.75rem;
-  row-gap: 0.1rem;
-}
-.summary dt {
-  font-weight: 500;
-  color: var(--bs-secondary-color);
-}
-.summary dd {
-  margin: 0;
-  min-width: 0;
-}
-.avatar.avatar-sm {
-  width: 1.6rem;
-  height: 1.6rem;
-  font-size: 0.65rem;
-}
-.avatar {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-</style>

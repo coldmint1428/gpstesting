@@ -56,54 +56,48 @@ async function logout() {
 </script>
 
 <template>
-  <main class="container py-4">
-    <div class="row justify-content-center">
-      <div class="col-12 col-sm-10 col-md-7 col-lg-5">
-        <h1 class="h4 mb-3">My profile</h1>
-        <form v-if="auth.profile" class="card" novalidate @submit.prevent="save">
-          <div class="card-body">
-            <div class="mb-3">
-              <label for="email" class="form-label">Email</label>
-              <input id="email" :value="auth.user && auth.user.email" class="form-control" readonly aria-describedby="email-help" data-testid="profile-email" />
-              <div id="email-help" class="form-text">Your login email can't be changed here.</div>
-            </div>
-            <div class="row g-2 mb-3">
-              <div class="col-12 col-sm-6">
-                <label for="firstName" class="form-label">First name</label>
-                <input id="firstName" v-model="firstName" class="form-control" maxlength="50" autocomplete="given-name" required data-testid="first-name" />
-              </div>
-              <div class="col-12 col-sm-6">
-                <label for="lastName" class="form-label">Last name</label>
-                <input id="lastName" v-model="lastName" class="form-control" maxlength="50" autocomplete="family-name" required data-testid="last-name" />
-              </div>
-            </div>
-            <div class="mb-3">
-              <label for="username" class="form-label">Username</label>
-              <input
-                id="username"
-                v-model="username"
-                class="form-control"
-                :class="{ 'is-invalid': ['invalid', 'taken'].includes(check.status.value), 'is-valid': check.status.value === 'free' }"
-                maxlength="20"
-                autocapitalize="none"
-                aria-describedby="username-help"
-                required
-                data-testid="username"
-              />
-              <div id="username-help" class="form-text" aria-live="polite">{{ check.message.value }}</div>
-            </div>
-
-            <BenchAlert v-if="errorMsg" data-testid="profile-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
-
-            <div class="d-flex flex-wrap gap-2">
-              <button type="submit" class="btn btn-primary" :disabled="!canSave" data-testid="profile-save">
-                {{ busy ? 'Saving...' : 'Save' }}
-              </button>
-              <button type="button" class="btn btn-outline-secondary ms-auto" data-testid="profile-logout" @click="logout">Log out</button>
-            </div>
-          </div>
-        </form>
-      </div>
+  <main class="kp-page kp-page-sm">
+    <div class="kp-head">
+      <h1>Profile</h1>
+      <button type="button" class="btn btn-sm btn-ghost" data-testid="profile-logout" @click="logout">Log out</button>
     </div>
+    <form v-if="auth.profile" class="kp-card kp-fields" novalidate @submit.prevent="save">
+      <div>
+        <label for="email" class="form-label">Email</label>
+        <input id="email" :value="auth.user && auth.user.email" class="form-control" readonly disabled aria-describedby="email-help" data-testid="profile-email" />
+        <div id="email-help" class="form-text">Your login email can't be changed.</div>
+      </div>
+      <div class="kp-fields-2">
+        <div>
+          <label for="firstName" class="form-label">First name</label>
+          <input id="firstName" v-model="firstName" class="form-control" maxlength="50" autocomplete="given-name" required data-testid="first-name" />
+        </div>
+        <div>
+          <label for="lastName" class="form-label">Last name</label>
+          <input id="lastName" v-model="lastName" class="form-control" maxlength="50" autocomplete="family-name" required data-testid="last-name" />
+        </div>
+      </div>
+      <div>
+        <label for="username" class="form-label">Username</label>
+        <input
+          id="username"
+          v-model="username"
+          class="form-control"
+          :class="{ 'is-invalid': ['invalid', 'taken'].includes(check.status.value), 'is-valid': check.status.value === 'free' }"
+          maxlength="20"
+          autocapitalize="none"
+          aria-describedby="username-help"
+          required
+          data-testid="username"
+        />
+        <div id="username-help" class="form-text" aria-live="polite">{{ check.message.value }}</div>
+      </div>
+
+      <BenchAlert v-if="errorMsg" data-testid="profile-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
+
+      <button type="submit" class="btn btn-primary" :disabled="!canSave" data-testid="profile-save">
+        {{ busy ? 'Saving...' : 'Save changes' }}
+      </button>
+    </form>
   </main>
 </template>

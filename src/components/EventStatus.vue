@@ -334,269 +334,135 @@ function remind() {
 </script>
 
 <template>
-  <div v-if="sessions.loaded.value" class="card mb-3" data-testid="event-status" :aria-busy="busy ? 'true' : null">
-    <div class="card-body py-2">
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <!-- Status -->
-        <span v-if="live" class="badge badge-live" data-testid="status-live">Live</span>
-        <span v-else-if="scheduledStart" class="badge text-bg-warning" data-testid="status-scheduled">Scheduled</span>
-        <span v-else class="badge text-bg-secondary" data-testid="status-not-started">Not live</span>
+  <section v-if="sessions.loaded.value" class="kp-status" data-testid="event-status" :aria-busy="busy ? 'true' : null">
+    <div class="kp-status-bar">
+      <span v-if="live" class="kp-chip kp-chip-ink" data-testid="status-live"><span class="kp-dot kp-pulse"></span>Live</span>
+      <span v-else-if="scheduledStart" class="kp-chip kp-chip-mint" data-testid="status-scheduled">Scheduled</span>
+      <span v-else class="kp-chip" data-testid="status-not-started">Not live</span>
 
-        <span class="small flex-grow-1" data-testid="status-text">
-          <template v-if="live">
-            Since {{ formatTime(live.startsAt) }} ·
-            <template v-if="scheduledEnd">
-              ends <strong>{{ endText(scheduledEnd, live.startsAt) }}</strong> <span class="text-muted">({{ endsIn }})</span>
-            </template>
-            <span v-else class="text-muted">no end time</span>
-            <span v-if="canManage && icCount" class="text-muted"> · {{ sharingCount }} of {{ icCount }} ICs sharing</span>
-            <span v-if="openPlanName" data-testid="status-plan"> · Running plan: <strong>{{ openPlanName }}</strong></span>
-            <span v-else-if="hasPlans" class="text-muted" data-testid="status-tracking-only"> · running nothing (tracking only)</span>
+      <span class="kp-status-text" data-testid="status-text">
+        <template v-if="live">
+          Since {{ formatTime(live.startsAt) }} ·
+          <template v-if="scheduledEnd">
+            ends <strong>{{ endText(scheduledEnd, live.startsAt) }}</strong> <span class="text-muted">({{ endsIn }})</span>
           </template>
-          <template v-else-if="scheduledStart">
-            Starts <strong>{{ formatDayTime(scheduledStart) }}</strong> ·
-            <template v-if="scheduledEnd">ends <strong>{{ endText(scheduledEnd, scheduledStart) }}</strong></template>
-            <span v-else class="text-muted">no end time</span>
-            <span v-if="openPlanName" data-testid="status-plan"> · will run plan <strong>{{ openPlanName }}</strong></span>
-          </template>
-          <template v-else>ICs can't share their location until {{ canManage ? 'you start' : 'a planner starts' }} the event.</template>
-        </span>
-
-        <!-- Root / planner buttons (hidden while a form is open) -->
-        <template v-if="canManage && !form">
-          <template v-if="live">
-            <button v-if="sharingCount < icCount" class="btn btn-sm btn-outline-warning" :disabled="busy" data-testid="remind-ics-btn" @click="remind">
-              Remind ICs
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="schedule-end-btn" @click="openEnd">
-              {{ scheduledEnd ? 'Change end time' : 'Set end time' }}
-            </button>
-            <button v-if="scheduledEnd" class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="remove-end-btn" @click="removeEnd">
-              Remove end time
-            </button>
-            <button class="btn btn-sm btn-danger" :disabled="busy" data-testid="end-event-btn" @click="endNow">End event now</button>
-          </template>
-          <template v-else-if="scheduledStart">
-            <button class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start now</button>
-            <button class="btn btn-sm btn-outline-primary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Edit schedule</button>
-            <button class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="cancel-schedule-btn" @click="cancelSchedule">
-              Cancel schedule
-            </button>
-          </template>
-          <template v-else>
-            <button class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start event now</button>
-            <button class="btn btn-sm btn-outline-primary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Schedule…</button>
-          </template>
+          <span v-else class="text-muted">no end time</span>
+          <span v-if="canManage && icCount" class="text-muted"> · {{ sharingCount }}/{{ icCount }} ICs sharing</span>
+          <span v-if="openPlanName" data-testid="status-plan"> · <strong>{{ openPlanName }}</strong></span>
+          <span v-else-if="hasPlans" class="text-muted" data-testid="status-tracking-only"> · tracking only</span>
         </template>
-      </div>
+        <template v-else-if="scheduledStart">
+          Starts <strong>{{ formatDayTime(scheduledStart) }}</strong> ·
+          <template v-if="scheduledEnd">ends <strong>{{ endText(scheduledEnd, scheduledStart) }}</strong></template>
+          <span v-else class="text-muted">no end time</span>
+          <span v-if="openPlanName" data-testid="status-plan"> · <strong>{{ openPlanName }}</strong></span>
+        </template>
+        <template v-else>ICs can share once {{ canManage ? 'you start' : 'a planner starts' }} the event.</template>
+      </span>
 
-      <!-- Start now: which published plan runs -->
-      <form v-if="form === 'start'" class="time-panel mt-2" data-testid="start-form" @submit.prevent="startNow">
-        <div class="d-flex align-items-start justify-content-between mb-2">
-          <h3 class="h6 mb-0">Start the event now</h3>
-          <button type="button" class="btn-close" aria-label="Close" @click="form = ''"></button>
-        </div>
-        <label class="time-label d-block" for="start-engine">What runs</label>
+      <!-- Root / planner buttons (hidden while a form is open) -->
+      <template v-if="canManage && !form">
+        <template v-if="live">
+          <button v-if="sharingCount < icCount" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="remind-ics-btn" @click="remind">Remind ICs</button>
+          <button class="btn btn-sm btn-ghost" :disabled="busy" data-testid="schedule-end-btn" @click="openEnd">{{ scheduledEnd ? 'Change end' : 'Set end' }}</button>
+          <button v-if="scheduledEnd" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="remove-end-btn" @click="removeEnd">Clear end</button>
+          <button class="btn btn-sm btn-danger" :disabled="busy" data-testid="end-event-btn" @click="endNow">End event</button>
+        </template>
+        <template v-else-if="scheduledStart">
+          <button class="btn btn-sm btn-ghost" :disabled="busy" data-testid="cancel-schedule-btn" @click="cancelSchedule">Cancel schedule</button>
+          <button class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Edit schedule</button>
+          <button class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start now</button>
+        </template>
+        <template v-else>
+          <button class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Schedule</button>
+          <button class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start now</button>
+        </template>
+      </template>
+    </div>
+
+    <!-- Start now: which published plan runs -->
+    <form v-if="form === 'start'" class="kp-status-panel kp-fields" data-testid="start-form" @submit.prevent="startNow">
+      <div>
+        <label class="form-label" for="start-engine">What runs</label>
         <select id="start-engine" v-model="engineChoice" class="form-select" data-testid="start-engine">
           <option value="">Nothing: tracking only</option>
           <optgroup label="Plan">
-            <option v-for="p in planList" :key="p.id" :value="'plan:' + p.id" :disabled="p.status !== 'live'">
-              {{ planOption(p) }}
-            </option>
+            <option v-for="p in planList" :key="p.id" :value="'plan:' + p.id" :disabled="p.status !== 'live'">{{ planOption(p) }}</option>
           </optgroup>
         </select>
-        <div class="small text-muted mt-1">
-          A session runs a plan or nothing. The plan must be published first; the strip is its schedule.
-        </div>
-        <fieldset v-if="startPlan" class="mt-2" data-testid="start-t0">
-          <legend class="time-label mb-1" style="font-size: inherit">When is T+0 (the plan's +0:00)?</legend>
-          <div class="d-flex flex-wrap align-items-center gap-3">
-            <label class="form-check mb-0">
-              <input v-model="t0Mode" class="form-check-input" type="radio" value="now" data-testid="start-t0-now" />
-              <span class="form-check-label">Now, as the event starts</span>
-            </label>
-            <label class="form-check mb-0 d-flex align-items-center gap-2">
-              <input v-model="t0Mode" class="form-check-input" type="radio" value="clock" data-testid="start-t0-clock" />
-              <span class="form-check-label">Today at</span>
-              <input v-model="t0Clock" type="time" class="form-control form-control-sm" style="width: 7.5rem" :disabled="t0Mode !== 'clock'" aria-label="T+0 time" data-testid="start-t0-time" />
-            </label>
-          </div>
-          <div class="small text-muted mt-1">Lateness is measured from T+0, so pick the moment the plan's first frame is meant to happen.</div>
-        </fieldset>
-        <div class="d-flex justify-content-end gap-2 mt-2">
-          <button class="btn btn-sm btn-outline-secondary" type="button" @click="form = ''">Cancel</button>
-          <button class="btn btn-sm btn-success px-3" type="submit" :disabled="busy" data-testid="start-confirm-btn">Start event…</button>
-        </div>
-      </form>
-
-      <!-- Schedule (start + optional end) / end-time panel -->
-      <form v-if="form === 'schedule' || form === 'end'" class="time-panel mt-2" data-testid="time-form" @submit.prevent="saveForm">
-        <div class="d-flex align-items-start justify-content-between mb-2">
-          <div>
-            <h3 class="h6 mb-0">{{ form === 'schedule' ? (scheduledStart ? 'Edit the schedule' : 'Schedule the event') : 'When should the event end?' }}</h3>
-            <p class="small text-muted mb-0">
-              {{
-                form === 'schedule'
-                  ? 'The event goes live by itself at the start and ends by itself at the end.'
-                  : "At the end time everyone's sharing stops by itself."
-              }}
-            </p>
-          </div>
-          <button type="button" class="btn-close" aria-label="Close" @click="form = ''"></button>
-        </div>
-
-        <div class="row g-2">
-          <!-- Start -->
-          <div v-if="form === 'schedule'" class="col-12 col-md-5">
-            <div class="time-card h-100">
-              <div class="time-label"><span class="dot dot-start"></span>Start</div>
-              <div class="d-flex gap-2">
-                <input v-model="startDate" type="date" class="form-control date-input" aria-label="Start date" required data-testid="start-date-input" />
-                <input v-model="startTime" type="time" class="form-control time-input" aria-label="Start time" required data-testid="start-time-input" />
-              </div>
-              <div class="small text-muted mt-1">{{ formStart ? formatDayTime(formStart) : '' }}</div>
-            </div>
-          </div>
-
-          <!-- End -->
-          <div class="col-12" :class="{ 'col-md-7': form === 'schedule' }">
-            <div class="time-card h-100">
-              <div class="time-label">
-                <span class="dot dot-end"></span>{{ form === 'schedule' ? 'End' : 'End in' }}
-                <span v-if="form === 'schedule'" class="text-muted fw-normal">· optional</span>
-              </div>
-              <div class="d-flex flex-wrap gap-1" role="group" aria-label="Event length">
-                <button
-                  v-for="d in DURATIONS"
-                  :key="d.mode"
-                  type="button"
-                  class="chip"
-                  :class="{ active: endMode === d.mode }"
-                  :data-testid="'duration-' + d.mode"
-                  @click="setEndMode(d.mode)"
-                >
-                  {{ form === 'end' ? '+' : '' }}{{ d.label }}
-                </button>
-                <button type="button" class="chip" :class="{ active: endMode === 'custom' }" data-testid="duration-custom" @click="setEndMode('custom')">
-                  Pick a time
-                </button>
-                <button
-                  v-if="form === 'schedule'"
-                  type="button"
-                  class="chip"
-                  :class="{ active: endMode === 'none' }"
-                  data-testid="duration-none"
-                  @click="setEndMode('none')"
-                >
-                  No end
-                </button>
-              </div>
-              <div v-if="endMode === 'custom'" class="d-flex gap-2 mt-2">
-                <input v-model="endDate" type="date" class="form-control date-input" aria-label="End date" data-testid="end-date-input" />
-                <input v-model="endTime" type="time" class="form-control time-input" aria-label="End time" data-testid="end-time-input" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Which plan the scheduled start runs -->
-        <div v-if="form === 'schedule' && hasPlans" class="time-card mt-2">
-          <label class="time-label d-block" for="schedule-engine">What runs</label>
-          <select id="schedule-engine" v-model="engineChoice" class="form-select" data-testid="schedule-engine">
-            <option value="">Nothing: tracking only</option>
-            <optgroup label="Plan">
-              <option v-for="p in planList" :key="p.id" :value="'plan:' + p.id" :disabled="p.status !== 'live'">
-                {{ planOption(p) }}
-              </option>
-            </optgroup>
-          </select>
-        </div>
-
-        <!-- Summary + save -->
-        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-          <div class="summary flex-grow-1" data-testid="time-summary">
-            <span v-if="formError" class="text-danger" role="alert">{{ formError }}</span>
-            <template v-else>{{ summary }}</template>
-          </div>
-          <button class="btn btn-sm btn-outline-secondary" type="button" @click="form = ''">Cancel</button>
-          <button class="btn btn-sm btn-primary px-3" type="submit" :disabled="busy" data-testid="save-schedule-btn">
-            {{ form === 'schedule' ? 'Save schedule' : 'Save end time' }}
-          </button>
-        </div>
-      </form>
-
-      <div v-if="$slots.sharing" class="border-top mt-2 pt-2">
-        <slot name="sharing" />
+        <div class="form-text">Only published plans can run.</div>
       </div>
-    </div>
-  </div>
-</template>
+      <fieldset v-if="startPlan" data-testid="start-t0">
+        <legend class="form-label" style="font-size: 13px">When is T+0?</legend>
+        <div class="kp-actions" style="gap: 8px 16px">
+          <label class="form-check mb-0">
+            <input v-model="t0Mode" class="form-check-input" type="radio" value="now" data-testid="start-t0-now" />
+            <span class="form-check-label">Now</span>
+          </label>
+          <label class="form-check mb-0 kp-inline">
+            <input v-model="t0Mode" class="form-check-input" type="radio" value="clock" data-testid="start-t0-clock" />
+            <span class="form-check-label text-nowrap">Today at</span>
+            <input v-model="t0Clock" type="time" class="form-control form-control-sm" style="width: 8rem" :disabled="t0Mode !== 'clock'" aria-label="T+0 time" data-testid="start-t0-time" />
+          </label>
+        </div>
+        <div class="form-text">Lateness is measured from T+0.</div>
+      </fieldset>
+      <div class="kp-actions" style="justify-content: flex-end">
+        <button class="btn btn-sm btn-ghost" type="button" @click="form = ''">Cancel</button>
+        <button class="btn btn-sm btn-success" type="submit" :disabled="busy" data-testid="start-confirm-btn">Start event</button>
+      </div>
+    </form>
 
-<style scoped>
-.time-panel {
-  background: var(--bs-tertiary-bg);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 0.75rem;
-  padding: 0.85rem;
-}
-.time-card {
-  background: var(--bs-body-bg);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 0.6rem;
-  padding: 0.6rem 0.7rem;
-}
-.time-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 0.4rem;
-}
-/* Date + time side by side; both may shrink on a phone */
-.date-input {
-  flex: 1 1 9rem;
-  min-width: 0;
-  max-width: 11.5rem;
-}
-.time-input {
-  flex: 0 1 8.5rem;
-  min-width: 0;
-}
-.dot {
-  display: inline-block;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  margin-right: 0.35rem;
-  vertical-align: 0.05rem;
-}
-.dot-start {
-  background: var(--bs-success);
-}
-.dot-end {
-  background: var(--bs-danger);
-}
-/* Duration chips: pill buttons, the chosen one filled */
-.chip {
-  border: 1px solid var(--bs-border-color);
-  background: var(--bs-body-bg);
-  color: var(--bs-body-color);
-  border-radius: 999px;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.875rem;
-  line-height: 1.4;
-}
-.chip:hover {
-  border-color: var(--bs-primary);
-  color: var(--bs-primary);
-}
-.chip.active {
-  background: var(--bs-primary);
-  border-color: var(--bs-primary);
-  color: #fff;
-}
-.summary {
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-</style>
+    <!-- Schedule (start + optional end) / end-time panel -->
+    <form v-if="form === 'schedule' || form === 'end'" class="kp-status-panel kp-fields" data-testid="time-form" @submit.prevent="saveForm">
+      <h3 class="kp-title" style="font-size: 16px">{{ form === 'schedule' ? (scheduledStart ? 'Edit schedule' : 'Schedule event') : 'Set end time' }}</h3>
+
+      <div v-if="form === 'schedule'">
+        <span class="form-label d-block">Start</span>
+        <div class="kp-inline">
+          <input v-model="startDate" type="date" class="form-control" aria-label="Start date" required data-testid="start-date-input" />
+          <input v-model="startTime" type="time" class="form-control" aria-label="Start time" required data-testid="start-time-input" />
+        </div>
+      </div>
+
+      <div>
+        <span class="form-label d-block">{{ form === 'schedule' ? 'End (optional)' : 'End in' }}</span>
+        <div class="kp-actions" style="gap: 6px" role="group" aria-label="Event length">
+          <button v-for="d in DURATIONS" :key="d.mode" type="button" class="kp-opt" :class="{ 'is-on': endMode === d.mode }" :data-testid="'duration-' + d.mode" @click="setEndMode(d.mode)">
+            {{ form === 'end' ? '+' : '' }}{{ d.label }}
+          </button>
+          <button type="button" class="kp-opt" :class="{ 'is-on': endMode === 'custom' }" data-testid="duration-custom" @click="setEndMode('custom')">Pick a time</button>
+          <button v-if="form === 'schedule'" type="button" class="kp-opt" :class="{ 'is-on': endMode === 'none' }" data-testid="duration-none" @click="setEndMode('none')">No end</button>
+        </div>
+        <div v-if="endMode === 'custom'" class="kp-inline mt-2">
+          <input v-model="endDate" type="date" class="form-control" aria-label="End date" data-testid="end-date-input" />
+          <input v-model="endTime" type="time" class="form-control" aria-label="End time" data-testid="end-time-input" />
+        </div>
+      </div>
+
+      <!-- Which plan the scheduled start runs -->
+      <div v-if="form === 'schedule' && hasPlans">
+        <label class="form-label" for="schedule-engine">What runs</label>
+        <select id="schedule-engine" v-model="engineChoice" class="form-select" data-testid="schedule-engine">
+          <option value="">Nothing: tracking only</option>
+          <optgroup label="Plan">
+            <option v-for="p in planList" :key="p.id" :value="'plan:' + p.id" :disabled="p.status !== 'live'">{{ planOption(p) }}</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="kp-actions">
+        <div class="kp-status-text small fw-bold" data-testid="time-summary">
+          <span v-if="formError" class="text-danger" role="alert">{{ formError }}</span>
+          <template v-else>{{ summary }}</template>
+        </div>
+        <button class="btn btn-sm btn-ghost" type="button" @click="form = ''">Cancel</button>
+        <button class="btn btn-sm btn-primary" type="submit" :disabled="busy" data-testid="save-schedule-btn">Save</button>
+      </div>
+    </form>
+
+    <div v-if="$slots.sharing" class="kp-status-extra">
+      <slot name="sharing" />
+    </div>
+  </section>
+</template>
