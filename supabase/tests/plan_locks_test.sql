@@ -262,30 +262,28 @@ begin
     raise exception 'FAIL 10b: an expired lock could not be taken';
   end if;
 
-  -- ---------- 9. A moment cannot be retimed under somebody else's badge ----------
+  -- ---------- 9. A moment and the badges in it are separate resources ----------
+  -- Priya is dragging Gate Crew at +1:00 and Daniel is dragging Stage there. Neither stops the other from
+  -- retiming the moment: a retime and a badge drag write different rows, so nothing can be lost, and the
+  -- first draft's refusal was dropped for exactly that reason.
   perform pg_temp.zz_as(v_p::text);
-  begin
-    perform public.plan_lock_frame(v_plan, v_f1, v_s_p, false);
-    v_msg := '';
-  exception when others then v_msg := sqlstate || '|' || sqlerrm;
-  end;
-  if v_msg not like 'PT423|%Daniel Planner%Stage%+1:00%' then
-    raise exception 'FAIL 11a: a frame moved under a held badge (got %)', v_msg;
+  select count(*) into n from public.plan_lock_frame(v_plan, v_f1, v_s_p, false);
+  if n <> 1 then
+    raise exception 'FAIL 11a: a badge being dragged elsewhere closed its moment';
   end if;
 
-  -- ...and the rule is symmetric: Daniel holds a badge in that moment too, so it is closed to him as well.
-  -- Neither planner is "the owner" of a moment; a moment is free only when nobody else is standing in it.
+  -- ...but two planners still cannot retime the SAME moment, and the second is told whose it is.
   perform pg_temp.zz_as(v_q::text);
   begin
     perform public.plan_lock_frame(v_plan, v_f1, v_s_q, false);
     v_msg := '';
   exception when others then v_msg := sqlstate || '|' || sqlerrm;
   end;
-  if v_msg not like 'PT423|%Priya Planner%Gate Crew%+1:00%' then
-    raise exception 'FAIL 11b: a second planner moved the moment under a held badge (got %)', v_msg;
+  if v_msg not like 'PT423|%Priya Planner%editing this moment%' then
+    raise exception 'FAIL 11b: two planners retimed one moment (got %)', v_msg;
   end if;
 
-  -- a moment nobody is standing in can be taken, and then only by one
+  -- a second, empty moment can be taken, and then only by one
   perform pg_temp.zz_as(v_p::text);
   select count(*) into n from public.plan_lock_frame(v_plan, v_f2, v_s_p, false);
   if n <> 1 then
@@ -304,13 +302,13 @@ begin
   -- ---------- 10. Letting go ----------
   perform pg_temp.zz_as(v_r::text);
   select count(*) into n from public.plan_lock_holders(v_plan) h where h.kind = 'moment';
-  if n <> 1 then
-    raise exception 'FAIL 13a: the holder list shows % moment(s), not 1', n;
+  if n <> 2 then
+    raise exception 'FAIL 13a: the holder list shows % moment(s), not 2', n;
   end if;
 
   perform public.plan_unlock_frame(v_f2, v_s_p);
   select count(*) into n from public.plan_lock_holders(v_plan) h where h.kind = 'moment';
-  if n <> 0 then
+  if n <> 1 then
     raise exception 'FAIL 13b: unlocking a moment left % of them', n;
   end if;
 

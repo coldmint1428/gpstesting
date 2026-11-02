@@ -17,7 +17,7 @@ plan applies that doctrine to the plan board, where the unit of contention is sm
 |---|---|---|
 | 1 | What is locked | One **cell** = `(frame_id, group_id)`. Two planners may edit different groups at the same frame. |
 | 2 | Multi-frame gestures | All-or-nothing, one call. If one cell in the range is taken, nothing happens and the holder is named. |
-| 3 | Frame time/note | A separate **frame** lock, disjoint from cell locks — but a frame cannot be taken while somebody else holds a badge standing in it. |
+| 3 | Frame time/note | A separate **frame** lock, disjoint from cell locks — a retime and a badge drag write different rows, so neither is refused because of the other. |
 | 4 | Idle release | 5 s without pointer movement, **including mid-drag**. The next movement re-acquires silently. |
 | 5 | Server timing | heartbeat 2 s, steal 7 s, expiry 12 s. |
 | 6 | Two grabs at once | Optimistic: the badge moves at once; the server picks a winner; the loser snaps back. |
@@ -54,7 +54,7 @@ cannot exist on a frame of another plan and dies with the frame it guards.
 | Function | Does |
 |---|---|
 | `plan_lock_cells(plan, cells, session, take_over?)` | Takes a grab: one badge or forty, all or nothing. Raises `PT423` naming the holder. |
-| `plan_lock_frame(plan, frame, session, take_over?)` | Takes a moment for a retime. Refuses while another session holds a badge standing in it. |
+| `plan_lock_frame(plan, frame, session, take_over?)` | Takes a moment for a retime. Independent of the badges standing in it. |
 | `plan_renew(plan, cells, frames, session)` | The heartbeat. Refreshes everything that session holds and says, per requested item, whether it is still `held`. |
 | `plan_unlock_cells` / `plan_unlock_frame` / `plan_release_all` | Letting go, one thing at a time or the whole page at once. |
 | `plan_lock_holders(plan)` | Who is editing, with display names and **never** a session id. Only live rows. |
@@ -165,5 +165,11 @@ than papered over: a script that "proves" arbitration on one connection would be
 - The 5 s mid-drag release is the product owner's decision and the main source of snap-backs; the
   mitigation is the silent re-acquire, not a change of rule.
 - The broadcast channel is public (section "Live stream").
+- **A retime and a badge drag are independent, on purpose.** The first draft of 081 refused a retime while
+  another session held a badge in that moment, on the theory that the badge would slide out from under the
+  hand. It does not: a badge is a lat/lng, and a clock does not move one. What slides is the frame's tick
+  in the strip and the walk lines and 25 m flags measured between moments — pictures reflowing, not an edit
+  lost. The rule deadlocked two planners dragging different badges at one moment, so it was dropped. Do not
+  add it back for a reason about the picture moving; only for one about data.
 - The word "lock" already means the local drag guard (`moveLock`, `data-testid="plan-lock"`). The server
   concept is called **editing** / **in use**; the old test id becomes `plan-drag-guard`.

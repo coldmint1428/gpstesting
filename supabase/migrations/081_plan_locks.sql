@@ -22,10 +22,8 @@
 --
 -- They are different tables because they answer different questions and are taken by different gestures.
 -- Holding a badge does not let me move the frame's clock, and holding the clock does not let me move a
--- badge. There is exactly one coupling, and it is a refusal rather than a grant: a frame's time may not
--- be taken while somebody else has a badge standing in it (plan_lock_frame, section 7). Otherwise the
--- moment would slide out from under the badge its holder is dragging, which is the very jitter this
--- feature exists to remove.
+-- badge. Nothing couples them: a retime and a badge drag write different rows after 082, so neither can
+-- lose the other's work, and the frame lock is only ever about two people retiming the SAME moment.
 --
 -- THE SESSION IS THE UNIT, NOT THE PLANNER -- 016's rule, and it is the same reason. auth.uid() is what
 -- the server needs to recognise "this is my renewal", so it cannot also be what tells my two tabs apart.
@@ -328,10 +326,18 @@ $body$;
 -- ============================================================
 -- 7. Taking a moment (t_s and note).
 --
---    Same machine, one resource up. The one coupling in the whole design lives here: a moment cannot be
---    retimed while a badge standing in it is being dragged by another session, because moving t_s would
---    slide that badge's screen position out from under the hand that is holding it. My own held badges do
---    not block me -- I know what gesture I am in -- and nothing else does.
+--    Same machine, one resource up, and NOTHING to do with a badge. A moment and the badges standing in
+--    it are separate resources held by separate gestures, and neither needs the other to be safe: after
+--    082 a badge write touches only plan_positions and a retime touches only plan_frames.t_s, so the two
+--    gestures do not write a shared row and cannot lose each other's work.
+--
+--    The first draft of this file refused a retime while another session held a badge in the moment, on
+--    the theory that moving t_s slides the badge out from under the hand. It does not -- a badge is a
+--    lat/lng, and a clock does not move one. What it slides is the frame's TICK in the strip, and the walk
+--    lines and 25 m flags that are measured between moments. That is a picture reflowing, not a lost edit,
+--    and the price of refusing was a deadlock: two planners dragging different badges at one moment would
+--    each block the other's retime, for a reason neither could see. The rule is gone; the frame lock is
+--    only ever about two people retiming the SAME moment.
 -- ============================================================
 drop function if exists public.plan_lock_frame(uuid, uuid, uuid, boolean);
 create function public.plan_lock_frame(
@@ -347,9 +353,7 @@ as $body$
 declare
   v_ttl constant interval := interval '12 seconds';
   v_steal constant interval := interval '7 seconds';
-  v_t_s integer;
   v_name text;
-  v_group_name text;
   v_elsewhere boolean;
 begin
   perform public.plan_require_editor(p_plan);
@@ -358,28 +362,10 @@ begin
     raise exception 'This page has no session, so nothing can be held' using errcode = 'PT409';
   end if;
 
-  select f.t_s into v_t_s from public.plan_frames f where f.id = p_frame and f.plan_id = p_plan;
+  -- The frame must be this plan's, so a stale page cannot lock a frame somebody deleted.
+  perform 1 from public.plan_frames f where f.id = p_frame and f.plan_id = p_plan;
   if not found then
     raise exception 'That frame is not in this plan.' using errcode = '42501';
-  end if;
-
-  -- A badge in this moment, held by somebody else, right now.
-  select coalesce(pr.display_name, 'Somebody'), g.name
-    into v_name, v_group_name
-    from public.plan_cell_locks l
-    join public.groups g on g.id = l.group_id
-    left join public.profiles pr on pr.id = l.user_id
-   where l.plan_id = p_plan
-     and l.frame_id = p_frame
-     and l.session_id <> p_session
-     and l.expires_at > now()
-     and l.last_seen > now() - v_steal
-   order by g.name
-   limit 1;
-  if found then
-    raise exception '% is editing % at %. Move the moment once they have finished.', v_name, v_group_name,
-      public.plan_clock(v_t_s)
-      using errcode = 'PT423';
   end if;
 
   return query
