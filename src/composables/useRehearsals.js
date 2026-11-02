@@ -80,14 +80,21 @@ export function useRehearsals(eventId) {
   const withdrawAbsence = (rehearsalId) => write(supabase.rpc('rehearsal_absence_withdraw', { p_rehearsal: rehearsalId }))
   const decideAbsence = (id, approve) => write(supabase.rpc('rehearsal_absence_decide', { p_id: id, p_approve: approve }))
 
-  const channel = supabase
-    .channel('event-rehearsals-' + eventId + '-' + Math.random().toString(36).slice(2)) // unique name (see useEventData.js)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rehearsals', filter: 'event_id=eq.' + eventId }, load)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'rehearsal_absences', filter: 'event_id=eq.' + eventId }, load)
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') load() // (re)connected: nothing missed
-    })
-  load()
+  load() // the calendar once: the page's badge and the "Next rehearsal" line need it before any tab is opened
+
+  // The Realtime channel opens the first time the Rehearsals tab is shown, not when the event page opens: most visits
+  // never look at the calendar, and a channel per event page is a cost on a phone. `start` is safe to call twice.
+  let channel = null
+  function start() {
+    if (channel) return
+    channel = supabase
+      .channel('event-rehearsals-' + eventId + '-' + Math.random().toString(36).slice(2)) // unique name (see useEventData.js)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rehearsals', filter: 'event_id=eq.' + eventId }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rehearsal_absences', filter: 'event_id=eq.' + eventId }, load)
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') load() // (re)connected: nothing missed
+      })
+  }
 
   const timer = setInterval(() => {
     now.value = Date.now()
@@ -100,8 +107,8 @@ export function useRehearsals(eventId) {
   onUnmounted(() => {
     clearInterval(timer)
     document.removeEventListener('visibilitychange', onVisible)
-    supabase.removeChannel(channel)
+    if (channel) supabase.removeChannel(channel)
   })
 
-  return { rehearsals, absences, next, errorMsg, busy, now, add, remove, requestAbsence, withdrawAbsence, decideAbsence }
+  return { rehearsals, absences, next, errorMsg, busy, now, add, remove, requestAbsence, withdrawAbsence, decideAbsence, start }
 }

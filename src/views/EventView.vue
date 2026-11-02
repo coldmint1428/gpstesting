@@ -339,6 +339,9 @@ function goToPage(name, query = {}) {
 const PHONE_ONLY = ['now', 'ops']
 const phoneTab = ref(null)
 const tab = computed(() => phoneTab.value || page.value) // what is on screen
+// The Rehearsals tab is the only thing here that needs Realtime: its channel opens when that tab is first shown,
+// not when the event page opens (deep links and the phone tab bar both arrive through `tab`).
+watch(tab, (name) => { if (name === 'rehearsals') rehearsals.start() }, { immediate: true })
 function openPage(key) {
   if (PHONE_ONLY.includes(key)) phoneTab.value = key
   else {

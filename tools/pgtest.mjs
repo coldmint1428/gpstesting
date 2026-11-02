@@ -803,6 +803,8 @@ await phase('noise', {
 })
 
 // ---------- Rehearsals: everyone in the event reads them, only the root and planners schedule them (079) ----------
+// Run on the schema the app runs on: 074 and 077 are applied first, so the suites prove the rehearsals against the
+// post-marshal role set (root, planner, participant) and 077's rewrite of has_event_role, not the older one.
 await phase('rehearsals', {
   migrations: [
     named('001_locations.sql'),
@@ -815,6 +817,23 @@ await phase('rehearsals', {
     { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
     { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
     { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
+    { name: '071_attendance.sql', sql: read('supabase/migrations/071_attendance.sql') },
+    {
+      name: '028 (the push queue only)',
+      sql: `create table public.push_queue (
+              id bigserial primary key,
+              user_id uuid not null references public.profiles (id) on delete cascade,
+              event_id uuid not null references public.events (id) on delete cascade,
+              session_id uuid,
+              kind text not null,
+              dedup text not null unique,
+              title text not null, body text not null, data jsonb not null default '{}',
+              created_at timestamptz not null default now(), sent_at timestamptz);`,
+    },
+    { name: '072_sos.sql', sql: read('supabase/migrations/072_sos.sql') },
+    { name: '073_members_see_own_group.sql', sql: read('supabase/migrations/073_members_see_own_group.sql') },
+    { name: '074_marshals_are_users.sql', sql: read('supabase/migrations/074_marshals_are_users.sql') },
+    { name: '077_no_marshals.sql', sql: read('supabase/migrations/077_no_marshals.sql') },
     { name: '079_rehearsals.sql', sql: read('supabase/migrations/079_rehearsals.sql') },
     { name: '080_rehearsal_details_absences.sql', sql: read('supabase/migrations/080_rehearsal_details_absences.sql') },
   ],
@@ -823,7 +842,7 @@ await phase('rehearsals', {
     await runSql(db, read('supabase/tests/rehearsal_absences_test.sql'), 'rehearsal_absences_test.sql')
     await runSql(db, read('supabase/migrations/079_rehearsals.sql'), '079 a second time')
     await runSql(db, read('supabase/migrations/080_rehearsal_details_absences.sql'), '080 a second time')
-    return ['the rehearsals and rehearsal_absences suites passed, and 079 and 080 re-apply cleanly']
+    return ['the rehearsals and rehearsal_absences suites passed on the post-077 role set, and 079 and 080 re-apply cleanly']
   },
 })
 
