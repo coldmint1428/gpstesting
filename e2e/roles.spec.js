@@ -64,9 +64,10 @@ test.describe('the database refuses what a role may not do', () => {
     expect(still.data).toHaveLength(1)
   })
 
-  test('a member can read only their own group, the marshal reads everyone (073)', async () => {
+  test('a member and a marshal read only their own group, a planner reads everyone (073, 074)', async () => {
     const member = await clientFor('member')
     const marshal = await clientFor('marshal')
+    const planner = await clientFor('planner')
     const read = async (sb) => ({
       groups: (await sb.from('groups').select('id').eq('event_id', ev.eventId)).data.map((g) => g.id),
       memberRows: (await sb.from('group_members').select('group_id').eq('event_id', ev.eventId)).data,
@@ -74,19 +75,23 @@ test.describe('the database refuses what a role may not do', () => {
     const m = await read(member.sb)
     expect(m.groups).toEqual([ev.groups.Alpha])
     expect(new Set(m.memberRows.map((r) => r.group_id))).toEqual(new Set([ev.groups.Alpha]))
-    const k = await read(marshal.sb)
-    expect(k.groups.length).toBeGreaterThan(1)
-    expect(k.memberRows.length).toBeGreaterThan(m.memberRows.length)
+    const k = await read(marshal.sb) // qa_marshal is in no group
+    expect(k.groups).toEqual([])
+    expect(k.memberRows).toEqual([])
+    const p = await read(planner.sb)
+    expect(p.groups.length).toBeGreaterThan(1)
   })
 
-  test('a member sees their own group\'s locations, the marshal sees every group', async () => {
+  test('a member sees their own group\'s locations, a marshal in no group sees none, a planner every group', async () => {
     const member = await clientFor('member')
     const marshal = await clientFor('marshal')
     const m = await member.sb.from('locations').select('group_id').eq('event_id', ev.eventId)
     expect(m.data.length).toBeGreaterThan(0)
     expect(new Set(m.data.map((r) => r.group_id))).toEqual(new Set([ev.groups.Alpha]))
     const k = await marshal.sb.from('locations').select('group_id').eq('event_id', ev.eventId)
-    expect(k.data.length).toBe(m.data.length)
+    expect(k.data).toEqual([])
+    const p = await (await clientFor('planner')).sb.from('locations').select('group_id').eq('event_id', ev.eventId)
+    expect(p.data.length).toBe(m.data.length)
   })
 })
 

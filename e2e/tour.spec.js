@@ -143,12 +143,11 @@ test('the root: every page of a live event, on a laptop', async ({ browser }) =>
   await expect(page.getByTestId('profile-email')).toHaveValue(/^qa-root@/) // the redesign shows it in a field, not as text
 })
 
-test('the planner and the marshal: the plan and the ops board', async ({ browser }) => {
+test('the planner: the plan and the ops board', async ({ browser }) => {
   const planner = await pageAs(browser, 'planner')
   await visit(planner, `/events/${ev.eventId}/timeline`, { heading: 'Timeline', shows: ['Tour walk'], name: 'planner-timeline' })
   await expect(planner.getByTestId('frame-add')).toBeVisible() // a planner can edit
-  const marshal = await pageAs(browser, 'marshal')
-  await visit(marshal, `/events/${ev.eventId}/live`, { heading: 'Live', shows: ['Alpha'], name: 'marshal-live' })
+  await visit(planner, `/events/${ev.eventId}/live`, { heading: 'Live', shows: ['Alpha'], name: 'planner-live' })
 })
 
 test('the IC on a phone: Now, sharing and the set-up check', async ({ browser }) => {

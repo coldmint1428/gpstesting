@@ -111,7 +111,7 @@ watch(
 )
 
 // Zones during the live session (merger Stage 2): who is inside which zone, group positions, No-Go alerts.
-// A No-Go entry is told to the event's root / planners / marshals (toast) and to the IC who entered it.
+// A No-Go entry is told to the event's root / planners (toast) and to the IC who entered it.
 const zoneActivity = useZoneActivity(props.id, computed(() => (liveSession.value ? liveSession.value.id : null)), {
   onAlert(alert) {
     const mine = auth.user && alert.userId === auth.user.id
@@ -322,7 +322,7 @@ const membership = computed(() =>
     ? { role: topRole(me.value), group_id: me.value.groupId, is_admin: me.value.isAdmin, is_ic: me.value.isIC, is_marshal: isMarshal(me.value) }
     : null,
 )
-const role = computed(() => viewRole(membership.value)) // root | planner | admin | marshal | ic | member
+const role = computed(() => viewRole(membership.value)) // root | planner | admin | ic | member
 const modeOf = (name) => pageMode(name, role.value)
 // ICs and members see only their own group: the Groups page opens it directly, with no list of groups
 const ownGroupOnly = computed(() => role.value === 'ic' || role.value === 'member')
@@ -356,7 +356,7 @@ watch(membership, async (now) => {
 // A push ("get ready", "leave now", "you are late", a message) opens the page with ?next=1. It used to scroll to the
 // member's "next move" card, which was read from `movements` and deleted with the run-sheet engine (step 25). The
 // member's own moments live on the Schedule page now (step 16), so that is where the push lands. On the phone that
-// is the home tab (Now shows the same schedule; Ops for root / planners / marshals).
+// is the home tab (Now shows the same schedule; Ops for root / planners).
 watch(
   () => route.query.next,
   (wanted) => {
@@ -526,7 +526,7 @@ const pages = computed(() => visiblePages.value.map((key) => ({ key, label: page
 const currentPage = computed(() => pages.value.find((p) => p.key === tab.value) || { label: event.value ? event.value.name : '' })
 
 // ---------- Phone app (Android first): bottom tabs that follow the role (Figma "Phone app — native prototype") ----------
-// ICs and members: Now · Map · Group · Info. Root, planners and marshals: Ops · Map · Timeline · People · More. Every
+// ICs and members: Now · Map · Group · Info. Root and planners: Ops · Map · Timeline · People · More. Every
 // other page my role may view is in the More sheet. Same pages and data as the website.
 const homeTab = computed(() => (seesWholeEvent.value ? 'ops' : 'now'))
 const nativeTabs = computed(() => {
@@ -757,7 +757,7 @@ async function removeEvent() {
           :mine="sos.mine.value"
           :gps="sos.gps.value"
           :me="me"
-          :sees-whole-event="seesWholeEvent"
+          :can-end-any="canManage || isMarshal(me)"
           :now="live.now.value"
           :busy="sos.busy.value"
           @help="onSosHelp"

@@ -4,8 +4,7 @@
 //   Root          : add people; make planners, group admins, members; remove anyone
 //   Planner       : the same for people below planner
 //   Group admin   : add people to their own group; removing members of their own group
-//   Marshals      : the list only
-// ICs and members do not have this page: they see only their own group, on the Groups page (073).
+// ICs, marshals and members do not have this page: they see only their own group, on the Groups page (073, 074).
 // Marshal and IC (duties of a member) are switched on the Groups page (MembersPanel.vue); here they are badges only.
 // An IC's arrival radius (063) stays here, beside the IC it belongs to.
 import { ref, computed, watch } from 'vue'

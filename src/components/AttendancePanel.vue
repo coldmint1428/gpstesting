@@ -6,7 +6,6 @@
 // Who does what here:
 //   Root / planners    : choose the mode; run and close a roll call for any group; every group's history
 //   A group's IC/admin : run their own group's roll calls
-//   Marshals           : every group's open roll calls and history (read only)
 //   Anyone in a group  : scan the QR (QR mode); see whether they were marked; their own history
 // This component only shows things: it emits what was asked and the event page (EventView.vue) calls the database.
 import { ref, computed, watch, onUnmounted } from 'vue'
@@ -20,7 +19,7 @@ const props = defineProps({
   members: { type: Array, required: true },
   me: { type: Object, default: null },
   canManage: { type: Boolean, default: false }, // root or planner
-  seesWholeEvent: { type: Boolean, default: false }, // root, planner or marshal
+  seesWholeEvent: { type: Boolean, default: false }, // root or planner
   mode: { type: String, default: 'manual' }, // the event's mode: 'manual' | 'qr'
   rollcalls: { type: Array, required: true }, // useAttendance().rollcalls
   checkins: { type: Array, required: true },
@@ -346,7 +345,7 @@ const history = computed(() =>
       </template>
     </section>
 
-    <!-- ========== Every group's open roll calls (root, planners, marshals) ========== -->
+    <!-- ========== Every group's open roll calls (root, planners) ========== -->
     <section v-if="seesWholeEvent" class="kp-card" data-testid="attendance-open-all">
       <h2 class="kp-title mb-2">Open now</h2>
       <p v-if="!openAll.length" class="text-muted mb-0">None open.</p>

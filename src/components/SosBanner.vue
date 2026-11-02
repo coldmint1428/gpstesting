@@ -12,7 +12,7 @@ const props = defineProps({
   mine: { type: Object, default: null }, // useSos().mine
   gps: { type: String, default: 'waiting' }, // useSos().gps
   me: { type: Object, default: null },
-  seesWholeEvent: { type: Boolean, default: false }, // root, planner or marshal
+  canEndAny: { type: Boolean, default: false }, // root, planner or marshal
   now: { type: Number, required: true },
   busy: { type: Boolean, default: false },
 })
@@ -20,7 +20,7 @@ defineEmits(['help', 'resolve', 'show'])
 
 // Who may end someone else's SOS (the database checks again)
 function canResolve(a) {
-  if (props.seesWholeEvent) return true
+  if (props.canEndAny) return true
   return !!(props.me && a.groupId && props.me.groupId === a.groupId && (props.me.isIC || props.me.isAdmin))
 }
 

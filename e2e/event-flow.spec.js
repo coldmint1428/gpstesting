@@ -1,6 +1,6 @@
 // E2E: one event from plan to playback, with every role in its own browser (IS216 Week 10c).
 // The planner imports a plan sheet and publishes it, starts the event, an IC shares a faked GPS position, the
-// planner sees it, the member sees their timetable, the marshal marks an arrival, the planner pushes the plan and
+// planner sees it, the member sees their timetable, the planner marks an arrival, the planner pushes the plan and
 // broadcasts, the member acknowledges, the planner ends the event (typing END) and replays it.
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs'
@@ -140,8 +140,8 @@ test('a member cannot share, and sees their own group only', async ({ browser })
   await shot(page, 'flow-07-member-schedule', { fullPage: true })
 })
 
-test('the marshal marks Alpha as arrived on the ops board', async ({ browser }) => {
-  const page = await as(browser, 'marshal')
+test('the planner marks Alpha as arrived on the ops board', async ({ browser }) => {
+  const page = await as(browser, 'planner')
   await page.goto(`/events/${ev.eventId}/live`) // the ops board sits on the Live page
   const mark = page.getByTestId('ops-mark-arrived').first()
   await expect(mark).toBeVisible({ timeout: 30_000 })
@@ -150,7 +150,7 @@ test('the marshal marks Alpha as arrived on the ops board', async ({ browser }) 
   await expect
     .poll(async () => (await sb.from('plan_progress').select('plan_id', { count: 'exact', head: true }).eq('plan_id', ev.planId)).count ?? 0, { timeout: 20_000 })
     .toBeGreaterThan(0)
-  await shot(page, 'flow-08-marshal-marked', { fullPage: true })
+  await shot(page, 'flow-08-planner-marked', { fullPage: true })
 })
 
 test('the planner pushes the rest of the plan by a minute, and the member is told the timeline changed', async ({ browser }) => {

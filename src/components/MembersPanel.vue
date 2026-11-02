@@ -4,7 +4,8 @@
 //   Root / planner : create groups, rename / recolour them, group details, assign groups, marshal sectors
 //   Group admin    : put people in / take them out of their own group, IC for its members
 // IC and marshal switches follow the People page's rules (src/utils/permissions.js).
-//   Everyone else  : read-only. ICs and members go straight to their own group, with no list of groups (onlyGroupId)
+//   Everyone else  : read-only. ICs, marshals and members go straight to their own group, with no list of groups
+//                    (onlyGroupId)
 // Adding people, roles, IC and removing people from the event are on the People page (PeoplePanel.vue).
 // The database checks every action again (see 002_users_events_groups.sql).
 import { ref, computed, watch } from 'vue'

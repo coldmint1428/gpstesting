@@ -75,7 +75,7 @@ export function useEventData(eventId) {
   const myRoles = computed(() => (me.value ? me.value.roles : []))
   const isRoot = computed(() => myRoles.value.includes('root'))
   const canManage = computed(() => isRoot.value || myRoles.value.includes('planner')) // root or planner
-  const seesWholeEvent = computed(() => canManage.value || myRoles.value.includes('marshal'))
+  const seesWholeEvent = canManage // only the root and planners: a marshal sees what any other user sees (074)
   const myGroup = computed(() => (me.value ? groups.value.find((g) => g.id === me.value.groupId) || null : null))
   const amAdminOf = (groupId) => !!(me.value && me.value.isAdmin && me.value.groupId === groupId)
 
