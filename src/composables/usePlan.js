@@ -16,6 +16,15 @@ import { usePlanLocks } from './usePlanLocks'
 
 const P409 = 'PT409'
 
+/**
+ * A refusal from the ownership doors: somebody else has this badge or this moment (081). HTTP 423 in the handler,
+ * PT423 from the database, and the sentence is already written for a planner -- so a caller shows the words, and
+ * decides WHERE (the board's strip rather than a toast, because a snap-back is not a success notice).
+ */
+export function isLockRefusal(error) {
+  return !!error && (error.code === 'PT423' || error.status === 423)
+}
+
 /** Turn a PostgREST/Postgres error into something worth putting in front of a planner. */
 export function planErrorMessage(error) {
   if (!error) return ''
@@ -41,13 +50,18 @@ export function usePlan(eventId) {
   const busy = ref(false)
   const errorMsg = ref('')
 
-  async function call(fn, args) {
+  /**
+   * One door, one error. `quiet` is for the calls whose failure is presented elsewhere or is not news: the ownership
+   * doors (a refusal is the board's strip, or nothing at all for a lapsed heartbeat), and the presence read. A quiet
+   * call neither writes `errorMsg` nor clears it, so a refusal on the strip is not said twice in the inspector.
+   */
+  async function call(fn, args, opts = {}) {
     const { data, error } = await supabase.rpc(fn, args)
     if (error) {
-      errorMsg.value = planErrorMessage(error)
+      if (!opts.quiet) errorMsg.value = planErrorMessage(error)
       throw error
     }
-    errorMsg.value = ''
+    if (!opts.quiet) errorMsg.value = ''
     return data
   }
 
@@ -254,7 +268,7 @@ export function usePlan(eventId) {
    * The hold is taken here rather than by the caller: a write that is not held is refused by the database, and
    * making the two a single call is what keeps them in step.
    */
-  async function placeCells(frameId, map) {
+  async function placeCells(frameId, map, options = {}) {
     if (!plan.value || !frameId) return 0
     const cells = Object.entries(map || {}).map(([group, at]) => ({
       frame: frameId,
@@ -267,13 +281,49 @@ export function usePlan(eventId) {
     if (!cells.length) return 0
     busy.value = true
     try {
-      const written = await locks.place(plan.value.id, cells)
+      const written = await locks.place(plan.value.id, cells, options)
       await loadFrames()
       await loadPlans()
       return written
     } finally {
       busy.value = false
     }
+  }
+
+  /**
+   * Hold badges for a gesture -- the length of a drag, not one write. `cells` is `[{ frame, group }]`: a hold is
+   * about a cell's identity, and the lat/lng belongs to the write that comes later. Nothing is written here and no
+   * frame is re-read: a refusal is the caller's to present, and a hold that is merely held changes nothing on screen.
+   *
+   * The heartbeat (2 s) belongs to the hold, so a caller that forgets to let go does not keep a badge for ever: the
+   * page still stops refreshing it 12 s after it stops being true, and the idle release is the board's own rule.
+   */
+  async function holdCells(cells, options = {}) {
+    if (!plan.value || !cells || !cells.length) return 0
+    await locks.hold(plan.value.id, cells, options)
+    return cells.length
+  }
+
+  /** Let go of badges held for a gesture. Best effort: a hold that is not let go of lapses on its own (081). */
+  async function releaseCells(cells) {
+    if (!plan.value || !cells || !cells.length) return
+    await locks.letGo(plan.value.id, cells)
+  }
+
+  /** Who is editing what on the open plan (081's plan_lock_holders). Quiet: a presence read that fails says nothing. */
+  async function lockHolders() {
+    if (!plan.value) return []
+    return locks.holders(plan.value.id)
+  }
+
+  /** Everything this page is holding on the open plan, given up at once -- on a hidden tab, a page unload, a plan switch. */
+  async function releaseAllHolds() {
+    await locks.releaseAll(plan.value ? plan.value.id : null)
+  }
+
+  /** Tell the page when a badge it believed it held is somebody else's (the heartbeat found out). */
+  function onHoldLost(fn) {
+    locks.onLost(fn)
   }
 
   /** Take badges off the plan -- the only way a position disappears (082), and a write like any other. */
@@ -659,7 +709,27 @@ export function usePlan(eventId) {
       if (status === 'SUBSCRIBED') onLiveChange(null)
     })
 
+  // A page that is going away, or a tab that has been hidden, is not working on anything: its holds are given up
+  // rather than waited out. `visibilitychange` fires first and reliably (a phone switching apps, a tab switch);
+  // `pagehide` covers a close, a reload and a back navigation. Both are best effort -- every hold also expires on its
+  // own after 12 s (081) -- and both are silent, because this is housekeeping rather than a change the planner made.
+  function letEverythingGo() {
+    locks.releaseAll(plan.value ? plan.value.id : null)
+  }
+  function onVisibility() {
+    if (document.visibilityState === 'hidden') letEverythingGo()
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', letEverythingGo)
+    document.addEventListener('visibilitychange', onVisibility)
+  }
+
   onScopeDispose(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', letEverythingGo)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+    locks.dispose()
     clearTimeout(liveTimer)
     clearTimeout(livePauseTimer)
     supabase.removeChannel(liveChannel)
@@ -692,6 +762,11 @@ export function usePlan(eventId) {
     saveFrame,
     placeCells,
     unplaceCells,
+    holdCells,
+    releaseCells,
+    lockHolders,
+    releaseAllHolds,
+    onHoldLost,
     moveFrame,
     deleteFrame,
     shiftFrom,

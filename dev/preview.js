@@ -55,6 +55,102 @@ const busy = ref(false)
 const errorMsg = ref('')
 const livePlan = computed(() => plans.value.find((p) => p.status === 'live') || null)
 
+// ---------- who is editing (081), as far as a fixture can have it ----------
+//
+// The real holds live in public.plan_cell_locks and are decided by the database; the fixture keeps the same facts in
+// memory and says the same sentences, so the ownership UI (a ring on somebody else's badge, the stack of who is
+// editing, a drag that is refused) can be seen and checked in a browser without a second account.
+//
+// `?peer=1` puts a colleague's hand on one badge from the start -- Sound at the first moment -- which is the case the
+// strip, the ring and the snap-back all exist for.
+const PEER = new URLSearchParams(location.search).has('peer')
+const refusals = new Map() // cell key -> the name of whoever has it, for a colleague's hold
+const mine = new Set() // cells this page is holding
+
+function cellKey(frame, group) {
+  return `${frame}|${group}`
+}
+
+function clockOf(frameId) {
+  const f = findFrame(frameId)
+  if (!f) return '?'
+  return `+${Math.floor(f.t_s / 60)}:${String(f.t_s % 60).padStart(2, '0')}`
+}
+
+function groupName(id) {
+  const group = groups.value.find((g) => g.id === id)
+  return group ? group.name : 'that group'
+}
+
+function lockRefusal(message) {
+  return Object.assign(new Error(message), { code: 'PT423' })
+}
+
+if (PEER) refusals.set(cellKey('f1', 'g2'), 'Priya')
+
+/** The hold the drag takes as it begins (081's plan_lock_cells): all or none, and somebody else's is refused. */
+async function holdCells(cells) {
+  for (const cell of cells || []) {
+    const blocker = refusals.get(cellKey(cell.frame, cell.group))
+    if (blocker) {
+      throw lockRefusal(`${blocker} is editing ${groupName(cell.group)} at ${clockOf(cell.frame)}.`)
+    }
+  }
+  for (const cell of cells || []) mine.add(cellKey(cell.frame, cell.group))
+  return (cells || []).length
+}
+
+async function releaseCells(cells) {
+  for (const cell of cells || []) mine.delete(cellKey(cell.frame, cell.group))
+}
+
+/** Who is editing what, shaped like plan_lock_holders (081). */
+async function lockHolders() {
+  const rows = []
+  for (const cell of mine) {
+    const [frame, group] = cell.split('|')
+    const f = findFrame(frame)
+    if (!f) continue
+    rows.push({
+      kind: 'badge',
+      frame_id: frame,
+      group_id: group,
+      t_s: f.t_s,
+      group_name: groupName(group),
+      user_id: 'me',
+      display_name: 'You',
+      mine: true,
+    })
+  }
+  for (const [cell, name] of refusals) {
+    const [frame, group] = cell.split('|')
+    const f = findFrame(frame)
+    if (!f) continue
+    rows.push({
+      kind: 'badge',
+      frame_id: frame,
+      group_id: group,
+      t_s: f.t_s,
+      group_name: groupName(group),
+      user_id: 'peer',
+      display_name: name,
+      mine: false,
+    })
+  }
+  return rows
+}
+
+async function releaseAllHolds() {
+  mine.clear()
+}
+
+// A seam for the browser checks (dev/checks/board-smoke.mjs): what this page is holding, so a gesture can be watched
+// taking a badge and giving it up without a database. In the app the answer is public.plan_cell_locks, which no page
+// reads directly -- it is the doors that read it -- so this exists only where the doors are faked.
+globalThis.__planPreview = {
+  holds: () => ({ mine: [...mine].sort(), refusals: [...refusals.keys()].sort() }),
+}
+
 function findFrame(id) {
   return frames.value.find((f) => f.id === id)
 }
@@ -111,6 +207,13 @@ const api = {
   async placeCells(frameId, map) {
     const target = findFrame(frameId)
     if (!target) throw new Error('That frame is not in this plan.')
+    // 082 checks every cell against a live hold before it writes. The fixture checks the one fact it has: somebody
+    // else's hand on that badge.
+    for (const groupId of Object.keys(map || {})) {
+      if (refusals.has(cellKey(frameId, groupId))) {
+        throw lockRefusal('This badge stopped being yours to edit. Try again.')
+      }
+    }
     let written = 0
     for (const [groupId, at] of Object.entries(map || {})) {
       const was = target.positions[groupId] || {}
@@ -137,6 +240,11 @@ const api = {
     }
     return removed
   },
+  // Ownership (081): the hold a gesture takes, the hold it gives up, who is editing, and the way out of it.
+  holdCells,
+  releaseCells,
+  lockHolders,
+  releaseAllHolds,
   async moveFrame(id, t_s) {
     const target = findFrame(id)
     if (target) {

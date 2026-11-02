@@ -1,8 +1,9 @@
-// usePlanLocks: taking a hold on the badges a write is about, and letting go of them afterwards.
+// usePlanLocks: taking a hold on the badges a write is about, keeping it while it is wanted, and letting go.
 //
-// The database is what actually refuses a write (082) -- these tests are about the ORDER of the three calls and
-// about what happens when one of them fails, which is the part a SQL suite cannot see.
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+// The database is what actually refuses a write (082) -- these tests are about the ORDER of the calls, about the
+// heartbeat that keeps a hold alive, and about what happens when one of them fails, which is the part a SQL suite
+// cannot see.
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { usePlanLocks } from '../usePlanLocks'
 
 vi.mock('../pageSession', () => ({ pageSession: () => 'session-1' }))
@@ -16,8 +17,8 @@ const cells = [cell('f1', 'g1'), cell('f1', 'g2')]
  */
 function recorder(overrides = {}) {
   const calls = []
-  const call = vi.fn(async (fn, args) => {
-    calls.push({ fn, args })
+  const call = vi.fn(async (fn, args, opts) => {
+    calls.push({ fn, args, opts })
     if (overrides[fn]) return overrides[fn](args)
     if (fn === 'frame_place_many' || fn === 'frame_unplace_many') return (args.p_cells || []).length
     return null
@@ -32,6 +33,11 @@ describe('usePlanLocks', () => {
   beforeEach(() => {
     rec = recorder()
     locks = usePlanLocks(rec.call)
+  })
+
+  afterEach(() => {
+    locks.dispose()
+    vi.useRealTimers()
   })
 
   it('holds the badges, writes them, and lets go — in that order', async () => {
@@ -160,5 +166,102 @@ describe('usePlanLocks', () => {
     await expect(locks.place('p1', [])).resolves.toBe(0)
     await expect(locks.unplace('p1', [])).resolves.toBe(0)
     expect(rec.doors()).toEqual([])
+  })
+
+  it('says "still here" for a held badge every two seconds, and stops when it lets go', async () => {
+    vi.useFakeTimers()
+    await locks.hold('p1', [cell('f1', 'g1')])
+    expect(rec.doors()).toEqual(['plan_lock_cells'])
+
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(rec.doors()).toEqual(['plan_lock_cells', 'plan_renew'])
+    // The heartbeat is about the CELL, not the coordinates: it asks whether the badge is still mine.
+    expect(rec.calls[1].args).toMatchObject({
+      p_plan: 'p1',
+      p_session: 'session-1',
+      p_cells: [{ frame: 'f1', group: 'g1' }],
+      p_frames: [],
+    })
+
+    await locks.letGo('p1', [cell('f1', 'g1')])
+    expect(rec.doors()).toEqual(['plan_lock_cells', 'plan_renew', 'plan_unlock_cells'])
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(rec.doors().filter((door) => door === 'plan_renew')).toHaveLength(1)
+  })
+
+  it('drops a badge the heartbeat says is no longer mine, and tells the board', async () => {
+    vi.useFakeTimers()
+    const told = vi.fn()
+    rec = recorder({
+      plan_renew: () => [{ kind: 'badge', frame_id: 'f1', group_id: 'g1', held: false }],
+    })
+    locks = usePlanLocks(rec.call)
+    locks.onLost(told)
+
+    await locks.hold('p1', [cell('f1', 'g1')])
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(told).toHaveBeenCalledTimes(1)
+    expect(told).toHaveBeenCalledWith([{ frame: 'f1', group: 'g1' }])
+    // The page must not go on believing it holds it: nothing is left, so the next beat is silent and a let-go
+    // does not knock on the door for a row it has already given up.
+    expect(locks.heldCells()).toEqual([])
+    await locks.letGo('p1', [cell('f1', 'g1')])
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(rec.doors()).toEqual(['plan_lock_cells', 'plan_renew'])
+  })
+
+  it('gives everything up at once, and keeps the heartbeat quiet afterwards', async () => {
+    vi.useFakeTimers()
+    await locks.hold('p1', cells)
+    await locks.releaseAll('p1')
+
+    expect(rec.doors()).toEqual(['plan_lock_cells', 'plan_release_all'])
+    expect(rec.calls[1].args).toMatchObject({ p_session: 'session-1', p_plan: 'p1' })
+    expect(locks.heldCells()).toEqual([])
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(rec.doors().filter((door) => door === 'plan_renew')).toHaveLength(0)
+  })
+
+  it('asks who is editing the plan, and treats a failed presence read as nobody', async () => {
+    rec = recorder({ plan_lock_holders: () => [{ kind: 'badge', display_name: 'Priya' }] })
+    locks = usePlanLocks(rec.call)
+    await expect(locks.holders('p1')).resolves.toHaveLength(1)
+    expect(rec.calls[0].fn).toBe('plan_lock_holders')
+
+    rec = recorder({
+      plan_lock_holders: () => {
+        throw Object.assign(new Error('not a planner'), { code: '42501' })
+      },
+    })
+    locks = usePlanLocks(rec.call)
+    await expect(locks.holders('p1')).resolves.toEqual([])
+  })
+
+  it('every door it knocks on is quiet: the strip says the refusal, not the inspector', async () => {
+    await locks.place('p1', [cell('f1', 'g1')])
+    for (const call of rec.calls) expect(call.opts).toMatchObject({ quiet: true })
+  })
+
+  it('asks to take over only when told to, and only for a badge this page did not have', async () => {
+    await locks.place('p1', [cell('f1', 'g1')])
+    expect(rec.calls[0].args).toMatchObject({ p_take_over: false })
+
+    rec = recorder()
+    locks = usePlanLocks(rec.call)
+    await locks.place('p1', [cell('f1', 'g1')], { takeOver: true })
+    expect(rec.calls[0].args).toMatchObject({ p_take_over: true })
+  })
+
+  it('a write inside a gesture is a second reference, not a second grab', async () => {
+    await locks.hold('p1', [cell('f1', 'g1')])
+    await locks.place('p1', [cell('f1', 'g1')])
+
+    // One grab, one write, and the write's release left the hand's hold standing.
+    expect(rec.doors()).toEqual(['plan_lock_cells', 'frame_place_many'])
+    expect(locks.heldCells()).toEqual([{ frame: 'f1', group: 'g1', refs: 1 }])
+
+    await locks.letGo('p1', [cell('f1', 'g1')])
+    expect(rec.doors()).toEqual(['plan_lock_cells', 'frame_place_many', 'plan_unlock_cells'])
   })
 })

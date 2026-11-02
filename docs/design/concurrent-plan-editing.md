@@ -1,6 +1,6 @@
 # Concurrent editing on the plan board
 
-**Status:** phases 1–2 built (081, 082). **Branch:** `concurrent-plan-editing`.
+**Status:** phases 1–3 built (081, 082, and the ownership UI). **Branch:** `concurrent-plan-editing`.
 
 Two or more planners may edit one plan at the same time. They must not move each other's badges by
 accident, must not lose work to somebody else's save, and must not wait for a network round trip before
@@ -92,15 +92,48 @@ colleague's badge. 082 splits it:
 bodies, without a hold. They are whole-stretch and whole-grid operations rather than per-badge ones, and 083 is
 where they meet the rule.
 
-What a phase-2 page does, then, is take the hold immediately before a write and put it down after it (`usePlanLocks`).
-That is enough for exclusion; holding one for the length of a gesture — pointer down to pointer up, the heartbeat,
-the 5 s idle release — is phase 3.
+A phase-2 page took the hold immediately before a write and put it down after it (`usePlanLocks`). That was enough
+for exclusion. Phase 3 keeps the hold for the length of the gesture; the rules are in "The ownership UI" below.
+
+## The ownership UI (phase 3, built)
+
+**A hold lasts as long as the hand does.** It is taken on `dragstart` — for every badge the drag will carry, all or
+none — and released on `dragend`, so a badge is locked to other planners for the whole gesture rather than for the
+instant of the write. Between the two, `plan_renew` says "still here" every 2 s: the server's blocking rule is "quiet
+for 7 s", so a page that renews cannot be mistaken for one that has walked away. The same call reports, per row,
+whether the hold is still mine; a row that is not is dropped from the page's list at once and the gesture finishes as
+a refusal instead of a write.
+
+**5 s of stillness lets go.** Decision 4: a badge nobody has moved for five seconds is released even though the
+finger is still down, so a planner who walks away — or a phone that locked — does not keep a colleague out. The next
+pointer movement takes it back silently; if somebody else took it in the gap, the write is refused and the badge goes
+back with the sentence. That snap-back is the price of the rule, and the silent re-acquire is the mitigation rather
+than a change of rule.
+
+**Every exit is a release.** Pointer up, the idle timer, a hidden tab (`visibilitychange`), a page unload
+(`pagehide`), a plan switch and a teardown all give up what the page holds (`plan_release_all` for the unload paths).
+The database also expires a hold on its own after 12 s, which is what makes all of it best effort.
+
+**One strip, and it is the only place a refusal is said.** A refusal arrives while the hand is still down, so a toast
+would be about a moment that has passed; the board's strip (`data-testid="plan-refusal"`) holds the server's sentence
+until dismissed or eight seconds pass, and carries the one action a refusal can have — "Edit it here anyway", offered
+only when the sentence is "another of your windows" (081's `p_take_over` reaches nothing else). A move that failed for
+any other reason reads "Error updating location: …" and the badge goes back where the plan has it. The four write
+sites and undo route a lock refusal here; everything else keeps its toast.
+
+**Rings and a stack, drawn from one read.** `plan_lock_holders` every 2.5 s: a badge somebody else is holding gets a
+slate ring and a tooltip that names them, a badge of my own account gets a green one, and the stack in the corner of
+the map (`data-testid="plan-presence"`) names everyone else and how many badges they are on. None of it decides
+anything — a ring is a courtesy, and the refusal is the fact.
+
+**`?concurrent=0`** turns off the rings, the stack and the gesture hold. It cannot turn off the rule: a write still
+goes through the per-cell doors and is still refused by the database.
 
 ## Client
 
 | Module | Owns |
 |---|---|
-| `usePlanLocks` | ownership: grab, heartbeat, 5 s idle release, release-all, take-over, `holderOf(cell)`. Phase 2 has the first three of those calls in their narrow form — hold, write, let go — and the rest arrives with the UI |
+| `usePlanLocks` | ownership: hold, the 2 s heartbeat, release, release-all, loss detection (`onLost`), take-over, `holders(cell)`. Built |
 | `usePlanDraft` | the optimistic frame store: merge rows, never overwrite a cell I own |
 | `usePlanStream` | draft drags and lock hints on one broadcast channel; drafts render on an overlay |
 | `usePlanQueue` | per-cell serialised writes, coalesce, retries, rollback |
@@ -130,12 +163,12 @@ deliberately rather than discovered later.
 |---|---|
 | Grabbed a cell someone else holds | badge does not move; strip: "Priya is editing Gate Crew at +1:00" |
 | Lost the lock mid-drag | snap back to committed; "Error updating location: Priya has this badge" |
-| Save failed after retries | snap back + the same message with the reason |
+| Save failed after retries | snap back + the same message with the reason (retries are phase 4) |
 | Undo refused | nothing moves; "Undo did not happen: Priya is editing Gate Crew at +1:00" |
-| Publish with someone mid-edit | two-step confirm naming them and their cells |
+| Publish with someone mid-edit | two-step confirm naming them and their cells (phase 5) |
 
-Refusals use a board-level strip (the bench's pattern), because the confirm toast is already used for
-successful moves and would collide.
+Refusals use a board-level strip (`data-testid="plan-refusal"`, built in phase 3 rather than the confirm toast, which
+is already used for successful moves and would collide). An undo refusal goes through the same strip.
 
 ## Failure matrix
 
@@ -156,7 +189,10 @@ successful moves and would collide.
 2. **Per-cell writes** — *done (082)*. `082_frame_place.sql`, the four doors, `frame_save` reduced to the moment
    and to a new frame's first cells, and the board writing through `placeCells` / `unplaceCells` (a drag, a
    placement, an off-site toggle, a bulk state change, and undo's inverse). Still single-user, all suites green.
-3. **Ownership UI** - release, refusal strip, snap-back, ghost ring, presence stack, badge test ids.
+3. **Ownership UI** — *done*. The hold taken on dragstart and kept across the gesture (2 s `plan_renew`), the 5 s
+   idle release with a silent re-acquire, release on up / idle / hidden / unload / plan switch, the refusal strip
+   (`plan-refusal`) with snap-back and "Error updating location: …", the ghost ring and the presence stack from
+   `plan_lock_holders`, the take-over action for my own other window, badge test ids, and `?concurrent=0`.
 4. **Live drafts and undo** - `usePlanStream`, overlay rendering, per-cell undo with pre-acquire.
 5. **Structural ops** - `083_frame_ops_locks.sql`, publish warning.
 
@@ -167,8 +203,8 @@ successful moves and would collide.
 | SQL rules, ownership | `node tools/pgtest.mjs plan-locks` | grab/refuse/steal/expire, all-or-nothing, holders, take-over, cascade, and that `authenticated` can reach the doors but not the tables (116 assertions) |
 | SQL rules, writes | `node tools/pgtest.mjs plan-place` | a write needs a hold; one cell is the only row written and the revision is untouched; a gesture is all or nothing; a new frame still takes its first cells; a stale rev is still PT409 (116 assertions) |
 | Full schema | `npm run test:db` | nothing else regressed (824 assertions) |
-| Unit | `npm run test:unit` | the take-write-release order, a refusal writing nothing, one release for overlapping writes, a failed release not being an error (68 assertions) |
-| Browser smoke | `npm run check:board` | the board works without logging in, and a dragged badge stays where it was put across a frame switch (29 assertions) |
+| Unit | `npm run test:unit` | the hold-write-release order, a refusal writing nothing, one release for overlapping writes, the 2 s heartbeat and its stop, a hold the heartbeat says is gone, release-all, presence, take-over, one grab for a write inside a gesture (75 assertions, 17 in that file) |
+| Browser smoke | `npm run check:board` | the board works without logging in; a dragged badge stays where it was put and is let go; a badge a colleague holds is ringed, named, refused and snapped back; 5 s of stillness releases it and the next movement takes it back; `?concurrent=0` hides the picture and not the rule (49 assertions, 4 tabs) |
 | Two tabs | manual, one identity | streaming and release |
 | e2e | blocked: `.tmp/qa-accounts.json` and seven accounts | two real identities |
 
@@ -188,7 +224,8 @@ than papered over: a script that "proves" arbitration on one connection would be
   migration, and it should read like one.
 - `frame_hold` must be copied from its **live** body (067), not 046, or QA-07 silently reverts.
 - The 5 s mid-drag release is the product owner's decision and the main source of snap-backs; the
-  mitigation is the silent re-acquire, not a change of rule.
+  mitigation is the silent re-acquire, not a change of rule. It is built, and the browser check holds a badge still
+  for five seconds to prove it is released and taken back.
 - The broadcast channel is public (section "Live stream").
 - **A retime and a badge drag are independent, on purpose.** The first draft of 081 refused a retime while
   another session held a badge in that moment, on the theory that the badge would slide out from under the
@@ -196,5 +233,6 @@ than papered over: a script that "proves" arbitration on one connection would be
   in the strip and the walk lines and 25 m flags measured between moments — pictures reflowing, not an edit
   lost. The rule deadlocked two planners dragging different badges at one moment, so it was dropped. Do not
   add it back for a reason about the picture moving; only for one about data.
-- The word "lock" already means the local drag guard (`moveLock`, `data-testid="plan-lock"`). The server
-  concept is called **editing** / **in use**; the old test id becomes `plan-drag-guard`.
+- The word "lock" already means the local drag guard (`moveLock`). The server concept is called **editing** / **in
+  use**; the guard's test id is `plan-drag-guard`, and `plan-lock` is gone from the board (the bench's
+  `plan-lock-<n>` ids are a different page and a different thing).
