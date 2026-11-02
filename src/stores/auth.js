@@ -7,6 +7,7 @@ import { useLocationTracker, stopBackgroundTracking } from '../composables/useLo
 import { clearAllStartReminders } from '../composables/useStartReminders'
 import { disablePush } from '../composables/usePushNotifications'
 import { forgetMembership } from '../services/memberService'
+import { clearTimetables } from '../lib/timetableReader'
 
 // Usernames: 3-20 lowercase letters, numbers or _ (the same rule as the database)
 export const USERNAME_RULE = /^[a-z0-9_]{3,20}$/
@@ -169,6 +170,7 @@ export const useAuthStore = defineStore('auth', () => {
     // 'local': log out THIS device only. The default ('global') also ended the same account's login
     // in every other browser and phone, which then failed with "Not signed in" on the next reminder.
     await supabase.auth.signOut({ scope: 'local' })
+    clearTimetables()
     session.value = null
     profile.value = null
     cacheProfile(null)

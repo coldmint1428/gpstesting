@@ -11,6 +11,7 @@
 //      did move it is a publish, and the live strip owns that decision (steps 15 and 18).
 import { computed, onScopeDispose, ref } from 'vue'
 import { supabase } from '../lib/supabase'
+import { readTimetable as readTimetableShared, forgetTimetable, staleTimetables } from '../lib/timetableReader'
 
 const P409 = 'PT409'
 
@@ -387,13 +388,10 @@ export function usePlan(eventId) {
    * a closed show's timetable is read at its end time, so what is on screen is how the night closed. Null means now,
    * which is the database's own default.
    */
+  // Through the shared reader since 2 Nov: the whole timetable once per published version, the marks between
+  // (lib/timetableReader.js). The rows come back exactly as session_timetable answers them.
   async function readTimetable(sessionId, at = null) {
-    if (!sessionId) return []
-    const args = { p_session: sessionId }
-    if (at) args.p_at = at instanceof Date ? at.toISOString() : at
-    const { data, error } = await supabase.rpc('session_timetable', args)
-    if (error) throw error
-    return data || []
+    return readTimetableShared(sessionId, at)
   }
 
   // ---------- the plan's log (step 22) ----------
@@ -432,6 +430,7 @@ export function usePlan(eventId) {
       p_group: groupId,
       p_state: state,
     })
+    forgetTimetable(sessionId) // the next read asks the database, so the press shows at once
     if (error) throw error
     return data
   }
@@ -543,6 +542,7 @@ export function usePlan(eventId) {
 
   /** Queue a read for the burst of rows one save writes, keeping the payload that names the plan on screen. */
   function onLiveChange(payload) {
+    staleTimetables() // a plan changed: every timetable copy checks its version at its next read
     const row = payload ? payload.new || payload.old : null
     const openId = plan.value ? plan.value.id : null
     if (!livePending || !openId || (row && row.id === openId)) livePending = payload
