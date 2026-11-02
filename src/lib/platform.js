@@ -4,4 +4,5 @@
 // the app runs.
 import { Capacitor } from '@capacitor/core'
 
-export const isNativeApp = Capacitor.isNativePlatform()
+// VITE_APP_PREVIEW=1 builds the website drawn as the phone app, to compare the two in a browser (never set for Vercel)
+export const isNativeApp = Capacitor.isNativePlatform() || import.meta.env.VITE_APP_PREVIEW === '1'

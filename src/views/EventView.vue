@@ -701,9 +701,9 @@ async function removeEvent() {
           {{ ROLE_LABEL[topRole(me)] || 'Member' }}<template v-if="isMarshal(me)"> · Marshal</template><template v-if="myGroup"> · {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</template>
         </p>
       </div>
-      <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">LIVE</span>
-      <span v-else-if="event.is_simulation" class="pv-chip pv-chip-sim" data-testid="sim-badge">SIM</span>
-      <button type="button" class="btn btn-danger btn-sm sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
+      <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">Live</span>
+      <span v-else-if="event.is_simulation" class="pv-chip pv-chip-sim" data-testid="sim-badge">Sim</span>
+      <button type="button" class="btn btn-sm k-sos sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </header>
 
     <!-- Which event and its state, in the site's top bar (one bar, as in the design) -->
@@ -830,8 +830,9 @@ async function removeEvent() {
         <BenchAlert v-if="shareError" data-testid="share-error" @dismiss="shareError = ''">{{ shareError }}</BenchAlert>
         <BenchAlert v-if="errorMsg" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-        <!-- The page's title. Only the Live page adds a line: who this person can see on the map. -->
-        <div v-if="!native" class="ev-page-head">
+        <!-- The page's title. Only the Live page adds a line: who this person can see on the map. The phone app's
+             map and home tabs (Map, Ops, Now) go without one: the map needs the room, and the header names the event. -->
+        <div v-if="!native || !['live', 'ops', 'now'].includes(tab)" class="ev-page-head">
           <h2>{{ currentPage.label }}</h2>
           <p v-if="tab === 'live'" data-testid="view-scope">{{ viewText }}</p>
         </div>

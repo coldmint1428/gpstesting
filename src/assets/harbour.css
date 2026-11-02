@@ -70,11 +70,7 @@
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* The phone app reads at arm's length, walking, in sunlight: Atkinson Hyperlegible */
-html.native-app {
-  --font-ui: 'Atkinson Hyperlegible', system-ui, Roboto, sans-serif;
-  --font-display: 'Atkinson Hyperlegible', system-ui, Roboto, sans-serif;
-}
+/* The phone app uses the website's type since 2 Nov (kinetic-tokens.css: Unbounded and Manrope) */
 
 /* :root, not html -- Bootstrap sets these on :root (and [data-bs-theme=light]), which outranks a plain html rule, so
    before Planova 2 links, primary and body colours silently stayed Bootstrap blue */
@@ -155,14 +151,12 @@ html:not(.native-app) .pl-h-page {
     opacity: 0.55;
   }
 }
-html .ev-chip-live,
-.pv-chip-live {
+html .ev-chip-live {
   background: #14201b !important;
   color: #ffffff !important;
   border-color: #14201b !important;
 }
-html .ev-chip-live::before,
-.pv-chip-live::before {
+html .ev-chip-live::before {
   content: '';
   display: inline-block;
   width: 9px;
@@ -173,20 +167,8 @@ html .ev-chip-live::before,
   vertical-align: 1px;
   animation: planova-live-pulse 1.6s ease-in-out infinite;
 }
-/* On the phone's dark header the pill turns light, or it disappears (ink on harbour 900 was 1.4:1) */
-html.native-app .pv-head .pv-chip-live {
-  background: #f7f6f2 !important;
-  color: #14201b !important;
-}
-html.native-app .pv-head .pv-chip-live::before {
-  box-sizing: border-box;
-  border: 2px solid #14201b;
-  width: 12px;
-  height: 12px;
-}
 @media (prefers-reduced-motion: reduce) {
-  html .ev-chip-live::before,
-  .pv-chip-live::before {
+  html .ev-chip-live::before {
     animation: none;
   }
 }
@@ -307,67 +289,7 @@ html .pv .pv-badge.is-live {
   color: #ffffff;
 }
 
-/* Phone, My events: the LIVE pill on the dark live card turns light, or its edge disappears (ink on harbour 900 is 1.4:1) */
-html.native-app .pv-live .pv-chip-live {
-  background: #f7f6f2 !important;
-  color: #14201b !important;
-}
-html.native-app .pv-live .pv-chip-live::before {
-  box-sizing: border-box;
-  border: 2px solid #14201b;
-  width: 12px;
-  height: 12px;
-}
-/* The other live events, as compact rows under the one big card */
-html.native-app .pv-also-live {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  padding: 6px 14px;
-  margin-bottom: 16px;
-}
-html.native-app .pv-also-title {
-  font-size: 15px;
-  font-weight: 700;
-  margin: 10px 2px 4px;
-  color: var(--text-secondary);
-}
-html.native-app .pv-also-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 8px 2px;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  text-decoration: none;
-}
-html.native-app .pv-also-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-html.native-app .pv-also-text strong {
-  font-size: 17px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-html.native-app .pv-also-text span {
-  font-size: 14px;
-  color: var(--text-tertiary);
-}
-html.native-app .pv-also-chev {
-  font-size: 24px;
-  color: var(--text-tertiary);
-}
-
-/* Phone tab bar: the dot on Ops means "live", so it is marigold, not red */
-html.native-app .pv-tab-dot {
-  background: var(--signal);
-  box-shadow: 0 0 0 2px #ffffff;
-}
+/* The phone app's own pieces (the live card, "Also live", the tab dot) are styled in native.css */
 
 /* QA-09: page change still waiting on the server (App.vue) */
 .nav-loading { position: fixed; inset: 0 0 auto 0; z-index: 2000; display: flex; align-items: center; gap: 8px; pointer-events: none; }
