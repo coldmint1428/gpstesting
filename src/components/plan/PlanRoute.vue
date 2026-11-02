@@ -29,13 +29,16 @@
 // they are what tells the map where the walk stops. The rules that turn rows into a line are `planWalk`'s (a run, a
 // break at an off-site statement, a single point with no line), because the live map draws the same walk and the same
 // rules must not exist twice.
+//
+// TWO PLACES. On the Map tab it is the whole page. On the Schedule page it is `embedded`: the map and its cards only,
+// drawing the rows that page has already read (`walkRows`), and `showMoment` zooms in on the row somebody picked.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
 import { areaStyle } from '../../utils/areaKinds'
 import { escapeHtml } from '../../utils/people'
-import { walksOf } from '../../utils/planWalk'
+import { walksOf, whereAt } from '../../utils/planWalk'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { usePlanWalk } from '../../composables/usePlanWalk'
 import { supabase } from '../../lib/supabase'
@@ -56,13 +59,19 @@ const props = defineProps({
   groups: { type: Array, default: () => [] },
   // A moment to open the map on, from the schedule's place link (`?t=300`). Null opens on the whole walk.
   focusT: { type: [String, Number], default: null },
+  // True on the Schedule page: the map and its cards, drawing walkRows instead of reading them again.
+  embedded: { type: Boolean, default: false },
+  walkRows: { type: Array, default: () => [] },
 })
 
 const TICK_MS = 1000
+const SHOW_ZOOM = 18 // close enough to tell one point from the next
 
-const { rows, loaded, errorMsg, readAt } = usePlanWalk({ session: () => props.session })
+const walk = usePlanWalk({ session: () => props.session, enabled: () => !props.embedded })
+const { loaded, errorMsg, readAt } = walk
+const rows = computed(() => (props.embedded ? props.walkRows : walk.rows.value))
 // Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
-useLoadGate(() => !loaded.value)
+useLoadGate(() => !props.embedded && !loaded.value)
 const zones = ref([])
 const now = ref(Date.now())
 const mapEl = ref(null)
@@ -74,6 +83,7 @@ let fittedWithPoints = false // the camera is set once the walk is in hand, then
 let appliedFocus = null // the `?t=` moment this map has already opened on
 let retries = 0 // frames spent waiting for the stage to be laid out (see draw)
 let tickTimer = null
+let shownT = null // the moment showMoment last centred on: its label stays strong
 
 const sessionId = computed(() => (props.session ? props.session.id : null))
 const endedAt = computed(() => (props.session && props.session.endedAt ? props.session.endedAt : null))
@@ -156,6 +166,15 @@ const tracks = computed(() => {
   return walks
 })
 
+const hasPoints = computed(() => [...tracks.value.values()].some((t) => t.points.length))
+
+/** Where the group should be right now, for the card over the map. Only while the event is live, and only one group. */
+const hereNow = computed(() => {
+  if (props.whole || phase.value !== 'live') return null
+  const track = [...tracks.value.values()][0]
+  return track ? whereAt(track.rows, clockAt.value.getTime()) : null
+})
+
 /** What a dot says: its clock time and its place, or the time alone at a route point. */
 function dotText(track, row) {
   const when = formatTime(row.planned_at)
@@ -209,10 +228,13 @@ function draw() {
       if (element) element.setAttribute('data-route', track.id)
     }
 
+    // The large dot is where the group should be now. A moment that only carries the group has no dot of its own, so
+    // this is the last point it stated, not the frame the clock is on.
+    const here = phase.value === 'live' ? whereAt(track.rows, clockAt.value.getTime()) : null
     for (const row of track.points) {
-      const current = row.frame_id === currentFrameId.value
+      const current = row === here
       const next = nextMoment.value && row.frame_id === nextMoment.value.frameId
-      const focused = props.focusT != null && String(props.focusT) === String(row.t_s)
+      const focused = shownT === row.t_s || (props.focusT != null && String(props.focusT) === String(row.t_s))
       const classes = ['pv-route-dot']
       if (current) classes.push('is-current')
       if (next) classes.push('is-next')
@@ -265,11 +287,24 @@ function fit() {
 
 /** Centre the map on a moment somebody tapped: its own point, at the zoom a person reads a place at. */
 function focusMoment(moment) {
-  if (!map || !moment) return
-  const row = moment.rows.find((r) => r.lat != null)
-  if (!row) return
-  map.setView([row.lat, row.lng], 17, { animate: false })
+  if (moment && moment.rows.length) showMoment(moment.t_s, moment.rows[0].group_id)
 }
+
+/** Zoom in on where a group should be at one of its moments. A carried moment shows the last point the group stated. */
+function showMoment(t_s, groupId) {
+  const track = tracks.value.get(groupId)
+  const row = track && track.rows.find((r) => r.t_s === t_s)
+  const point = row && whereAt(track.rows, new Date(row.planned_at).getTime())
+  if (!map || !point) return
+  shownT = point.t_s
+  draw()
+  map.flyTo([point.lat, point.lng], SHOW_ZOOM, {
+    duration: 0.6,
+    animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  })
+}
+
+defineExpose({ showMoment })
 
 /** Open on the moment the schedule's link named, once, and mark it. */
 function applyFocus() {
@@ -366,8 +401,8 @@ watch(
 
 <template>
   <div class="pv">
-    <section class="pv-route" data-testid="plan-route">
-      <header class="pv-route-head">
+    <section class="pv-route" :class="{ 'is-embedded': embedded }" data-testid="plan-route">
+      <header v-if="!embedded" class="pv-route-head">
         <div class="pv-route-id">
           <h2 class="pv-route-title">{{ whole ? 'The route' : 'Your route' }}</h2>
           <p class="pv-route-sub">
@@ -385,41 +420,53 @@ watch(
         </div>
       </header>
 
-      <p v-if="phase === 'scheduled'" class="pv-route-line" data-testid="route-scheduled">
+      <p v-if="!embedded && phase === 'scheduled'" class="pv-route-line" data-testid="route-scheduled">
         Starts {{ formatDayTime(session.startsAt) }}.
       </p>
-      <p v-if="phase === 'ended'" class="pv-route-line" data-testid="route-ended">
+      <p v-if="!embedded && phase === 'ended'" class="pv-route-line" data-testid="route-ended">
         Ended {{ formatTime(endedAt) }}.
       </p>
 
       <!-- A read that failed says so and keeps the last answer: a map that blanks itself is worse than an old one. -->
-      <p v-if="errorMsg" class="pv-route-line is-warn" data-testid="route-error">
+      <p v-if="!embedded && errorMsg" class="pv-route-line is-warn" data-testid="route-error">
         {{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template>
       </p>
 
       <!-- The stage holds the map and the card that floats over it. v-show, not v-if: Leaflet holds the element, so it is
            taken out of the layout when there is nothing to draw rather than torn down and rebuilt. -->
-      <div v-show="rows.length" class="pv-route-stage">
+      <div v-show="rows.length && (!embedded || hasPoints)" class="pv-route-stage">
         <div ref="mapEl" class="pv-map" data-testid="route-map"></div>
 
-        <!-- The next moment, floating over the map: tapping it centres on the moment it names. -->
-        <button
-          v-if="nextMoment"
-          type="button"
-          class="pv-route-next"
-          data-testid="route-next"
-          @click="focusMoment(nextMoment)"
-        >
-          <span class="pv-route-next-kicker">Next</span>
-          <strong class="pv-route-next-at">{{ formatTime(nextMoment.at) }}</strong>
-          <span v-if="placeOf(nextMoment)" class="pv-route-next-place">{{ placeOf(nextMoment) }}</span>
-          <span class="pv-route-next-in">{{ nextIn }}</span>
-        </button>
+        <!-- Over the map: where to be now, then the next moment. Tapping a card centres the map on it. -->
+        <div class="pv-route-cards">
+          <button
+            v-if="hereNow"
+            type="button"
+            class="pv-route-next is-here"
+            data-testid="route-here"
+            @click="showMoment(hereNow.t_s, hereNow.group_id)"
+          >
+            <span class="pv-route-next-kicker">Be here now</span>
+            <strong class="pv-route-next-place">{{ hereNow.place || 'The large dot on the map' }}</strong>
+          </button>
+          <button
+            v-if="nextMoment"
+            type="button"
+            class="pv-route-next"
+            data-testid="route-next"
+            @click="focusMoment(nextMoment)"
+          >
+            <span class="pv-route-next-kicker">Next</span>
+            <strong class="pv-route-next-at">{{ formatTime(nextMoment.at) }}</strong>
+            <span v-if="placeOf(nextMoment)" class="pv-route-next-place">{{ placeOf(nextMoment) }}</span>
+            <span class="pv-route-next-in">{{ nextIn }}</span>
+          </button>
+        </div>
       </div>
 
-      <SkeletonLoader v-if="!loaded" variant="lines" :rows="4" label="Reading your route…" data-testid="route-loading" />
+      <SkeletonLoader v-if="!embedded && !loaded" variant="lines" :rows="4" label="Reading your route…" data-testid="route-loading" />
 
-      <div v-else-if="!rows.length" class="pv-route-empty" data-testid="route-empty">
+      <div v-else-if="!embedded && !rows.length" class="pv-route-empty" data-testid="route-empty">
         <template v-if="phase === 'none'">
           No route yet.
         </template>
@@ -435,8 +482,8 @@ watch(
         <template v-else>This plan has no moments for {{ whole ? 'any group' : groupName }}.</template>
       </div>
 
-      <p v-else-if="!tracks.size || ![...tracks.values()].some((t) => t.points.length)" class="pv-route-note" data-testid="route-nopoints">
-        {{ whole ? 'No group has a stated point yet.' : 'Your group has no stated points yet.' }}
+      <p v-else-if="rows.length && !hasPoints" class="pv-route-note" data-testid="route-nopoints">
+        {{ whole ? 'No group has a place on the map yet.' : 'Your group has no places on the map yet.' }}
       </p>
     </section>
   </div>

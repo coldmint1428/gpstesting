@@ -489,8 +489,8 @@ const PAGE_INFO = computed(() => ({
             'start the event.',
         }
       : {
-          hint: 'Your timetable',
-          about: seesWholeEvent.value ? "Every group's moments on the plan's clock." : "Your group's moments on the plan's clock.",
+          hint: 'Where to be and when',
+          about: 'A map of where your group should be and when. Once the event starts, it also shows if you are late or on schedule.',
         },
   map: canManage.value
     ? {
@@ -547,7 +547,7 @@ const nativeTabs = computed(() => {
 })
 const MORE_HINT = computed(() => ({
   overview: 'Details, invite, and leave the event',
-  timeline: modeOf('timeline') === 'edit' ? 'The plan board' : 'Your timetable',
+  timeline: modeOf('timeline') === 'edit' ? 'The plan board' : 'Where to be and when',
   map: canManage.value ? 'Areas, doors and No-Go areas' : 'Your route on the plan',
   people: 'Who is in it, roles',
   groups: 'Groups and their ICs',
@@ -869,7 +869,7 @@ async function removeEvent() {
         </div>
 
         <!-- ===== Phone app pages (the website shows these on the Live map and Timeline pages) ===== -->
-        <!-- Now: an IC's or member's own moments on the plan's clock (the same read as the Schedule page) -->
+        <!-- Now: where an IC's or member's group should be, the same as the Schedule page -->
         <template v-if="native && tab === 'now'">
           <PlanSchedule
             v-if="scheduleSession"
@@ -877,6 +877,7 @@ async function removeEvent() {
             :session="scheduleSession"
             :whole="seesWholeEvent"
             :my-group="myGroup"
+            :groups="groups"
             :can-press="isIC"
           />
           <div v-else class="pv-empty" data-testid="now-empty">
@@ -993,7 +994,7 @@ async function removeEvent() {
 
         <!-- Timeline: the plan board for the people who draw it, and the timetable for the people who follow it
              (step 16). Root and planner get the strip, the map and the inspector; a member, an IC, a group admin or a
-             marshal gets their own moments on the plan's clock, from the one read that is already scoped to them (052). -->
+             marshal gets the map and list of where to be, from the one read that is already scoped to them (052). -->
         <template v-if="tab === 'timeline'">
           <PlanBoard
             v-if="modeOf('timeline') === 'edit'"
@@ -1008,6 +1009,7 @@ async function removeEvent() {
             :session="scheduleSession"
             :whole="seesWholeEvent"
             :my-group="myGroup"
+            :groups="groups"
             :can-press="isIC"
           />
         </template>

@@ -16,7 +16,7 @@
 // each must turn its named case red. If a mutation ever stops applying (the line it rewrites is gone), the test throws
 // rather than quietly passing: a red-first proof that cannot go red is not a proof.
 import fs from 'node:fs'
-import { runsOf, walksOf, legNow } from '../src/utils/planWalk.js'
+import { runsOf, walksOf, legNow, whereAt } from '../src/utils/planWalk.js'
 
 let passed = 0
 const failures = []
@@ -138,6 +138,24 @@ const legOfOne = await mutant(
 const legOfOneResult = legOfOne.legNow(LEGS, at(900))
 check('M4 the mutant invents a leg at the last statement, so C6 is red', Array.isArray(legOfOneResult) && legOfOneResult.length === 2, show(legOfOneResult && legOfOneResult.map((r) => r.t_s)))
 check('M4 and it is the same statement twice: a walk of one point, joined to itself', !!legOfOneResult && legOfOneResult[0].t_s === legOfOneResult[1].t_s)
+
+// ---------- where the plan has a group at an instant ----------
+const WALK = [row(60, GATE_LINE), row(120, null), row(180, GATE_5), row(240, null, 'not_required'), row(300, GATE_10)]
+const whereT = (clock, rows = WALK) => {
+  const found = whereAt(rows, at(clock))
+  return found ? found.t_s : null
+}
+check('W1 before the first point the group is nowhere yet', whereT(30) === null, show(whereT(30)))
+check('W2 on a point, the group is at that point', whereT(60) === 60, show(whereT(60)))
+check('W3 a carried moment keeps the group at the last point', whereT(120) === 60, show(whereT(120)))
+check('W4 the next point takes over at its own time', whereT(180) === 180, show(whereT(180)))
+check('W5 off site, the group is not on the map', whereT(240) === null, show(whereT(240)))
+check('W6 the walk starts again after off site', whereT(300) === 300, show(whereT(300)))
+check('W7 after the last point the group stays there', whereT(9000) === 300, show(whereT(9000)))
+
+const offSiteStays = await mutant('off site keeps the last point', "if (row.state === 'not_required') found = null", 'if (false) found = null')
+const offSiteStaysRow = offSiteStays.whereAt(WALK, at(240))
+check('M5 the mutant keeps an off-site group on the map, so W5 is red', !!offSiteStaysRow && offSiteStaysRow.t_s === 180, show(offSiteStaysRow))
 
 // ---------- verdict ----------
 if (failures.length) {

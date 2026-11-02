@@ -74,6 +74,20 @@ export function walksOf(rows) {
 }
 
 /**
+ * Where the plan has one group at an instant: the row of the last point it stated by then. A moment that only carries
+ * the group keeps it at that point. Null before its first point and while it is off site.
+ */
+export function whereAt(rows, clockMs) {
+  let found = null
+  for (const row of rows) {
+    if (at(row) > clockMs) break
+    if (row.state === 'not_required') found = null
+    else if (row.lat != null) found = row
+  }
+  return found
+}
+
+/**
  * The leg the clock is on: the statement the clock has reached and the one after it, or null when there is no such pair
  * to draw. Null is the honest answer in four of the five places a clock can be (see the test): before the first
  * statement, on a moment that states no point (a carried or off-site one — the plan says the group is still where it

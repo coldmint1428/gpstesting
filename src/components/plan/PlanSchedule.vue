@@ -1,11 +1,9 @@
 <script setup>
-// PlanSchedule — the timetable a person follows: one moment per frame, on the plan's own clock.
+// PlanSchedule — the Schedule page: where a person's group should be and when, as a map and a list of the plan's moments.
 //
-// WHO THIS IS FOR. Everyone the board is not for: a member, an IC, a group admin, a marshal. The plan board is the
-// planner's instrument — it draws a strip of frames and drags people around a map — and this is what the people who
-// walk it need instead. It is deliberately not the board with its controls hidden: there is no strip, no map and no
-// frames to select, because a follower's question is "when, and what is the clock saying about it", not "may I move
-// anybody". (Step 16's job; the board keeps root and planner.)
+// WHO THIS IS FOR. Everyone the board is not for: a member, an IC, a group admin, a marshal. Each row says when and where
+// and can zoom the map to its point. Once the event is live a row also says late or on schedule; before the start and
+// after the end it does not. The map is PlanRoute, which draws the rows read here. (The board keeps root and planner.)
 //
 // WHERE THE ROWS COME FROM. One read (051, widened in 052): session_timetable() answers a row per group per frame
 // with the planned clock time, the five-state word, lateness, the frame's note, the plan's name and the revision the
@@ -36,12 +34,12 @@
 // words. A write's error is kept until the next write: the read beside it polls every half minute, and an error that a
 // poll can wipe is an error nobody reads.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
-import { formatOffset } from '../../utils/planFrames'
+import { walksOf, whereAt } from '../../utils/planWalk'
 import { planErrorMessage, usePlan } from '../../composables/usePlan'
 import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
+import PlanRoute from './PlanRoute.vue'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -55,6 +53,8 @@ const props = defineProps({
   // The caller's group, for the header and for the no-group empty state. The rows are the authority for what is
   // shown; this only names it when the read has no rows to name.
   myGroup: { type: Object, default: null },
+  // The event's groups, for the map's colours.
+  groups: { type: Array, default: () => [] },
   // True for the group's own IC: the one role that may say "we are here" from this screen (step 28). It is passed in
   // rather than derived here because the membership row is the event's, not this read's.
   canPress: { type: Boolean, default: false },
@@ -68,6 +68,8 @@ const POLL_MS = 30000 // the floor, not the point: the wake at each moment is wh
 const TICK_MS = 1000
 
 const rows = ref([]) // the read, exactly as it answered
+const routeMap = ref(null)
+const shownFrame = ref(null) // the row whose "Show on map" was last pressed
 const logRows = ref([]) // what the plan's log says to this person (058)
 const loaded = ref(false) // one answer has arrived (an empty read is still an answer)
 // Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
@@ -86,10 +88,6 @@ let tickTimer = null
 
 const sessionId = computed(() => (props.session ? props.session.id : null))
 const planId = computed(() => (props.session && props.session.planId ? props.session.planId : null))
-const t0 = computed(() => {
-  const s = props.session
-  return s ? s.t0At || s.startsAt || null : null
-})
 const endedAt = computed(() => (props.session && props.session.endedAt ? props.session.endedAt : null))
 const phase = computed(() => {
   const s = props.session
@@ -102,11 +100,6 @@ const phaseWord = computed(() => ({ none: 'not started', live: 'live', scheduled
 
 // The instant the screen is speaking about: the end of a closed show, otherwise the clock on the wall.
 const clockAt = computed(() => (endedAt.value ? endedAt.value : new Date(now.value)))
-const clockText = computed(() => formatTime(clockAt.value))
-const t0Text = computed(() => (t0.value ? formatTime(t0.value) : ''))
-const elapsedText = computed(() =>
-  t0.value ? formatOffset((clockAt.value.getTime() - t0.value.getTime()) / 1000) : '',
-)
 const planName = computed(() => (rows.value.length ? rows.value[0].plan_name : ''))
 const rev = computed(() => (rows.value.length ? rows.value[0].plan_rev : props.session ? props.session.planRev : null))
 const groupName = computed(() => {
@@ -114,8 +107,8 @@ const groupName = computed(() => {
   return rows.value.length ? rows.value[0].group_name : props.myGroup ? props.myGroup.name : ''
 })
 
-/** The log rows addressed to this person: what a planner said, and the changes to their own times (058). */
-const myMessages = computed(() => logRows.value.filter((row) => row.i_recipient))
+/** The messages addressed to this person that they have not read (058). */
+const myMessages = computed(() => logRows.value.filter((row) => row.i_recipient && !row.i_acked))
 
 /**
  * Read the timetable, and schedule the next ask. Guarded so a background poll cannot interrupt itself, and so a
@@ -127,7 +120,10 @@ const myMessages = computed(() => logRows.value.filter((row) => row.i_recipient)
  */
 async function read() {
   const id = sessionId.value
-  if (!id) return
+  if (!id) {
+    loaded.value = true // never started: nothing to wait for, so show the sentence and not a skeleton
+    return
+  }
   if (running) {
     again = true
     return
@@ -209,15 +205,19 @@ const moments = computed(() => {
 /** The first moment the clock has not reached yet — the one the eye should land on. */
 const nextIndex = computed(() => moments.value.findIndex((m) => m.at.getTime() > clockAt.value.getTime()))
 
-const STATE_LABEL = {
-  pending: 'due',
-  late: 'late',
-  arrived: 'arrived',
-  missed: 'missed',
-  not_required: 'not required',
-}
-function stateLabel(row) {
-  return STATE_LABEL[row.state] || row.state
+/** The status beside a row: only while the event is live, and only for a moment there is something to say about. */
+function statusOf(row) {
+  if (phase.value !== 'live') return null
+  if (row.state === 'arrived') {
+    const late = secondsOfInterval(row.lateness)
+    if (late != null && late >= 30) return { text: formatDuration(late * 1000) + ' late', tone: 'late' }
+    return { text: 'On schedule', tone: 'ok' }
+  }
+  if (row.state === 'late') {
+    return { text: formatDuration(clockAt.value.getTime() - new Date(row.planned_at).getTime()) + ' late', tone: 'late' }
+  }
+  if (row.state === 'missed') return { text: 'Missed', tone: 'missed' }
+  return null
 }
 
 /**
@@ -240,13 +240,6 @@ function secondsOfInterval(text) {
   const [h, m, s] = [Number(found[1]), Number(found[2]), Number(found[3])]
   const sign = h < 0 ? -1 : 1
   return sign * (Math.abs(h) * 3600 + m * 60 + s)
-}
-
-/** "2 min late" / "45 s early" / "on time" — the interval the database answered, in words. */
-function latenessText(seconds) {
-  if (seconds == null) return ''
-  if (Math.abs(seconds) < 30) return 'on time'
-  return formatDuration(Math.abs(seconds) * 1000) + (seconds > 0 ? ' late' : ' early')
 }
 
 /**
@@ -295,27 +288,34 @@ async function here(moment, row) {
   }
 }
 
-/** The line under the word. States are the database's; countdowns are this screen's arithmetic on planned_at. */
-function detail(row) {
-  const planned = new Date(row.planned_at).getTime()
-  if (row.state === 'pending') {
-    const wait = planned - clockAt.value.getTime()
-    return wait <= 0 ? 'due now' : 'in ' + formatDuration(wait)
+// ---------- where each row is ----------
+
+/** For each row: the point the group should be at then (a carried moment keeps the last one), and how to say it. */
+const placeOfRow = computed(() => {
+  const out = new Map()
+  for (const walk of walksOf(rows.value).values()) {
+    for (const row of walk.rows) {
+      const point = whereAt(walk.rows, new Date(row.planned_at).getTime())
+      let text = 'No place set'
+      if (point) text = point.place || (point === row ? '' : 'Same place')
+      else if (row.state === 'not_required') text = 'Off site'
+      out.set(row, { point, text })
+    }
   }
-  if (row.state === 'late') {
-    return formatDuration(clockAt.value.getTime() - planned) + ' late'
-  }
-  if (row.state === 'arrived') {
-    const said = latenessText(secondsOfInterval(row.lateness))
-    return [said, row.marked_at ? 'recorded ' + formatTime(row.marked_at) : ''].filter(Boolean).join(' · ')
-  }
-  if (row.state === 'missed') {
-    const after = secondsOfInterval(row.lateness)
-    const how = after != null && after > 30 ? 'decided ' + formatDuration(after * 1000) + ' after' : 'decided'
-    return [how, row.marked_at ? 'recorded ' + formatTime(row.marked_at) : ''].filter(Boolean).join(' · ')
-  }
-  if (row.state === 'not_required') return 'off site at this moment'
-  return ''
+  return out
+})
+
+function nextText() {
+  const moment = moments.value[nextIndex.value]
+  if (phase.value !== 'live' || !moment) return 'Next'
+  return 'Next · in ' + formatDuration(moment.at.getTime() - clockAt.value.getTime())
+}
+
+function showOnMap(moment, row) {
+  if (!routeMap.value) return
+  shownFrame.value = moment.frameId
+  routeMap.value.showMoment(moment.t_s, row.group_id)
+  routeMap.value.$el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
 // ---------- the plan log (step 22) ----------
@@ -394,24 +394,16 @@ watch(
   <div class="pv">
     <section class="pv-sched" data-testid="plan-schedule">
       <header class="pv-sched-head">
-        <div class="pv-sched-id">
-          <h2 class="pv-sched-title">{{ whole ? 'Timetable' : 'Your schedule' }}</h2>
-          <p class="pv-sched-sub">
-            <span class="pv-badge" :class="{ 'is-live': phase === 'live' }" data-testid="sched-phase">{{ phaseWord }}</span>
-            <template v-if="planName">
-              <span class="pv-sched-plan" data-testid="sched-plan">{{ planName }}</span>
-              <span v-if="rev != null"> · version <strong data-testid="sched-rev">{{ rev }}</strong></span>
-            </template>
-            <span v-if="!whole && groupName" class="pv-sched-group-name" data-testid="sched-group">
-              · your group <strong>{{ groupName }}</strong>
-            </span>
-          </p>
-        </div>
-        <div class="pv-sched-clock" data-testid="sched-clock" :data-t0="t0 ? t0.toISOString() : ''">
-          <strong class="pv-sched-now" data-testid="sched-now">{{ clockText }}</strong>
-          <span v-if="t0" class="pv-sched-t0">T+0 <span data-testid="sched-t0">{{ t0Text }}</span></span>
-          <span v-if="elapsedText" class="pv-sched-elapsed">{{ elapsedText }}</span>
-        </div>
+        <h2 class="pv-sched-title" data-testid="sched-title">
+          {{ whole ? 'Where groups should be' : 'Where ' + (groupName || 'your group') + ' should be' }}
+        </h2>
+        <p class="pv-sched-sub">
+          <span class="pv-badge" :class="{ 'is-live': phase === 'live' }" data-testid="sched-phase">{{ phaseWord }}</span>
+          <template v-if="planName">
+            <span class="pv-sched-plan" data-testid="sched-plan">{{ planName }}</span>
+            <span v-if="rev != null">· version <span data-testid="sched-rev">{{ rev }}</span></span>
+          </template>
+        </p>
       </header>
 
       <p v-if="phase === 'scheduled'" class="pv-sched-line" data-testid="sched-scheduled">
@@ -426,26 +418,20 @@ watch(
         {{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template>
       </p>
 
-      <!-- What a planner said, and "your times changed" when a publish moved this group's walk (step 22). One tap to
-           say it was read; an acked row stays as a quiet line rather than disappearing, because it is a record. -->
+      <!-- New messages from a planner, and "your times changed" when a publish moved this group's walk (step 22). -->
       <div v-if="myMessages.length" class="pv-sched-log" data-testid="sched-log">
         <article
           v-for="row in myMessages"
           :key="row.id"
-          class="pv-sched-msg"
-          :class="{ 'is-new': !row.i_acked, 'is-timeline': row.kind === 'timeline' }"
+          class="pv-sched-msg is-new"
+          :class="{ 'is-timeline': row.kind === 'timeline' }"
           data-testid="sched-msg"
           :data-kind="row.kind"
-          :data-acked="row.i_acked ? 'true' : 'false'"
         >
           <div class="pv-sched-msg-line">
             <strong class="pv-sched-msg-title">{{ row.kind === 'timeline' ? 'Your times changed' : row.from_name }}</strong>
             <span class="pv-sched-msg-at">{{ formatTime(row.at) }}</span>
-            <span v-if="row.i_acked" class="pv-sched-msg-done" data-testid="sched-acked">
-              got it {{ formatTime(row.i_acked) }}
-            </span>
             <button
-              v-else
               type="button"
               class="pv-sched-ack"
               data-testid="sched-ack"
@@ -458,6 +444,18 @@ watch(
           <p class="pv-sched-msg-body" data-testid="sched-msg-body">{{ row.body }}</p>
         </article>
       </div>
+
+      <PlanRoute
+        v-if="session"
+        ref="routeMap"
+        embedded
+        :event-id="eventId"
+        :session="session"
+        :whole="whole"
+        :my-group="myGroup"
+        :groups="groups"
+        :walk-rows="rows"
+      />
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the schedule…" data-testid="sched-loading" />
 
@@ -480,48 +478,57 @@ watch(
           v-for="(moment, i) in moments"
           :key="moment.frameId"
           class="pv-sched-moment"
-          :class="{ 'is-next': i === nextIndex, 'is-past': moment.at.getTime() <= clockAt.getTime() }"
+          :class="{
+            'is-now': phase === 'live' && moment.frameId === currentFrameId,
+            'is-past': moment.at.getTime() <= clockAt.getTime() && moment.frameId !== currentFrameId,
+            'is-shown': moment.frameId === shownFrame,
+          }"
           data-testid="sched-moment"
           :data-frame="moment.frameId"
           :data-t="moment.t_s"
         >
-          <div class="pv-sched-when">
-            <strong class="pv-sched-at" :data-testid="'sched-at-' + moment.t_s">{{ formatTime(moment.at) }}</strong>
-            <span class="pv-sched-offset">{{ formatOffset(moment.t_s) }}</span>
-            <span v-if="moment.note" class="pv-sched-note" data-testid="sched-note">{{ moment.note }}</span>
-          </div>
+          <strong class="pv-sched-at" :data-testid="'sched-at-' + moment.t_s">{{ formatTime(moment.at) }}</strong>
           <div class="pv-sched-rows">
             <div
               v-for="row in moment.rows"
               :key="row.group_id"
               class="pv-sched-row"
-              :class="'is-' + row.state.replace('_', '-')"
               data-testid="sched-row"
               :data-group="row.group_id"
               :data-state="row.state"
             >
-              <span v-if="whole" class="pv-sched-group">{{ row.group_name }}</span>
-              <span class="pv-sched-state" data-testid="sched-state">{{ stateLabel(row) }}</span>
-              <!-- A place opens the Map tab on that moment (step 29). One link, not a map: this page stays the list it
-                   was, and step 16's assertion that it asks for nothing but the timetable keeps holding. A row with no
-                   place has no link. -->
-              <RouterLink
-                v-if="row.place"
-                class="pv-sched-place-link"
-                :to="{ name: 'event', params: { id: eventId, page: 'map' }, query: { t: String(moment.t_s) } }"
-                :aria-label="'Show ' + row.place + ' on the map'"
-                data-testid="sched-place-link"
-              ><span class="pv-sched-place" data-testid="sched-place">{{ row.place }}</span></RouterLink>
-              <span class="pv-sched-detail">{{ detail(row) }}</span>
-              <button
-                v-if="canHere(moment, row)"
-                type="button"
-                class="pv-sched-here"
-                data-testid="sched-here"
-                :disabled="busyHere === moment.frameId"
-                @click="here(moment, row)"
-              >{{ busyHere === moment.frameId ? 'Saying…' : 'We’re here' }}</button>
-              <span v-if="i === nextIndex" class="pv-sched-flag">next</span>
+              <div class="pv-sched-where">
+                <span v-if="whole" class="pv-sched-group">{{ row.group_name }}</span>
+                <span v-if="placeOfRow.get(row).text" class="pv-sched-place" data-testid="sched-place">{{ placeOfRow.get(row).text }}</span>
+                <span v-if="moment.note" class="pv-sched-note" data-testid="sched-note">{{ moment.note }}</span>
+              </div>
+              <div class="pv-sched-marks">
+                <span v-if="phase === 'live' && moment.frameId === currentFrameId" class="pv-sched-flag">Now</span>
+                <span v-else-if="phase !== 'ended' && i === nextIndex" class="pv-sched-flag">{{ nextText() }}</span>
+                <span
+                  v-if="statusOf(row)"
+                  class="pv-sched-state"
+                  :class="'is-' + statusOf(row).tone"
+                  data-testid="sched-state"
+                >{{ statusOf(row).text }}</span>
+              </div>
+              <div class="pv-sched-actions">
+                <button
+                  v-if="canHere(moment, row)"
+                  type="button"
+                  class="pv-sched-here"
+                  data-testid="sched-here"
+                  :disabled="busyHere === moment.frameId"
+                  @click="here(moment, row)"
+                >{{ busyHere === moment.frameId ? 'Saving…' : 'We’re here' }}</button>
+                <button
+                  v-if="placeOfRow.get(row).point"
+                  type="button"
+                  class="pv-sched-show"
+                  data-testid="sched-place-link"
+                  @click="showOnMap(moment, row)"
+                >Show on map</button>
+              </div>
             </div>
           </div>
         </li>
