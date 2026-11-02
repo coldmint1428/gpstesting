@@ -82,8 +82,8 @@ export const PAGE_ACCESS = {
   overview: EVERYONE,
   timeline: EVERYONE,
   map: EVERYONE,
-  groups: EVERYONE,
-  people: EVERYONE,
+  groups: EVERYONE, // ICs and members: their own group only
+  people: ['root', 'planner', 'marshal', 'admin'], // ICs and members cannot see everyone in the event (073)
   attendance: EVERYONE, // checking in; ICs, admins and planners also run roll calls (071)
   live: EVERYONE,
   playback: ['root', 'planner'],

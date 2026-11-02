@@ -143,8 +143,11 @@ function saveDetails() {
             <dt>Your group</dt>
             <dd>{{ myGroup ? myGroup.name : 'None yet' }}</dd>
           </template>
-          <dt>People</dt>
-          <dd>{{ members.length }} in {{ groupCount }}</dd>
+          <!-- ICs and members see only their own group, so they have no count for the event -->
+          <template v-if="role !== 'ic' && role !== 'member'">
+            <dt>People</dt>
+            <dd>{{ members.length }} in {{ groupCount }}</dd>
+          </template>
         </dl>
       </div>
 

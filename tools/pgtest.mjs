@@ -31,6 +31,7 @@
 //   headcount supabase/tests/auto_headcount_test.sql: a group's headcount is the number of people in it (070)
 //   attendance supabase/tests/attendance_test.sql: roll calls, by hand or by scanning a QR (071)
 //   sos      supabase/tests/sos_test.sql: anyone in an event can call for help (072)
+//   own-group supabase/tests/own_group_test.sql: ICs and members see only their own group (073)
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -561,8 +562,8 @@ await phase('groups', {
             alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
     },
     { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
-    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
-    { name: '034_planners_not_in_groups.sql', sql: read('supabase/migrations/034_planners_not_in_groups.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
     { name: '069_edit_group.sql', sql: read('supabase/migrations/069_edit_group.sql') },
   ],
   body: async (db) => {
@@ -584,8 +585,8 @@ await phase('headcount', {
             alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
     },
     { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
-    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
-    { name: '034_planners_not_in_groups.sql', sql: read('supabase/migrations/034_planners_not_in_groups.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
     { name: '070_auto_headcount.sql', sql: read('supabase/migrations/070_auto_headcount.sql') },
   ],
   body: async (db) => {
@@ -607,8 +608,8 @@ await phase('attendance', {
             alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
     },
     { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
-    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
-    { name: '034_planners_not_in_groups.sql', sql: read('supabase/migrations/034_planners_not_in_groups.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
     { name: '071_attendance.sql', sql: read('supabase/migrations/071_attendance.sql') },
   ],
   body: async (db) => {
@@ -677,7 +678,7 @@ await phase('sos', {
             alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
     },
     { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
-    { name: '031_people_and_roles.sql', sql: read('supabase/migrations/031_people_and_roles.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
     {
       name: '028 (the push queue only)',
       sql: `create table public.push_queue (
@@ -696,6 +697,44 @@ await phase('sos', {
     await runSql(db, read('supabase/tests/sos_test.sql'), 'sos_test.sql')
     await runSql(db, read('supabase/migrations/072_sos.sql'), '038 a second time')
     return ['supabase/tests/sos_test.sql passed, and 038 re-applies cleanly']
+  },
+})
+
+// ---------- ICs and members see only their own group (073); the suites of 033, 036 and 072 must still pass ----------
+await phase('own-group', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
+    {
+      name: '028 (the push queue only)',
+      sql: `create table public.push_queue (
+              id bigserial primary key,
+              user_id uuid not null references public.profiles (id) on delete cascade,
+              event_id uuid not null references public.events (id) on delete cascade,
+              session_id uuid,
+              kind text not null,
+              dedup text not null unique,
+              title text not null, body text not null, data jsonb not null default '{}',
+              created_at timestamptz not null default now(), sent_at timestamptz);`,
+    },
+    { name: '072_sos.sql', sql: read('supabase/migrations/072_sos.sql') },
+    { name: '073_members_see_own_group.sql', sql: read('supabase/migrations/073_members_see_own_group.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/own_group_test.sql'), 'own_group_test.sql')
+    await runSql(db, read('supabase/tests/roles_test.sql'), 'roles_test.sql with 073')
+    await runSql(db, read('supabase/tests/planners_test.sql'), 'planners_test.sql with 073')
+    await runSql(db, read('supabase/tests/sos_test.sql'), 'sos_test.sql with 073')
+    await runSql(db, read('supabase/migrations/073_members_see_own_group.sql'), '073 a second time')
+    return ['own_group_test.sql, roles_test.sql, planners_test.sql and sos_test.sql passed, and 073 re-applies cleanly']
   },
 })
 
