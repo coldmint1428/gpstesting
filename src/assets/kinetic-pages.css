@@ -105,13 +105,21 @@ html body .kp-label {
   text-transform: uppercase;
   color: var(--muted);
 }
+/* One column that may shrink below its content: a long plan name in a dropdown otherwise widens the whole form
+   past a phone's screen, and Safari then zooms the page out (2 Nov, iPhone) */
 .kp-fields {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 .kp-fields-2 {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+}
+.kp-fields > *,
+.kp-fields-2 > * {
+  min-width: 0;
 }
 .kp-actions {
   display: flex;
@@ -789,11 +797,14 @@ html body .kp-setup h1 {
   left: 50%;
   bottom: 28px;
   z-index: var(--z-toast);
+  width: max-content;
+  max-width: calc(100vw - 32px);
   padding: 10px 18px;
-  border-radius: var(--radius-pill);
+  border-radius: 22px; /* a pill on one line, a rounded box when a long message wraps on a phone */
   background: var(--ink);
   color: var(--on-forest);
   font-weight: 700;
+  text-align: center;
   box-shadow: var(--offset-lime);
   transform: translateX(-50%);
 }
@@ -1141,4 +1152,26 @@ html body input[type='file'].form-control::file-selector-button {
     flex-basis: 0;
     flex-grow: 1;
   }
+}
+
+/* ---------- Narrow screens (2 Nov: iPhone Safari, small Androids) ---------- */
+/* A fieldset is as wide as its content by default; let it shrink like any other box */
+fieldset {
+  min-width: 0;
+}
+/* Dropdowns never grow past their box; a long option is cut with an ellipsis */
+.form-select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+/* iOS gives date and time fields a fixed width of their own; let them share a row */
+input[type='date'].form-control,
+input[type='time'].form-control,
+input[type='datetime-local'].form-control {
+  min-width: 0;
+  max-width: 100%;
+}
+input[type='date'].form-control::-webkit-date-and-time-value,
+input[type='time'].form-control::-webkit-date-and-time-value {
+  text-align: left;
 }

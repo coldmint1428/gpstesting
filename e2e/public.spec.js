@@ -59,7 +59,8 @@ test.describe('Visitor', () => {
     await visible(page, 'username').fill('qa_root') // a QA account, so the name is taken
     await expect(visible(page, 'username-status')).toContainText(/taken/i)
     await visible(page, 'password').fill('short')
-    await expect(visible(page, 'password-rules').locator('li.text-muted').first()).toBeVisible()
+    // A rule not yet met is marked "(not yet)" for screen readers (the 2 Nov redesign dropped the grey class)
+    await expect(visible(page, 'password-rules').locator('li:not(.su-ok)').first()).toContainText('(not yet)')
     await expect(submit).toBeDisabled()
     await shot(page, 'pub-05-signup-checks')
   })

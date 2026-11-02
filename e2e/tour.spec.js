@@ -139,7 +139,8 @@ test('the root: every page of a live event, on a laptop', async ({ browser }) =>
   await visit(page, `${e}/live`, { heading: 'Live', shows: ['QA Ic1'], name: 'root-live' })
   await visit(page, `${e}/playback`, { heading: 'Playback', name: 'root-playback' })
   await visit(page, '/events/new', { name: 'root-wizard', shows: [/name/i] })
-  await visit(page, '/profile', { name: 'root-profile', shows: [/qa_root/] })
+  await visit(page, '/profile', { heading: 'Profile', name: 'root-profile' })
+  await expect(page.getByTestId('profile-email')).toHaveValue(/^qa-root@/) // the redesign shows it in a field, not as text
 })
 
 test('the planner and the marshal: the plan and the ops board', async ({ browser }) => {

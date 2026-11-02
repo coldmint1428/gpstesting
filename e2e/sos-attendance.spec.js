@@ -156,7 +156,8 @@ test('the IC takes a roll call by hand; the member sees they are marked present'
 test('in QR mode the member checks in with the code on the IC\'s screen, and an old code is refused', async ({ browser }) => {
   const root = pages.root
   await root.goto(`/events/${ev.eventId}/attendance`)
-  await root.getByTestId('attendance-mode-qr').check()
+  // A segmented control since the 2 Nov redesign: the radio itself is hidden, its label is what is pressed
+  await root.locator('label[for="att-mode-qr"]').click()
   await expect.poll(async () => (await (await clientFor('root')).sb.from('events').select('attendance_mode').eq('id', ev.eventId).single()).data.attendance_mode, { timeout: 15_000 }).toBe('qr')
 
   const ic = pages.ic1
@@ -190,5 +191,5 @@ test('in QR mode the member checks in with the code on the IC\'s screen, and an 
   expect(byHand.error && byHand.error.message).toMatch(/only a planner or the root/i)
   await ic.getByTestId('attendance-close').first().click()
   await okDialog(ic)
-  await root.getByLabel(/By hand/).check() // put the event back to manual
+  await root.locator('label[for="att-mode-manual"]').click() // put the event back to manual
 })

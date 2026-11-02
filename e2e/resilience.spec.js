@@ -11,7 +11,7 @@ test('regression QA-09: an event opened while the server does not answer shows L
   const ev = await makeQaEvent('Slow')
   const page = await (await contextAs(browser, 'member', baseURL)).newPage()
   await page.goto('/events')
-  await page.getByPlaceholder('Search events').fill('QA-Slow')
+  await page.getByLabel('Search events').fill('QA-Slow')
   const row = page.getByText(/^QA-Slow /).last() // the newest (the laptop list has no row test id; the phone list does)
   await expect(row).toBeVisible()
   // From here the membership check the event guard waits on never answers

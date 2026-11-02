@@ -1028,6 +1028,23 @@ html body .leaflet-tooltip {
   font: 700 11px var(--font-body);
   box-shadow: none;
 }
+/* A pill only suits one line: a person's card (name, group, place, time...) is a rounded box with room inside,
+   and wraps on a narrow phone instead of running off the screen (2 Nov) */
+html body .leaflet-tooltip:has(br) {
+  border-radius: var(--radius-lg, 16px);
+  padding: 10px 14px;
+  line-height: 1.45;
+  white-space: normal;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 32px));
+  overflow-wrap: anywhere;
+}
+html body .leaflet-tooltip .text-muted {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+html body .leaflet-tooltip .text-danger {
+  color: #ff9b8a !important;
+}
 html body .leaflet-control-attribution {
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.8) !important;

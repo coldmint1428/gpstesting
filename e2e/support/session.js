@@ -40,6 +40,13 @@ export async function sessionFor(name) {
     const { data } = await sb.auth.refreshSession({ refresh_token: cached.refresh_token })
     session = data.session
   }
+  // A cached session can be dead before it expires: every browser a test opens refreshes it on its own, and Auth
+  // revokes the whole session when one refresh token is used twice. A dead one makes every call arrive as anon
+  // ("permission denied for function ..."), and the pages show the signed-out bar (2 Nov). Ask before using it.
+  if (session) {
+    const { error } = await sb.auth.getUser(session.access_token)
+    if (error) session = null
+  }
   if (!session) {
     // Auth allows a burst of about 30 sign-ins per address; a test run waits its turn rather than failing on a 429
     for (let attempt = 0; ; attempt++) {
