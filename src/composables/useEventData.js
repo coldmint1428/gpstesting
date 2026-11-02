@@ -21,7 +21,7 @@ export function useEventData(eventId) {
       // description, venue, starts_at, ends_at: the Create-an-event wizard's details (older events have none)
       supabase.from('events').select('id, name, join_code, is_simulation, description, venue, starts_at, ends_at').eq('id', eventId).maybeSingle(),
       supabase.from('groups').select('id, name, colour, code, category, sector, headcount, radio').eq('event_id', eventId).order('created_at'),
-      supabase.from('event_roles').select('user_id, role, sector, profiles (username, display_name)').eq('event_id', eventId),
+      supabase.from('event_roles').select('user_id, role, profiles (username, display_name)').eq('event_id', eventId),
       supabase.from('group_members').select('group_id, user_id, is_admin, is_ic, ic_tolerance_m').eq('event_id', eventId),
     ])
     loading.value = false
@@ -52,11 +52,9 @@ export function useEventData(eventId) {
           isAdmin: false,
           isIC: false,
           toleranceM: null, // an IC's arrival radius in metres (063); null for everybody else
-          sector: null, // a marshal's sector (merger Stage 7)
         }
       }
       byId[row.user_id].roles.push(row.role)
-      if (row.role === 'marshal') byId[row.user_id].sector = row.sector
     }
     for (const row of gm.data) {
       const m = byId[row.user_id]
@@ -75,7 +73,7 @@ export function useEventData(eventId) {
   const myRoles = computed(() => (me.value ? me.value.roles : []))
   const isRoot = computed(() => myRoles.value.includes('root'))
   const canManage = computed(() => isRoot.value || myRoles.value.includes('planner')) // root or planner
-  const seesWholeEvent = canManage // only the root and planners: a marshal sees what any other user sees (074)
+  const seesWholeEvent = canManage // only the root and planners see every group
   const myGroup = computed(() => (me.value ? groups.value.find((g) => g.id === me.value.groupId) || null : null))
   const amAdminOf = (groupId) => !!(me.value && me.value.isAdmin && me.value.groupId === groupId)
 

@@ -88,6 +88,47 @@ export function whereAt(rows, clockMs) {
 }
 
 /**
+ * One group's rows as the stops a person walks between, in the plan's order. A stop is a point and every moment spent at
+ * it: the statement, the moments that carry it, and a further statement of the same point (a different name at the same
+ * point is a different stop, because a planner wrote it). Off-site moments make one 'off' entry, and moments before the
+ * first point make one 'none' entry; neither takes a number, so the numbers are the pins on the map. A stop lasts until
+ * the next entry starts (`endsAt`), and the last one has no end the plan can state.
+ */
+export function stopsOf(rows) {
+  const stops = []
+  let number = 0
+  let stop = null
+  const open = (kind, row) => {
+    const place = kind === 'place'
+    stop = {
+      kind,
+      number: place ? (number += 1) : null,
+      point: place ? row : null,
+      name: '',
+      rows: [],
+      startsAt: row.planned_at,
+      endsAt: null,
+    }
+    if (stops.length) stops[stops.length - 1].endsAt = row.planned_at
+    stops.push(stop)
+  }
+  for (const row of rows) {
+    if (row.state === 'not_required') {
+      if (!stop || stop.kind !== 'off') open('off', row)
+    } else if (row.lat != null) {
+      const same = stop && stop.kind === 'place' && stop.point.lat === row.lat && stop.point.lng === row.lng
+        && (!row.place || !stop.name || row.place === stop.name)
+      if (!same) open('place', row)
+      if (!stop.name && row.place) stop.name = row.place
+    } else if (!stop) {
+      open('none', row)
+    }
+    stop.rows.push(row)
+  }
+  return stops
+}
+
+/**
  * The leg the clock is on: the statement the clock has reached and the one after it, or null when there is no such pair
  * to draw. Null is the honest answer in four of the five places a clock can be (see the test): before the first
  * statement, on a moment that states no point (a carried or off-site one — the plan says the group is still where it

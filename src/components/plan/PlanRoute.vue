@@ -10,8 +10,9 @@
 //
 // WHAT IS DRAWN, AND WHAT IS NOT. A moment is a point, and the line between two moments is the walk — the planner's own
 // reading of "the frames are the route" (the board draws the same line). So: the zones underneath, one dashed line per
-// group in the group's colour, a dot on every stated on-site moment labelled with its clock time and its place, and the
-// moment the clock is on marked. An off-site statement is a break in the line, not a point to bridge (046, step 10):
+// group in the group's colour, a numbered dot on every stop (`stopsOf`, the same numbers as the Schedule's list) labelled
+// with its clock time and its place (no clock unless the event is live: the Schedule's static mode is a view of the plan),
+// and the moment the clock is on marked. An off-site statement is a break in the line, not a point to bridge (046, step 10):
 // the group is not on the map then, so the walk stops and starts again. Nothing here is live position (that is the Live
 // page), nothing here estimates a walk time, and nothing here routes around anything.
 //
@@ -38,7 +39,7 @@ import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
 import { areaStyle } from '../../utils/areaKinds'
 import { escapeHtml } from '../../utils/people'
-import { walksOf, whereAt } from '../../utils/planWalk'
+import { stopsOf, walksOf, whereAt } from '../../utils/planWalk'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { usePlanWalk } from '../../composables/usePlanWalk'
 import { supabase } from '../../lib/supabase'
@@ -94,7 +95,15 @@ const phase = computed(() => {
   if (s.startsAt && s.startsAt.getTime() > now.value) return 'scheduled'
   return 'live'
 })
-const phaseWord = computed(() => ({ none: 'not started', live: 'live', scheduled: 'scheduled', ended: 'ended' })[phase.value])
+const phaseWord = computed(() => {
+  if (phase.value === 'live' && !isLive.value) return 'not live'
+  return { none: 'not started', live: 'live', scheduled: 'scheduled', ended: 'ended' }[phase.value]
+})
+// What the event header calls live (useEventSessions): a session whose scheduled end has passed is no longer live.
+const isLive = computed(() => {
+  const end = props.session && props.session.scheduledEnd
+  return phase.value === 'live' && !(end && end.getTime() <= now.value)
+})
 
 // The instant the screen is speaking about: the end of a closed show, otherwise the clock on the wall (050's p_at rule,
 // as the schedule reads it).
@@ -129,8 +138,26 @@ function placeOf(moment) {
   return seen.join(' / ')
 }
 
-/** The first moment the clock has not reached yet — the one the eye should land on. */
-const nextMoment = computed(() => moments.value.find((m) => m.at.getTime() > clockAt.value.getTime()) || null)
+/** The one group's next stop: the card says where to go next, and a carried moment ahead is not somewhere to go. */
+const nextStop = computed(() => {
+  if (props.whole) return null
+  const track = [...tracks.value.values()][0]
+  return (track && track.stops.find((stop) => new Date(stop.startsAt).getTime() > clockAt.value.getTime())) || null
+})
+
+/** The first moment the clock has not reached yet — the one the eye should land on. For one group, the next stop's. */
+const nextMoment = computed(() => {
+  if (props.whole) return moments.value.find((m) => m.at.getTime() > clockAt.value.getTime()) || null
+  const stop = nextStop.value
+  return (stop && moments.value.find((m) => m.frameId === stop.rows[0].frame_id)) || null
+})
+
+/** What the Next card names: the moment's places for every group, the stop for one. */
+const nextPlace = computed(() => {
+  const stop = nextStop.value
+  if (!stop) return nextMoment.value ? placeOf(nextMoment.value) : ''
+  return stop.kind === 'off' ? 'Off site' : stopName(stop)
+})
 
 /** The moment the clock is on: the last one whose time has come. */
 const currentFrameId = computed(() => {
@@ -162,7 +189,10 @@ function colourOf(groupId) {
  */
 const tracks = computed(() => {
   const walks = walksOf(rows.value)
-  for (const track of walks.values()) track.colour = colourOf(track.id)
+  for (const track of walks.values()) {
+    track.colour = colourOf(track.id)
+    track.stops = stopsOf(track.rows)
+  }
   return walks
 })
 
@@ -170,16 +200,28 @@ const hasPoints = computed(() => [...tracks.value.values()].some((t) => t.points
 
 /** Where the group should be right now, for the card over the map. Only while the event is live, and only one group. */
 const hereNow = computed(() => {
-  if (props.whole || phase.value !== 'live') return null
+  if (props.whole || !isLive.value) return null
   const track = [...tracks.value.values()][0]
   return track ? whereAt(track.rows, clockAt.value.getTime()) : null
 })
 
-/** What a dot says: its clock time and its place, or the time alone at a route point. */
-function dotText(track, row) {
-  const when = formatTime(row.planned_at)
-  if (props.whole) return track.name + ' · ' + when + (row.place ? ' · ' + row.place : '')
-  return when + (row.place ? ' · ' + row.place : '')
+/** The card's words for where to be now: the name of the stop that row belongs to. */
+const hereText = computed(() => {
+  const track = [...tracks.value.values()][0]
+  const stop = track && hereNow.value && track.stops.find((s) => s.rows.includes(hereNow.value))
+  return stop ? stopName(stop) : ''
+})
+
+function stopName(stop) {
+  return stop.name || (stop.number ? 'Stop ' + stop.number : '')
+}
+
+/** What a dot says. Live: its clock time and its place, or the time alone at a route point. Static: just its place. */
+function dotText(track, stop) {
+  const parts = props.whole ? [track.name] : []
+  if (isLive.value) parts.push(formatTime(stop.point.planned_at))
+  if (stop.name || !isLive.value) parts.push(stopName(stop))
+  return parts.join(' · ')
 }
 
 // ---------- the map ----------
@@ -230,11 +272,13 @@ function draw() {
 
     // The large dot is where the group should be now. A moment that only carries the group has no dot of its own, so
     // this is the last point it stated, not the frame the clock is on.
-    const here = phase.value === 'live' ? whereAt(track.rows, clockAt.value.getTime()) : null
-    for (const row of track.points) {
-      const current = row === here
-      const next = nextMoment.value && row.frame_id === nextMoment.value.frameId
-      const focused = shownT === row.t_s || (props.focusT != null && String(props.focusT) === String(row.t_s))
+    const here = isLive.value ? whereAt(track.rows, clockAt.value.getTime()) : null
+    for (const stop of track.stops) {
+      if (stop.kind !== 'place') continue
+      const row = stop.point
+      const current = stop.rows.includes(here)
+      const next = isLive.value && nextMoment.value && stop.rows.some((r) => r.lat != null && r.frame_id === nextMoment.value.frameId)
+      const focused = stop.rows.some((r) => shownT === r.t_s || (props.focusT != null && String(props.focusT) === String(r.t_s)))
       const classes = ['pv-route-dot']
       if (current) classes.push('is-current')
       if (next) classes.push('is-next')
@@ -244,14 +288,14 @@ function draw() {
         html:
           `<span class="${classes.join(' ')}" style="--pv-dot:${track.colour}"` +
           ` data-testid="route-dot" data-group="${track.id}" data-t="${row.t_s}">` +
-          `<span class="pv-route-dot-mark"></span>` +
-          `<span class="pv-route-dot-label" data-testid="route-dot-label">${escapeHtml(dotText(track, row))}</span>` +
+          `<span class="pv-route-dot-mark">${stop.number}</span>` +
+          `<span class="pv-route-dot-label" data-testid="route-dot-label">${escapeHtml(dotText(track, stop))}</span>` +
           `</span>`,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6],
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
       })
-      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, title: dotText(track, row) })
-      marker.bindTooltip(dotText(track, row), { direction: 'top', offset: [0, -8] })
+      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, title: dotText(track, stop) })
+      marker.bindTooltip(dotText(track, stop), { direction: 'top', offset: [0, -12] })
       marker.addTo(dotLayer)
     }
   }
@@ -381,6 +425,7 @@ watch(sessionId, () => {
 // moments, not the second hand's). `flush: 'post'` so the stage has been taken out of or put back into the layout before
 // Leaflet measures it -- a map measured while its container is still `display:none` opens on a corner of the world.
 watch(rows, () => draw(), { flush: 'post' })
+watch(isLive, () => draw(), { flush: 'post' })
 watch(
   () => zones.value.length,
   () => {
@@ -406,7 +451,7 @@ watch(
         <div class="pv-route-id">
           <h2 class="pv-route-title">{{ whole ? 'The route' : 'Your route' }}</h2>
           <p class="pv-route-sub">
-            <span class="pv-badge" :class="{ 'is-live': phase === 'live' }" data-testid="route-phase">{{ phaseWord }}</span>
+            <span class="pv-badge" :class="{ 'is-live': isLive }" data-testid="route-phase">{{ phaseWord }}</span>
             <template v-if="planName">
               <span class="pv-route-plan" data-testid="route-plan">{{ planName }}</span>
               <span v-if="rev != null"> · version <strong data-testid="route-rev">{{ rev }}</strong></span>
@@ -447,10 +492,10 @@ watch(
             @click="showMoment(hereNow.t_s, hereNow.group_id)"
           >
             <span class="pv-route-next-kicker">Be here now</span>
-            <strong class="pv-route-next-place">{{ hereNow.place || 'The large dot on the map' }}</strong>
+            <strong class="pv-route-next-place">{{ hereText }}</strong>
           </button>
           <button
-            v-if="nextMoment"
+            v-if="nextMoment && isLive"
             type="button"
             class="pv-route-next"
             data-testid="route-next"
@@ -458,7 +503,7 @@ watch(
           >
             <span class="pv-route-next-kicker">Next</span>
             <strong class="pv-route-next-at">{{ formatTime(nextMoment.at) }}</strong>
-            <span v-if="placeOf(nextMoment)" class="pv-route-next-place">{{ placeOf(nextMoment) }}</span>
+            <span v-if="nextPlace" class="pv-route-next-place">{{ nextPlace }}</span>
             <span class="pv-route-next-in">{{ nextIn }}</span>
           </button>
         </div>

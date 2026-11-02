@@ -998,6 +998,62 @@
   outline-offset: 2px;
 }
 
+/* A stop in one group's list: its time is a range, and its number is the pin's on the map. */
+.pv-sched-stop {
+  grid-template-columns: 124px 1fr;
+}
+
+/* Static mode: no clock column, just the place and how long. */
+.pv-sched-moment.is-static {
+  grid-template-columns: 1fr;
+}
+
+.pv-sched-for {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pv-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The number has its own column, kept even for a row with no number, so every name and note lines up beside it. */
+.pv-sched-where-stop {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pv-sched-node {
+  flex: none;
+  display: flex;
+  width: 20px;
+  min-height: 20px;
+}
+
+.pv-sched-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pv-sched-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--pv-dot, var(--pv-primary));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-sched-moment.is-past .pv-sched-num {
+  opacity: 0.6;
+}
+
 /* The IC's own press (step 28): a small quiet action inside the row it belongs to, so the schedule still reads as a
    list of times first and an instrument second. */
 .pv-sched-here {
@@ -1788,17 +1844,24 @@
 .pv-route-dot {
   position: relative;
   display: block;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
 }
 
 .pv-route-dot-mark {
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 2px solid #fff;
   background: var(--pv-dot, var(--pv-primary));
   box-shadow: 0 1px 3px rgba(10, 31, 23, 0.45);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 /* The moment the clock is on: bigger, with the ring a person's eye lands on. */
@@ -1814,7 +1877,7 @@
 
 .pv-route-dot-label {
   position: absolute;
-  left: 18px;
+  left: 26px;
   top: 50%;
   transform: translateY(-50%);
   padding: 2px 7px;

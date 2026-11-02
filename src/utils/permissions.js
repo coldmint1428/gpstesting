@@ -61,10 +61,11 @@ export function canRemove(actor, target) {
 // ---------- Event pages ----------
 // Page keys are the URL: /events/:id/<page>. In the order of the side menu: what everyone uses first, planning
 // pages next, then people, then the planners' tools.
-export const PAGES = ['overview', 'live', 'timeline', 'map', 'groups', 'people', 'attendance', 'playback', 'simulator']
+export const PAGES = ['overview', 'live', 'timeline', 'rehearsals', 'map', 'groups', 'people', 'attendance', 'playback', 'simulator']
 export const PAGE_LABEL = {
   overview: 'Overview',
   timeline: 'Timeline',
+  rehearsals: 'Rehearsals',
   map: 'Map',
   groups: 'Groups',
   people: 'People',
@@ -80,6 +81,7 @@ const EVERYONE = ['root', 'planner', 'admin', 'ic', 'member']
 export const PAGE_ACCESS = {
   overview: EVERYONE,
   timeline: EVERYONE,
+  rehearsals: EVERYONE, // a calendar; only root and planners schedule them (EDIT_ACCESS, 079)
   map: EVERYONE,
   groups: EVERYONE, // ICs and members: their own group only
   people: ['root', 'planner', 'admin'], // ICs and members cannot see everyone in the event (073, 074)
@@ -92,6 +94,7 @@ export const PAGE_ACCESS = {
 export const EDIT_ACCESS = {
   overview: ['root'], // event details, delete event
   timeline: ['root', 'planner'],
+  rehearsals: ['root', 'planner'],
   map: ['root', 'planner'],
   groups: ['root', 'planner', 'admin'], // admin: own group only
   people: ['root', 'planner', 'admin'], // admin: IC and removing, own group only

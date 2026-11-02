@@ -16,7 +16,7 @@
 // each must turn its named case red. If a mutation ever stops applying (the line it rewrites is gone), the test throws
 // rather than quietly passing: a red-first proof that cannot go red is not a proof.
 import fs from 'node:fs'
-import { runsOf, walksOf, legNow, whereAt } from '../src/utils/planWalk.js'
+import { runsOf, walksOf, legNow, whereAt, stopsOf } from '../src/utils/planWalk.js'
 
 let passed = 0
 const failures = []
@@ -156,6 +156,37 @@ check('W7 after the last point the group stays there', whereT(9000) === 300, sho
 const offSiteStays = await mutant('off site keeps the last point', "if (row.state === 'not_required') found = null", 'if (false) found = null')
 const offSiteStaysRow = offSiteStays.whereAt(WALK, at(240))
 check('M5 the mutant keeps an off-site group on the map, so W5 is red', !!offSiteStaysRow && offSiteStaysRow.t_s === 180, show(offSiteStaysRow))
+
+// ---------- 5. the stops a person walks between ----------
+const named = (r, place) => ({ ...r, place })
+const brief = (stops) => stops.map((s) => [s.kind, s.number, s.rows.map((r) => r.t_s).join('+')].join(':')).join(' ')
+const OUTING = [
+  row(0, null),
+  row(60, GATE_LINE),
+  row(120, null),
+  row(180, GATE_LINE),
+  row(240, GATE_5),
+  row(300, null, 'not_required'),
+  row(360, null, 'not_required'),
+  row(420, GATE_LINE),
+]
+const outing = stopsOf(OUTING)
+check(
+  'S1 moments before a point, carried moments, a repeat of the point, off site and a return each land in the right entry',
+  brief(outing) === 'none::0 place:1:60+120+180 place:2:240 off::300+360 place:3:420',
+  brief(outing),
+)
+check('S2 a stop lasts until the next entry starts', outing[1].endsAt === OUTING[4].planned_at && outing[3].endsAt === OUTING[7].planned_at, show(outing[1]))
+check('S2 and the last one has no end', outing[4].endsAt === null, show(outing[4]))
+check('S3 a stop’s point is the row that first stated it', outing[1].point === OUTING[1], show(outing[1].point))
+const renamed = stopsOf([named(row(0, GATE_LINE), 'Gate'), named(row(60, GATE_LINE), 'Stage')])
+check('S4 two names at one point are two stops', renamed.length === 2 && renamed[1].name === 'Stage', show(renamed))
+const lateName = stopsOf([row(0, GATE_LINE), named(row(60, GATE_LINE), 'Gate')])
+check('S5 a name stated later names the whole stop', lateName.length === 1 && lateName[0].name === 'Gate', show(lateName))
+check('S6 no rows, no stops', stopsOf([]).length === 0)
+
+const noMerge = await mutant('a repeat of a point is a new stop', 'if (!same) open(', 'if (true) open(')
+check('M6 the mutant splits a repeated point, so S1 is red', brief(noMerge.stopsOf(OUTING)) !== brief(outing), brief(noMerge.stopsOf(OUTING)))
 
 // ---------- verdict ----------
 if (failures.length) {

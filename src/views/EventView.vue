@@ -45,6 +45,8 @@ import { useBroadcasts } from '../composables/useBroadcasts'
 import BroadcastBanner from '../components/BroadcastBanner.vue'
 import BroadcastPanel from '../components/BroadcastPanel.vue'
 import AttendancePanel from '../components/AttendancePanel.vue'
+import RehearsalsPanel from '../components/RehearsalsPanel.vue'
+import { useRehearsals } from '../composables/useRehearsals'
 import { useAttendance } from '../composables/useAttendance'
 import SosDialog from '../components/SosDialog.vue'
 import SosBanner from '../components/SosBanner.vue'
@@ -217,6 +219,22 @@ async function onAttScan(text) {
   const result = await attendance.scan(text)
   if (result.ok) toast('You are marked present for ' + result.title + '.', 'success', 4000)
   else scanMessage.value = result.message
+}
+
+// Rehearsals (079): a calendar for everyone, scheduled by the root and planners. The page emits what was asked.
+const rehearsals = useRehearsals(props.id)
+const rehearsalError = ref('')
+async function onRehearsalAdd(date) {
+  rehearsalError.value = await rehearsals.add(date)
+  if (!rehearsalError.value) toast('Rehearsal scheduled for ' + formatDayTime(date) + '.', 'success', 4000)
+}
+async function onRehearsalRemove(id) {
+  const ok = await askConfirm({
+    title: 'Remove this rehearsal?',
+    message: 'It comes off everyone’s calendar.',
+    confirmText: 'Remove rehearsal',
+  })
+  if (ok) rehearsalError.value = await rehearsals.remove(id)
 }
 
 // SOS (072): anyone in the event can call for help. Everyone sees it as a banner on every page and on the map, with a
@@ -482,6 +500,7 @@ function goLive() {
 const ICONS = {
   overview: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16v-4', 'M12 8h.01'],
   timeline: ['M9 6h12', 'M9 12h12', 'M9 18h12', 'M4 6h.01', 'M4 12h.01', 'M4 18h.01'],
+  rehearsals: ['M8 2v4', 'M16 2v4', 'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M3 10h18'],
   map: ['M12 3l8 5v8l-8 5-8-5V8z'],
   people: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   groups: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
@@ -513,6 +532,10 @@ const PAGE_INFO = computed(() => ({
           'plan uses, and everyone sees them on the live map.',
       }
     : { hint: 'Your route', about: "Where your group walks on the plan, and when it is due at each place." },
+  rehearsals: {
+    hint: modeOf('rehearsals') === 'edit' ? 'Schedule and calendar' : 'When to practise',
+    about: modeOf('rehearsals') === 'edit' ? 'Schedule rehearsals. Everyone in the event sees them on this calendar.' : 'When the event’s rehearsals are.',
+  },
   people: {
     hint: 'Who is in it, roles',
     badge: members.value.length,
@@ -562,6 +585,7 @@ const nativeTabs = computed(() => {
 const MORE_HINT = computed(() => ({
   overview: 'Details, invite, and leave the event',
   timeline: modeOf('timeline') === 'edit' ? 'The plan board' : 'Where to be and when',
+  rehearsals: 'When to practise',
   map: canManage.value ? 'Areas, doors and No-Go areas' : 'Your route on the plan',
   people: 'Who is in it, roles',
   groups: 'Groups and their ICs',
@@ -894,6 +918,8 @@ async function removeEvent() {
             :my-group="myGroup"
             :groups="groups"
             :can-press="isIC"
+            :next-rehearsal="rehearsals.next.value"
+            :event-starts-at="event.starts_at"
           />
           <div v-else class="pv-empty" data-testid="now-empty">
             <strong>{{ scheduledStart ? 'Starts ' + formatDayTime(scheduledStart) : 'Not started yet' }}</strong>
@@ -940,6 +966,19 @@ async function removeEvent() {
           :only-group-id="ownGroupOnly ? (myGroup ? myGroup.id : 'none') : null"
           :sharing-status="sharingStatus"
           @changed="load"
+        />
+
+        <RehearsalsPanel
+          v-if="tab === 'rehearsals'"
+          :rehearsals="rehearsals.rehearsals.value"
+          :next="rehearsals.next.value"
+          :can-edit="modeOf('rehearsals') === 'edit'"
+          :event-starts-at="event.starts_at"
+          :now="rehearsals.now.value"
+          :busy="rehearsals.busy.value"
+          :error-msg="rehearsalError || rehearsals.errorMsg.value"
+          @add="onRehearsalAdd"
+          @remove="onRehearsalRemove"
         />
 
         <AttendancePanel
@@ -1026,6 +1065,8 @@ async function removeEvent() {
             :my-group="myGroup"
             :groups="groups"
             :can-press="isIC"
+            :next-rehearsal="rehearsals.next.value"
+            :event-starts-at="event.starts_at"
           />
         </template>
 

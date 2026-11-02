@@ -5,6 +5,14 @@
 // and can zoom the map to its point. Once the event is live a row also says late or on schedule; before the start and
 // after the end it does not. The map is PlanRoute, which draws the rows read here. (The board keeps root and planner.)
 //
+// STOPS, NOT MOMENTS. A person in one group reads the list as where to go and until when, so the moments at one point
+// are one row, numbered as its pin is on the map (`stopsOf`). Ops staff still get a row per moment while the event is
+// live: every group is in that list and each one changes stop at a different time, so no one row could say them all.
+//
+// TWO MODES. Live is an instrument: clock times, Now and Next, late or on schedule, the IC's press. Anything else is
+// static, a view of the plan: each place and how long is spent there, for every group's stops, and no clock at all.
+// Live means what the event header means by it (useEventSessions), so the two cannot disagree past a scheduled end.
+//
 // WHERE THE ROWS COME FROM. One read (051, widened in 052): session_timetable() answers a row per group per frame
 // with the planned clock time, the five-state word, lateness, the frame's note, the plan's name and the revision the
 // session follows. The scope is the database's (040): ops staff get every group, everyone else their own. So this
@@ -34,8 +42,8 @@
 // words. A write's error is kept until the next write: the read beside it polls every half minute, and an error that a
 // poll can wipe is an error nobody reads.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
-import { walksOf, whereAt } from '../../utils/planWalk'
+import { formatDay, formatDayTime, formatDuration, formatTime } from '../../utils/time'
+import { stopsOf, walksOf } from '../../utils/planWalk'
 import { planErrorMessage, usePlan } from '../../composables/usePlan'
 import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
@@ -58,6 +66,9 @@ const props = defineProps({
   // True for the group's own IC: the one role that may say "we are here" from this screen (step 28). It is passed in
   // rather than derived here because the membership row is the event's, not this read's.
   canPress: { type: Boolean, default: false },
+  // What comes next for a static schedule: the next rehearsal (079), or else the event's own date.
+  nextRehearsal: { type: Object, default: null },
+  eventStartsAt: { type: String, default: null },
   // Seam for the development harness; in the app this is absent and the component reads through usePlan.
   api: { type: Object, default: null },
 })
@@ -70,6 +81,7 @@ const TICK_MS = 1000
 const rows = ref([]) // the read, exactly as it answered
 const routeMap = ref(null)
 const shownFrame = ref(null) // the row whose "Show on map" was last pressed
+const shownGroup = ref(null) // and its group: a static list has every group's stops, and they share frames
 const logRows = ref([]) // what the plan's log says to this person (058)
 const loaded = ref(false) // one answer has arrived (an empty read is still an answer)
 // Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
@@ -97,7 +109,14 @@ const phase = computed(() => {
   if (s.startsAt && s.startsAt.getTime() > now.value) return 'scheduled'
   return 'live'
 })
-const phaseWord = computed(() => ({ none: 'not started', live: 'live', scheduled: 'scheduled', ended: 'ended' })[phase.value])
+const isLive = computed(() => {
+  const end = props.session && props.session.scheduledEnd
+  return phase.value === 'live' && !(end && end.getTime() <= now.value)
+})
+const phaseWord = computed(() => {
+  if (phase.value === 'live' && !isLive.value) return 'not live'
+  return { none: 'not started', live: 'live', scheduled: 'scheduled', ended: 'ended' }[phase.value]
+})
 
 // The instant the screen is speaking about: the end of a closed show, otherwise the clock on the wall.
 const clockAt = computed(() => (endedAt.value ? endedAt.value : new Date(now.value)))
@@ -106,6 +125,13 @@ const rev = computed(() => (rows.value.length ? rows.value[0].plan_rev : props.s
 const groupName = computed(() => {
   if (props.whole) return ''
   return rows.value.length ? rows.value[0].group_name : props.myGroup ? props.myGroup.name : ''
+})
+
+/** The line a finished or not-yet-started schedule opens with: what is coming, not how the last run closed. */
+const comingUp = computed(() => {
+  if (isLive.value || phase.value === 'scheduled') return ''
+  if (props.nextRehearsal) return 'Next rehearsal: ' + formatDayTime(props.nextRehearsal.startsAt)
+  return props.eventStartsAt ? 'Event date: ' + formatDay(props.eventStartsAt) : ''
 })
 
 /** The messages addressed to this person that they have not read (058). */
@@ -212,7 +238,7 @@ const nextIndex = computed(() => moments.value.findIndex((m) => m.at.getTime() >
 
 /** The status beside a row: only while the event is live, and only for a moment there is something to say about. */
 function statusOf(row) {
-  if (phase.value !== 'live') return null
+  if (!isLive.value) return null
   if (row.state === 'arrived') {
     const late = secondsOfInterval(row.lateness)
     if (late != null && late >= 30) return { text: formatDuration(late * 1000) + ' late', tone: 'late' }
@@ -265,8 +291,8 @@ const currentFrameId = computed(() => {
  * `pending` has not happened, `arrived` and `missed` are already said, and `not_required` is an off-site moment with
  * nothing to arrive at. The database refuses each of those too; the screen simply does not offer them.
  */
-function canHere(moment, row) {
-  return props.canPress && phase.value === 'live' && row.state === 'late' && moment.frameId === currentFrameId.value
+function canHere(row) {
+  return props.canPress && isLive.value && row.state === 'late' && row.frame_id === currentFrameId.value
 }
 
 /**
@@ -274,13 +300,13 @@ function canHere(moment, row) {
  * one shown, not a mark guessed here. A refusal keeps the database's sentence on screen (the poll does not wipe it)
  * -- another person's mark, a moment that has not happened, a group that is off site all come back that way.
  */
-async function here(moment, row) {
+async function here(row) {
   if (!api.markProgress || busyHere.value) return
-  busyHere.value = moment.frameId
+  busyHere.value = row.frame_id
   errorSticky.value = false
   errorMsg.value = ''
   try {
-    await api.markProgress(sessionId.value, moment.frameId, row.group_id, 'arrived')
+    await api.markProgress(sessionId.value, row.frame_id, row.group_id, 'arrived')
     await read()
   } catch (error) {
     errorSticky.value = true
@@ -295,31 +321,81 @@ async function here(moment, row) {
 
 // ---------- where each row is ----------
 
-/** For each row: the point the group should be at then (a carried moment keeps the last one), and how to say it. */
+/** The list of stops, group by group. Ops staff read a row per moment instead while live (see the top of this file). */
+const stops = computed(() => [...walksOf(rows.value).values()].flatMap((walk) => stopsOf(walk.rows)))
+
+const currentStop = computed(() => stops.value.findIndex((stop) => stop.rows.some((row) => row.frame_id === currentFrameId.value)))
+
+/** The first stop the clock has not reached yet: a carried moment ahead is not somewhere to go next. */
+const nextStop = computed(() => stops.value.findIndex((stop) => new Date(stop.startsAt).getTime() > clockAt.value.getTime()))
+
+/** The row a stop speaks for: the last of its moments the clock has reached, or its first if none has. */
+function rowOfStop(stop) {
+  const reached = stop.rows.filter((row) => new Date(row.planned_at).getTime() <= clockAt.value.getTime())
+  return reached.length ? reached[reached.length - 1] : stop.rows[0]
+}
+
+function stopText(stop) {
+  if (stop.kind === 'off') return 'Off site'
+  if (stop.kind === 'none') return 'No place set'
+  return stop.name || 'Stop ' + stop.number
+}
+
+/** "1:39 – 1:41 pm", "1:39 pm" when both ends read the same, "From 1:41 pm" for the last stop. */
+function stopWhen(stop) {
+  const start = formatTime(stop.startsAt)
+  if (!stop.endsAt) return 'From ' + start
+  const end = formatTime(stop.endsAt)
+  if (start === end) return start
+  return (start.slice(-2) === end.slice(-2) ? start.slice(0, -2).trim() : start) + ' – ' + end
+}
+
+/** How long a stop lasts: "5 min". The last stop runs to the event's scheduled end, or says nothing if it has none. */
+function stopLength(stop) {
+  const end = stop.endsAt ? new Date(stop.endsAt) : props.session && props.session.scheduledEnd
+  const ms = end ? end.getTime() - new Date(stop.startsAt).getTime() : 0
+  return ms > 0 ? formatDuration(ms) : ''
+}
+
+/** What a stop's moments say. Live, a later moment's note gets its time, as its row is gone from the list. */
+function notesOf(stop) {
+  return stop.rows
+    .filter((row) => row.note)
+    .map((row) => ({
+      id: row.frame_id,
+      text: isLive.value && row !== stop.rows[0] ? formatTime(row.planned_at) + ' · ' + row.note : row.note,
+    }))
+}
+
+function colourOfGroup(groupId) {
+  const group = props.groups.find((g) => g.id === groupId)
+  return (group && group.colour) || '#244f3f'
+}
+
+/** For each row of the ops list: the point the group should be at then (a carried moment keeps the last one), and how to say it. */
 const placeOfRow = computed(() => {
   const out = new Map()
   for (const walk of walksOf(rows.value).values()) {
-    for (const row of walk.rows) {
-      const point = whereAt(walk.rows, new Date(row.planned_at).getTime())
-      let text = 'No place set'
-      if (point) text = point.place || (point === row ? '' : 'Same place')
-      else if (row.state === 'not_required') text = 'Off site'
-      out.set(row, { point, text })
+    for (const stop of stopsOf(walk.rows)) {
+      for (const row of stop.rows) {
+        let text = stopText(stop)
+        if (stop.kind === 'place' && !stop.name && row !== stop.point) text = 'Still at ' + text
+        out.set(row, { point: stop.point, text })
+      }
     }
   }
   return out
 })
 
-function nextText() {
-  const moment = moments.value[nextIndex.value]
-  if (phase.value !== 'live' || !moment) return 'Next'
-  return 'Next · in ' + formatDuration(moment.at.getTime() - clockAt.value.getTime())
+function nextText(at) {
+  return 'Next · in ' + formatDuration(at.getTime() - clockAt.value.getTime())
 }
 
-function showOnMap(moment, row) {
+function showOnMap(frameId, t_s, groupId) {
   if (!routeMap.value) return
-  shownFrame.value = moment.frameId
-  routeMap.value.showMoment(moment.t_s, row.group_id)
+  shownFrame.value = frameId
+  shownGroup.value = groupId
+  routeMap.value.showMoment(t_s, groupId)
   routeMap.value.$el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
@@ -406,7 +482,7 @@ watch(
           {{ whole ? 'Where groups should be' : 'Where ' + (groupName || 'your group') + ' should be' }}
         </h2>
         <p class="pv-sched-sub">
-          <span class="pv-badge" :class="{ 'is-live': phase === 'live' }" data-testid="sched-phase">{{ phaseWord }}</span>
+          <span v-if="phase !== 'ended'" class="pv-badge" :class="{ 'is-live': isLive }" data-testid="sched-phase">{{ phaseWord }}</span>
           <template v-if="planName">
             <span class="pv-sched-plan" data-testid="sched-plan">{{ planName }}</span>
             <span v-if="rev != null">· version <span data-testid="sched-rev">{{ rev }}</span></span>
@@ -417,9 +493,7 @@ watch(
       <p v-if="phase === 'scheduled'" class="pv-sched-line" data-testid="sched-scheduled">
         Starts {{ formatDayTime(session.startsAt) }}.
       </p>
-      <p v-if="phase === 'ended'" class="pv-sched-line" data-testid="sched-ended">
-        Ended {{ formatTime(endedAt) }}.
-      </p>
+      <p v-if="comingUp" class="pv-sched-line" data-testid="sched-coming-up">{{ comingUp }}</p>
 
       <!-- A read that failed says so and keeps the last answer: a schedule that blanks itself is worse than an old one. -->
       <p v-if="errorMsg" class="pv-sched-line is-warn" data-testid="sched-error">
@@ -481,13 +555,84 @@ watch(
         <template v-else>This plan has no moments for {{ groupName }} yet.</template>
       </div>
 
+      <ol v-else-if="!whole || !isLive" class="pv-sched-list">
+        <li
+          v-for="(stop, i) in stops"
+          :key="stop.rows[0].group_id + stop.rows[0].frame_id"
+          class="pv-sched-moment pv-sched-stop"
+          :class="{
+            'is-static': !isLive,
+            'is-now': isLive && i === currentStop,
+            'is-past': isLive && i < currentStop,
+            'is-shown': stop.point && stop.point.frame_id === shownFrame && stop.point.group_id === shownGroup,
+          }"
+          data-testid="sched-moment"
+          :data-frame="stop.rows[0].frame_id"
+          :data-t="stop.rows[0].t_s"
+        >
+          <strong v-if="isLive" class="pv-sched-at" :data-testid="'sched-at-' + stop.rows[0].t_s">{{ stopWhen(stop) }}</strong>
+          <div class="pv-sched-rows">
+            <div
+              class="pv-sched-row"
+              data-testid="sched-row"
+              :data-group="stop.rows[0].group_id"
+              :data-state="rowOfStop(stop).state"
+            >
+              <div class="pv-sched-where pv-sched-where-stop">
+                <span class="pv-sched-node">
+                  <span
+                    v-if="stop.number"
+                    class="pv-sched-num"
+                    :style="{ '--pv-dot': colourOfGroup(stop.rows[0].group_id) }"
+                    data-testid="sched-num"
+                  >{{ stop.number }}</span>
+                </span>
+                <span class="pv-sched-what">
+                  <span v-if="whole" class="pv-sched-group">{{ stop.rows[0].group_name }}</span>
+                  <span class="pv-sched-place" data-testid="sched-place">{{ stopText(stop) }}</span>
+                  <span v-for="note in notesOf(stop)" :key="note.id" class="pv-sched-note" data-testid="sched-note">{{ note.text }}</span>
+                </span>
+              </div>
+              <div class="pv-sched-marks">
+                <span v-if="!isLive && stopLength(stop)" class="pv-sched-for" data-testid="sched-for">{{ stopLength(stop) }}</span>
+                <span v-if="isLive && i === currentStop" class="pv-sched-flag">Now</span>
+                <span v-else-if="isLive && i === nextStop" class="pv-sched-flag">{{ nextText(new Date(stop.startsAt)) }}</span>
+                <span
+                  v-if="statusOf(rowOfStop(stop))"
+                  class="pv-sched-state"
+                  :class="'is-' + statusOf(rowOfStop(stop)).tone"
+                  data-testid="sched-state"
+                >{{ statusOf(rowOfStop(stop)).text }}</span>
+              </div>
+              <div class="pv-sched-actions">
+                <button
+                  v-if="canHere(rowOfStop(stop))"
+                  type="button"
+                  class="pv-sched-here"
+                  data-testid="sched-here"
+                  :disabled="busyHere === rowOfStop(stop).frame_id"
+                  @click="here(rowOfStop(stop))"
+                >{{ busyHere === rowOfStop(stop).frame_id ? 'Saving…' : 'We’re here' }}</button>
+                <button
+                  v-if="stop.point"
+                  type="button"
+                  class="pv-sched-show"
+                  data-testid="sched-place-link"
+                  @click="showOnMap(stop.point.frame_id, stop.point.t_s, stop.point.group_id)"
+                >Show on map</button>
+              </div>
+            </div>
+          </div>
+        </li>
+      </ol>
+
       <ol v-else class="pv-sched-list">
         <li
           v-for="(moment, i) in moments"
           :key="moment.frameId"
           class="pv-sched-moment"
           :class="{
-            'is-now': phase === 'live' && moment.frameId === currentFrameId,
+            'is-now': moment.frameId === currentFrameId,
             'is-past': moment.at.getTime() <= clockAt.getTime() && moment.frameId !== currentFrameId,
             'is-shown': moment.frameId === shownFrame,
           }"
@@ -511,8 +656,8 @@ watch(
                 <span v-if="moment.note" class="pv-sched-note" data-testid="sched-note">{{ moment.note }}</span>
               </div>
               <div class="pv-sched-marks">
-                <span v-if="phase === 'live' && moment.frameId === currentFrameId" class="pv-sched-flag">Now</span>
-                <span v-else-if="phase !== 'ended' && i === nextIndex" class="pv-sched-flag">{{ nextText() }}</span>
+                <span v-if="moment.frameId === currentFrameId" class="pv-sched-flag">Now</span>
+                <span v-else-if="i === nextIndex" class="pv-sched-flag">{{ nextText(moment.at) }}</span>
                 <span
                   v-if="statusOf(row)"
                   class="pv-sched-state"
@@ -522,19 +667,19 @@ watch(
               </div>
               <div class="pv-sched-actions">
                 <button
-                  v-if="canHere(moment, row)"
+                  v-if="canHere(row)"
                   type="button"
                   class="pv-sched-here"
                   data-testid="sched-here"
                   :disabled="busyHere === moment.frameId"
-                  @click="here(moment, row)"
+                  @click="here(row)"
                 >{{ busyHere === moment.frameId ? 'Saving…' : 'We’re here' }}</button>
                 <button
                   v-if="placeOfRow.get(row).point"
                   type="button"
                   class="pv-sched-show"
                   data-testid="sched-place-link"
-                  @click="showOnMap(moment, row)"
+                  @click="showOnMap(moment.frameId, moment.t_s, row.group_id)"
                 >Show on map</button>
               </div>
             </div>

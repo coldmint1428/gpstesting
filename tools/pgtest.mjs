@@ -34,6 +34,7 @@
 //   own-group supabase/tests/own_group_test.sql: ICs and members see only their own group (073)
 //   marshal-user supabase/tests/marshal_user_test.sql: a marshal sees what any other user sees (074)
 //   noise    supabase/tests/location_noise_test.sql: coarse fixes and repeated uploads are not stored (075)
+//   rehearsals supabase/tests/rehearsals_test.sql: everyone reads them, only root and planners schedule them (079)
 //
 // Exit code 0 only when every phase passes.
 import { PGlite } from '@electric-sql/pglite'
@@ -793,6 +794,28 @@ await phase('noise', {
     await runSql(db, read('supabase/tests/location_noise_test.sql'), 'location_noise_test.sql')
     await runSql(db, read('supabase/migrations/075_location_noise.sql'), '075 a second time')
     return ['supabase/tests/location_noise_test.sql passed, and 075 re-applies cleanly']
+  },
+})
+
+// ---------- Rehearsals: everyone in the event reads them, only the root and planners schedule them (079) ----------
+await phase('rehearsals', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
+    { name: '079_rehearsals.sql', sql: read('supabase/migrations/079_rehearsals.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/rehearsals_test.sql'), 'rehearsals_test.sql')
+    await runSql(db, read('supabase/migrations/079_rehearsals.sql'), '079 a second time')
+    return ['supabase/tests/rehearsals_test.sql passed, and 079 re-applies cleanly']
   },
 })
 
