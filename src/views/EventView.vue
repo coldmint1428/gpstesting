@@ -111,7 +111,7 @@ watch(
 )
 
 // Zones during the live session (merger Stage 2): who is inside which zone, group positions, No-Go alerts.
-// A No-Go entry is told to the event's root / planners / marshals (toast) and to the IC who entered it.
+// A No-Go entry is told to the event's root / planners (toast) and to the IC who entered it.
 const zoneActivity = useZoneActivity(props.id, computed(() => (liveSession.value ? liveSession.value.id : null)), {
   onAlert(alert) {
     const mine = auth.user && alert.userId === auth.user.id
@@ -226,8 +226,7 @@ const sos = useSos(
   {
     myUserIdRef: computed(() => (auth.user ? auth.user.id : null)),
     onNew(a) {
-      const who = members.value.find((m) => m.id === a.userId)
-      toast('SOS: ' + (who ? who.display_name : 'Someone') + ' needs help.' + (a.note ? ' "' + a.note + '"' : ''), 'danger', 15000)
+      toast('SOS: ' + a.name + ' needs help.' + (a.note ? ' "' + a.note + '"' : ''), 'danger', 15000)
       if (navigator.vibrate) navigator.vibrate([400, 150, 400])
     },
   },
@@ -262,10 +261,7 @@ async function onSosResolve(id) {
 const sosOnMap = computed(() =>
   sos.alerts.value
     .filter((a) => a.lat != null)
-    .map((a) => {
-      const who = members.value.find((m) => m.id === a.userId)
-      return { id: a.id, lat: a.lat, lng: a.lng, accuracy: a.accuracy, note: a.note, raisedAt: a.raisedAt, name: who ? who.display_name : 'Someone' }
-    }),
+    .map((a) => ({ id: a.id, lat: a.lat, lng: a.lng, accuracy: a.accuracy, note: a.note, raisedAt: a.raisedAt, name: a.name })),
 )
 // "Show on map": the live map, zoomed to the SOS
 function showSos(id) {
@@ -326,14 +322,17 @@ const membership = computed(() =>
     ? { role: topRole(me.value), group_id: me.value.groupId, is_admin: me.value.isAdmin, is_ic: me.value.isIC, is_marshal: isMarshal(me.value) }
     : null,
 )
-const role = computed(() => viewRole(membership.value)) // root | planner | admin | marshal | ic | member
+const role = computed(() => viewRole(membership.value)) // root | planner | admin | ic | member
 const modeOf = (name) => pageMode(name, role.value)
+// ICs and members see only their own group: the Groups page opens it directly, with no list of groups
+const ownGroupOnly = computed(() => role.value === 'ic' || role.value === 'member')
 const visiblePages = computed(() =>
   PAGES.filter((p) => canView(p, role.value) && (p !== 'simulator' || (event.value && event.value.is_simulation))),
 )
 // The Timeline tab is the planner's board; for everyone else it is their own timetable, and the tab says so
 // (step 16). The address stays /timeline, so one page keeps one name in the URL.
 function pageLabel(name) {
+  if (name === 'groups' && ownGroupOnly.value) return 'My group'
   return name === 'timeline' && modeOf('timeline') !== 'edit' ? 'Schedule' : PAGE_LABEL[name]
 }
 // Someone changed my role or removed me: keep the router guard's copy right, leave pages I may no longer view
@@ -357,7 +356,7 @@ watch(membership, async (now) => {
 // A push ("get ready", "leave now", "you are late", a message) opens the page with ?next=1. It used to scroll to the
 // member's "next move" card, which was read from `movements` and deleted with the run-sheet engine (step 25). The
 // member's own moments live on the Schedule page now (step 16), so that is where the push lands. On the phone that
-// is the home tab (Now shows the same schedule; Ops for root / planners / marshals).
+// is the home tab (Now shows the same schedule; Ops for root / planners).
 watch(
   () => route.query.next,
   (wanted) => {
@@ -519,10 +518,9 @@ const PAGE_INFO = computed(() => ({
     badge: members.value.length,
     about: 'Who is in the event and their roles.',
   },
-  groups: {
-    hint: 'Groups and their ICs',
-    about: "The event's groups and who is in each. A group's IC shares its location.",
-  },
+  groups: ownGroupOnly.value
+    ? { hint: 'Who is in your group', about: 'Your group and who is in it.' }
+    : { hint: 'Groups and their ICs', about: "The event's groups and who is in each. A group's IC shares its location." },
   live: {
     hint: planSession.value ? 'The plan is running' : isLive.value ? 'Live now' : 'Where everyone is',
     badge: isLive.value ? 'LIVE' : '',
@@ -542,7 +540,7 @@ const pages = computed(() => visiblePages.value.map((key) => ({ key, label: page
 const currentPage = computed(() => pages.value.find((p) => p.key === tab.value) || { label: event.value ? event.value.name : '' })
 
 // ---------- Phone app (Android first): bottom tabs that follow the role (Figma "Phone app — native prototype") ----------
-// ICs and members: Now · Map · Group · Info. Root, planners and marshals: Ops · Map · Timeline · People · More. Every
+// ICs and members: Now · Map · Group · Info. Root and planners: Ops · Map · Timeline · People · More. Every
 // other page my role may view is in the More sheet. Same pages and data as the website.
 const homeTab = computed(() => (seesWholeEvent.value ? 'ops' : 'now'))
 const nativeTabs = computed(() => {
@@ -772,10 +770,8 @@ async function removeEvent() {
           :alerts="sos.alerts.value"
           :mine="sos.mine.value"
           :gps="sos.gps.value"
-          :members="members"
-          :groups="groups"
           :me="me"
-          :sees-whole-event="seesWholeEvent"
+          :can-end-any="canManage || isMarshal(me)"
           :now="live.now.value"
           :busy="sos.busy.value"
           @help="onSosHelp"
@@ -940,7 +936,7 @@ async function removeEvent() {
           :me="me"
           :is-root="isRoot"
           :can-manage="canManage"
-          :only-group-id="role === 'ic' || role === 'member' ? (myGroup ? myGroup.id : 'none') : null"
+          :only-group-id="ownGroupOnly ? (myGroup ? myGroup.id : 'none') : null"
           :sharing-status="sharingStatus"
           @changed="load"
         />

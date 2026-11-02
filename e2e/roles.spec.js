@@ -64,14 +64,34 @@ test.describe('the database refuses what a role may not do', () => {
     expect(still.data).toHaveLength(1)
   })
 
-  test('a member sees their own group\'s locations, the marshal sees every group', async () => {
+  test('a member and a marshal read only their own group, a planner reads everyone (073, 074)', async () => {
+    const member = await clientFor('member')
+    const marshal = await clientFor('marshal')
+    const planner = await clientFor('planner')
+    const read = async (sb) => ({
+      groups: (await sb.from('groups').select('id').eq('event_id', ev.eventId)).data.map((g) => g.id),
+      memberRows: (await sb.from('group_members').select('group_id').eq('event_id', ev.eventId)).data,
+    })
+    const m = await read(member.sb)
+    expect(m.groups).toEqual([ev.groups.Alpha])
+    expect(new Set(m.memberRows.map((r) => r.group_id))).toEqual(new Set([ev.groups.Alpha]))
+    const k = await read(marshal.sb) // qa_marshal is in no group
+    expect(k.groups).toEqual([])
+    expect(k.memberRows).toEqual([])
+    const p = await read(planner.sb)
+    expect(p.groups.length).toBeGreaterThan(1)
+  })
+
+  test('a member sees their own group\'s locations, a marshal in no group sees none, a planner every group', async () => {
     const member = await clientFor('member')
     const marshal = await clientFor('marshal')
     const m = await member.sb.from('locations').select('group_id').eq('event_id', ev.eventId)
     expect(m.data.length).toBeGreaterThan(0)
     expect(new Set(m.data.map((r) => r.group_id))).toEqual(new Set([ev.groups.Alpha]))
     const k = await marshal.sb.from('locations').select('group_id').eq('event_id', ev.eventId)
-    expect(k.data.length).toBe(m.data.length)
+    expect(k.data).toEqual([])
+    const p = await (await clientFor('planner')).sb.from('locations').select('group_id').eq('event_id', ev.eventId)
+    expect(p.data.length).toBe(m.data.length)
   })
 })
 
@@ -97,12 +117,16 @@ test.describe('the pages show each role what it may do', () => {
     await expect(page.getByRole('link', { name: /Playback/ })).toHaveCount(0)
     await page.goto(`/events/${ev.eventId}/playback`)
     await expect(page).toHaveURL(/\/overview$/)
+    // No People page (073): the menu does not offer it, and its address goes back to the overview
+    await expect(page.getByTestId('tab-people')).toHaveCount(0)
     await page.goto(`/events/${ev.eventId}/people`)
-    // The People page's list, not the Live map's hidden "people on the map" list, which shares its test id and stays
-    // in the page (hidden) once Live has been opened
-    await expect(page.locator('.ev-main [data-testid="people-list"]:visible')).toBeVisible()
-    await expect(page.locator('[data-testid^="person-menu-"]')).toHaveCount(0)
-    await shot(page, 'roles-03-member-people', { fullPage: true })
+    await expect(page).toHaveURL(/\/overview$/)
+    // The group tab opens their own group straight away, with no list of groups
+    await page.goto(`/events/${ev.eventId}/groups`)
+    await expect(page.getByTestId('group-view-Alpha')).toBeVisible()
+    await expect(page.getByTestId('group-list')).toHaveCount(0)
+    await expect(page.getByTestId('group-back')).toHaveCount(0)
+    await shot(page, 'roles-03-member-own-group', { fullPage: true })
   })
 
   test('a group admin can make someone in their own group an IC', async ({ browser, baseURL }) => {

@@ -2,7 +2,8 @@
 // and as a banner, and gets a phone notification.
 //
 //   alerts   active SOSs in the event, oldest first:
-//            [{ id, userId, groupId, note, lat, lng, accuracy, locatedAt: Date | null, raisedAt: Date, helpers: [{ userId, name }] }]
+//            [{ id, userId, name, groupId, groupName, note, lat, lng, accuracy, locatedAt: Date | null, raisedAt: Date, helpers: [{ userId, name }] }]
+//            (name and groupName come with the SOS: not everyone can look up people outside their own group, 073)
 //   mine     my active SOS, or null
 //   gps      while my SOS is active: 'waiting' (no location yet) | 'on' (sending) | 'off' (refused or not available)
 //   raise(note) -> '' or an error message. Turns on GPS, waits up to 5 s for a first location, then sends.
@@ -39,7 +40,7 @@ export function useSos(eventIdRef, { myUserIdRef, onNew } = {}) {
     try {
       const { data, error } = await supabase
         .from('sos_alerts')
-        .select('id, user_id, group_id, note, lat, lng, accuracy, located_at, raised_at, helpers')
+        .select('id, user_id, sender_name, group_id, group_name, note, lat, lng, accuracy, located_at, raised_at, helpers')
         .eq('event_id', eid)
         .is('resolved_at', null)
         .order('raised_at')
@@ -50,7 +51,9 @@ export function useSos(eventIdRef, { myUserIdRef, onNew } = {}) {
       alerts.value = data.map((a) => ({
         id: a.id,
         userId: a.user_id,
+        name: a.sender_name || 'Someone',
         groupId: a.group_id,
+        groupName: a.group_name || '',
         note: a.note,
         lat: a.lat,
         lng: a.lng,

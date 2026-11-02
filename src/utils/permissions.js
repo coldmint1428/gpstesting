@@ -2,8 +2,8 @@
 // the pages only show what the server would allow. Keep every list here, so it is one file to change.
 //
 // Top role (one per person, highest first): root > planner > admin (group admin) > member.
-// Marshal and IC are duties on top of that, not ranks: a marshal (event_roles row) sees every group and the plan's
-// ops board; an IC (group flag) shares GPS. "View role" 'marshal' / 'ic' is a member with that duty.
+// Marshal and IC are duties on top of that, not ranks: an IC (group flag) shares GPS. A marshal (event_roles row) sees
+// what any other user sees (074) and can end an SOS. "View role" 'ic' is a member with that duty.
 
 export const ROLE_RANK = { root: 4, planner: 3, admin: 2, member: 1 }
 export const ROLE_LABEL = { root: 'Root', planner: 'Planner', marshal: 'Marshal', admin: 'Group admin', member: 'Member', ic: 'IC' }
@@ -18,11 +18,10 @@ export function topRole(member) {
 
 export const isMarshal = (member) => !!member && (member.roles || []).includes('marshal')
 
-// The role the pages are built for: a member who is marshal gets the marshal view, one who is IC the IC view
+// The role the pages are built for: a member who is IC gets the IC view; being a marshal changes no page (074)
 export function viewRole(membership) {
   if (!membership) return null
   if (membership.role !== 'member') return membership.role
-  if (membership.is_marshal) return 'marshal'
   return membership.is_ic ? 'ic' : 'member'
 }
 
@@ -75,15 +74,15 @@ export const PAGE_LABEL = {
   simulator: 'Simulator',
 }
 
-const EVERYONE = ['root', 'planner', 'marshal', 'admin', 'ic', 'member']
+const EVERYONE = ['root', 'planner', 'admin', 'ic', 'member']
 // Everyone opens Timeline and Map: members, ICs and admins see their own group's timetable and map (the planning
 // stage, 040 and later); only root and planners edit them (EDIT_ACCESS).
 export const PAGE_ACCESS = {
   overview: EVERYONE,
   timeline: EVERYONE,
   map: EVERYONE,
-  groups: EVERYONE,
-  people: EVERYONE,
+  groups: EVERYONE, // ICs and members: their own group only
+  people: ['root', 'planner', 'admin'], // ICs and members cannot see everyone in the event (073, 074)
   attendance: EVERYONE, // checking in; ICs, admins and planners also run roll calls (071)
   live: EVERYONE,
   playback: ['root', 'planner'],
@@ -101,7 +100,7 @@ export const EDIT_ACCESS = {
 // Not pages, but shown by role the same way
 export const FEATURE_ACCESS = {
   invite: ['root', 'planner'], // the invite code / QR on the overview
-  wholeEvent: ['root', 'planner', 'marshal'], // see every group (the ops board, the map)
+  wholeEvent: ['root', 'planner'], // see every group (the ops board, the map)
 }
 
 export const canView = (page, role) => PAGE_ACCESS[page]?.includes(role) ?? false
@@ -109,13 +108,11 @@ export const canEdit = (page, role) => EDIT_ACCESS[page]?.includes(role) ?? fals
 export const can = (feature, role) => FEATURE_ACCESS[feature]?.includes(role) ?? false
 export const pageMode = (page, role) => (canEdit(page, role) ? 'edit' : 'view')
 
-// Where an event opens: the plan board for root / planners, groups for admins, the live view for marshals, ICs and
-// members while the event is on. Out of a live event a marshal opens the timetable (they read every group's moments)
-// and members and ICs the overview.
+// Where an event opens: the plan board for root / planners, groups for admins, the live view for ICs and members while
+// the event is on, and the overview when it is not.
 export function defaultPage(role, isLive) {
   if (role === 'root' || role === 'planner') return 'timeline'
   if (role === 'admin') return 'groups'
   if (isLive) return 'live'
-  if (role === 'marshal') return 'timeline'
   return 'overview'
 }

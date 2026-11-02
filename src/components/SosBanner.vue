@@ -11,21 +11,16 @@ const props = defineProps({
   alerts: { type: Array, required: true }, // useSos().alerts
   mine: { type: Object, default: null }, // useSos().mine
   gps: { type: String, default: 'waiting' }, // useSos().gps
-  members: { type: Array, required: true },
-  groups: { type: Array, required: true },
   me: { type: Object, default: null },
-  seesWholeEvent: { type: Boolean, default: false }, // root, planner or marshal
+  canEndAny: { type: Boolean, default: false }, // root, planner or marshal
   now: { type: Number, required: true },
   busy: { type: Boolean, default: false },
 })
 defineEmits(['help', 'resolve', 'show'])
 
-const nameOf = (userId) => (props.members.find((m) => m.id === userId) || { display_name: 'Someone' }).display_name
-const groupOf = (groupId) => (props.groups.find((g) => g.id === groupId) || null)
-
 // Who may end someone else's SOS (the database checks again)
 function canResolve(a) {
-  if (props.seesWholeEvent) return true
+  if (props.canEndAny) return true
   return !!(props.me && a.groupId && props.me.groupId === a.groupId && (props.me.isIC || props.me.isAdmin))
 }
 
@@ -33,11 +28,10 @@ const others = computed(() =>
   props.alerts
     .filter((a) => !props.mine || a.id !== props.mine.id)
     .map((a) => {
-      const group = groupOf(a.groupId)
       return {
         a,
-        name: nameOf(a.userId),
-        group: group ? group.name : '',
+        name: a.name,
+        group: a.groupName,
         ago: timeAgo(a.raisedAt.getTime(), props.now),
         where: a.lat == null ? 'Location unknown' : 'Location ±' + Math.round(a.accuracy || 0) + ' m, ' + timeAgo(a.locatedAt.getTime(), props.now),
         iAmHelping: !!props.me && a.helpers.some((h) => h.userId === props.me.id),

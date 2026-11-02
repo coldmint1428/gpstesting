@@ -4,7 +4,8 @@
 //   Root / planner : create groups, rename / recolour them, group details, assign groups, marshal sectors
 //   Group admin    : put people in / take them out of their own group, IC for its members
 // IC and marshal switches follow the People page's rules (src/utils/permissions.js).
-//   Everyone else  : read-only (ICs and members: their own group only, onlyGroupId)
+//   Everyone else  : read-only. ICs, marshals and members go straight to their own group, with no list of groups
+//                    (onlyGroupId)
 // Adding people, roles, IC and removing people from the event are on the People page (PeoplePanel.vue).
 // The database checks every action again (see 002_users_events_groups.sql).
 import { ref, computed, watch } from 'vue'
@@ -33,9 +34,10 @@ const shownGroups = computed(() => (props.onlyGroupId ? props.groups.filter((g) 
 const emit = defineEmits(['changed'])
 
 // The group open in full (?group=), or null for the list of cards. Only groups this page lists can open;
-// 'none' (people without a group) is for the root and planners.
+// 'none' (people without a group) is for the root and planners. ICs and members always have their own group open.
 const route = useRoute()
 const openGroup = computed(() => {
+  if (props.onlyGroupId) return shownGroups.value[0] || null
   const id = route.query.group
   if (!id) return null
   if (id === 'none') return props.canManage ? { id: 'none', name: 'No group', colour: '#6c757d' } : null
@@ -335,7 +337,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
     <!-- ========== One group in full (?group=) ========== -->
     <template v-if="openGroup">
       <div>
-        <RouterLink :to="{ query: {} }" class="kp-back" data-testid="group-back">‹ All groups</RouterLink>
+        <RouterLink v-if="!onlyGroupId" :to="{ query: {} }" class="kp-back" data-testid="group-back">‹ All groups</RouterLink>
         <!-- Name and colour (root / planner) -->
         <form v-if="editingGroup" class="kp-card" data-testid="group-edit" @submit.prevent="saveGroup">
           <h2 class="kp-label">Name and colour</h2>
@@ -474,7 +476,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         </button>
       </div>
 
-      <p v-if="onlyGroupId === 'none'" class="kp-empty" data-testid="no-group">You are not in a group yet.</p>
+      <p v-if="onlyGroupId === 'none'" class="kp-empty" data-testid="no-group">You are not in a group. Ask a planner or a group admin to add you.</p>
       <p v-else-if="!shownGroups.length" class="kp-empty">No groups yet.</p>
 
       <!-- Group details (root / planner): category, code, sector, headcount -->
