@@ -1,6 +1,7 @@
 # Concurrent editing on the plan board
 
-**Status:** phases 1–4 built (081, 082, the ownership UI, live drafts, per-cell undo). **Branch:** `concurrent-plan-editing`.
+**Status:** phases 1–5 built (081, 082, 083, the ownership UI, live drafts, per-cell undo, the structural doors).
+**Branch:** `concurrent-plan-editing`.
 
 Two or more planners may edit one plan at the same time. They must not move each other's badges by
 accident, must not lose work to somebody else's save, and must not wait for a network round trip before
@@ -63,6 +64,11 @@ cannot exist on a frame of another plan and dies with the frame it guards.
 with SQLSTATE `PT423`**, not a returned flag: the whole call rolls back (which is what all-or-nothing
 means), and the message is the sentence the board shows. `PT409` stays what it always was — a stale write.
 
+083 adds four more internal helpers, shared by the structural doors so that a refused delete, push and confirmation
+are the same sentence read three ways: `plan_raise_hold` (the words), `plan_refuse_holds` (any live hold in these
+frames, or in the whole plan), `plan_refuse_cells` (any live hold on these cells) and `plan_require_moment_hold` (the
+positive check a retime makes).
+
 The blocking rule is written once, in both the steal and the listing: a lock blocks while
 `last_seen > now() - 7 s AND expires_at > now()`.
 
@@ -88,9 +94,9 @@ colleague's badge. 082 splits it:
   on every badge move would hand the next planner a stale-rev refusal for an unrelated note edit, which is the
   exact message this feature exists to remove.
 
-`frame_hold` (045/067), `frames_fill` (042) and `frame_set_verify` (047) still write positions inside their own
-bodies, without a hold. They are whole-stretch and whole-grid operations rather than per-badge ones, and 083 is
-where they meet the rule.
+`frame_hold` (045/067), `frames_fill` (042) and `frame_set_verify` (047) used to write positions inside their own
+bodies, without a hold. 083 gives them, and the rest of the structural writes, the same rule — see "The rest of the
+board (phase 5)" below.
 
 A phase-2 page took the hold immediately before a write and put it down after it (`usePlanLocks`). That was enough
 for exclusion. Phase 3 keeps the hold for the length of the gesture; the rules are in "The ownership UI" below.
@@ -173,6 +179,51 @@ The comparison is against the live frame, not against the command's other map, b
 frame was and not what somebody else has done to it since: a badge taken away in the meantime comes back, which is what
 the planner asked for.
 
+## The rest of the board (phase 5, built)
+
+**The rule, in one sentence:** a door that would take away or overwrite something a live hold is guarding refuses and
+names the holder; a door that only adds something that was not there may go ahead. 083 applies it to the eight writes
+that were still unguarded.
+
+**Two checks, because there are two kinds of write.** A retime (`frame_move`) is a gesture, and a gesture can be
+claimed: it **takes** the moment lock for the length of the write, exactly as a note edit does, so a colleague
+retiming the same moment is refused by name. Everything else — a push, a fill, a hold, a confirmation, a frame
+delete, a plan delete, an import — is one action across many rows rather than a hand on one, so it takes no hold and
+asks the **negative** question instead: is anybody else's hand on anything this would write? Taking forty holds to
+write forty flags would lock a colleague out of the board for a click.
+
+| Door | Refused by |
+|---|---|
+| `frame_move` (retime) | the caller must hold the moment |
+| `frame_delete` | **any** live hold in the frame — a badge being dragged in it, its own clock being retimed |
+| `frame_shift` (push), `frames_fill` | a moment hold in the stretch (both bump those frames' revisions) |
+| `frame_hold` | a badge hold on a cell it writes, a moment hold on the frame it bumps |
+| `frame_set_verify` | a badge hold on a row it would change, a moment hold on a frame it touches |
+| `plan_delete`, `plan_import` | any live hold anywhere in the plan |
+
+**Deleting a moment is refused while a badge in it is held.** A badge only exists inside a frame, and 081's composite
+foreign key cascades the lock away with it, so doing nothing was an option — and the wrong one. The colleague's hand
+is on a badge that is about to cease to exist: their drag ends on a refusal about a badge that is gone, and the
+moment they were drawing is gone with it, so there is nothing to redo. Refusing costs the deleter the twelve seconds
+a hold can live at most, and it is the same rule the two bigger destructive acts already had. The sentence says who
+and where: *"Priya is editing Gate Crew at +1:00, so this moment cannot be deleted yet."*
+
+**A lapsed hold is not a hold**, so there is no "delete it anyway": 083 shares 081's blocking rule (quiet for 7 s,
+expired at 12 s), which means the delete works a few seconds after the holder has walked away. `p_take_over` stays
+what it was — a way past my **own** other window, on the two doors that are a gesture, and never a way to take a
+colleague's badge out from under them. A hold of my own account in another tab is named as exactly that, not as a
+stranger.
+
+**What is still allowed, deliberately.** A retime does not wait for the badges standing in the moment (081's
+decision, and the deadlock that made it), and a push or a fill is never refused by a badge hold: neither changes a
+position, and both would otherwise be blocked by the very drags they are not touching.
+
+**Publishing warns, and does not wait** (decision 15). After the publish question, `plan_lock_holders` is read fresh —
+not the 2.5 s presence read — and if anybody is mid-edit a second question names them and their cells and says what
+the version being written will not contain: it is a snapshot, so their change lands afterwards and needs another
+publish to reach anyone. Cancelling it publishes nothing. With `?concurrent=0` the warning goes with the rest of the
+ownership picture; the publish itself is never blocked either way.
+
 ## Client
 
 | Module | Owns |
@@ -196,7 +247,13 @@ the five draft calls — `startDrafts`, `stopDrafts`, `planDraft`, `clearDrafts`
 | Lost the lock mid-drag | snap back to committed; "Error updating location: Priya has this badge" |
 | Save failed | snap back + the same message with the reason (retries are the write queue, not built) |
 | Undo refused | nothing moves (one hold covers both directions, so nothing is written at all); "Undo did not happen: Priya is editing Gate Crew at +1:00"; the command stays on the stack |
-| Publish with someone mid-edit | two-step confirm naming them and their cells (phase 5) |
+| Publish with someone mid-edit | two-step confirm naming them and their cells; not blocked |
+| Delete a moment with a badge held in it | nothing is deleted; strip: "Priya is editing Gate Crew at +1:00, so this moment cannot be deleted yet" |
+| Delete a moment while it is being retimed | the same, naming the moment |
+| Retime a moment somebody else is retiming | the field goes back; strip: "Daniel Planner is editing the moment at +2:00, so this moment cannot be moved yet" |
+| Push, fill, hold or confirm over a held badge | nothing is written; the strip names the holder and says what did not happen |
+| Delete the plan, or import a sheet, while anybody is in it | refused; strip: "…so this plan cannot be deleted yet" / "…so the plan cannot be replaced yet" |
+| Any of the above after the holder has gone | works once the hold lapses (12 s at most) — there is no override |
 
 Refusals use a board-level strip (`data-testid="plan-refusal"`, built in phase 3 rather than the confirm toast, which
 is already used for successful moves and would collide). An undo refusal goes through the same strip.
@@ -205,13 +262,13 @@ is already used for successful moves and would collide). An undo refusal goes th
 
 | Case | Behaviour |
 |---|---|
-| Frame deleted under a drag | `frame_place` refuses unknown frames. (`frame_save` still re-inserts a frame whose id it is handed — that is 041's restore — so the badge door is the one that refuses, and it is the one a drag uses.) |
+| Frame deleted under a drag | `frame_place` refuses unknown frames, and 083 refuses the delete while the drag's hold is live, so the only window is the one between a lapsed hold and its next heartbeat. (`frame_save` still re-inserts a frame whose id it is handed — that is 041's restore — so the badge door is the one that refuses, and it is the one a drag uses.) |
 | Reload with locks held | release is best effort; a reclaimed grab may return `mine_elsewhere`; the reloaded page takes it back at once |
 | Crashed tab | steal after 7 s, expiry 12 s |
 | Crashed tab mid-drag | its ghost expires 2.5 s after its last draft; nothing else was ever written |
 | Peer edits another group | merged on apply; my cell untouched |
 | Peer drags a badge I am looking at | a ghost on the overlay; the badge stays where the plan has it until their write lands |
-| Import / delete plan while anyone holds | refused, holders named |
+| Import / delete plan while anyone holds | refused, holders named (083) |
 | Clock skew | never decide "held" from a local timestamp; the server's `expires_at` decides |
 
 ## Phases
@@ -230,7 +287,9 @@ is already used for successful moves and would collide). An undo refusal goes th
    per-sender sequence numbers, 2.5 s TTL, a let-go message), the ghost overlay drawn from it, `?concurrent=0` turning
    it off, and per-cell undo with pre-acquire: one `plan_lock_cells` for every cell of both directions, then the two
    writes, so a refusal writes nothing and the command stays.
-5. **Structural ops** - `083_frame_ops_locks.sql`, publish warning.
+5. **Structural ops** — *done*. `083_frame_ops_locks.sql`: every remaining write on the board is checked against the
+   holds it could destroy, a moment delete is refused while a badge in it is held, `frame_move` takes the moment lock,
+   the session travels with all eight doors, and publishing asks a second question that names whoever is mid-edit.
 
 ## Verification
 
@@ -238,9 +297,10 @@ is already used for successful moves and would collide). An undo refusal goes th
 |---|---|---|
 | SQL rules, ownership | `node tools/pgtest.mjs plan-locks` | grab/refuse/steal/expire, all-or-nothing, holders, take-over, cascade, and that `authenticated` can reach the doors but not the tables (116 assertions) |
 | SQL rules, writes | `node tools/pgtest.mjs plan-place` | a write needs a hold; one cell is the only row written and the revision is untouched; a gesture is all or nothing; a new frame still takes its first cells; a stale rev is still PT409 (116 assertions) |
-| Full schema | `npm run test:db` | nothing else regressed (824 assertions) |
-| Unit | `npm run test:unit` | the hold-write-release order, a refusal writing nothing, one release for overlapping writes, the 2 s heartbeat and its stop, a hold the heartbeat says is gone, release-all, presence, take-over, one grab for a write inside a gesture, an undo asking for both directions in ONE hold and writing nothing when that hold is refused; the draft channel's join, its push gate, its per-badge throttle with the last place sent, an overtaken draft dropped, a draft from this page dropped, a draft outside the box dropped, a let-go, the TTL, and `stop()`; the allow-list on its own (94 assertions, 20 + 10 + 6 in those three files) |
-| Browser smoke | `npm run check:board` | the board works without logging in; a dragged badge stays where it was put and is let go; a badge a colleague holds is ringed, named, refused and snapped back; 5 s of stillness releases it and the next movement takes it back; a colleague's drag is a ghost drawn where it said, named from the holders read, with the badge itself unmoved, and the ghost goes when they let go; an undo refused by a held badge writes nothing and the same key works once the badge is free; `?concurrent=0` hides the picture (and the stream) and not the rule (60 assertions, 4 tabs) |
+| SQL rules, structural ops | `node tools/pgtest.mjs plan-ops` | a retime needs the moment; a moment delete waits for a badge in it, for its own clock, and for my own other window, and goes once the hold lapses; a push and a fill wait for a moment and not for a badge; a hold and a confirmation refuse over a badge in somebody's hand and over a retimed moment, and a flag already at the value asked for is not in anybody's way; a plan delete and an import wait for anybody; the old arities are gone and only `authenticated` can reach the doors (108 assertions) |
+| Full schema | `npm run test:db` | nothing else regressed (932 assertions) |
+| Unit | `npm run test:unit` | the hold-write-release order, a refusal writing nothing, one release for overlapping writes, the 2 s heartbeat and its stop, a hold the heartbeat says is gone, release-all, presence, take-over, one grab for a write inside a gesture, an undo asking for both directions in ONE hold and writing nothing when that hold is refused; the draft channel's join, its push gate, its per-badge throttle with the last place sent, an overtaken draft dropped, a draft from this page dropped, a draft outside the box dropped, a let-go, the TTL, and `stop()`; the allow-list on its own; and every structural door carrying the session, with the retime wrapped in one moment hold (99 assertions, 20 + 10 + 6 + 5 in those files) |
+| Browser smoke | `npm run check:board` | the board works without logging in; a dragged badge stays where it was put and is let go; a badge a colleague holds is ringed, named, refused and snapped back; 5 s of stillness releases it and the next movement takes it back; a colleague's drag is a ghost drawn where it said, named from the holders read, with the badge itself unmoved, and the ghost goes when they let go; an undo refused by a held badge writes nothing and the same key works once the badge is free; a moment with a badge in it is not deleted, and the same two clicks delete it once the badge is free; publishing while somebody is mid-edit asks twice, names them, publishes nothing on Cancel and publishes on the second yes; `?concurrent=0` hides the picture (and the stream) and not the rule (73 assertions, 6 tabs) |
 | Two tabs | manual, one identity | streaming and release |
 | e2e | blocked: `.tmp/qa-accounts.json` and seven accounts | two real identities |
 
@@ -253,6 +313,12 @@ The same is true of the draft channel in a different way: the browser harness ha
 `usePlanStream` against a fake client. What neither can show is two real browsers on one Realtime channel —
 the manual two-profile pass is the only thing that does, and it is the one piece of phase 4 still owed.
 
+**The one place 083 is thinner than a hold, and it is on purpose.** A bulk door (a push, a fill, a hold, a
+confirmation, both plan-level deletes) checks for other people's holds in the same transaction as the write but takes
+no row of its own, so two bulk writes can still interleave. The cost of that is bounded and small — a flag written
+twice, a position stated twice — and the alternative was forty lock rows for one click. The doors that are a gesture
+(one badge, one moment) are the ones that take a hold, and they are the ones where losing a race would lose work.
+
 ## Risks
 
 - `frame_save` losing `positions` touches paste, import, undo and the sheet path — and it did: the answer was to
@@ -263,7 +329,13 @@ the manual two-profile pass is the only thing that does, and it is the one piece
   `?concurrent=0` can turn the UI off but not the per-cell write. That is deliberate: the old path is the
   data-loss bug, and a flag that could re-enable it would keep the bug reachable from a URL. A rollback here is a
   migration, and it should read like one.
-- `frame_hold` must be copied from its **live** body (067), not 046, or QA-07 silently reverts.
+- `frame_hold` must be copied from its **live** body (067), not 046, or QA-07 silently reverts. 083 is the second
+  copy of it and carries 067's condition; a third copy would need the same care.
+- **A multi-frame undo is a loop of single doors.** Undoing a paste or a fill deletes its frames one `frame_delete` at
+  a time (and a delete is now refusable per frame), so a refusal part-way through leaves the stretch half undone. The
+  command stays on the stack, so the same key resumes, and the strip says who is in the way — but the stack's promise
+  ("either it happened or it did not") is only true for the per-cell commands, which are one hold and one call.
+  Making it true here means a `frame_delete_many`, which nobody has asked for yet.
 - The 5 s mid-drag release is the product owner's decision and the main source of snap-backs; the
   mitigation is the silent re-acquire, not a change of rule. It is built, and the browser check holds a badge still
   for five seconds to prove it is released and taken back.

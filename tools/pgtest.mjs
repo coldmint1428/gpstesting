@@ -963,6 +963,73 @@ await phase('plan-place', {
   },
 })
 
+// ---------- Concurrent plan editing, step 5: every other write on the board (083) ----------
+// The schema the board actually runs on, for the doors 083 rewrites: 042 (frames_fill), 044 (frame_shift and
+// frame_move), 046 (the flags, and frame_hold's final body), 047 (the confirmation grid) and 059 (the sheet), on top
+// of plan-place's chain. 045 is skipped because 046 replaces its frame_hold outright, and 050 is reduced to the one
+// table plan_import counts (plan_progress), the same way the phases above stub a table they only need a name for.
+await phase('plan-ops', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
+    {
+      name: '020 (zones, without the polygon)',
+      sql: `create table public.zones (
+              id uuid primary key default gen_random_uuid(),
+              event_id uuid not null references public.events (id) on delete cascade,
+              code text not null,
+              name text not null,
+              kind text not null default 'zone');`,
+    },
+    { name: '037_plans_activities.sql', sql: read('supabase/migrations/037_plans_activities.sql') },
+    { name: '038_plan_frames.sql', sql: read('supabase/migrations/038_plan_frames.sql') },
+    { name: '042_frames_fill.sql', sql: read('supabase/migrations/042_frames_fill.sql') },
+    { name: '044_frame_shift_range.sql', sql: read('supabase/migrations/044_frame_shift_range.sql') },
+    { name: '046_position_state.sql', sql: read('supabase/migrations/046_position_state.sql') },
+    { name: '047_frame_verify.sql', sql: read('supabase/migrations/047_frame_verify.sql') },
+    {
+      name: '050 (plan_progress only)',
+      sql: `create table public.plan_progress (
+              plan_id uuid not null references public.plans (id) on delete cascade);`,
+    },
+    { name: '059_plan_import.sql', sql: read('supabase/migrations/059_plan_import.sql') },
+    { name: '071_attendance.sql', sql: read('supabase/migrations/071_attendance.sql') },
+    {
+      name: '028 (the push queue only)',
+      sql: `create table public.push_queue (
+              id bigserial primary key,
+              user_id uuid not null references public.profiles (id) on delete cascade,
+              event_id uuid not null references public.events (id) on delete cascade,
+              session_id uuid,
+              kind text not null,
+              dedup text not null unique,
+              title text not null, body text not null, data jsonb not null default '{}',
+              created_at timestamptz not null default now(), sent_at timestamptz);`,
+    },
+    { name: '072_sos.sql', sql: read('supabase/migrations/072_sos.sql') },
+    { name: '073_members_see_own_group.sql', sql: read('supabase/migrations/073_members_see_own_group.sql') },
+    { name: '074_marshals_are_users.sql', sql: read('supabase/migrations/074_marshals_are_users.sql') },
+    { name: '077_no_marshals.sql', sql: read('supabase/migrations/077_no_marshals.sql') },
+    { name: '081_plan_locks.sql', sql: read('supabase/migrations/081_plan_locks.sql') },
+    { name: '082_frame_place.sql', sql: read('supabase/migrations/082_frame_place.sql') },
+    { name: '083_frame_ops_locks.sql', sql: read('supabase/migrations/083_frame_ops_locks.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/plan_ops_test.sql'), 'plan_ops_test.sql')
+    await runSql(db, read('supabase/migrations/083_frame_ops_locks.sql'), '083 a second time')
+    await runSql(db, read('supabase/tests/plan_ops_test.sql'), 'plan_ops_test.sql after 083 again')
+    return ['plan_ops_test.sql passed, and 083 re-applies cleanly over its own tables and functions']
+  },
+})
+
 console.log('')
 console.log(failures === 0 ? `all phases passed (${checks} assertions)` : `${failures} phase(s) failed`)
 process.exit(failures === 0 ? 0 : 1)

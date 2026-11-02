@@ -184,7 +184,9 @@ export function usePlan(eventId) {
   async function deletePlan(id) {
     busy.value = true
     try {
-      await call('plan_delete', { p_plan: id })
+      // The session lets the database say whose hand is in the plan it is about to take away (083): a plan is not a
+      // lockable thing, so a delete is refused while anybody is mid-edit anywhere in it.
+      await call('plan_delete', { p_plan: id, p_session: locks.session() })
       if (plan.value && plan.value.id === id) {
         plan.value = null
         clearFrames()
@@ -443,10 +445,17 @@ export function usePlan(eventId) {
     }
   }
 
+  /**
+   * Retime one moment. The moment lock is taken for the length of the call (083, and the same shape as a note in
+   * saveFrame): a retime is a gesture on the frame lock, so a colleague retiming the same moment is refused by name
+   * before anything is written, rather than being overwritten by a revision they never saw.
+   */
   async function moveFrame(id, t_s, rev) {
     busy.value = true
     try {
-      await call('frame_move', { p_id: id, p_t_s: t_s, p_rev: rev })
+      await locks.withMoment(plan.value.id, id, () =>
+        call('frame_move', { p_id: id, p_t_s: t_s, p_rev: rev, p_session: locks.session() }),
+      )
       await loadFrames()
       await loadPlans()
     } catch (error) {
@@ -457,10 +466,15 @@ export function usePlan(eventId) {
     }
   }
 
+  /**
+   * Delete one moment. The session goes with it so the database can say whose hand is in the moment it is about to
+   * take away (083) -- a badge being dragged in it, its own clock being retimed, or the same in another window of
+   * mine. A refusal writes nothing, so there is no half-deleted moment to reason about.
+   */
   async function deleteFrame(id, rev) {
     busy.value = true
     try {
-      await call('frame_delete', { p_id: id, p_rev: rev })
+      await call('frame_delete', { p_id: id, p_rev: rev, p_session: locks.session() })
       await loadFrames()
       await loadPlans()
     } finally {
@@ -472,6 +486,9 @@ export function usePlan(eventId) {
    * Push a stretch of frames later (or earlier) by `delta_s`, in one call whatever the number of frames. Name both
    * ends and only the frames between them move; pass `to_s` null and everything at or after `from_s` travels, which
    * is the "we are five minutes behind" move. The board always names both ends, because a selection is a stretch.
+   *
+   * The session is only so the database can name whoever is retiming a moment in that stretch (083): a push takes no
+   * hold of its own -- it is one action across many frames, not a hand on any of them.
    */
   async function shiftFrom(from_s, delta_s, to_s = null) {
     busy.value = true
@@ -481,6 +498,7 @@ export function usePlan(eventId) {
         p_from_s: from_s,
         p_delta_s: delta_s,
         p_to_s: to_s,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -504,6 +522,7 @@ export function usePlan(eventId) {
         p_from: fromId,
         p_to: toId,
         p_groups: groupIds && groupIds.length ? groupIds : null,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -526,6 +545,7 @@ export function usePlan(eventId) {
         p_frame: frameId,
         p_seconds: seconds,
         p_groups: groupIds && groupIds.length ? groupIds : null,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -551,6 +571,7 @@ export function usePlan(eventId) {
         p_frames: frameIds,
         p_groups: groupIds && groupIds.length ? groupIds : null,
         p_verify: verify,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -572,7 +593,7 @@ export function usePlan(eventId) {
   async function importFrames(planId, frameList) {
     busy.value = true
     try {
-      const summary = await call('plan_import', { p_plan: planId, p_frames: frameList })
+      const summary = await call('plan_import', { p_plan: planId, p_frames: frameList, p_session: locks.session() })
       await loadFrames()
       await loadPlans()
       return summary || { frames: 0, positions: 0 }

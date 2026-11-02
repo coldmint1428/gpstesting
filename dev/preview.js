@@ -3,6 +3,7 @@
 // the real src/components/plan/PlanBoard.vue.
 import { computed, createApp, h, ref } from 'vue'
 import PlanBoard from '../src/components/plan/PlanBoard.vue'
+import NotifyHost from '../src/components/NotifyHost.vue'
 
 const eventId = 'preview-event'
 
@@ -72,6 +73,7 @@ const livePlan = computed(() => plans.value.find((p) => p.status === 'live') || 
 // strip, the ring and the snap-back all exist for.
 const PEER = new URLSearchParams(location.search).has('peer')
 const refusals = new Map() // cell key -> the name of whoever has it, for a colleague's hold
+const momentRefusals = new Map() // frame id -> the name of whoever is retiming it (083)
 const mine = new Set() // cells this page is holding
 
 function cellKey(frame, group) {
@@ -91,6 +93,33 @@ function groupName(id) {
 
 function lockRefusal(message) {
   return Object.assign(new Error(message), { code: 'PT423' })
+}
+
+// ---------- the structural doors (083), as far as a fixture can have them ----------
+//
+// The real rule is one sentence: a door that would take away or overwrite something a live hold is guarding refuses,
+// and names the holder. The fixture keeps the same two facts the doors read -- a cell somebody else has, and a moment
+// somebody else is retiming -- and says the same sentences, so the strip and the confirmations can be seen and checked
+// without a database. Nothing here decides anything: the database's own refusal is the fact.
+const BLOCKED = {
+  deleted: 'this moment cannot be deleted yet',
+  moved: 'this moment cannot be moved yet',
+  pushed: 'the stretch cannot be moved yet',
+  held: 'this hold cannot be made yet',
+  confirmed: 'the confirmation cannot be changed yet',
+}
+
+/** The first cell of a frame somebody else has, as the sentence a delete or a hold is refused with. */
+function heldInFrame(frameId) {
+  for (const [cell, name] of refusals) {
+    const [frame, group] = cell.split('|')
+    if (frame === frameId) return { name, group }
+  }
+  return null
+}
+
+function momentHolder(frameId) {
+  return momentRefusals.get(frameId) || null
 }
 
 if (PEER) refusals.set(cellKey('f1', 'g2'), 'Priya')
@@ -227,6 +256,13 @@ globalThis.__planPreview = {
   unblock: (key) => {
     refusals.delete(key)
   },
+  /** ...and the same for a MOMENT (083): somebody retiming the frame, which a delete, a push or a hold waits for. */
+  blockMoment: (frameId, name) => {
+    momentRefusals.set(frameId, name || 'Priya')
+  },
+  unblockMoment: (frameId) => {
+    momentRefusals.delete(frameId)
+  },
 }
 
 function findFrame(id) {
@@ -272,7 +308,13 @@ const api = {
   async renamePlan() {},
   async deletePlan() {},
   async forkPlan() {},
-  async publishPlan() {},
+  async publishPlan() {
+    // The real one writes a version and makes this the timetable everyone follows (054). The fixture only needs the
+    // two facts the board reads back: the status, and that the button is now "Publish again".
+    plan.value.status = 'live'
+    plan.value.rev = (plan.value.rev || 1) + 1
+    plan.value.published_at = new Date().toISOString()
+  },
   async saveFrame(input) {
     const existing = input.id ? findFrame(input.id) : frames.value.find((f) => f.t_s === input.t_s)
     if (existing) {
@@ -345,17 +387,31 @@ const api = {
   rewriteCells,
   async moveFrame(id, t_s) {
     const target = findFrame(id)
-    if (target) {
-      target.t_s = t_s
-      target.rev += 1
-    }
+    if (!target) throw new Error('That frame does not exist.')
+    // 083: a retime is a gesture on the moment, so a colleague retiming the same one is refused by name.
+    const holder = momentHolder(id)
+    if (holder) throw lockRefusal(`${holder} is editing the moment at ${clockOf(id)}, so ${BLOCKED.moved}.`)
+    target.t_s = t_s
+    target.rev += 1
   },
   async deleteFrame(id) {
+    // 083: a frame with somebody's hand in it -- a badge being dragged in it, or its own clock -- is not taken away.
+    const held = heldInFrame(id)
+    if (held) {
+      throw lockRefusal(`${held.name} is editing ${groupName(held.group)} at ${clockOf(id)}, so ${BLOCKED.deleted}.`)
+    }
+    const retiming = momentHolder(id)
+    if (retiming) throw lockRefusal(`${retiming} is editing the moment at ${clockOf(id)}, so ${BLOCKED.deleted}.`)
     frames.value = frames.value.filter((f) => f.id !== id)
   },
   async shiftFrom(from_s, delta_s, to_s = null) {
     const inRange = frames.value.filter((f) => f.t_s >= from_s && (to_s == null || f.t_s <= to_s))
     if (!inRange.length) return 0
+    // 083: a push is refused by a MOMENT hold in the stretch, never by a badge (a clock does not move a badge).
+    for (const f of inRange) {
+      const holder = momentHolder(f.id)
+      if (holder) throw lockRefusal(`${holder} is editing the moment at ${clockOf(f.id)}, so ${BLOCKED.pushed}.`)
+    }
     // A chunk moves rigidly: it stops at T+0 rather than squashing its first frames onto it (044 does the same).
     const first = Math.min(...inRange.map((f) => f.t_s))
     const delta = Math.max(delta_s, -first)
@@ -374,6 +430,19 @@ const api = {
       ? groupIds
       : groups.value.map((g) => g.id).filter((id) => standingAt(source.t_s, id))
     let target = frames.value.find((f) => f.t_s === target_s) || null
+    // 083: a hold writes a badge at the later moment, and bumps that moment's revision. Either can be somebody's.
+    if (target) {
+      for (const id of wanted) {
+        const blocker = refusals.get(cellKey(target.id, id))
+        if (blocker) {
+          throw lockRefusal(`${blocker} is editing ${groupName(id)} at ${clockOf(target.id)}, so ${BLOCKED.held}.`)
+        }
+      }
+      const retiming = momentHolder(target.id)
+      if (retiming) {
+        throw lockRefusal(`${retiming} is editing the moment at ${clockOf(target.id)}, so ${BLOCKED.held}.`)
+      }
+    }
     const existed = !!target
     let created = 0
     let written = 0
@@ -416,6 +485,25 @@ const api = {
   async setVerify(frameIds, groupIds, verify) {
     const wantedFrames = new Set(frameIds)
     const named = groupIds && groupIds.length ? groupIds : null
+    // 083: the rows this call would CHANGE are the ones somebody's hand can be on -- a row already saying what was
+    // asked for is not written at all, and so is not in anybody's way. The moment is checked for every named frame,
+    // because a frame this call touches has its revision bumped even when the flag did not move.
+    for (const f of frames.value) {
+      if (!wantedFrames.has(f.id)) continue
+      const wanted = named || Object.keys(f.positions || {})
+      for (const id of wanted) {
+        const row = f.positions && f.positions[id]
+        if (!row || (row.verify === 'manual' ? 'manual' : 'auto') === verify) continue
+        const blocker = refusals.get(cellKey(f.id, id))
+        if (blocker) {
+          throw lockRefusal(`${blocker} is editing ${groupName(id)} at ${clockOf(f.id)}, so ${BLOCKED.confirmed}.`)
+        }
+      }
+      const retiming = momentHolder(f.id)
+      if (retiming) {
+        throw lockRefusal(`${retiming} is editing the moment at ${clockOf(f.id)}, so ${BLOCKED.confirmed}.`)
+      }
+    }
     const touched = new Set()
     let set = 0
     let skipped = 0
@@ -443,5 +531,8 @@ const api = {
 }
 
 createApp({
-  render: () => h(PlanBoard, { eventId, canEdit: true, api }),
+  // The host as well as the board: the questions ("Delete the frame at +0:00?", "Publish while somebody is editing?")
+  // and the toasts live in one component the app mounts once (App.vue), and a preview without it would leave every
+  // confirmation waiting for an answer nothing could give.
+  render: () => h('div', [h(PlanBoard, { eventId, canEdit: true, api }), h(NotifyHost)]),
 }).mount('#app')

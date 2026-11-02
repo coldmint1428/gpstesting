@@ -1762,7 +1762,8 @@ async function fillGap(gap) {
       4000,
     )
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 7000)
+    // A fill refused by a moment somebody is retiming in the stretch (083).
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 7000)
   }
 }
 
@@ -1809,7 +1810,8 @@ async function hold(seconds) {
     }
     toast(`Held ${label} at ${formatOffset(frame.t_s)} until ${at}.`, 'success', 4000)
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 7000)
+    // A hold that would write over a badge in somebody's hand, or bump a moment they are retiming (083).
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 7000)
   }
 }
 
@@ -1896,7 +1898,8 @@ async function setGroupVerify(groupId, next) {
       3000,
     )
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A confirmation is a write on a cell somebody may be dragging, and it bumps the moment's revision (083).
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -1979,7 +1982,7 @@ async function bulkVerify(next) {
       toast(`Already ${word} ${where}.`, 'warning', 3000)
     }
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -2107,7 +2110,9 @@ async function removeFrame() {
     selectedId.value = null
     edits.deleted(copy, `deleted the frame at ${formatOffset(copy.t_s)}`)
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A delete refused because somebody's hand is in the moment (083): the strip, not a toast. The sentence names
+    // them and says the moment cannot be deleted yet, which is the whole story.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -2148,7 +2153,9 @@ async function setFrameTime(frameId, text, input = null) {
     // The field is bound to the frame's time, but a refused write leaves the frame where it was -- so the box would
     // otherwise keep saying the time the database just said no to. Put the truth back in it (finding 52).
     if (input) input.value = formatOffset(before_s)
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A retime refused because somebody else is retiming the same moment (083) is the strip's; the box has already
+    // been put back, so there is nothing to undo on screen.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -2179,7 +2186,8 @@ async function shiftStretch(from_s, delta, to_s) {
     toast(`${countLabel(moved)} moved by ${formatOffset(delta)}.`, 'success', 3000)
     return moved
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A stretch refused because somebody is retiming a moment in it (083): nothing moved, and the sentence says who.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
     return 0
   }
 }
@@ -2265,6 +2273,27 @@ async function fork() {
   }
 }
 
+/**
+ * Who is mid-edit on this plan, as the sentences the publish warning is made of: one line per person and the cell
+ * they are on, so the planner can see what the version they are about to announce will not contain. The name and the
+ * badge both come from `plan_lock_holders` -- the same read the rings are drawn from -- so the warning cannot name
+ * somebody the board is not already showing as an editor.
+ */
+function midEditLines(rows) {
+  return rows.map((row) => {
+    const at = formatOffset(row.t_s)
+    if (row.mine) {
+      return row.kind === 'moment'
+        ? `You are retiming ${at} in another window.`
+        : `You have ${row.group_name || 'a badge'} at ${at} open in another window.`
+    }
+    const who = row.display_name || 'Somebody'
+    return row.kind === 'moment'
+      ? `${who} is retiming ${at}.`
+      : `${who} is editing ${row.group_name || 'a badge'} at ${at}.`
+  })
+}
+
 async function publish() {
   if (!plan.value) return
   // Publishing a plan that is already live is legitimate — it is how a change made ahead of the clock is announced
@@ -2278,6 +2307,24 @@ async function publish() {
     confirmText: again ? 'Publish again' : 'Publish',
   })
   if (!ok) return
+
+  // Decision 15: a publish is NOT blocked by somebody mid-edit -- they are drawing, not saving, and the plan as it
+  // stands is still a thing worth announcing. It is a second question instead, naming them and their cells, because
+  // the version being written is a snapshot: whatever they are still moving lands after it and needs another publish
+  // to reach anybody. Read fresh rather than from the 2.5 s presence read: this is the one moment the answer matters.
+  const editing = OWNERSHIP_UI && props.canEdit && api.lockHolders ? await api.lockHolders() : []
+  if (editing.length) {
+    const okBusy = await askConfirm({
+      title: 'Somebody is editing this plan',
+      message:
+        'Publishing announces the plan as it stands now, so this version will not contain what they are still ' +
+        'moving. Their change still lands, and needs another publish to reach everyone. Nobody is interrupted.',
+      lines: midEditLines(editing),
+      confirmText: 'Publish anyway',
+    })
+    if (!okBusy) return
+  }
+
   try {
     // The revision this screen is showing goes with the request (step 18): the database refuses the publish if the
     // plan has moved on, rather than announcing a picture nobody is looking at any more.
@@ -2345,7 +2392,8 @@ async function removePlan() {
     if (next) await choosePlan(next.id)
     else if (api.stopDrafts) api.stopDrafts() // nothing is open: the channel had one plan and that plan is gone
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // Deleting a plan is refused while anybody is mid-edit anywhere in it (083): the same strip, the same sentence.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -2723,6 +2771,7 @@ watch(
           <span class="pv-sep" aria-hidden="true"></span>
           <button
             class="pv-btn is-primary"
+            data-testid="plan-publish"
             :disabled="busy"
             :title="
               plan && plan.status === 'live'

@@ -192,7 +192,12 @@ export default {
       `Math.abs(document.querySelector('[data-testid=plan-badge][data-group="g2"]').getBoundingClientRect().left - ${heldAfter}) < 3`,
     )
     // For the picture: the same ghost a step away from the badge, the way a drag in progress looks (the assertions
-    // above needed it exactly on a badge, because that is a place the check can measure to the pixel).
+    // above needed it exactly on a badge, because that is a place the check can measure to the pixel). The strip is
+    // from a step ago and would be the wrong story beside it, so it is dismissed first -- it is not what this step is
+    // about, and whether it is still up eight seconds later is not something the picture should depend on.
+    if (await peer.eval(`!!document.querySelector('[data-testid=plan-refusal-dismiss]')`)) {
+      await peer.click('[data-testid=plan-refusal-dismiss]')
+    }
     await peer.eval(`__planPreview.draft('f1','g2', ${ghostAt.lat + 0.0006}, ${ghostAt.lng + 0.0012})`)
     await peer.sleep(150)
     await peer.shot('shots/step4-draft.png')
@@ -246,7 +251,59 @@ export default {
     await plain.assertNoErrors()
     await plain.close()
 
-    // ---------- 11. a reload starts again from the fixtures ----------
+    // ---------- 11. a moment somebody's hand is in is not deleted ----------
+    // Decision 083: deleting a frame takes its badges with it, so a frame somebody is dragging a badge in is refused
+    // -- by name, with the place, and left where it was. The question is the board's own two-step confirm, so this is
+    // the whole path: click, confirm, and the database's sentence arriving in the strip.
+    const guard = await newTab({ label: 'guard', url: `${url}?peer=1`, width: 1200, height: 900 })
+    await guard.waitFor('.pv-frame')
+    await guard.assertCount('.pv-frame', 5)
+    await guard.click('[data-testid=frame-delete]')
+    await guard.assertCount('[data-testid=confirm-dialog]', 1)
+    await guard.click('[data-testid=confirm-ok]')
+    await guard.assertContains(
+      '[data-testid=plan-refusal]',
+      'Priya is editing Sound at +0:00, so this moment cannot be deleted yet.',
+    )
+    await guard.assertCount('.pv-frame', 5)
+    // Free, the same two clicks delete it: the refusal was about the hand, not about the moment.
+    await guard.eval(`__planPreview.unblock('f1|g2')`)
+    await guard.click('[data-testid=frame-delete]')
+    await guard.click('[data-testid=confirm-ok]')
+    await guard.sleep(300)
+    await guard.assertCount('.pv-frame', 4)
+    await guard.assertNoErrors()
+    await guard.close()
+
+    // ---------- 12. publishing while somebody is mid-edit asks twice, and names them ----------
+    // Decision 15: a publish is not blocked. The version it writes is a snapshot, though, so the second question says
+    // what is not in it -- who is on what, and that their change will need another publish to reach anyone.
+    const warn = await newTab({ label: 'warn', url: `${url}?peer=1`, width: 1200, height: 900 })
+    await warn.waitFor('.pv-frame')
+    await warn.click('[data-testid=plan-publish]')
+    await warn.assertCount('[data-testid=confirm-dialog]', 1)
+    await warn.click('[data-testid=confirm-ok]')
+    await warn.assertCount('[data-testid=confirm-dialog]', 1)
+    await warn.assertContains('[data-testid=confirm-dialog]', 'Somebody is editing this plan')
+    await warn.assertContains('[data-testid=confirm-dialog]', 'Priya is editing Sound at +0:00.')
+    // Cancelling the second question publishes nothing at all.
+    await warn.click('[data-testid=confirm-cancel]')
+    await warn.assertThat(
+      'cancelling the warning published nothing',
+      `document.querySelector('[data-testid=plan-publish]').textContent.trim() === 'Publish'`,
+    )
+    await warn.click('[data-testid=plan-publish]')
+    await warn.click('[data-testid=confirm-ok]')
+    await warn.click('[data-testid=confirm-ok]')
+    await warn.sleep(300)
+    await warn.assertThat(
+      'saying yes twice publishes',
+      `document.querySelector('[data-testid=plan-publish]').textContent.trim() === 'Publish again'`,
+    )
+    await warn.assertNoErrors()
+    await warn.close()
+
+    // ---------- 13. a reload starts again from the fixtures ----------
     await left.reload()
     await left.waitFor('.pv-frame')
     await left.assertCount('.pv-frame', 5)
@@ -256,7 +313,7 @@ export default {
       `document.querySelector('.pv-board-head select').selectedOptions[0].textContent.trim().replace(/\\s+/g, ' ').startsWith('Show night — example')`,
     )
 
-    // ---------- 12. a second tab, opened on the same page, selects independently ----------
+    // ---------- 14. a second tab, opened on the same page, selects independently ----------
     const right = await newTab({ label: 'right', url, width: 900, height: 800 })
     await right.waitFor('.pv-frame')
     await right.assertCount('.pv-frame', 5)
