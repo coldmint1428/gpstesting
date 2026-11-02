@@ -1,0 +1,65 @@
+/* Movement statuses in the ops view (merger Stage 7): the same colours on the summary bar, the queue, the run sheet
+   chips and the map clusters. Always shown with a word and a symbol too (src/utils/opsStatus.js). Text colours keep
+   4.5:1 contrast on white. */
+.ops-late { color: #b91c1c; }
+.ops-risk { color: #b45309; }
+.ops-ok { color: #0f766e; }
+.ops-nosig { color: #475569; }
+.ops-done { color: #15803d; }
+.ops-late-done { color: #9a3412; }
+.ops-missed { color: #7f1d1d; }
+.ops-wait { color: #64748b; }
+
+.ops-pill.ops-late, .ops-chip.ops-late { background: #fee2e2; border-color: #fca5a5; }
+.ops-pill.ops-risk, .ops-chip.ops-risk { background: #fef3c7; border-color: #fcd34d; }
+.ops-pill.ops-ok, .ops-chip.ops-ok { background: #ccfbf1; border-color: #5eead4; }
+.ops-pill.ops-nosig, .ops-chip.ops-nosig { background: #f1f5f9; border-color: #94a3b8; }
+.ops-chip.ops-done, .ops-chip.ops-late-done, .ops-chip.ops-missed, .ops-chip.ops-wait { background: #f8fafc; border-color: #cbd5e1; }
+
+.ops-late-bg { background: #fef2f2; }
+.ops-risk-bg { background: #fffbeb; }
+.ops-nosig-bg { background: #f8fafc; }
+
+/* Map: a cluster of groups (zoomed out) and a group's status ring (zoomed in) */
+.ops-cluster {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fff;
+  border: 5px solid #0f766e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.05;
+  color: #0f1b2d;
+  box-shadow: 0 2px 6px rgba(15, 27, 45, 0.3);
+  cursor: pointer;
+}
+.ops-cluster small {
+  font-size: 9px;
+  font-weight: 600;
+  max-width: 44px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ops-cluster.ops-nosig { border-style: dashed; }
+.ops-ring {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 4px solid currentColor;
+  background: transparent;
+  pointer-events: none;
+}
+.ops-eta-label {
+  background: #fff;
+  border: 0;
+  box-shadow: 0 1px 3px rgba(15, 27, 45, 0.3);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 5px;
+}
