@@ -46,6 +46,38 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+// The web app inside the APK is a COPY (src/main/assets/public, git-ignored), refreshed only by `npm run build` and
+// `npx cap copy`. Building from Android Studio after a pull therefore packaged whatever copy was last made: on 2 Nov
+// that was 31 Oct's, without SOS or attendance. So every build now refreshes it first: install packages (new ones
+// arrive with a pull, e.g. jsqr), build the web app, copy it in. `cap copy`, not `cap sync`: sync rewrites Gradle files
+// while Gradle is running. Skip with -PskipWebBuild (e.g. when only native code changed and node is not available).
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def webRoot = rootProject.file('..')
+def shell = { List<String> args -> isWindows ? ['cmd', '/c'] + args : args }
+tasks.register('webInstall', Exec) {
+    group = 'web app'
+    description = 'npm install in the web project (fast when nothing changed)'
+    workingDir webRoot
+    commandLine shell(['npm', 'install', '--no-audit', '--no-fund'])
+}
+tasks.register('webBuild', Exec) {
+    group = 'web app'
+    description = 'npm run build: the web app into dist/'
+    dependsOn 'webInstall'
+    workingDir webRoot
+    commandLine shell(['npm', 'run', 'build'])
+}
+tasks.register('webCopy', Exec) {
+    group = 'web app'
+    description = 'npx cap copy android: dist/ into the APK assets'
+    dependsOn 'webBuild'
+    workingDir webRoot
+    commandLine shell(['npx', 'cap', 'copy', 'android'])
+}
+if (!project.hasProperty('skipWebBuild')) {
+    preBuild.dependsOn 'webCopy'
+}
+
 // Firebase config (gitignored, so a branch switch or fresh clone can lose it). Without it the app
 // crashes on start ("Default FirebaseApp is not initialized" when push registers), so stop the build.
 def servicesJSON = file('google-services.json')
