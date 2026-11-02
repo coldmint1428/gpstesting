@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Spectators Raffles City R1 A",
+    "category": "spectators",
+    "headcount": 25,
+    "colour": "#009E73"
+  },
+  {
+    "name": "Motivators Red",
+    "category": "motivators",
+    "headcount": 20,
+    "colour": "#CC79A7"
+  },
+  {
+    "name": "Show Hosts",
+    "category": "hosts",
+    "headcount": 6,
+    "colour": "#009E73"
+  },
+  {
+    "name": "P&C Contingent 1",
+    "category": "contingent",
+    "headcount": 30,
+    "colour": "#6A4C93"
+  },
+  {
+    "name": "P&C Contingent 2",
+    "category": "contingent",
+    "headcount": 30,
+    "colour": "#0072B2"
+  },
+  {
+    "name": "P&C Contingent 3",
+    "category": "contingent",
+    "headcount": 30,
+    "colour": "#56B4E9"
+  },
+  {
+    "name": "P&C Contingent 4",
+    "category": "contingent",
+    "headcount": 30,
+    "colour": "#009E73"
+  },
+  {
+    "name": "Mobile Column",
+    "category": "vehicles",
+    "headcount": 40,
+    "colour": "#009E73"
+  },
+  {
+    "name": "Red Lions",
+    "category": "performers",
+    "headcount": 7,
+    "colour": "#CC79A7"
+  },
+  {
+    "name": "Combined School Bands",
+    "category": "performers",
+    "headcount": 40,
+    "colour": "#6A4C93"
+  },
+  {
+    "name": "Choir",
+    "category": "performers",
+    "headcount": 40,
+    "colour": "#0072B2"
+  },
+  {
+    "name": "Medical Team 1",
+    "category": "medical",
+    "headcount": 8,
+    "colour": "#56B4E9"
+  },
+  {
+    "name": "Quick Response Team 1",
+    "category": "medical",
+    "headcount": 6,
+    "colour": "#6A4C93"
+  }
+]
