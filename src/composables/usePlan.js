@@ -12,6 +12,7 @@
 import { computed, onScopeDispose, ref } from 'vue'
 import { supabase } from '../lib/supabase'
 import { readTimetable as readTimetableShared, forgetTimetable, staleTimetables } from '../lib/timetableReader'
+import { usePlanLocks } from './usePlanLocks'
 
 const P409 = 'PT409'
 
@@ -49,6 +50,9 @@ export function usePlan(eventId) {
     errorMsg.value = ''
     return data
   }
+
+  // Ownership of a badge while it is being written (081, 082). Everything it does is one of the plan_* doors.
+  const locks = usePlanLocks(call)
 
   // Reads of the same rows are queued, one at a time, and each applies before the next starts. Overlapping reads do
   // not have to come back in the order they left: a save's own reload and a background one, or a plan switch against
@@ -200,8 +204,18 @@ export function usePlan(eventId) {
   }
 
   /**
-   * Write one frame. `positions` is replaced wholesale on the server when present, so pass the complete set of
-   * stated positions for that frame, not just the one that moved.
+   * Write one frame: its time and its note, and -- only when the frame does not exist yet -- its first badges.
+   *
+   * 082 split the write. A frame that is already in the plan refuses a `positions` payload outright, because the
+   * payload was the bug: it carried every badge on the frame as the page had last read them, so one planner's drag
+   * put everybody else's back. Badges of a frame that already stands are written by placeCells() below, one cell at
+   * a time and against a hold on it. A frame this call creates still takes its first map, because a moment that did
+   * not exist a statement ago cannot have somebody else's badge on it (that is also how plan_import() writes a
+   * sheet, and how undo puts a deleted frame back).
+   *
+   * A frame this page can see also has its MOMENT held for the length of the write: the note and the time are one
+   * resource, and two people editing the same moment are refused with a sentence rather than a stale-revision
+   * error. A frame it cannot see is a restore (041) -- there is nothing to hold.
    */
   async function saveFrame(frame) {
     const payload = { t_s: frame.t_s }
@@ -209,9 +223,14 @@ export function usePlan(eventId) {
     if (frame.rev != null) payload.rev = frame.rev
     if (frame.note !== undefined) payload.note = frame.note
     if (frame.positions !== undefined) payload.positions = frame.positions
+    const known = Boolean(frame.id) && frames.value.some((f) => f.id === frame.id)
     busy.value = true
     try {
-      const row = await call('frame_save', { p_plan: plan.value.id, p_frame: payload })
+      const row = known
+        ? await locks.withMoment(plan.value.id, frame.id, () =>
+            call('frame_save', { p_plan: plan.value.id, p_frame: payload, p_session: locks.session() }),
+          )
+        : await call('frame_save', { p_plan: plan.value.id, p_frame: payload })
       await loadFrames()
       await loadPlans()
       return row
@@ -219,6 +238,55 @@ export function usePlan(eventId) {
       // A stale revision means my copy of the plan is out of date; pull the truth back in.
       if (error && error.code === P409) await loadFrames()
       throw error
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * Write badges at one frame: `map` is `groupId -> { lat, lng, state?, verify? }` -- the shape the board already
+   * builds for a drag, a placement, an off-site toggle and a bulk state change.
+   *
+   * One call for the whole map because a gesture is one statement: a drag with three badges ticked writes all
+   * three or none, and a refusal names whoever has the first one in the way. The rows in the payload are the only
+   * rows touched (082), so a colleague's badge at the same moment is not carried along and cannot be lost.
+   *
+   * The hold is taken here rather than by the caller: a write that is not held is refused by the database, and
+   * making the two a single call is what keeps them in step.
+   */
+  async function placeCells(frameId, map) {
+    if (!plan.value || !frameId) return 0
+    const cells = Object.entries(map || {}).map(([group, at]) => ({
+      frame: frameId,
+      group,
+      lat: at.lat,
+      lng: at.lng,
+      ...(at.state ? { state: at.state } : {}),
+      ...(at.verify ? { verify: at.verify } : {}),
+    }))
+    if (!cells.length) return 0
+    busy.value = true
+    try {
+      const written = await locks.place(plan.value.id, cells)
+      await loadFrames()
+      await loadPlans()
+      return written
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Take badges off the plan -- the only way a position disappears (082), and a write like any other. */
+  async function unplaceCells(frameId, groupIds) {
+    if (!plan.value || !frameId) return 0
+    const cells = (groupIds || []).map((group) => ({ frame: frameId, group }))
+    if (!cells.length) return 0
+    busy.value = true
+    try {
+      const removed = await locks.unplace(plan.value.id, cells)
+      await loadFrames()
+      await loadPlans()
+      return removed
     } finally {
       busy.value = false
     }
@@ -622,6 +690,8 @@ export function usePlan(eventId) {
     forkPlan,
     publishPlan,
     saveFrame,
+    placeCells,
+    unplaceCells,
     moveFrame,
     deleteFrame,
     shiftFrom,

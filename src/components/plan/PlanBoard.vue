@@ -674,9 +674,10 @@ function drawMarkers() {
  * Drag a group on the map: that moment states a new position for it. When the group is ticked, every ticked group
  * standing at this frame comes with it — the gesture a planner makes for "the whole crew steps ten metres back".
  *
- * The write at the end is ONE frame_save carrying every moved position, not one call per badge. A call per badge
- * would bump the frame's revision, so the second and third would be refused as stale (PT409) and the reload that
- * follows would quietly keep only the first: three badges dragged, one move stored.
+ * The write at the end is ONE call carrying every badge that moved (082), not one call per badge: a gesture is one
+ * statement, so three badges dragged are three written or none. It carries only the badges that moved, and one
+ * cell's write touches one row — that is what lets a colleague drag a different badge at the same moment without
+ * either of them losing the other's work.
  */
 function beginGroupDrag(leaderId) {
   const frame = selected.value
@@ -733,9 +734,9 @@ async function endGroupDrag(leaderId) {
     drawMarkers()
     return
   }
-  // positions replaces this frame's set wholesale, so the payload is the frame's own statements PLUS the groups that
-  // moved. Sending only the moved ones would delete everyone else's position on this frame (that is the trap step 10
-  // names); restatedPositions() is the one place that full map is built, for this write and the flag writes.
+  // The payload is the badges that moved, and only those: 082 writes one cell per row, so a badge nobody touched
+  // is not in the write and cannot be put back to how this page last read it. restatedPositions() still builds the
+  // pair below, because the undo stack remembers a whole map and the inverse has to be able to restore one.
   const changes = {}
   for (const row of state.roster) {
     // The flags come with the coordinates (046). Dragging a badge says where the group now stands; it does not put an
@@ -745,7 +746,7 @@ async function endGroupDrag(leaderId) {
     changes[row.id] = { lat: row.lat + dLat, lng: row.lng + dLng, state: at?.state, verify: at?.verify }
   }
   // Where the frame's statements stood before the drag, and where they stand after it: both whole maps, because that
-  // is what frame_save takes, and because the pair is what makes the gesture reversible (step 13).
+  // is what the undo stack stores, and because the pair is what makes the gesture reversible (step 13).
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
   pendingMoves = {
@@ -753,10 +754,13 @@ async function endGroupDrag(leaderId) {
     at: new Map(state.roster.map((row) => [row.id, { lat: changes[row.id].lat, lng: changes[row.id].lng }])),
   }
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
-  } catch {
+    await api.placeCells(frame.id, changes)
+  } catch (error) {
     pendingMoves = null
     drawMarkers() // the database was not changed; put every badge back where it has it
+    // The product decision is that a move stands locally and is only undone when the write really failed — and a
+    // planner who has just watched a badge jump back is owed the reason (the refusal strip proper is phase 3).
+    toast(planErrorMessage(error), 'danger', 6000)
     return
   }
   pendingMoves = null
@@ -789,8 +793,7 @@ function startPlacing(groupId) {
 
 /**
  * The tap that places the armed group. It is a statement at the open frame like a drag is, so it is the same one
- * write: the frame's own positions plus this group (restatedPositions), never this group alone, which would delete
- * everyone else's position on the frame. After a placement the next group still unplaced is armed, so a new plan is
+ * write: that badge, at that place (082). After a placement the next group still unplaced is armed, so a new plan is
  * a tap per group rather than a button and a tap per group.
  */
 async function onMapClick(event) {
@@ -801,7 +804,7 @@ async function onMapClick(event) {
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
+    await api.placeCells(frame.id, changes)
   } catch (error) {
     toast(planErrorMessage(error), 'danger', 5000)
     return
@@ -1339,10 +1342,9 @@ async function hold(seconds) {
  * Take a group off the map at the open frame, or put it back on.
  *
  * Off site is a STATEMENT about this moment, so it is written at this moment: a frame that only inherits a position
- * has to gain a row here, or the earlier on-site sentence keeps standing. The write is frame_save with the frame's
- * own map plus this group — restatedPositions() — because a payload naming only the group would delete every other
- * position the frame states. Coming back on site reuses the coordinates the row already holds: the plan does not know
- * where the group went, and inventing a place is a different edit (a drag, once there is a badge again).
+ * has to gain a row here, or the earlier on-site sentence keeps standing. The write is that one badge (082), with
+ * the place the row already holds — the plan does not know where the group went, and inventing a place is a
+ * different edit (a drag, once there is a badge again).
  */
 async function setGroupState(groupId, next) {
   const frame = selected.value
@@ -1357,7 +1359,7 @@ async function setGroupState(groupId, next) {
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
+    await api.placeCells(frame.id, changes)
     edits.positions(
       frame.id,
       before,
@@ -1422,9 +1424,8 @@ async function setGroupVerify(groupId, next) {
 }
 
 /**
- * The bulk state control: the same statement, for every group the flags act on, at the open frame. One save, because
- * each frame has one revision and a second save built against the pre-save copy would be refused as stale (PT409) —
- * the reason the drag is one write too.
+ * The bulk state control: the same statement, for every group the flags act on, at the open frame. One call, because
+ * a click is one statement: every badge it is about is written or none is (082).
  */
 async function bulkState(next) {
   const frame = selected.value
@@ -1442,7 +1443,7 @@ async function bulkState(next) {
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
+    await api.placeCells(frame.id, changes)
     const names = nameList(targets.map((g) => g.name))
     edits.positions(
       frame.id,

@@ -93,13 +93,49 @@ const api = {
   async saveFrame(input) {
     const existing = input.id ? findFrame(input.id) : frames.value.find((f) => f.t_s === input.t_s)
     if (existing) {
-      if (input.positions !== undefined) existing.positions = input.positions
+      // 082: a frame that already stands refuses a badge map, because the map is what carried everybody else's
+      // positions back. The fixture says the same thing, so a page that starts sending one is caught here.
+      if (input.positions !== undefined) {
+        throw new Error('This frame already has badges, and they are edited one at a time. Reload the board.')
+      }
       if (input.note !== undefined) existing.note = input.note
       existing.rev += 1
     } else {
       frames.value.push(frame(input.t_s, input.positions || {}, input.note))
       frames.value.sort((a, b) => a.t_s - b.t_s)
     }
+  },
+  // One badge, one row (082). The real one is frame_place_many(), checked against a hold; the fixture has no server
+  // and one page, so there is nothing to hold and no revision to bump -- a badge move is not a change to the frame's
+  // time or note, and the dev page should not pretend it is.
+  async placeCells(frameId, map) {
+    const target = findFrame(frameId)
+    if (!target) throw new Error('That frame is not in this plan.')
+    let written = 0
+    for (const [groupId, at] of Object.entries(map || {})) {
+      const was = target.positions[groupId] || {}
+      target.positions[groupId] = {
+        lat: at.lat,
+        lng: at.lng,
+        state: at.state || was.state || 'on_site',
+        verify: at.verify || was.verify || 'auto',
+      }
+      written += 1
+    }
+    return written
+  },
+  // The only way a position disappears (082).
+  async unplaceCells(frameId, groupIds) {
+    const target = findFrame(frameId)
+    if (!target) return 0
+    let removed = 0
+    for (const id of groupIds || []) {
+      if (target.positions[id]) {
+        delete target.positions[id]
+        removed += 1
+      }
+    }
+    return removed
   },
   async moveFrame(id, t_s) {
     const target = findFrame(id)

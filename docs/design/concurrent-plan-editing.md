@@ -1,6 +1,6 @@
 # Concurrent editing on the plan board
 
-**Status:** decided, not implemented. **Branch:** `concurrent-plan-editing`.
+**Status:** phases 1–2 built (081, 082). **Branch:** `concurrent-plan-editing`.
 
 Two or more planners may edit one plan at the same time. They must not move each other's badges by
 accident, must not lose work to somebody else's save, and must not wait for a network round trip before
@@ -30,7 +30,7 @@ plan applies that doctrine to the plan board, where the unit of contention is sm
 | 13 | Phase 1 scope | Badge positions only; frame time and structural ops follow. |
 | 14 | 25 m rule | Not enforced on a concurrent write; a violation is painted red by `plan_check`. |
 | 15 | Publish | **Not blocked**; a warning names whoever is mid-edit. |
-| 16 | Rollout | On by default; `?concurrent=0` restores the old path. |
+| 16 | Rollout | On by default; `?concurrent=0` turns off the ownership UI and the live stream. It **cannot** restore the old write path — 082 made the per-cell write the only one (see "The write path") |
 | 17 | Capacitor | Later, same code path. |
 
 ## The model
@@ -66,32 +66,48 @@ means), and the message is the sentence the board shows. `PT409` stays what it a
 The blocking rule is written once, in both the steal and the listing: a lock blocks while
 `last_seen > now() - 7 s AND expires_at > now()`.
 
-## The write path
+## The write path (082, built)
 
-`frame_save` replaces a frame's whole position map and bumps one `rev` for the row. That is incompatible
-with per-cell locks: two planners holding different cells still collide, and a stale payload deletes the
-colleague's badge. So:
+`frame_save` used to replace a frame's whole position map and bump one `rev` for the row. That is incompatible
+with per-cell holds: two planners holding different cells still collided, and a stale payload deleted the
+colleague's badge. 082 splits it:
 
-- **`frame_place(plan, frame, group, session, lat, lng, state?, verify?)`** writes exactly one cell,
-  guarded by a live lock on that cell, and touches `plans.updated_at`.
-- **`frame_place_many`** writes one gesture's cells in one statement.
-- **`frame_unplace`** is the only way a position disappears. A payload never deletes.
-- **`frame_save` stops writing positions** and takes a frame lock for `t_s`/note.
-- **A cell write does not bump `plan_frames.rev`.** `rev` becomes a metadata version (time/note) only.
-  Bumping it on every badge move would hand the next planner a stale-rev refusal for an unrelated note
-  edit, which is the exact message this feature exists to remove.
+- **`frame_place(plan, frame, group, session, lat, lng, state?, verify?)`** writes exactly one cell, checked
+  against a live hold on it, and touches `plans.updated_at` once per call (never `plan_frames.rev`).
+- **`frame_place_many(plan, cells, session)`** writes one gesture's cells in one statement, all or none. The cell
+  list is the grab's own shape — `{frame, group, lat, lng, state?, verify?}`.
+- **`frame_unplace` / `frame_unplace_many`** are the only way a position disappears. A payload never deletes.
+- **`frame_save` writes `positions` only when it *inserts* the frame**, and refuses them on a frame that already
+  stands. A moment that did not exist a statement ago cannot have somebody else's badge on it, so the map has
+  nothing to lose there — and this is what keeps `plan_import` (one `frame_save` per sheet frame, after deleting
+  every frame) and undo's restore (041) working untouched.
+- **`frame_save` takes an optional session**; given one, and on a frame that exists, the moment hold must be the
+  caller's. Without one the rev check is the only guard — the same guard every caller had before, which is all
+  `plan_import` has to offer.
+- **A cell write does not bump `plan_frames.rev`.** `rev` is the metadata version (time and note) now. Bumping it
+  on every badge move would hand the next planner a stale-rev refusal for an unrelated note edit, which is the
+  exact message this feature exists to remove.
+
+`frame_hold` (045/067), `frames_fill` (042) and `frame_set_verify` (047) still write positions inside their own
+bodies, without a hold. They are whole-stretch and whole-grid operations rather than per-badge ones, and 083 is
+where they meet the rule.
+
+What a phase-2 page does, then, is take the hold immediately before a write and put it down after it (`usePlanLocks`).
+That is enough for exclusion; holding one for the length of a gesture — pointer down to pointer up, the heartbeat,
+the 5 s idle release — is phase 3.
 
 ## Client
 
 | Module | Owns |
 |---|---|
-| `usePlanLocks` | ownership: grab, heartbeat, 5 s idle release, release-all, take-over, `holderOf(cell)` |
+| `usePlanLocks` | ownership: grab, heartbeat, 5 s idle release, release-all, take-over, `holderOf(cell)`. Phase 2 has the first three of those calls in their narrow form — hold, write, let go — and the rest arrives with the UI |
 | `usePlanDraft` | the optimistic frame store: merge rows, never overwrite a cell I own |
 | `usePlanStream` | draft drags and lock hints on one broadcast channel; drafts render on an overlay |
 | `usePlanQueue` | per-cell serialised writes, coalesce, retries, rollback |
 
 `usePlan.js` changes in two places only: `loadFrames` merges instead of assigning, and a peer event no
-longer triggers a full-board reload.
+longer triggers a full-board reload. (Phase 2 already added `placeCells` / `unplaceCells` and the moment hold
+in `saveFrame`; the board's own calls at those five sites are the whole of its edit.)
 
 ## Live stream
 
@@ -125,7 +141,7 @@ successful moves and would collide.
 
 | Case | Behaviour |
 |---|---|
-| Frame deleted under a drag | `frame_place` refuses unknown frames (today `frame_save` re-inserts them) |
+| Frame deleted under a drag | `frame_place` refuses unknown frames. (`frame_save` still re-inserts a frame whose id it is handed — that is 041's restore — so the badge door is the one that refuses, and it is the one a drag uses.) |
 | Reload with locks held | release is best effort; a reclaimed grab may return `mine_elsewhere`; the reloaded page takes it back at once |
 | Crashed tab | steal after 7 s, expiry 12 s |
 | Peer edits another group | merged on apply; my cell untouched |
@@ -137,8 +153,9 @@ successful moves and would collide.
 1. **Locks, server only** — *done (081)*. `081_plan_locks.sql`, the seven doors, and a `plan-locks` pgtest
    phase that proves grab / refuse / steal / expire / all-or-nothing / holders / take-over / cascade and the
    real-role grants. Nothing user-visible.
-2. **Per-cell writes** - `082_frame_place.sql`; `frame_save` stops replacing positions; the board writes
-   through `frame_place`. Still single-user, all suites green.
+2. **Per-cell writes** — *done (082)*. `082_frame_place.sql`, the four doors, `frame_save` reduced to the moment
+   and to a new frame's first cells, and the board writing through `placeCells` / `unplaceCells` (a drag, a
+   placement, an off-site toggle, a bulk state change, and undo's inverse). Still single-user, all suites green.
 3. **Ownership UI** - release, refusal strip, snap-back, ghost ring, presence stack, badge test ids.
 4. **Live drafts and undo** - `usePlanStream`, overlay rendering, per-cell undo with pre-acquire.
 5. **Structural ops** - `083_frame_ops_locks.sql`, publish warning.
@@ -147,10 +164,11 @@ successful moves and would collide.
 
 | Layer | Command | Proves |
 |---|---|---|
-| SQL rules | `node tools/pgtest.mjs plan-locks` | grab/refuse/steal/expire, all-or-nothing, holders, take-over, cascade, and that `authenticated` can reach the doors but not the tables |
-| Full schema | `npm run test:db` | nothing else regressed (708 assertions) |
-| Unit | `npm run test:unit` | lock state machine, queue retries, refusal means no undo inverse |
-| Browser smoke | `npm run check:board` | the board works without logging in |
+| SQL rules, ownership | `node tools/pgtest.mjs plan-locks` | grab/refuse/steal/expire, all-or-nothing, holders, take-over, cascade, and that `authenticated` can reach the doors but not the tables (116 assertions) |
+| SQL rules, writes | `node tools/pgtest.mjs plan-place` | a write needs a hold; one cell is the only row written and the revision is untouched; a gesture is all or nothing; a new frame still takes its first cells; a stale rev is still PT409 (116 assertions) |
+| Full schema | `npm run test:db` | nothing else regressed (824 assertions) |
+| Unit | `npm run test:unit` | the take-write-release order, a refusal writing nothing, one release for overlapping writes, a failed release not being an error (68 assertions) |
+| Browser smoke | `npm run check:board` | the board works without logging in, and a dragged badge stays where it was put across a frame switch (29 assertions) |
 | Two tabs | manual, one identity | streaming and release |
 | e2e | blocked: `.tmp/qa-accounts.json` and seven accounts | two real identities |
 
@@ -160,7 +178,14 @@ than papered over: a script that "proves" arbitration on one connection would be
 
 ## Risks
 
-- `frame_save` losing `positions` touches paste, import, undo and the sheet path; it gets its own phase.
+- `frame_save` losing `positions` touches paste, import, undo and the sheet path — and it did: the answer was to
+  keep the wholesale map for a frame the call *creates*, which is why 059 (import) and 041 (restore) needed no
+  change at all. It only looks like a loophole until you ask who could be holding a badge on a frame that did not
+  exist a statement ago.
+- **There is no going back to the old write path.** 082 refuses a badge map on a frame that exists, so
+  `?concurrent=0` can turn the UI off but not the per-cell write. That is deliberate: the old path is the
+  data-loss bug, and a flag that could re-enable it would keep the bug reachable from a URL. A rollback here is a
+  migration, and it should read like one.
 - `frame_hold` must be copied from its **live** body (067), not 046, or QA-07 silently reverts.
 - The 5 s mid-drag release is the product owner's decision and the main source of snap-backs; the
   mitigation is the silent re-acquire, not a change of rule.

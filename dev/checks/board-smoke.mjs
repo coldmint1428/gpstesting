@@ -58,7 +58,30 @@ export default {
       `document.querySelector('#pv-frame-note').value === 'doors'`,
     )
 
-    // ---------- 5. a reload starts again from the fixtures ----------
+    // ---------- 5. a real drag on a badge writes that badge, and it stays where it was put ----------
+    // The write behind the gesture is frame_place_many (082): one cell, not the frame's whole map. Measured on the
+    // rendered marker, so a badge that was moved on screen but never stored fails at the last assertion below.
+    const markerLeft = () =>
+      left.eval(`document.querySelectorAll('.pv-marker-wrap')[0].getBoundingClientRect().left`)
+    await left.assertCount('.pv-marker-wrap', 3)
+    const badgeBefore = await markerLeft()
+    await left.drag('.pv-marker-wrap', 34, 0)
+    const badgeAfter = await markerLeft()
+    await left.assertThat('the badge followed the hand', badgeAfter > badgeBefore + 20)
+    await left.assertCount('.pv-frame', 5) // a badge is not a new moment
+    // Leave the frame and come back: the badge is drawn again from what the plan holds, so this is the write.
+    await left.click('.pv-frame', { index: 0 })
+    await left.assertContains('.pv-hint', 'Frame +0:00')
+    await left.click('.pv-frame', { index: 2 })
+    await left.assertContains('.pv-hint', 'Frame +2:50')
+    await left.assertCount('.pv-marker-wrap', 3)
+    const badgeKept = await markerLeft()
+    await left.assertThat(
+      'the badge stayed where it was put',
+      badgeKept > badgeBefore + 20 && Math.abs(badgeKept - badgeAfter) < 3,
+    )
+
+    // ---------- 6. a reload starts again from the fixtures ----------
     await left.reload()
     await left.waitFor('.pv-frame')
     await left.assertCount('.pv-frame', 5)
@@ -68,7 +91,7 @@ export default {
       `document.querySelector('.pv-board-head select').selectedOptions[0].textContent.trim().replace(/\\s+/g, ' ').startsWith('Show night — example')`,
     )
 
-    // ---------- 6. a second tab, opened on the same page, selects independently ----------
+    // ---------- 7. a second tab, opened on the same page, selects independently ----------
     const right = await newTab({ label: 'right', url, width: 900, height: 800 })
     await right.waitFor('.pv-frame')
     await right.assertCount('.pv-frame', 5)

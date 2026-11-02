@@ -129,10 +129,38 @@ export function usePlanUndo({ plan, frames, api }) {
     return new Error('That frame is no longer in the plan, so there is nothing to put back.')
   }
 
+  /**
+   * Put a frame's badges back the way the command remembers them.
+   *
+   * A badge is written on its own now (082), so "as it was" is not one payload: it is the cells that differ from
+   * what the frame states at this moment -- the ones that moved or appeared are placed, the ones that were taken
+   * away are unplaced. The comparison is against the LIVE frame, not against the command's other map, because the
+   * command remembers where the frame was and not what somebody else has done to it since; a cell that has been
+   * taken away in the meantime therefore comes back, which is what the planner asked for.
+   */
   async function writePositions(frameId, positions) {
     const frame = liveFrame(frameId)
     if (!frame) throw missing()
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: positions || {} })
+    const target = positions || {}
+    const current = frame.positions || {}
+    const changed = {}
+    for (const [groupId, point] of Object.entries(target)) {
+      const was = current[groupId]
+      if (
+        !was ||
+        was.lat !== point.lat ||
+        was.lng !== point.lng ||
+        was.state !== point.state ||
+        was.verify !== point.verify
+      ) {
+        changed[groupId] = point
+      }
+    }
+    const gone = Object.keys(current).filter((groupId) => !(groupId in target))
+    // The placements first: an undo interrupted after them has the badge back where it belongs and one row too many,
+    // which is nearer the truth than the other order. (Phase 4 makes this one call with every cell held at once.)
+    if (Object.keys(changed).length) await api.placeCells(frame.id, changed)
+    if (gone.length) await api.unplaceCells(frame.id, gone)
   }
 
   async function writeNote(frameId, note) {
