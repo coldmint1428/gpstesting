@@ -21,7 +21,7 @@
 --      step 26's answer unchanged and proves the new columns did not shift the lateral.
 --   6. THE MEMBER'S READ IS ONE GROUP, engine and wrapper. A Sound member reads five rows, none of them Gate Crew's, and
 --      `session_status` called straight answers the same five: the scope is the engine's (052), not the wrapper's.
---   7. A MARSHAL READS BOTH GROUPS -- ten rows -- and Gate Crew's carried frame is still null in that read.
+--   7. A SECOND PLANNER READS BOTH GROUPS -- ten rows -- and Gate Crew's carried frame is still null in that read.
 --   8. AN OUTSIDER IS REFUSED, and `anon` cannot execute: the point is a follower's own walk, not a public map.
 --
 -- Proven to bite (each restored before the next run, and the check re-run green):
@@ -47,9 +47,9 @@ insert into public.event_roles (event_id, user_id, role) values
   ('0b000000-0000-4000-8000-000000000e29', 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7', 'planner'),
   ('0b000000-0000-4000-8000-000000000e29', 'ba04a00c-518f-4252-91d5-1081cecec1d2', 'participant'),
   ('0b000000-0000-4000-8000-000000000e29', '2906655b-33ad-4e9d-a608-f083e43e22d4', 'participant'),
-  ('0b000000-0000-4000-8000-000000000e29', '00cd023b-0e26-4574-a635-760e782c8029', 'marshal');
+  ('0b000000-0000-4000-8000-000000000e29', '00cd023b-0e26-4574-a635-760e782c8029', 'planner');
 
--- Gate Crew's IC and Sound's member. The marshal has no group, which is what makes their ten rows the ops read.
+-- Gate Crew's IC and Sound's member. The second planner has no group, which is what makes their ten rows the ops read.
 insert into public.group_members (event_id, group_id, user_id, is_ic, is_admin) values
   ('0b000000-0000-4000-8000-000000000e29', '0b000000-0000-4000-8000-00000000a291', 'ba04a00c-518f-4252-91d5-1081cecec1d2', true, false),
   ('0b000000-0000-4000-8000-000000000e29', '0b000000-0000-4000-8000-00000000a292', '2906655b-33ad-4e9d-a608-f083e43e22d4', false, false);
@@ -289,7 +289,7 @@ begin
   end if;
 end $$;
 
--- ---------- 4. the marshal reads both groups ----------
+-- ---------- 4. the second planner reads both groups ----------
 set local request.jwt.claims = '{"sub":"00cd023b-0e26-4574-a635-760e782c8029","role":"authenticated"}';
 
 do $$
@@ -300,18 +300,18 @@ declare
 begin
   select count(*) into v_n from public.session_timetable(v_s);
   if v_n <> 10 then
-    raise exception 'FAIL 4a: the marshal read % rows, expected 10', v_n;
+    raise exception 'FAIL 4a: the second planner read % rows, expected 10', v_n;
   end if;
   select count(distinct group_id) into v_n from public.session_timetable(v_s);
   if v_n <> 2 then
-    raise exception 'FAIL 4a: the marshal read % group(s), expected 2', v_n;
+    raise exception 'FAIL 4a: the second planner read % group(s), expected 2', v_n;
   end if;
-  -- The carried frame is null for the marshal too: the rule is about the plan, not about who is reading.
+  -- The carried frame is null for the planner too: the rule is about the plan, not about who is reading.
   select lat into v_lat from public.session_timetable(v_s)
    where group_id = '0b000000-0000-4000-8000-00000000a291'
      and frame_id = '0b000000-0000-4000-8000-0000000f2903';
   if v_lat is not null then
-    raise exception 'FAIL 4b: the marshal''s read answered a point for the carried frame';
+    raise exception 'FAIL 4b: the planner''s read answered a point for the carried frame';
   end if;
 end $$;
 

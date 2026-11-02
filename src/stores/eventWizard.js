@@ -4,7 +4,7 @@
 // background - does not lose it either; Confirm and Start over clear it.
 //
 // Roles follow the database (002): everyone added is a participant ("Member"), optionally also a
-// planner or marshal. Inside a group a person can be Admin and/or IC. The creator is root.
+// planner. Inside a group a person can be Admin and/or IC. The creator is root.
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { GROUP_PALETTE } from '../utils/groupColours'
@@ -12,7 +12,6 @@ import { GROUP_PALETTE } from '../utils/groupColours'
 export const ROLE_OPTIONS = [
   { value: 'participant', label: 'Member' },
   { value: 'planner', label: 'Planner' },
-  { value: 'marshal', label: 'Marshal' },
 ]
 
 // Colours the next new group gets (it can be changed)

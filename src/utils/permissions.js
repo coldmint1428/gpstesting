@@ -2,11 +2,10 @@
 // the pages only show what the server would allow. Keep every list here, so it is one file to change.
 //
 // Top role (one per person, highest first): root > planner > admin (group admin) > member.
-// Marshal and IC are duties on top of that, not ranks: an IC (group flag) shares GPS. A marshal (event_roles row) sees
-// what any other user sees (074) and can end an SOS. "View role" 'ic' is a member with that duty.
+// IC is a duty on top of that, not a rank: an IC (group flag) shares GPS. "View role" 'ic' is a member with that duty.
 
 export const ROLE_RANK = { root: 4, planner: 3, admin: 2, member: 1 }
-export const ROLE_LABEL = { root: 'Root', planner: 'Planner', marshal: 'Marshal', admin: 'Group admin', member: 'Member', ic: 'IC' }
+export const ROLE_LABEL = { root: 'Root', planner: 'Planner', admin: 'Group admin', member: 'Member', ic: 'IC' }
 
 // A member of useEventData ({ roles: ['planner', ...], isAdmin, isIC }) -> 'root' | 'planner' | 'admin' | 'member'
 export function topRole(member) {
@@ -16,9 +15,7 @@ export function topRole(member) {
   return member.isAdmin ? 'admin' : 'member'
 }
 
-export const isMarshal = (member) => !!member && (member.roles || []).includes('marshal')
-
-// The role the pages are built for: a member who is IC gets the IC view; being a marshal changes no page (074)
+// The role the pages are built for: a member who is IC gets the IC view
 export function viewRole(membership) {
   if (!membership) return null
   if (membership.role !== 'member') return membership.role
@@ -33,12 +30,6 @@ export function canManage(actorRole, targetRole) {
 export function assignableRoles(actorRole) {
   if (actorRole !== 'root' && actorRole !== 'planner') return []
   return ['planner', 'admin', 'member'].filter((r) => ROLE_RANK[r] < ROLE_RANK[actorRole])
-}
-
-// Marshal duty on / off: root / planners, for people below them
-export function canSetMarshal(actor, target) {
-  if (!actor || !target || actor.id === target.id) return false
-  return canManage(topRole(actor), topRole(target))
 }
 
 // IC: root / planners in any group (themselves too); a group admin for themselves and members of their own group
@@ -82,7 +73,7 @@ export const PAGE_ACCESS = {
   timeline: EVERYONE,
   map: EVERYONE,
   groups: EVERYONE, // ICs and members: their own group only
-  people: ['root', 'planner', 'admin'], // ICs and members cannot see everyone in the event (073, 074)
+  people: ['root', 'planner', 'admin'], // ICs and members cannot see everyone in the event (073)
   attendance: EVERYONE, // checking in; ICs, admins and planners also run roll calls (071)
   live: EVERYONE,
   playback: ['root', 'planner'],

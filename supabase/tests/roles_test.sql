@@ -4,7 +4,7 @@
 -- after 033. One transaction that ends in ROLLBACK: the test accounts, event and groups disappear.
 -- Each check raises 'FAIL n: ...'.
 --
--- Event "Roles test": root R, planners P and P2, M (a member with the marshal duty), Group 1 (admin A, IC U1, member U2),
+-- Event "Roles test": root R, planners P and P2, M (a member with no group), Group 1 (admin A, IC U1, member U2),
 -- Group 2 (admin A2, IC U3), member U4 with no group; X is not in the event.
 begin;
 
@@ -50,7 +50,7 @@ begin
   insert into auth.users (id, email, raw_user_meta_data)
   select id, uname || '@example.test', jsonb_build_object('username', uname, 'first_name', fname, 'last_name', 'Test')
   from (values (r, 'roles_root', 'Rita'), (p, 'roles_planner', 'Pat'), (p2, 'roles_planner2', 'Pam'),
-               (m, 'roles_marshal', 'Max'), (a, 'roles_admin', 'Ada'), (a2, 'roles_admin2', 'Abe'),
+               (m, 'roles_m', 'Max'), (a, 'roles_admin', 'Ada'), (a2, 'roles_admin2', 'Abe'),
                (u1, 'roles_u1', 'Uma'), (u2, 'roles_u2', 'Ugo'), (u3, 'roles_u3', 'Uli'), (u4, 'roles_u4', 'Una'),
                (x, 'roles_outsider', 'Xan')) v (id, uname, fname);
   -- an older client sends display_name only
@@ -60,7 +60,7 @@ begin
   insert into public.events (id, name, created_by) values (ev, 'Roles test', r);
   insert into public.event_roles (event_id, user_id, role) values
     (ev, r, 'root'), (ev, p, 'planner'), (ev, p, 'participant'), (ev, p2, 'planner'),
-    (ev, m, 'marshal'), (ev, m, 'participant'), (ev, a, 'participant'), (ev, a2, 'participant'),
+    (ev, m, 'participant'), (ev, a, 'participant'), (ev, a2, 'participant'),
     (ev, u1, 'participant'), (ev, u2, 'participant'), (ev, u3, 'participant'), (ev, u4, 'participant');
   insert into public.groups (id, event_id, name) values (g1, ev, 'Group 1'), (g2, ev, 'Group 2');
   insert into public.group_members (group_id, event_id, user_id, is_admin, is_ic) values
@@ -131,41 +131,12 @@ begin
   if public.member_top_role(ev, u2) <> 'admin' then raise exception 'FAIL 5: u2 is not admin'; end if;
   passed := passed + 1;
 
-  -- marshal is a duty, not a role: on / off by root / planners, kept when the role changes below planner
+  -- admin -> member clears the admin flag
   perform pg_temp.zz_as(p);
-  e := pg_temp.zz_err(format('select public.set_member_role(%L, %L, %L)', ev, u2, 'marshal'));
-  if e not like 'Role must be%' then raise exception 'FAIL 6: marshal given as a role (%)', e; end if;
-  perform public.set_marshal(ev, u2, true);
   perform public.set_member_role(ev, u2, 'member');
   reset role;
-  if public.member_top_role(ev, u2) <> 'member'
-     or (select is_admin from public.group_members where user_id = u2)
-     or not exists (select 1 from public.event_roles where event_id = ev and user_id = u2 and role = 'marshal') then
-    raise exception 'FAIL 6: admin -> member kept the admin flag, or lost the marshal duty';
-  end if;
-  perform pg_temp.zz_as(a);
-  e := pg_temp.zz_err(format('select public.set_marshal(%L, %L, false)', ev, u2));
-  if e <> 'Only the root and planners can make marshals' then raise exception 'FAIL 6: admin unset marshal (%)', e; end if;
-  perform pg_temp.zz_as(p);
-  e := pg_temp.zz_err(format('select public.set_marshal(%L, %L, true)', ev, p2));
-  if e <> 'You can only change people below you' then raise exception 'FAIL 6: planner made a planner marshal (%)', e; end if;
-  perform public.set_marshal(ev, u2, false);
-  perform public.set_marshal(ev, m, true);
-  perform pg_temp.zz_as(r);
-  perform public.set_member_role(ev, m, 'planner'); -- a planner is no longer also a marshal
-  reset role;
-  if exists (select 1 from public.event_roles where event_id = ev and user_id = m and role = 'marshal') then
-    raise exception 'FAIL 6: a new planner kept the marshal row';
-  end if;
-  perform pg_temp.zz_as(r);
-  perform public.set_member_role(ev, m, 'member');
-  perform public.set_marshal(ev, m, true);
-  perform pg_temp.zz_as(m);
-  j := public.my_event_membership(ev);
-  reset role;
-  if exists (select 1 from public.event_roles where event_id = ev and user_id = u2 and role = 'marshal')
-     or j ->> 'role' <> 'member' or not (j ->> 'is_marshal')::boolean then
-    raise exception 'FAIL 6: marshal off / back on: %', j;
+  if public.member_top_role(ev, u2) <> 'member' or (select is_admin from public.group_members where user_id = u2) then
+    raise exception 'FAIL 6: admin -> member kept the admin flag';
   end if;
   passed := passed + 1;
 
@@ -176,13 +147,13 @@ begin
   if public.member_top_role(ev, p2) <> 'member' then raise exception 'FAIL 7: demoted planner left the event'; end if;
   passed := passed + 1;
 
-  -- admins and marshals give no roles
+  -- admins and members give no roles
   perform pg_temp.zz_as(a);
   e := pg_temp.zz_err(format('select public.set_member_role(%L, %L, %L)', ev, u2, 'member'));
   if e <> 'Only the root and planners can change roles' then raise exception 'FAIL 8: admin changed a role (%)', e; end if;
   perform pg_temp.zz_as(m);
   e := pg_temp.zz_err(format('select public.set_member_role(%L, %L, %L)', ev, u2, 'member'));
-  if e <> 'Only the root and planners can change roles' then raise exception 'FAIL 8: marshal changed a role (%)', e; end if;
+  if e <> 'Only the root and planners can change roles' then raise exception 'FAIL 8: a member changed a role (%)', e; end if;
   reset role;
   passed := passed + 1;
 
@@ -216,7 +187,7 @@ begin
   perform public.remove_event_member(ev, u2);
   perform pg_temp.zz_as(m);
   e := pg_temp.zz_err(format('select public.remove_event_member(%L, %L)', ev, u1));
-  if e <> 'You can only remove people below you' then raise exception 'FAIL 11: marshal removed someone (%)', e; end if;
+  if e <> 'You can only remove people below you' then raise exception 'FAIL 11: a member removed someone (%)', e; end if;
   reset role;
   if public.member_top_role(ev, u2) is not null then raise exception 'FAIL 11: u2 still in the event'; end if;
   passed := passed + 1;

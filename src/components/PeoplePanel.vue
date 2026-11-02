@@ -4,12 +4,12 @@
 //   Root          : add people; make planners, group admins, members; remove anyone
 //   Planner       : the same for people below planner
 //   Group admin   : add people to their own group; removing members of their own group
-// ICs, marshals and members do not have this page: they see only their own group, on the Groups page (073, 074).
-// Marshal and IC (duties of a member) are switched on the Groups page (MembersPanel.vue); here they are badges only.
+// ICs and members do not have this page: they see only their own group, on the Groups page (073).
+// IC (a duty of a member) is switched on the Groups page (MembersPanel.vue); here it is a badge only.
 // An IC's arrival radius (063) stays here, beside the IC it belongs to.
 import { ref, computed, watch } from 'vue'
 import { initials } from '../utils/people'
-import { ROLE_RANK, ROLE_LABEL, topRole, isMarshal, canManage, assignableRoles, canSetIC, canRemove } from '../utils/permissions'
+import { ROLE_RANK, ROLE_LABEL, topRole, canManage, assignableRoles, canSetIC, canRemove } from '../utils/permissions'
 import { addEventMember, setMemberRole, setArrivalTolerance, removeEventMember } from '../services/memberService'
 import { findPersonByEmail, looksLikeEmail } from '../services/eventService'
 import { askConfirm, toast } from '../composables/useNotify'
@@ -61,8 +61,8 @@ const rows = computed(() => {
 // What I can do here, in one line
 const myScope = computed(() => {
   if (props.mode !== 'edit') return 'You can see everyone in this event.'
-  if (myRole.value === 'root') return 'You can change roles and remove people. Set marshals and ICs on the Groups page.'
-  if (myRole.value === 'planner') return 'You can change the roles of group admins and members, and remove them. Set marshals and ICs on the Groups page.'
+  if (myRole.value === 'root') return 'You can change roles and remove people. Set ICs on the Groups page.'
+  if (myRole.value === 'planner') return 'You can change the roles of group admins and members, and remove them. Set ICs on the Groups page.'
   if (myRole.value === 'admin' && props.me.groupId) return 'You can remove members of ' + groupName(props.me.groupId) + '. Set ICs on the Groups page.'
   return 'You are not in a group, so you have no one to manage.'
 })
@@ -223,7 +223,6 @@ async function changeTolerance(m, input) {
           <div class="kp-chips">
             <span class="kp-chip" :class="{ 'kp-chip-ink': r.role === 'root', 'kp-chip-mint': r.role === 'planner', 'd-md-none': r.any && r.actions.role }" :data-testid="'person-role-' + r.m.username">{{ ROLE_LABEL[r.role] }}</span>
             <span v-if="r.m.isAdmin && r.role !== 'admin'" class="kp-chip">Group admin</span>
-            <span v-if="isMarshal(r.m)" class="kp-chip" :data-testid="'person-marshal-' + r.m.username">Marshal</span>
             <span v-if="r.m.isIC" class="kp-chip kp-chip-peach" :data-testid="'person-ic-' + r.m.username">IC</span>
           </div>
 

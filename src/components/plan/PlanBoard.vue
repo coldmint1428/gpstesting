@@ -62,7 +62,7 @@ const props = defineProps({
   eventId: { type: String, required: true },
   canEdit: { type: Boolean, default: false },
   // Set for a member, an IC or a group admin: they see one group, never the event (040). 'none' means they are
-  // in no group yet. Null for ops staff (root, planner, marshal), who see every group.
+  // in no group yet. Null for ops staff (root, planner), who see every group.
   onlyGroupId: { type: String, default: null },
   // The event's live session (useEventSessions), when there is one: the board says which revision of the running
   // plan it is showing, and warns when another tab publishes a newer one (step 15).

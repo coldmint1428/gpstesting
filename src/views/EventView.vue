@@ -22,7 +22,7 @@ import { useZoneActivity } from '../composables/useZoneActivity'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
 import { formatDayTime, formatTimeSeconds } from '../utils/time'
 import { groupRoleLabel } from '../utils/people'
-import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, isMarshal, viewRole, canView, pageMode } from '../utils/permissions'
+import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, viewRole, canView, pageMode } from '../utils/permissions'
 import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, updateEventDetails, deleteEvent } from '../services/memberService'
 import { isNativeApp } from '../lib/platform'
 import PeoplePanel from '../components/PeoplePanel.vue'
@@ -319,7 +319,7 @@ function openPage(key) {
 // My membership as the permission map wants it, from the member list (kept up to date by Realtime)
 const membership = computed(() =>
   me.value
-    ? { role: topRole(me.value), group_id: me.value.groupId, is_admin: me.value.isAdmin, is_ic: me.value.isIC, is_marshal: isMarshal(me.value) }
+    ? { role: topRole(me.value), group_id: me.value.groupId, is_admin: me.value.isAdmin, is_ic: me.value.isIC }
     : null,
 )
 const role = computed(() => viewRole(membership.value)) // root | planner | admin | ic | member
@@ -710,7 +710,7 @@ async function removeEvent() {
       <div class="pv-head-text">
         <h1 class="pv-title" data-testid="event-name">{{ event.name }}</h1>
         <p class="pv-sub" data-testid="event-role-badge">
-          {{ ROLE_LABEL[topRole(me)] || 'Member' }}<template v-if="isMarshal(me)"> · Marshal</template><template v-if="myGroup"> · {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</template>
+          {{ ROLE_LABEL[topRole(me)] || 'Member' }}<template v-if="myGroup"> · {{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</template>
         </p>
       </div>
       <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">Live</span>
@@ -758,7 +758,6 @@ async function removeEvent() {
           <span>You</span>
           <div class="k-you-pills">
             <span class="chip" :class="topRole(me) === 'root' ? 'rl-root' : topRole(me) === 'planner' ? 'rl-planner' : 'chip-soft'" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
-            <span v-if="isMarshal(me)" class="chip chip-soft" data-testid="event-marshal-badge">Marshal</span>
             <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
           </div>
         </div>
@@ -771,7 +770,7 @@ async function removeEvent() {
           :mine="sos.mine.value"
           :gps="sos.gps.value"
           :me="me"
-          :can-end-any="canManage || isMarshal(me)"
+          :can-end-any="canManage"
           :now="live.now.value"
           :busy="sos.busy.value"
           @help="onSosHelp"
@@ -1007,8 +1006,8 @@ async function removeEvent() {
         />
 
         <!-- Timeline: the plan board for the people who draw it, and the timetable for the people who follow it
-             (step 16). Root and planner get the strip, the map and the inspector; a member, an IC, a group admin or a
-             marshal gets their own moments on the plan's clock, from the one read that is already scoped to them (052). -->
+             (step 16). Root and planner get the strip, the map and the inspector; a member, an IC or a group admin gets
+             their own moments on the plan's clock, from the one read that is already scoped to them (052). -->
         <template v-if="tab === 'timeline'">
           <PlanBoard
             v-if="modeOf('timeline') === 'edit'"

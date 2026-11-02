@@ -5,10 +5,9 @@
 //     node tools/sql.mjs --file dev/checks/step30-planline-prep.sql
 //     node tools/run.mjs dev/checks/step30-planline.mjs --session .tmp/session.json
 //
-// Needs three more sessions (the check says so if they are missing):
+// Needs two more sessions (the check says so if they are missing):
 //     node tools/authlink.mjs 2906655b-33ad-4e9d-a608-f083e43e22d4 .tmp/session3.json   (Sound's member)
 //     node tools/authlink.mjs ba04a00c-518f-4252-91d5-1081cecec1d2 .tmp/session4.json   (Gate Crew's IC)
-//     node tools/authlink.mjs 00cd023b-0e26-4574-a635-760e782c8029 .tmp/session5.json   (a marshal)
 //
 // THE BENCH IS STEP 29'S, run within five minutes of the prep (the bold leg is the pair +0:00 -> +5:00 only while the
 // clock is between them). Gate Crew's walk is one run, a break at its off-site moment, and a lone stage dot; Sound's is a
@@ -25,15 +24,13 @@
 //      discarded read.
 //   3. TWO IDENTITIES ON THE SAME ADDRESS prove the scope: Sound's member sees one line and it is Sound's; Gate Crew's IC
 //      sees one line and it is Gate Crew's; neither sees the staff board.
-//   4. THE MARSHAL reads every group: two lines and the board's two rows.
-//   5-6. THE TWO EMPTY BENCHES: never started, and running without a plan -- no line, no legend line, no checkbox, and
+//   4-5. THE TWO EMPTY BENCHES: never started, and running without a plan -- no line, no legend line, no checkbox, and
 //      the map that is still there is the people's.
-//   7. THE SHOTS.
+//   6. THE SHOTS.
 import fs from 'node:fs'
 
 const soundFile = process.env.SOUND_SESSION || '.tmp/session3.json'
 const gateFile = process.env.GATE_SESSION || '.tmp/session4.json'
-const marshalFile = process.env.MARSHAL_SESSION || '.tmp/session5.json'
 const staffFile = process.env.PLANNER_SESSION || '.tmp/session.json'
 
 const EVENT = '0b000000-0000-4000-8000-000000000e39'
@@ -89,7 +86,6 @@ export default {
       [staffFile, 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7', 'planner'],
       [soundFile, '2906655b-33ad-4e9d-a608-f083e43e22d4', "Sound's member"],
       [gateFile, 'ba04a00c-518f-4252-91d5-1081cecec1d2', "Gate Crew's IC"],
-      [marshalFile, '00cd023b-0e26-4574-a635-760e782c8029', 'marshal'],
     ]) {
       if (!fs.existsSync(file)) {
         throw new Error(`no ${who} session at ${file}. Mint one with: node tools/authlink.mjs ${id} ${file}`)
@@ -98,7 +94,6 @@ export default {
     const staff = JSON.parse(fs.readFileSync(staffFile, 'utf8'))
     const sound = JSON.parse(fs.readFileSync(soundFile, 'utf8'))
     const gate = JSON.parse(fs.readFileSync(gateFile, 'utf8'))
-    const marshal = JSON.parse(fs.readFileSync(marshalFile, 'utf8'))
 
     // ---------- 1. the staff view: the walk under the people ----------
     const view = await newTab({ session: staff, label: 'staff live', url: live, width: 1440, height: 1500 })
@@ -251,20 +246,7 @@ export default {
     await gateTab.assertNoErrors()
     await gateTab.close()
 
-    // ---------- 4. the marshal reads every group ----------
-    const marshalTab = await newTab({ session: marshal, label: 'marshal', url: live, width: 1280, height: 1400 })
-    await marshalTab.waitFor('[data-testid=live-map]', { timeout: 25000 })
-    await marshalTab.waitUntil(`${count('[data-plan-line]')} === 2`, { what: "both groups' walks for a marshal", timeout: 25000 })
-    await marshalTab.assertThat(
-      'a marshal sees both lines',
-      (await marshalTab.count(`[data-plan-line="${GATE}"]`)) === 1 && (await marshalTab.count(`[data-plan-line="${SOUND}"]`)) === 1,
-    )
-    await marshalTab.waitUntil(`${count('[data-testid=ops-row]')} === 2`, { what: 'both rows of the board', timeout: 15000 })
-    await marshalTab.assertThat('and the board’s two rows', (await marshalTab.count('[data-testid=ops-row]')) === 2)
-    await marshalTab.assertNoErrors()
-    await marshalTab.close()
-
-    // ---------- 5-6. the two empty benches ----------
+    // ---------- 4-5. the two empty benches ----------
     for (const [id, name, why, badge] of [
       [NEVER, 'never started', 'an event that has never been started', 'status-not-started'],
       [NO_PLAN, 'no plan tonight', 'an event running without a plan', 'status-live'],

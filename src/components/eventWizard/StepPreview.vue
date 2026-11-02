@@ -36,8 +36,6 @@ const roleLabel = (role) => (role === 'root' ? 'Root' : ROLE_OPTIONS.find((r) =>
       <dd>{{ withRole('root').map((p) => p.display_name).join(', ') }} (you)</dd>
       <dt>Planners</dt>
       <dd>{{ withRole('planner').map((p) => p.display_name).join(', ') || 'None' }}</dd>
-      <dt>Marshals</dt>
-      <dd>{{ withRole('marshal').map((p) => p.display_name).join(', ') || 'None' }}</dd>
       <dt>Members</dt>
       <dd>{{ withRole('participant').length }}</dd>
     </dl>

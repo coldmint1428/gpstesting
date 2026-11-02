@@ -20,7 +20,7 @@
 --   6. Deleting a frame deletes what was recorded at it (frame_id on delete cascade), and the frame is then gone
 --      from the timetable as well.
 --   7. An ended session can still be recorded -- paperwork happens late -- and that is stated here rather than
---      discovered by a marshal the morning after.
+--      discovered the morning after.
 --
 -- The clock the check works on: it builds its own plan and starts a real session through start_event. The plan's
 -- T+0 is "50 minutes ago", so the session's starts_at is 50 minutes after its t0_at by construction: start_event

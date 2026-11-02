@@ -8,7 +8,7 @@ const N = Number(process.env.USERS || 300)
 const seed = JSON.parse(fs.readFileSync('.tmp/loadtest/seed.json', 'utf8'))
 const sessions = JSON.parse(fs.readFileSync('.tmp/loadtest/sessions.json', 'utf8'))
 const PASSWORD = JSON.parse(fs.readFileSync('.tmp/qa-accounts.json', 'utf8')).password
-for (const who of ['root', 'planner', 'marshal']) await sessionFor(who) // refreshes the cached staff sessions
+for (const who of ['root', 'planner']) await sessionFor(who) // refreshes the cached staff sessions
 let waits = 0
 let n = 0
 for (const p of seed.people.slice(0, N)) {

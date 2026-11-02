@@ -9,7 +9,7 @@ import InvitePanel from './InvitePanel.vue'
 
 const props = defineProps({
   event: { type: Object, required: true },
-  role: { type: String, default: null }, // view role: root | planner | marshal | admin | ic | member
+  role: { type: String, default: null }, // view role: root | planner | admin | ic | member
   mode: { type: String, default: 'view' }, // 'edit' (root) | 'view'
   members: { type: Array, required: true },
   groups: { type: Array, required: true },

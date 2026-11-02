@@ -6,7 +6,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getMyEvents, getLiveEventIds, joinEventByCode } from '../services/eventService'
-import { ROLE_LABEL, topRole, isMarshal, viewRole } from '../utils/permissions'
+import { ROLE_LABEL, topRole, viewRole } from '../utils/permissions'
 import BenchAlert from '../components/BenchAlert.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import KLogo from '../components/kinetic/KLogo.vue'
@@ -79,7 +79,7 @@ async function load() {
 }
 onMounted(load)
 
-const roleLabel = (ev) => ROLE_LABEL[viewRole({ role: topRole(ev), is_ic: ev.isIC, is_marshal: isMarshal(ev) })]
+const roleLabel = (ev) => ROLE_LABEL[viewRole({ role: topRole(ev), is_ic: ev.isIC })]
 const liveEvents = computed(() => events.value.filter((e) => liveIds.value.includes(e.id)))
 const upcoming = computed(() =>
   events.value

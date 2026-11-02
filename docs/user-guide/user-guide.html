@@ -89,7 +89,6 @@
     <tr><th style="width:24%">Role</th><th>What they do</th></tr>
     <tr><td><b>Root</b></td><td>Created the event. Can do everything a planner can, and manage the event itself.</td></tr>
     <tr><td><b>Planner</b></td><td>Builds the run sheet, zones and groups; starts and runs the show; watches every group on the Ops / Live map page; can message everyone at once.</td></tr>
-    <tr><td><b>Marshal</b></td><td>Helps on the ground: sees the groups, can mark a group in position (e.g. heard on the radio) and report delays for it.</td></tr>
     <tr><td><b>Group admin</b></td><td>Looks after one group: adds its people.</td></tr>
     <tr><td><b>IC (in charge)</b></td><td>The person whose phone shares the group's location. Gets "Your next move" with a countdown, and can tell the planners about a delay or say "We're in position".</td></tr>
     <tr><td><b>Member</b></td><td>Belongs to a group; sees where the group must be next.</td></tr>
@@ -137,7 +136,7 @@
     <tr><td><span class="chip c-late">Late</span></td><td>Will not make it in time: the label shows by how much (e.g. +1:30).</td></tr>
     <tr><td><span class="chip c-sig">○ Not sharing yet</span></td><td>None of the group's ICs has pressed Share in this session.</td></tr>
     <tr><td><span class="chip c-sig">◌ No signal</span></td><td>The ICs were sharing but nothing has been heard for 2 minutes.</td></tr>
-    <tr><td><span class="chip c-done">Arrived</span> / Arrived late</td><td>The group is inside its zone (or an IC / marshal said "in position").</td></tr>
+    <tr><td><span class="chip c-done">Arrived</span> / Arrived late</td><td>The group is inside its zone (or an IC said "in position").</td></tr>
   </table>
 </section>
 
@@ -228,7 +227,7 @@
   <table class="avoid">
     <tr><th style="width:22%">Type</th><th>Used for</th></tr>
     <tr><td><b>Zone</b></td><td>A place a group must reach. Movements in the run sheet point to it.</td></tr>
-    <tr><td><b>No-Go</b></td><td>A place groups must not enter. Entering it sends one alert to planners and marshals and a red banner to the IC.</td></tr>
+    <tr><td><b>No-Go</b></td><td>A place groups must not enter. Entering it sends one alert to planners and a red banner to the IC.</td></tr>
     <tr><td><b>Obstacle / Stage / Entrance</b></td><td>Shown on the map to help people find their way.</td></tr>
   </table>
   <h3>Overview</h3>
@@ -354,7 +353,7 @@
 <section class="page">
   <div class="kicker">Android phone app</div>
   <h2>10. Planner screens</h2>
-  <p>Inside an event, the header shows the event name, your role and a red <b>● LIVE</b> badge while the show runs. Planners, roots and marshals get these tabs: <b>Ops, Map, Run sheet, People, More</b>. Tap the back arrow to return to My events.</p>
+  <p>Inside an event, the header shows the event name, your role and a red <b>● LIVE</b> badge while the show runs. Planners and roots get these tabs: <b>Ops, Map, Run sheet, People, More</b>. Tap the back arrow to return to My events.</p>
   <div class="row">
     <div class="shot"><img src="img/phone-ops.png" alt="Ops tab" /></div>
     <div class="text">
@@ -448,8 +447,8 @@
     <tr><td>Everyone in the event</td><td>Every person with any role, except you.</td></tr>
     <tr><td>Every group's members</td><td>Everyone who is in a group.</td></tr>
     <tr><td>ICs and group admins</td><td>The people leading each group.</td></tr>
-    <tr><td>Planners and marshals</td><td>The root, planners and marshals.</td></tr>
-    <tr><td>One sector… / One category…</td><td>The members of the groups with that sector or category (set in Members → Group details). A sector also reaches the marshals of that sector.</td></tr>
+    <tr><td>Root and planners</td><td>The root and the planners.</td></tr>
+    <tr><td>One sector… / One category…</td><td>The members of the groups with that sector or category (set in Members → Group details).</td></tr>
   </table>
 </section>
 

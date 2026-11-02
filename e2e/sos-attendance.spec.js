@@ -1,7 +1,7 @@
 // E2E: SOS and attendance (Ern's event_creation_ern work, merged into komin-merge on 1 Nov), role by role.
 // The rules are the database's own (072_sos.sql, 071_attendance.sql):
 //   SOS:        anyone in the event raises one; everyone in the event is alerted and can say "I'm on my way";
-//               the sender ("I'm safe"), root / planners / marshals and the sender's group IC or admin end it.
+//               the sender ("I'm safe"), root / planners and the sender's group IC or admin end it.
 //   Attendance: root / planners run roll calls for any group, a group's IC or admin for their own; by hand, or (QR mode,
 //               set by root / planners) everyone scans the QR on the IC's screen, which changes every 5 seconds.
 // The member and the IC use a 390 px phone; the root uses a laptop.

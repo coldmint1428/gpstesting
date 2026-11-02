@@ -1,7 +1,7 @@
 // Scenario and pushback tests: the NDP night's awkward moments, each with the answer the spec says it should get.
 //   node tools/qa/scenarios.mjs
 // Runs against the live database through the same RPCs the app calls, as the QA accounts (qa_root plans, qa_ic1/qa_ic2
-// are Alpha's two ICs, qa_marshal marks, qa_member reads). Each scenario is a list of checks; the run writes
+// are Alpha's two ICs, qa_planner marks, qa_member reads). Each scenario is a list of checks; the run writes
 // .tmp/scenarios/result.json and prints a table. Nothing here needs the service key: every refusal is the database's.
 import fs from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -30,7 +30,6 @@ const must = (r, what) => {
 const root = (await clientFor('root')).sb
 const ic1 = await clientFor('ic1')
 const ic2 = await clientFor('ic2')
-const marshal = (await clientFor('marshal')).sb
 const member = (await clientFor('member')).sb
 const planner = (await clientFor('planner')).sb
 
@@ -117,8 +116,8 @@ scenario('Two planners edit at once: the second save on a stale revision is refu
 scenario('History is kept: a marked moment survives, and an import over a marked plan is refused', 'Comparison is against the plan version in force; re-planning cannot retroactively rewrite history')
 {
   const f0 = (await framesNow())[0]
-  const mark = await marshal.rpc('progress_mark', { p_session: session.id, p_frame: f0.id, p_group: ev.groups.Alpha, p_state: 'arrived', p_at: new Date().toISOString() })
-  check('the marshal marks Alpha arrived at the first moment', !mark.error, mark.error?.message)
+  const mark = await planner.rpc('progress_mark', { p_session: session.id, p_frame: f0.id, p_group: ev.groups.Alpha, p_state: 'arrived', p_at: new Date().toISOString() })
+  check('the planner marks Alpha arrived at the first moment', !mark.error, mark.error?.message)
   const again = await ic1.sb.rpc('progress_mark', { p_session: session.id, p_frame: f0.id, p_group: ev.groups.Alpha, p_state: 'missed', p_at: new Date().toISOString() })
   check("a second person cannot replace somebody else's mark", !!again.error, again.error?.message)
   const imp = await root.rpc('plan_import', { p_plan: plan.id, p_frames: frames })
@@ -150,11 +149,11 @@ scenario("One IC's phone goes wrong: the group's position is not dragged by it",
   check('a made-up tracking pass is refused', !forged.ok, forged.status)
 }
 
-// ---------- 6. the marshal takes over ----------
-scenario('The marshal takes the board, then the IC is taken off and put back mid-event', 'Marshal marks take priority, the hand-over is logged')
+// ---------- 6. a planner takes over ----------
+scenario('A planner takes the board, then the IC is taken off and put back mid-event', 'Ops marks take priority, the hand-over is logged')
 {
-  const take = await marshal.rpc('handover_take', { p_session: session.id, p_note: 'QA: radio check, I have the board' })
-  check('the marshal takes the board', !take.error, take.error?.message)
+  const take = await planner.rpc('handover_take', { p_session: session.id, p_note: 'QA: radio check, I have the board' })
+  check('the planner takes the board', !take.error, take.error?.message)
   const log = await root.rpc('handover_log_list', { p_session: session.id })
   check('the hand-over is in the log with the note', !log.error && (log.data || []).some((r) => /radio check/.test(JSON.stringify(r))), log.error?.message)
   const u = (await clientFor('ic2')).user.id

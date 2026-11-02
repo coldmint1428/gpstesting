@@ -18,7 +18,7 @@
 --      the one read that still answers -- which is what makes closing the rest possible without taking the
 --      timetable away. Both the table and the function are tried, because a table policy does not close an invoker
 --      function that was written to bypass it.
---   4. OPS STAFF KEEP EVERYTHING. A marshal sees every group, every position, every outcome, every plan (draft
+--   4. OPS STAFF KEEP EVERYTHING. A planner sees every group, every position, every outcome, every plan (draft
 --      included): the narrowing must not narrow the people who run the night.
 --   5. THE OTHER GROUP'S IC reads their own group only -- the same rule through four different doors.
 --   6. A MEMBER WITH NO GROUP reads nothing, and the live plan is still the one plan they may read.
@@ -82,9 +82,8 @@ insert into public.plans (id, event_id, name, for_date, t0_time, status, created
 insert into public.plan_frames (id, plan_id, event_id, t_s, note, created_by) values
   ('0b000000-0000-4000-8000-0000000f1611', '0b000000-0000-4000-8000-00000000b16d', '0b000000-0000-4000-8000-000000000e01', 0, 'secret', 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7');
 
--- A marshal who is not otherwise in the plan's story: ops staff have to keep seeing everything (testuser2).
-insert into public.event_roles (event_id, user_id, role) values
-  ('0b000000-0000-4000-8000-000000000e01', 'c6bba1d6-9ef3-41f7-b504-9a9b4b7de8e5', 'marshal');
+-- testuser2 is a planner of the bench who is not otherwise in the plan's story: ops staff have to keep seeing
+-- everything.
 
 -- ---------- open the session through the product's door ----------
 set local role authenticated;
@@ -325,17 +324,17 @@ declare
   v_n integer;
 begin
   select count(*) into v_n from public.session_timetable(v_s);
-  if v_n <> 10 then raise exception 'FAIL 5a: a marshal reads % timetable rows, expected 10', v_n; end if;
+  if v_n <> 10 then raise exception 'FAIL 5a: a planner reads % timetable rows, expected 10', v_n; end if;
   select count(*) into v_n from public.session_status(v_s);
-  if v_n <> 10 then raise exception 'FAIL 5b: a marshal reads % engine rows, expected 10', v_n; end if;
+  if v_n <> 10 then raise exception 'FAIL 5b: a planner reads % engine rows, expected 10', v_n; end if;
   select count(*) into v_n from public.plan_frames where plan_id = '0b000000-0000-4000-8000-000000000b16';
-  if v_n <> 5 then raise exception 'FAIL 5c: a marshal reads % frames of the live plan, expected 5', v_n; end if;
+  if v_n <> 5 then raise exception 'FAIL 5c: a planner reads % frames of the live plan, expected 5', v_n; end if;
   select count(*) into v_n from public.plan_frames where plan_id = '0b000000-0000-4000-8000-00000000b16d';
-  if v_n <> 1 then raise exception 'FAIL 5d: a marshal reads % frames of the draft, expected 1 (finding 23 over-corrected)', v_n; end if;
+  if v_n <> 1 then raise exception 'FAIL 5d: a planner reads % frames of the draft, expected 1 (finding 23 over-corrected)', v_n; end if;
   select count(*) into v_n from public.plan_positions where plan_id = '0b000000-0000-4000-8000-000000000b16';
-  if v_n <> 8 then raise exception 'FAIL 5e: a marshal reads % positions, expected 8', v_n; end if;
+  if v_n <> 8 then raise exception 'FAIL 5e: a planner reads % positions, expected 8', v_n; end if;
   select count(*) into v_n from public.plan_progress where session_id = v_s;
-  if v_n <> 4 then raise exception 'FAIL 5f: a marshal reads % outcomes, expected 4', v_n; end if;
+  if v_n <> 4 then raise exception 'FAIL 5f: a planner reads % outcomes, expected 4', v_n; end if;
 end $$;
 
 -- ---------- 6. the other group's IC reads their own group, through all four doors ----------

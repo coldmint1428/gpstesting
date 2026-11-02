@@ -17,7 +17,7 @@
 --      the sender's read carries the tally and who is still to ack.
 --   3. THE AUDIENCE IS THE PLAN'S GROUPS. `all` reaches the members of the groups the plan places (a group with no part
 --      in the plan is not told, a group with no members contributes nobody), `group` reaches one of them, `ops` reaches
---      the root/planners/marshals; the sender is never a recipient; a marshal may send, a member may not.
+--      the root/planners; the sender is never a recipient; a planner may send, a member may not.
 --   4. THE TIMELINE PUSH IS TARGETED. Publishing compares the walk it announces with the walk it replaces, group by
 --      group, and writes one `timeline` row whose recipients are the members of the affected groups only. A republish
 --      that changes nothing writes nothing and queues nothing; a first publish tells nobody; moving one group's point

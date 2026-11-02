@@ -9,7 +9,7 @@ the captured files, so every claim is checkable against a screenshot.
 
 **Headline:** the design is a strong, production-grade elaboration of the spec's *planning* half and a
 weaker match for its *live* half. It covers the shared timeline, zones, movement planning, playback and
-the multi-role model well. It does not implement the Marshal fallback role, the IC-weighted-midpoint /
+the multi-role model well. It does not implement the IC-weighted-midpoint /
 handoff model, T+0 as the internal clock, versioned re-planning, or the ack-based notification contract.
 It also adds a substantial attendance system the spec never mentions — which may be the most valuable
 thing in it.
@@ -19,12 +19,12 @@ thing in it.
 | Spec area | Status | Design evidence | Gap |
 |---|---|---|---|
 | Problem framing | **Covered** | `Main`, `M-SignIn` — "Plan the venue. Move every group on time." | — |
-| Roles & access | **Partial** | `D-Root-Participants` (Planner, IC, Group Admin, Participant), `D-Admin-Members`, `D-Planner-*` | No Marshal; no per-event multi-role *assignment* screen (badges show it: "role per event") |
+| Roles & access | **Partial** | `D-Root-Participants` (Planner, IC, Group Admin, Participant), `D-Admin-Members`, `D-Planner-*` | No per-event multi-role *assignment* screen (badges show it: "role per event") |
 | Joining | **Partial** | `D-Join`, `M-Join`, `D-Root-Overview` (invite link + QR, approval queue), `D-Create-CSV` | No join-by-code from home; joins are link/email only |
 | Layout / zones | **Partial** | `D-Planner-Zones` (7 zones: Stage, Restricted, Holding, Assembly, Entrance, Exit, No-go) | No floor-plan raster overlay; no Obstacle type; no visible polygon-editing affordance |
 | Time model | **Partial** | `D-Planner-Timeline` (activities with Starts/Ends per group), `D-Planner-Playback` | No T+0 internal clock; no named "state + description"; no 25 m cap or polygon-crossing validation surfaced |
 | Authoring | **Partial** | `D-Planner-Timeline` (add/edit/delete activity, Undo point), `M-Planner-Timeline` | No copy/paste of states; no multi-select drag; no segment rule-flagging; CSV is people-only |
-| Live | **Partial** | `D-Planner-Live` (planned vs actual, Needs attention / At risk / No signal / Late), `D-IC-Now`, `M-IC-Location-Off` | No marshal marks; no weighted midpoint of multiple ICs; no handoff or handoff log |
+| Live | **Partial** | `D-Planner-Live` (planned vs actual, Needs attention / At risk / No signal / Late), `D-IC-Now`, `M-IC-Location-Off` | No weighted midpoint of multiple ICs; no handoff or handoff log |
 | Comparison | **Partial** | Attendance bands per activity; `D-Admin-Attendance` (Present/Late/Absent/Not marked) | Vocabulary is attendance, not state-hit; no "missed"; no plan-version-in-force |
 | Change handling | **Missing** | "Share plan with groups" exists (publish) | No shift-remaining-span, no hold-one-group, no version list |
 | Playback | **Covered** | `D-Planner-Playback` (timestamps, Problems, selected/all routes, "lost signal" markers), `D-Stress-Playback` | Not editable back into the plan style |
@@ -70,11 +70,9 @@ These are additions, not gaps. Several close real holes in the written spec.
 
 Ordered by how much work each gap implies.
 
-**1. Marshal role is entirely absent.** No board mentions it; the role vocabulary across all 72 boards is
-Root / Planner / Group Admin / IC / Participant. This removes the spec's stated fallback for GPS failure
-— and note the design *has* the failure (`No signal`, `Not tracked`, `M-IC-Location-Off`) but no recovery
-path other than "Message all ICs". The spec's design intent — marshal marks outrank IC GPS, hand back at
-marshal's judgement, handoff logged — has no UI at all.
+**1. No recovery path for GPS failure.** The role vocabulary across all 72 boards is Root / Planner /
+Group Admin / IC / Participant, which matches the spec. The design *has* the failure (`No signal`, `Not
+tracked`, `M-IC-Location-Off`) but no recovery path other than "Message all ICs".
 
 **2. Live position model is single-source.** Design shows "ICs 2" (`D-Admin-Members`, tab "ICs 2") but
 never expresses the weighted midpoint of multiple ICs, nor which source is currently authoritative. So
@@ -128,10 +126,9 @@ link" and email invite. A code is materially different at a 200-person door queu
    (then rename it and give it an ack), or it is messaging and violates the non-goal. This needs a
    decision, not a redesign.
 2. **Attendance vs state-hit as the comparison primitive.** The spec defines comparison as arrival vs
-   planned state, human-confirmed by a marshal. The design defines it as per-person attendance, confirmed
-   by the group's admin/IC/participant. Both are "human confirms", but the confirmer and granularity
-   differ, and the spec gives marshals priority in the live model while the design gives admins the
-   attendance authority. Pick one primary, or state the relationship (attendance ⊂ state-hit?).
+   planned state, human-confirmed. The design defines it as per-person attendance, confirmed by the
+   group's admin/IC/participant. Both are "human confirms", but the granularity differs, and the design
+   gives admins the attendance authority. Pick one primary, or state the relationship (attendance ⊂ state-hit?).
 3. **"Fix in the plan"** (`D-Planner-Overview`) hints at guided remediation. The spec rules out automated
    bottleneck detection but playback "lets the planner see it". A deep-link is fine; a suggestion engine
    is not.
@@ -142,8 +139,8 @@ link" and email invite. A code is materially different at a 200-person door queu
 
 1. **Decide the comparison primitive** (attendance vs state-hit) — everything downstream, including the
    live monitor's status taxonomy and the version-freeze requirement, depends on it.
-2. **Design the Marshal surface** — 3 boards would do it: marshal sees groups + IC GPS, drop-a-pin
-   override, "hand back to IC" with a logged handoff entry. It reuses `D-Planner-Live` structure.
+2. **Design a GPS-failure path** — a planner's drop-a-pin override for a group whose ICs have no signal,
+   with a logged entry. It reuses `D-Planner-Live` structure.
 3. **Add the two change operations** — a "Shift remaining" control on the event timeline and a
    "Hold this group" control in a group's timeline, both producing a version.
 4. **Add version history + author/time stamp**, since live comparison needs a plan-version pointer.
@@ -155,8 +152,7 @@ link" and email invite. A code is materially different at a 200-person door queu
 ## Questions the design raises that the spec should answer
 
 - Is attendance per activity *required* for every event, or opt-in? It doubles the marking workload.
-- Who may override a group's position: marshal only, or any admin? The spec says marshal; the design has
-  no one.
+- Who may override a group's position: a planner only, or any admin? The design has no one.
 - Does "Hold one group" shift that group's attendance windows too?
 - At 30 groups, does the planner need the "Needs attention" bucket to be subdivided by outcome (late vs
   no-signal vs missed), given the spec's four outcomes?

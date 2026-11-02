@@ -161,39 +161,7 @@ begin
   if v_n <> 16 then raise exception 'FAIL 5: the other planner sees % of 16 positions', v_n; end if;
 end $$;
 
--- ---------- 6. a marshal is ops staff too (and losing the duty loses the view) ----------
--- A marshal stands on the floor and already sees every group's movement (027). The plan says the same thing, so
--- this is checked with a real marshal role, then removed again: the duty is not the bench's normal state.
-reset role;
-insert into public.event_roles (event_id, user_id, role)
-values ('0b000000-0000-4000-8000-000000000e01', '00cd023b-0e26-4574-a635-760e782c8029', 'marshal');
-set local request.jwt.claims = '{"sub":"00cd023b-0e26-4574-a635-760e782c8029","role":"authenticated"}';
-set local role authenticated;
-
-do $$
-declare v_n integer;
-begin
-  select count(*) into v_n from public.plan_positions where plan_id = '0b000000-0000-4000-8000-000000000b02';
-  if v_n <> 16 then raise exception 'FAIL 6a: a marshal sees % of 16 positions, expected every group', v_n; end if;
-end $$;
-
-reset role;
-delete from public.event_roles
- where event_id = '0b000000-0000-4000-8000-000000000e01'
-   and user_id = '00cd023b-0e26-4574-a635-760e782c8029' and role = 'marshal';
-set local request.jwt.claims = '{"sub":"00cd023b-0e26-4574-a635-760e782c8029","role":"authenticated"}';
-set local role authenticated;
-
-do $$
-declare v_n integer;
-begin
-  select count(*) into v_n from public.plan_positions where plan_id = '0b000000-0000-4000-8000-000000000b02';
-  if v_n <> 4 then
-    raise exception 'FAIL 6b: after the marshal duty ended the IC still sees % positions, expected 4', v_n;
-  end if;
-end $$;
-
--- ---------- 7. finding 20: no PUBLIC execute left on the plan surface ----------
+-- ---------- 6. finding 20: no PUBLIC execute left on the plan surface ----------
 reset role;
 
 do $$
@@ -246,6 +214,5 @@ select jsonb_build_object(
   'second_ic', 'same 4',
   'sound_admin', '4 positions, no plan_check errors (the frames are closed)',
   'planner', '16 positions, 4 groups, sees the 200 m error',
-  'marshal', '16 while on duty, 4 after',
   'grants', 'PUBLIC 0, anon 0, authenticated 12 of 12'
 ) as step3;

@@ -30,7 +30,7 @@ const grab = (html, re, map = (m) => stripTags(m[1])) => {
 };
 
 const TERMS = {
-  roles: /\b(Root user|Planner|Group Admin|Admin|IC|Participant|Marshal)\b/gi,
+  roles: /\b(Root user|Planner|Group Admin|Admin|IC|Participant)\b/gi,
   time: /\b(T\+0|snapshot|waypoint|state|time span|timeline|master clock)\b/gi,
   live: /\b(live monitor|no signal|GPS|location|checkpoint|at risk)\b/gi,
   change: /\b(shift|hold|version|re-plan|republish|updated)\b/gi,

@@ -2,7 +2,7 @@
 // PlanRoute — the follower's own map (step 29): the walk their group is meant to take, drawn on the venue's zones, and
 // nothing of any other group's.
 //
-// WHO THIS IS FOR. Everyone the board is not for — a member, an IC, a group admin, a marshal. The Map tab used to be a
+// WHO THIS IS FOR. Everyone the board is not for — a member, an IC, a group admin. The Map tab used to be a
 // placeholder for all of them ("the event map: zones and areas, view only") that drew nothing, because the one read a
 // follower has answered the moment's place *name* and not its point (`session_timetable`, 062). Step 29 gives the read
 // the point (065) and this file the map. Root and planner keep the zone editor on this tab; this is mounted for
@@ -16,7 +16,7 @@
 // page), nothing here estimates a walk time, and nothing here routes around anything.
 //
 // WHY IT CANNOT SHOW ANOTHER GROUP. Not because this screen filters: `session_timetable` applies 040's scope inside the
-// engine (052), so a member's read answers their group's rows alone, and a marshal's answers both. The map draws what
+// engine (052), so a member's read answers their group's rows alone, and a planner's answers every group's. The map draws what
 // arrived. A client-side filter would look identical in a browser and be a different rule.
 //
 // ONE READ, THE SAME ONE THE SCHEDULE MAKES. The timetable, every 30 s, woken at each moment, and on a publish (the
@@ -48,7 +48,7 @@ const props = defineProps({
   // The session to read: the live one, the scheduled one, or the last one that ended (EventView picks). Null when the
   // event has never been started, which is the one case with nothing to read.
   session: { type: Object, default: null },
-  // True for ops staff (root, planner, marshal): the read answers every group, so the map draws every group's walk.
+  // True for ops staff (root, planner): the read answers every group, so the map draws every group's walk.
   whole: { type: Boolean, default: false },
   // The caller's group, for the header and for the no-group empty state. The rows are the authority for what is drawn.
   myGroup: { type: Object, default: null },

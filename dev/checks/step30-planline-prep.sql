@@ -1,15 +1,13 @@
 -- The bench step 30's browser check reads: step 29's live walk, plus the two things the live map needs to show the same
 -- walk under the people -- a GPS reading per group, a couple of dozen metres OFF the plan's line (so a picture shows
--- both halves of the question: where the plan says the group is, and where the group actually is), and a marshal, who
--- reads every group from the Live page and sees no board of their own.
+-- both halves of the question: where the plan says the group is, and where the group actually is).
 --
 --     node tools/sql.mjs --file dev/checks/step30-planline-prep.sql
 --     node tools/run.mjs dev/checks/step30-planline.mjs --session .tmp/session.json
 --
--- Needs three more sessions (the check says so if they are missing):
+-- Needs two more sessions (the check says so if they are missing):
 --     node tools/authlink.mjs 2906655b-33ad-4e9d-a608-f083e43e22d4 .tmp/session3.json   (Sound's member)
 --     node tools/authlink.mjs ba04a00c-518f-4252-91d5-1081cecec1d2 .tmp/session4.json   (Gate Crew's IC)
---     node tools/authlink.mjs 00cd023b-0e26-4574-a635-760e782c8029 .tmp/session5.json   (a marshal)
 --
 -- THIS IS STEP 29'S BENCH WITH THREE ADDITIONS. The event, plan, frame and group ids are step 29's, so either check runs
 -- on either bench: five frames five minutes apart, Gate Crew at the gate at +0:00 and +5:00, carried at +10:00, off site
@@ -56,9 +54,7 @@ insert into public.event_roles (event_id, user_id, role) values
   ('0b000000-0000-4000-8000-000000000e39', 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7', 'root'),
   ('0b000000-0000-4000-8000-000000000e39', 'ead7d0d2-8c53-4bca-b4e5-27bb8ca513a7', 'planner'),
   ('0b000000-0000-4000-8000-000000000e39', 'ba04a00c-518f-4252-91d5-1081cecec1d2', 'participant'),
-  ('0b000000-0000-4000-8000-000000000e39', '2906655b-33ad-4e9d-a608-f083e43e22d4', 'participant'),
-  -- Step 30's addition: a marshal reads every group and has no board of their own to look at.
-  ('0b000000-0000-4000-8000-000000000e39', '00cd023b-0e26-4574-a635-760e782c8029', 'marshal');
+  ('0b000000-0000-4000-8000-000000000e39', '2906655b-33ad-4e9d-a608-f083e43e22d4', 'participant');
 
 insert into public.group_members (event_id, group_id, user_id, is_ic, is_admin) values
   ('0b000000-0000-4000-8000-000000000e39', '0b000000-0000-4000-8000-00000000a391', 'ba04a00c-518f-4252-91d5-1081cecec1d2', true, false),
@@ -156,8 +152,7 @@ commit;
 select e.id as event, s.id as session, s.t0_at,
        (s.t0_at + interval '5 minutes' - now()) as next_moment_in,
        (select count(*) from public.plan_positions p where p.plan_id = s.plan_id) as positions,
-       (select count(*) from public.locations l where l.event_id = e.id) as readings,
-       (select count(*) from public.event_roles r where r.event_id = e.id and r.role = 'marshal') as marshals
+       (select count(*) from public.locations l where l.event_id = e.id) as readings
 from public.events e
 join public.event_sessions s on s.event_id = e.id
 where e.id = '0b000000-0000-4000-8000-000000000e39';

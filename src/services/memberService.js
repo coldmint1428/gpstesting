@@ -20,9 +20,6 @@ export const addEventMember = (eventId, userId, groupId) =>
 export const setMemberRole = (eventId, userId, role) =>
   call('set_member_role', { p_event_id: eventId, p_user_id: userId, p_new_role: role })
 
-export const setMarshal = (eventId, userId, isMarshal) =>
-  call('set_marshal', { p_event_id: eventId, p_user_id: userId, p_is_marshal: isMarshal })
-
 export const setGroupIC = (groupId, userId, isIC) => call('set_group_ic', { p_group_id: groupId, p_user_id: userId, p_is_ic: isIC })
 
 // How close this IC's phone must be to a moment's point for the tick to close it automatically (063). `userId` null

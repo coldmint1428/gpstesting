@@ -59,11 +59,6 @@ begin
   end if;
 end $$;
 
--- The event's third ops role: the read policy names marshals, so the check has to have one. testuser5 is a Gate Crew
--- IC on the bench, and only planners are kept out of groups (036), so a marshal row is legal.
-insert into public.event_roles (event_id, user_id, role)
-values ('0b000000-0000-4000-8000-000000000e01', '00cd023b-0e26-4574-a635-760e782c8029', 'marshal');
-
 -- ---------- the plan sections 1-6 are about: two moments, every step legal ----------
 -- Gate Crew walks 24 m north between +0:00 and +1:00; Sound stands still, and is off site at +1:00 with a manual
 -- flag, so the version has flags to carry. Nothing here trips the 25 m rule, so the gate lets every publish through
@@ -595,7 +590,7 @@ declare
   v_n integer;
   v_policies integer;
 begin
-  -- Ops staff read every version of the event: root, the other planner, and the marshal the fixture added. There are
+  -- Ops staff read every version of the event: root and the other planner. There are
   -- six: the plan published four times (revisions 2, 3, 4), the empty plan once, the fork's original once, and the
   -- copy once. The count is scoped to this event: ops staff are staff of every event on the machine, and the other
   -- benches' versions are not this check's business (the row's own event_id is what the policy reads).
@@ -610,12 +605,6 @@ begin
   select count(*) into v_n from public.plan_versions where event_id = '0b000000-0000-4000-8000-000000000e01';
   if v_n <> 6 then
     raise exception 'FAIL 8b: the second planner reads % versions, expected 6', v_n;
-  end if;
-
-  set local request.jwt.claims = '{"sub":"00cd023b-0e26-4574-a635-760e782c8029","role":"authenticated"}';
-  select count(*) into v_n from public.plan_versions where event_id = '0b000000-0000-4000-8000-000000000e01';
-  if v_n <> 6 then
-    raise exception 'FAIL 8c: a marshal reads % versions, expected 6', v_n;
   end if;
 
   -- A plain member of Sound: their copy of the plan is their own timetable (052), not every group's walk.

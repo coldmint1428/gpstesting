@@ -1,7 +1,7 @@
 <script setup>
 // PlanSchedule — the timetable a person follows: one moment per frame, on the plan's own clock.
 //
-// WHO THIS IS FOR. Everyone the board is not for: a member, an IC, a group admin, a marshal. The plan board is the
+// WHO THIS IS FOR. Everyone the board is not for: a member, an IC, a group admin. The plan board is the
 // planner's instrument — it draws a strip of frames and drags people around a map — and this is what the people who
 // walk it need instead. It is deliberately not the board with its controls hidden: there is no strip, no map and no
 // frames to select, because a follower's question is "when, and what is the clock saying about it", not "may I move
@@ -49,7 +49,7 @@ const props = defineProps({
   // The session to read: the live one, the scheduled one, or the last one that has ended (EventView picks). Null
   // when the event has never been started, which is the one case with nothing to read.
   session: { type: Object, default: null },
-  // True for ops staff (root, planner, marshal): they read every group's timetable. False for everyone else, whose
+  // True for ops staff (root, planner): they read every group's timetable. False for everyone else, whose
   // rows the database has already scoped to their group.
   whole: { type: Boolean, default: false },
   // The caller's group, for the header and for the no-group empty state. The rows are the authority for what is
