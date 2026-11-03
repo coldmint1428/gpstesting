@@ -38,7 +38,7 @@ test.afterAll(async () => {
 /** Where a group's badge is drawn on the map right now (relative to the map, so a toolbar that wraps when a warning
  *  appears and moves the whole board down is not mistaken for the badge moving), or null. */
 async function badgeAt(name) {
-  const badge = page.locator('.pv-marker', { hasText: new RegExp('^' + name + '$') })
+  const badge = page.locator('.pv-map .pv-marker', { hasText: new RegExp('^' + name + '$') })
   if (!(await badge.count())) return null
   const [box, map] = await Promise.all([badge.first().boundingBox(), page.locator('.pv-map').boundingBox()])
   return box && map && { x: Math.round(box.x + box.width / 2 - map.x), y: Math.round(box.y + box.height / 2 - map.y) }
@@ -53,12 +53,15 @@ async function positionsAt(t_s) {
 
 test('the plan picker names the frame count, not a copy number', async () => {
   await page.goto(`/events/${ev.eventId}/timeline`)
-  const picker = page.locator('select.pv-select')
+  const picker = page.getByTestId('plan-picker') // a button that opens the plan list (3 Nov redesign)
   await expect(picker).toBeVisible()
-  await expect(picker.locator('option:checked')).toHaveText(/Hand plan · 2 frames/)
+  await expect(picker).toContainText('Hand plan')
+  await expect(picker).toContainText('2 frames')
+  await expect(picker).not.toContainText(/copy|\(\d\)/i)
 })
 
 test('a group with no position is placed with "Place on map" and one tap', async () => {
+  await page.getByTestId('insp-tab-groups').click() // the inspector's Groups tab (3 Nov redesign)
   const place = page.getByTestId('place-group')
   await expect(place).toHaveCount(2) // Alpha and Bravo: nobody is on the map yet
   await place.first().click()
@@ -76,7 +79,7 @@ test('a group with no position is placed with "Place on map" and one tap', async
   await expect(page.getByTestId('place-group')).toHaveText(/Tap the map/)
   await map.click({ position: { x: box.width * 0.55, y: box.height * 0.5 } })
   await expect(page.getByTestId('place-group')).toHaveCount(0)
-  await expect(page.locator('.pv-marker')).toHaveCount(2)
+  await expect(page.locator('.pv-map .pv-marker')).toHaveCount(2) // on the map: the Groups tab draws a badge per group too
   await shot(page, 'plan-02-both-placed')
 
   const stated = await positionsAt(0)
@@ -132,8 +135,8 @@ test('dragging along the ruler shows any moment, and Resume plays on from it', a
   await expect(page.getByTestId('play-head')).toBeVisible()
   await expect(page.getByTestId('play-clock')).toHaveText(/^\+0:(2[5-9]|3[0-5])$/) // about half-way: +0:30
   await expect(page.getByTestId('board-hint')).toContainText('next +1:00')
-  await expect(page.locator('.pv-marker.is-walking')).not.toHaveCount(0) // drawn between its two moments
-  await expect(page.getByTestId('play')).toHaveText('Resume')
+  await expect(page.locator('.pv-map .pv-marker.is-walking')).not.toHaveCount(0) // drawn between its two moments
+  await expect(page.getByTestId('play')).toHaveAttribute('aria-label', 'Resume') // an icon button since 3 Nov: the word is its label
   expect(await mapHeight()).toBe(heightWithFrameOpen)
   await shot(page, 'plan-04-scrubbed')
 
@@ -144,7 +147,7 @@ test('dragging along the ruler shows any moment, and Resume plays on from it', a
 
 test('a locked area lets presses through, and the lock is stored on the shape', async () => {
   await page.goto(`/events/${ev.eventId}/map`)
-  const draw = page.getByRole('button', { name: 'Draw areas' })
+  const draw = page.getByRole('button', { name: 'Draw area' }) // "Draw areas" until the 3 Nov redesign
   await expect(draw).toBeVisible({ timeout: 20_000 })
   await draw.click()
   const map = page.locator('.bench-map')
@@ -172,6 +175,7 @@ test('a locked area lets presses through, and the lock is stored on the shape', 
 
   await lock.click()
   await expect(lock).toHaveAttribute('aria-pressed', 'true')
+  if (!(await page.getByTestId('area-name-Lock test').isVisible())) await page.getByTestId('area-open-Lock test').click()
   await expect(page.getByTestId('area-name-Lock test')).toBeDisabled()
   await expect.poll(outlineTakesPress).toBe(false) // a press on it now reaches the map underneath
   await shot(page, 'plan-05-area-locked')

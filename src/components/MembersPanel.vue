@@ -77,6 +77,18 @@ const cards = computed(() =>
     }
   }),
 )
+// Your own group first, under its own header, with what you are there (handoff 3.5)
+const myCardRole = computed(() => {
+  const me = props.me
+  const roles = [me && me.isAdmin && 'Admin', me && me.isIC && 'IC'].filter(Boolean)
+  return 'Your group' + (roles.length ? ' · ' + roles.join(', ') : '')
+})
+const cardSections = computed(() => {
+  const mine = cards.value.filter((c) => props.me && c.g.id === props.me.groupId)
+  const others = cards.value.filter((c) => !mine.includes(c))
+  if (!mine.length) return [{ label: '', cards: others }]
+  return [{ label: 'Your groups', cards: mine }, { label: 'Other groups', cards: others }].filter((section) => section.cards.length)
+})
 const unassignedText = computed(() => peopleText(unassigned.value.length))
 const openCountText = computed(() => peopleText(openMembers.value.length))
 const openLine = computed(() => (openGroup.value && openGroup.value.id !== 'none' ? detailLine(openGroup.value) : ''))
@@ -329,6 +341,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           <span class="kp-dot" :style="{ backgroundColor: openGroup.colour, width: '16px', height: '16px' }" aria-hidden="true"></span>
           <h2 class="kp-title text-truncate" style="flex: 0 1 auto; font-size: 22px">{{ openGroup.name }}</h2>
           <span class="kp-chip">{{ openCountText }}</span>
+          <span v-if="me && openGroup.id === me.groupId" class="chip chip-ink k k2-minechip" style="margin: 0" data-testid="group-mine-chip"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>{{ myCardRole }}</span>
           <span class="kp-spacer"></span>
           <button v-if="canManage && openGroup.id !== 'none'" type="button" class="btn btn-sm btn-outline-secondary" data-testid="group-edit-btn" @click="startEditGroup">Edit</button>
         </div>
@@ -467,8 +480,12 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         </div>
       </div>
 
-      <div class="kp-groups" data-testid="group-list">
-        <RouterLink v-for="c in cards" :key="c.g.id" :to="{ query: { group: c.g.id } }" class="kp-group" :style="{ '--c': c.g.colour }" :data-testid="'group-card-' + c.g.name">
+      <div class="k k2-grouplist" data-testid="group-list">
+      <template v-for="section in cardSections" :key="section.label">
+      <div v-if="section.label" class="k2-sub">{{ section.label }}</div>
+      <div class="kp-groups">
+        <RouterLink v-for="c in section.cards" :key="c.g.id" :to="{ query: { group: c.g.id } }" class="kp-group" :style="{ '--c': c.g.colour }" :data-mine="section.label === 'Your groups' ? 'true' : null" :data-testid="'group-card-' + c.g.name">
+          <span v-if="section.label === 'Your groups'" class="chip chip-ink k2-minechip" data-testid="group-mine-chip"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>{{ myCardRole }}</span>
           <div class="kp-inline" style="align-items: flex-start">
             <h3 class="kp-group-name me-auto">{{ c.g.name }}</h3>
             <span class="kp-chip">{{ c.countText }}</span>
@@ -486,15 +503,18 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
             <span v-if="c.live" class="small ms-auto fw-bold" :class="c.allSharing ? 'text-success' : 'text-warning'">{{ c.sharingText }}</span>
           </div>
         </RouterLink>
-
+      </div>
+      </template>
+      <div v-if="canManage && unassigned.length" class="kp-groups" style="margin-top: 16px">
         <!-- People without a group (root / planners) -->
-        <RouterLink v-if="canManage && unassigned.length" :to="{ query: { group: 'none' } }" class="kp-group kp-group-empty" data-testid="group-card-none">
+        <RouterLink :to="{ query: { group: 'none' } }" class="kp-group kp-group-empty" data-testid="group-card-none">
           <div class="kp-inline">
             <h3 class="kp-group-name me-auto">No group</h3>
             <span class="kp-chip">{{ unassignedText }}</span>
           </div>
           <p class="small text-muted mb-0">Open to add them to a group.</p>
         </RouterLink>
+      </div>
       </div>
     </template>
   </div>

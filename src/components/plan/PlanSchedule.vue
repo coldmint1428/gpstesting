@@ -42,7 +42,10 @@
 // words. A write's error is kept until the next write: the read beside it polls every half minute, and an error that a
 // poll can wipe is an error nobody reads.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { formatDay, formatDayTime, formatDuration, formatTime } from '../../utils/time'
+import { formatDay, formatDayTime, formatDuration, formatTime, formatTimeSeconds } from '../../utils/time'
+import { scheduleOf } from '../../utils/scheduleRows'
+import { formatOffset } from '../../utils/planFrames'
+import { isNativeApp } from '../../lib/platform'
 import { stopsOf, walksOf } from '../../utils/planWalk'
 import { planErrorMessage, usePlan } from '../../composables/usePlan'
 import '../../assets/planova.css'
@@ -368,6 +371,57 @@ function notesOf(stop) {
     }))
 }
 
+// ---------- the website's rows: a time range and a zone from the Map page ----------
+
+const zones = computed(() => (routeMap.value && routeMap.value.zones) || [])
+const schedule = computed(() => scheduleOf(rows.value, zones.value))
+// Every stated point of a row carries the row's number, so the pins read the same as the list
+const pinNumbers = computed(() => {
+  if (isNativeApp) return null
+  const out = new Map()
+  for (const row of schedule.value) {
+    for (const stop of row.stops) if (stop.point) out.set(stop.point.group_id + '|' + stop.point.frame_id, row.number)
+  }
+  return out
+})
+const KIND_WORD = { zone: 'Zone', stage: 'Stage', no_go: 'No-go', obstacle: 'Obstacle', entrance: 'Entrance' }
+const KIND_SWATCH = { zone: '#0B3D2E', stage: '#c6f36b', no_go: '#C2410C', obstacle: '#56685F', entrance: '#14523E' }
+
+/** When this run starts on the clock: the session's own times, else the next rehearsal, else no clock (null). */
+const scheduleBase = computed(() => {
+  if (isLive.value || phase.value === 'scheduled') return 'session'
+  return props.nextRehearsal ? new Date(props.nextRehearsal.startsAt).getTime() : null
+})
+function rowClock(at, t_s) {
+  if (scheduleBase.value === 'session') return new Date(at)
+  return new Date(scheduleBase.value + t_s * 1000)
+}
+/** "10:57:00 – 10:57:15 am", "From 10:58:00 am"; with no clock, offsets: "+0:15 – +0:30". */
+function rowWhen(row) {
+  if (scheduleBase.value == null) {
+    return row.endS == null ? 'From ' + formatOffset(row.startS) : formatOffset(row.startS) + ' – ' + formatOffset(row.endS)
+  }
+  const start = formatTimeSeconds(rowClock(row.startsAt, row.startS))
+  if (row.endS == null) return 'From ' + start
+  const end = formatTimeSeconds(rowClock(row.endsAt, row.endS))
+  return (start.slice(-2) === end.slice(-2) ? start.slice(0, -2).trim() : start) + ' – ' + end
+}
+const rowRowOf = (row) => rowOfStop({ rows: row.rows })
+const rowNow = (row) => isLive.value && row.rows.some((r) => r.frame_id === currentFrameId.value)
+const rowNext = computed(() => schedule.value.find((row) => new Date(row.startsAt).getTime() > clockAt.value.getTime()))
+const rowShown = (row) => !!row.point && row.stops.some((stop) => stop.point && stop.point.frame_id === shownFrame.value && stop.point.group_id === shownGroup.value)
+const rowNotes = (row) => row.stops.flatMap((stop) => notesOf(stop))
+const scheduleDay = computed(() => {
+  const at = scheduleBase.value === 'session' ? props.session.startsAt : scheduleBase.value
+  return at ? formatDay(at) : ''
+})
+const placesText = computed(() => {
+  const n = schedule.value.filter((row) => row.number).length
+  return n + (n === 1 ? ' position' : ' positions')
+})
+const scheduleTitle = computed(() => (props.whole ? 'Groups’ schedule' : (groupName.value || 'Your group') + '’s schedule'))
+const web = !isNativeApp
+
 function colourOfGroup(groupId) {
   const group = props.groups.find((g) => g.id === groupId)
   return (group && group.colour) || '#244f3f'
@@ -478,7 +532,19 @@ watch(
 <template>
   <div class="pv">
     <section class="pv-sched" data-testid="plan-schedule">
-      <header class="pv-sched-head">
+      <!-- Website: the page's header, with what runs and what comes next as chips -->
+      <div v-if="web" class="k k2-h k2-schedhead">
+        <div style="flex: 1 1 260px; min-width: 0">
+          <h1>Schedule</h1>
+          <p class="mut k2-schedsub" data-testid="sched-title">Where <b style="color: var(--ink)">{{ whole ? 'groups' : groupName || 'your group' }}</b> should be</p>
+        </div>
+        <span v-if="phase !== 'ended'" class="chip" :class="isLive ? 'chip-ink' : 'chip-soft'" data-testid="sched-phase">{{ phaseWord.charAt(0).toUpperCase() + phaseWord.slice(1) }}</span>
+        <span v-if="planName" class="chip chip-soft" data-testid="sched-plan"><span>{{ planName }}<template v-if="rev != null"> · v<span data-testid="sched-rev">{{ rev }}</span></template></span></span>
+        <span v-if="phase === 'scheduled'" class="chip chip-mint" data-testid="sched-scheduled">Starts {{ formatDayTime(session.startsAt) }}</span>
+        <span v-if="comingUp" class="chip chip-mint" data-testid="sched-coming-up">{{ comingUp.replace(':', ' ·') }}</span>
+      </div>
+
+      <header v-if="!web" class="pv-sched-head">
         <h2 class="pv-sched-title" data-testid="sched-title">
           {{ whole ? 'Where groups should be' : 'Where ' + (groupName || 'your group') + ' should be' }}
         </h2>
@@ -491,10 +557,10 @@ watch(
         </p>
       </header>
 
-      <p v-if="phase === 'scheduled'" class="pv-sched-line" data-testid="sched-scheduled">
+      <p v-if="!web && phase === 'scheduled'" class="pv-sched-line" data-testid="sched-scheduled">
         Starts {{ formatDayTime(session.startsAt) }}.
       </p>
-      <p v-if="comingUp" class="pv-sched-line" data-testid="sched-coming-up">{{ comingUp }}</p>
+      <p v-if="!web && comingUp" class="pv-sched-line" data-testid="sched-coming-up">{{ comingUp }}</p>
 
       <!-- A read that failed says so and keeps the last answer: a schedule that blanks itself is worse than an old one. -->
       <p v-if="errorMsg" class="pv-sched-line is-warn" data-testid="sched-error">
@@ -502,7 +568,25 @@ watch(
       </p>
 
       <!-- New messages from a planner, and "your times changed" when a publish moved this group's walk (step 22). -->
-      <div v-if="myMessages.length" class="pv-sched-log" data-testid="sched-log">
+      <section v-if="web && myMessages.length" class="k k2-card k2-updates" data-testid="sched-log">
+        <div class="row" style="margin-bottom: 6px">
+          <b class="U" style="font-size: 16px; letter-spacing: -0.04em">Updates</b>
+          <span class="chip chip-ink" style="height: 22px">{{ myMessages.length }} new</span>
+        </div>
+        <article v-for="row in myMessages" :key="row.id" class="k2-upd" data-testid="sched-msg" :data-kind="row.kind">
+          <span class="k2-uico" :class="row.kind === 'timeline' ? 'change' : 'msg'">
+            <svg v-if="row.kind === 'timeline'" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"></path></svg>
+            <svg v-else class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l2.5-3A8 8 0 1 1 21 12z"></path></svg>
+          </span>
+          <div style="flex: 1; min-width: 0">
+            <b style="font-size: 14px">{{ row.kind === 'timeline' ? 'Your times changed' : row.from_name }}</b><span class="mut" style="font-size: 13px"> · {{ formatTime(row.at) }}</span>
+            <div class="k2-updtxt" data-testid="sched-msg-body">{{ row.body }}</div>
+          </div>
+          <button type="button" class="k2-pillbtn" data-testid="sched-ack" :disabled="busyAck === row.id" @click="ack(row)">Got it</button>
+        </article>
+      </section>
+
+      <div v-else-if="myMessages.length" class="pv-sched-log" data-testid="sched-log">
         <article
           v-for="row in myMessages"
           :key="row.id"
@@ -538,6 +622,7 @@ watch(
         :my-group="myGroup"
         :groups="groups"
         :walk-rows="rows"
+        :pin-numbers="pinNumbers"
       />
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the schedule…" data-testid="sched-loading" />
@@ -550,6 +635,51 @@ watch(
         :text="phase === 'none' ? 'The schedule appears once the event starts with a plan.' : !session.planId ? 'This event is running without a plan.' : !whole && !groupName ? 'Ask a planner to add you to a group.' : whole ? 'This plan has no moments yet.' : 'This plan has no moments for ' + groupName + ' yet.'"
         data-testid="sched-empty"
       />
+
+      <!-- Website: a row for each place, the whole row showing it on the map -->
+      <section v-else-if="web && (!whole || !isLive)" class="k k2-card k2-schedlist">
+        <div class="row" style="margin-bottom: 8px; flex-wrap: wrap">
+          <b class="U" style="font-size: 18px; letter-spacing: -0.04em; flex: 1">{{ scheduleTitle }}</b>
+          <span class="mut" style="font-size: 13px; font-weight: 700">{{ scheduleDay ? scheduleDay + ' · ' : '' }}{{ placesText }}</span>
+        </div>
+        <div class="k2-srow hd" aria-hidden="true"><span>#</span><span>Time</span><span>Where</span><span></span></div>
+        <div
+          v-for="row in schedule"
+          :key="row.rows[0].group_id + row.rows[0].frame_id"
+          class="k2-srowwrap"
+          :class="{ 'is-now': rowNow(row) }"
+          data-testid="sched-moment"
+          :data-frame="row.rows[0].frame_id"
+          :data-t="row.rows[0].t_s"
+        >
+          <button
+            type="button"
+            class="k2-srow"
+            :style="{ '--c': colourOfGroup(row.rows[0].group_id) }"
+            :aria-pressed="rowShown(row) ? 'true' : 'false'"
+            :disabled="!row.point"
+            data-testid="sched-place-link"
+            @click="showOnMap(row.point.frame_id, row.point.t_s, row.point.group_id)"
+          >
+            <span class="k2-sn" :style="{ background: row.number ? 'var(--c)' : 'transparent' }" data-testid="sched-num">{{ row.number }}</span>
+            <span class="k2-stime" :data-testid="'sched-at-' + row.rows[0].t_s">{{ rowWhen(row) }}</span>
+            <span class="row" style="gap: 8px; min-width: 0">
+              <i v-if="KIND_SWATCH[row.kind]" class="k2-sw" :style="{ background: KIND_SWATCH[row.kind] }"></i>
+              <span class="k2-szone" data-testid="sched-place"><template v-if="whole">{{ row.rows[0].group_name }} · </template>{{ row.name }}</span>
+              <span v-if="KIND_WORD[row.kind]" class="mut k2-hm" style="font-size: 12px">{{ KIND_WORD[row.kind] }}</span>
+            </span>
+            <span class="k2-show"><svg v-if="row.point" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg></span>
+          </button>
+          <div v-if="rowNotes(row).length || rowNow(row) || rowNext === row || statusOf(rowRowOf(row)) || canHere(rowRowOf(row))" class="k2-srowextra" data-testid="sched-row" :data-group="row.rows[0].group_id" :data-state="rowRowOf(row).state">
+            <span v-if="rowNow(row)" class="chip chip-ink" style="height: 24px">Now</span>
+            <span v-else-if="rowNext === row && isLive" class="chip chip-mint" style="height: 24px">{{ nextText(new Date(row.startsAt)) }}</span>
+            <span v-if="statusOf(rowRowOf(row))" class="chip" :class="statusOf(rowRowOf(row)).tone === 'ok' ? 'chip-mint' : 'chip-warn'" style="height: 24px" data-testid="sched-state">{{ statusOf(rowRowOf(row)).text }}</span>
+            <span v-for="note in rowNotes(row)" :key="note.id" class="mut" style="font-size: 13px" data-testid="sched-note">{{ note.text }}</span>
+            <span class="sp"></span>
+            <button v-if="canHere(rowRowOf(row))" type="button" class="kb kb-lime kb-sm" data-testid="sched-here" :disabled="busyHere === rowRowOf(row).frame_id" @click="here(rowRowOf(row))">{{ busyHere === rowRowOf(row).frame_id ? 'Saving…' : 'We’re here' }}</button>
+          </div>
+        </div>
+      </section>
 
       <ol v-else-if="!whole || !isLive" class="pv-sched-list">
         <li

@@ -223,7 +223,7 @@ export default {
     await viewer.assertContains('[data-testid=sched-group]', 'Sound')
     // textContent, not innerText: the badge is uppercased by CSS.
     const phaseWord = await viewer.eval(`document.querySelector('[data-testid=sched-phase]').textContent.trim()`)
-    await viewer.assertThat('the header says the event is live', phaseWord === 'live')
+    await viewer.assertThat('the header says the event is live', phaseWord.toLowerCase() === 'live')
 
     // The clock times are the plan's, and the first moment is T+0 by definition -- so the header and the first row
     // must agree. If the screen added the clock wrongly, they would not.

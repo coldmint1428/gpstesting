@@ -39,6 +39,7 @@
 // Libraries: Leaflet (BSD-2-Clause) - https://leafletjs.com
 //            OneMap basemap tiles (c) Singapore Land Authority - https://www.onemap.gov.sg
 import { askConfirm } from '../composables/useNotify'
+import { useOpenMenu } from '../composables/useOpenMenu'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -50,8 +51,10 @@ import {
   AREA_MIN_POINTS,
   areaStyle,
   areaTooltipHtml,
+  zoneLabelClass,
   isValidAreaName,
 } from '../utils/areaKinds'
+import { inRing } from '../utils/scheduleRows'
 import {
   PLAN_NAME_MAX,
   angleFromPoints,
@@ -99,9 +102,6 @@ const props = defineProps({
   // because a history that reset when the planner clicked away was the bug. All the bench does
   // with it is close a run of changes when a drag ends; the buttons live on the page.
   history: { type: Object, default: null },
-  // What has been copied, so the paste buttons can say whether they have anything to paste.
-  // The clipboard itself lives on the page (composables/useBenchClipboard.js).
-  clipboard: { type: Object, default: null },
   // Who else is on the bench and what each of them has open (composables/useBenchPresence.js).
   // Handed in rather than owned here, like the history and the clipboard, because it is the PAGE's
   // session -- one row and one socket. This component only draws it.
@@ -120,12 +120,8 @@ const emit = defineEmits([
   // decided yet, and a dot's drag is deliberately kept out of the document until it is let go.
   'area-frame',
   'view-changed',
-  // A copy is just news -- the page keeps the clipboard. A paste is a request for a new thing,
-  // built by the page because the page owns the document.
-  'area-copied',
-  'area-pasted',
-  'plan-copied',
-  'plan-pasted',
+  'area-duplicated',
+  'plan-duplicated',
 ])
 
 // null | 'floorplan:<id>' | 'polygons' | 'area:<id>'
@@ -482,41 +478,8 @@ const editingAreaCrosses = computed(() => {
   return Boolean(area && Array.isArray(area.points) && ringCrossing(area.points))
 })
 
-// Does the bench have an area or a floor plan on its clipboard? Asked so the Paste buttons can
-// say whether they have anything to paste, and what.
-const canPasteArea = computed(() => Boolean(props.clipboard && props.clipboard.area.value))
-const canPastePlan = computed(() => Boolean(props.clipboard && props.clipboard.plan.value))
-const clipboardAreaName = computed(() =>
-  props.clipboard && props.clipboard.area.value ? props.clipboard.area.value.name : '',
-)
-const clipboardPlanName = computed(() =>
-  props.clipboard && props.clipboard.plan.value ? props.clipboard.plan.value.name : '',
-)
-
-// Copying and pasting. The copy is reported because the PAGE holds the clipboard; the paste is
-// reported because the PAGE holds the document. Both go through the page so there is one place
-// that decides what a duplicate is -- a new id, a name that is not already taken, and a place to
-// put it.
-function copyArea(area) {
-  if (!area) return
-  emit('area-copied', area)
-}
-
-function pasteArea() {
-  if (!props.clipboard || !props.clipboard.area.value) return
-  emit('area-pasted')
-}
-
-function copyPlan(plan) {
-  if (!plan) return
-  emit('plan-copied', plan)
-}
-
-function pastePlan() {
-  if (!props.clipboard || !props.clipboard.plan.value) return
-  emit('plan-pasted')
-}
-
+// Duplicating goes through the page, because the page holds the document and so decides what a duplicate is: a new id,
+// a name that is not already taken, and a place to put it.
 function newId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return 'x' + Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -838,7 +801,7 @@ function render() {
       layer.bindTooltip(areaTooltipHtml(area.kind, escapeHtml(area.name)), {
         permanent: true,
         direction: 'center',
-        className: 'area-label',
+        className: 'area-label ' + zoneLabelClass(area.kind),
       })
       layer.benchKey = key
       layer.benchStyleKey = area.kind + '\u0000' + area.name
@@ -875,6 +838,9 @@ function render() {
         layer.benchCrossing = false // re-styled from the area, which is not crossing
         layer.setStyle(areaStyle(area.kind))
         layer.setTooltipContent(areaTooltipHtml(area.kind, escapeHtml(area.name)))
+        const caption = layer.getTooltip()
+        caption.options.className = 'area-label ' + zoneLabelClass(area.kind)
+        if (caption.getElement()) caption.getElement().className = 'leaflet-tooltip leaflet-tooltip-center ' + caption.options.className
         layer.benchStyleKey = styleKey
       }
     }
@@ -1289,7 +1255,7 @@ function wantsPan(event) {
   if (!target || !target.closest) return true
   // Everything the bench puts on the map under its own name, plus Leaflet's own interactive
   // layers: each of those has a press of its own to handle.
-  return !target.closest('.bench-plan, .bench-handle, .bench-knob, .leaflet-interactive')
+  return !target.closest('.leaflet-control, .bench-plan, .bench-handle, .bench-knob, .leaflet-interactive')
 }
 
 // Every press on the map passes through here, whatever it turns out to be for. The one thing that
@@ -2005,6 +1971,37 @@ function cancelAreaDrag() {
 //   - otherwise: the click puts down whatever was being worked on. Nothing open means nothing to
 //     put down, so it does nothing at all -- which is the common case, because the view can be
 //     dragged whenever the planner likes.
+// A click on an area or a floor plan zooms to it, locked or not. A locked shape lets its press through, so this asks
+// where the click landed rather than which layer took it. On the container, in the capture phase, because a shape stops
+// its own press from reaching the map; and it only moves the view, so every other meaning of the click stands.
+let zoomPress = null
+function onZoomPress(event) {
+  zoomPress = { x: event.clientX, y: event.clientY, mode: mode.value }
+}
+function shapeAt(latlng) {
+  const inside = (corners) => inRing(latlng.lat, latlng.lng, corners.map(([lat, lng]) => [lng, lat]))
+  for (let i = props.areas.length - 1; i >= 0; i--) {
+    const area = props.areas[i]
+    if (Array.isArray(area.points) && inside(area.points)) return { key: 'area:' + area.id, corners: area.points }
+  }
+  for (let i = props.plans.length - 1; i >= 0; i--) {
+    const plan = props.plans[i]
+    if (plan.visible !== false && inside(cornersOf(plan))) return { key: 'floorplan:' + plan.id, corners: cornersOf(plan) }
+  }
+  return null
+}
+function onZoomClick(event) {
+  const press = zoomPress
+  zoomPress = null
+  if (!map || !press || event.button !== 0 || press.mode === 'polygons' || panMoved) return
+  if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > 5) return // a drag, not a click
+  if (event.target.closest && event.target.closest('.leaflet-control, .bench-hint, .bench-draft, .bench-handle, .bench-knob, .bench-vertex, .k2-drawbar')) return
+  const shape = shapeAt(map.mouseEventToLatLng(event))
+  if (!shape || shape.key === press.mode) return // the shape being worked on is already in view
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  map.fitBounds(L.latLngBounds(shape.corners), { padding: [FRAME_PADDING_PX, FRAME_PADDING_PX], maxZoom: 20, animate: !reduce })
+}
+
 function onMapClick(event) {
   const native = event.originalEvent
   // The click the browser fires at the end of a press is a click on the map only if the press was
@@ -2330,7 +2327,7 @@ async function deletePlan(plan) {
 // A row in the list of floor plans is a way of choosing one, exactly as a row in the list of areas
 // is: choosing one is what puts its corners and its rotate knob on the map. What must NOT choose is
 // anything ON the row that does something of its own -- the name field, the show/hide switch, Edit,
-// Copy, Delete, the opacity slider -- so a click that lands on one of those is left to it.
+// Duplicate, Delete, the opacity slider -- so a click that lands on one of those is left to it.
 //
 // Choosing the plan already being worked on changes nothing. A row in the areas list toggles,
 // because that row is the only handle an area has; a plan has an Edit button that says what pressing
@@ -2597,6 +2594,8 @@ onMounted(() => {
   // On the container rather than on the map, because Leaflet drops every press that has already
   // been stopped -- and a press on a shape has been. A pan has to be able to start there.
   map.getContainer().addEventListener('pointerdown', onMapPointerDown)
+  map.getContainer().addEventListener('pointerdown', onZoomPress, true)
+  map.getContainer().addEventListener('click', onZoomClick, true)
   map.getContainer().addEventListener('pointermove', onEdgeHover)
 
   map.on('click', onMapClick)
@@ -2778,12 +2777,15 @@ watch(() => props.canEdit, () => {
 // added or removed. NOT driven from render(), so a half-finished drag is never torn down
 // underneath the planner's finger.
 watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
+
+const sideTab = ref('areas') // the side panel: 'areas' | 'plans'
+const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
 </script>
 
 <template>
-  <div class="row g-3">
+  <div class="k2-mapp">
     <!-- ============ The map ============ -->
-    <div class="col-12 col-xl-7">
+    <div style="min-width: 0">
       <div
         class="bench-wrap position-relative"
         :class="{ 'bench-drawing': mode === 'polygons' }"
@@ -2853,6 +2855,21 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
           <span v-else data-testid="edit-hint">{{ editHint }}</span>
         </div>
 
+        <!-- While drawing: the existing flow's buttons, floating at the bottom of the map -->
+        <div v-if="canEdit && mode === 'polygons' && !draftClosed" class="k k2-drawbar" data-testid="draw-bar">
+          <span style="font: 700 13px Manrope">Tap the map to add corners</span>
+          <button type="button" class="kb kb-ghost kb-sm" :disabled="draftPoints.length === 0" data-testid="area-clear" @click="clearDraft">Cancel</button>
+          <button
+            type="button"
+            class="kb kb-line kb-sm"
+            :disabled="draftPoints.length < 3 || draftClosed || closeBlocked"
+            :title="closeBlocked ? 'This shape would close across itself' : ''"
+            data-testid="area-finish"
+            @click="closeDraft"
+          >Finish</button>
+          <button type="button" class="kb kb-lime kb-sm" data-testid="area-done" @click="mode = null"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Done</button>
+        </div>
+
         <!-- The ring is closed: ask for a name and a type -->
         <div v-if="draftClosed" class="bench-draft shadow" data-testid="draft-form">
           <label class="form-label small mb-1" for="draft-name">Name</label>
@@ -2882,332 +2899,133 @@ watch([editingArea, () => props.areas], drawAreaVertices, { deep: true })
           </div>
         </div>
       </div>
+      <!-- The area chips sit under the map, outside it, so a long list never covers it -->
+      <slot name="under-map" />
     </div>
 
     <!-- ============ Controls ============ -->
-    <div class="col-12 col-xl-5">
-      <!-- Under the map on a tablet and a small laptop, split in two: the areas being drawn, and the pictures they are
-           drawn over. Beside the map from xl, where they stack; on a phone they stack too. -->
-      <div class="row g-3">
-        <!-- Looking, not editing: the map moves, nothing else does. -->
-        <div v-if="!canEdit" class="col-12">
-          <div class="card">
-            <div class="card-body">
-              <h2 class="h6 card-title">Looking, not editing</h2>
-              <p class="small text-muted mb-0">
-                Only this event's root and planners can change its zones.
-              </p>
+    <aside class="k k2-card k2-benchside" style="padding-top: 6px">
+      <div v-if="canEdit" class="k2-tabs" role="tablist" aria-label="Map side panel">
+        <button type="button" role="tab" :aria-selected="sideTab === 'areas' ? 'true' : 'false'" data-testid="map-tab-areas" @click="sideTab = 'areas'">Areas<span class="n">{{ areas.length }}</span></button>
+        <button type="button" role="tab" :aria-selected="sideTab === 'plans' ? 'true' : 'false'" data-testid="map-tab-plans" @click="sideTab = 'plans'">Floor plans<span class="n">{{ plans.length }}</span></button>
+      </div>
+
+      <!-- Looking, not editing: the map moves, nothing else does. -->
+      <p v-if="!canEdit" class="k2-hint" style="margin-top: 8px">Only this event's root and planners can change its zones.</p>
+
+      <!-- ===== Areas: drawing them is what the bench is for, and the list is what the planner keeps coming back to ===== -->
+      <div v-show="sideTab === 'areas' || !canEdit" role="tabpanel">
+        <template v-if="canEdit">
+          <template v-if="editingArea">
+            <!-- The instruction is on the map, over the shape it is about. An outline left crossing by an older build
+                 refuses every edit until it is put right, so that one thing does get said here, with the way out. -->
+            <p v-if="editingAreaCrosses" class="k2-err" data-testid="area-crosses">
+              This outline crosses itself. Drag a dot until the lines no longer cross.
+            </p>
+            <div class="row" style="gap: 6px; flex-wrap: wrap">
+              <button
+                type="button"
+                class="k2-pillbtn"
+                :disabled="editingArea.points.length >= AREA_MAX_POINTS"
+                :title="editingArea.points.length >= AREA_MAX_POINTS ? 'An area can have at most ' + AREA_MAX_POINTS + ' points' : ''"
+                data-testid="area-add-point"
+                @click="addAreaPoint"
+              >Add point</button>
+              <button type="button" class="k2-pillbtn" title="Make a copy of this area" data-testid="area-duplicate" @click="emit('area-duplicated', editingArea)">Duplicate</button>
+              <button type="button" class="kb kb-lime kb-sm k2-done" title="Finish editing this area" data-testid="area-shape-done" @click="mode = null"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Done</button>
             </div>
-          </div>
+          </template>
+
+          <button v-else type="button" class="kb kb-lime" style="width: 100%" :disabled="mode === 'polygons'" data-testid="draw-areas" @click="mode = 'polygons'">
+              <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Draw area
+            </button>
+        </template>
+
+        <!-- The page drops the list of areas in here, so it lines up with the controls. -->
+        <slot />
+      </div>
+
+      <!-- ===== Floor plans: one row each, because each one has its own name, its own show/hide and its own placement ===== -->
+      <div v-if="canEdit" v-show="sideTab === 'plans'" role="tabpanel">
+        <!-- How full the bench is, against the 4 MB the database enforces (layout_bytes in 017, handed in by the page) -->
+        <div class="row" style="margin-bottom: 12px" data-testid="canvas-size" :title="'Storage used by all areas and floor plans: ' + sizeText + '. Floor plan pictures take the most space.'">
+          <svg class="k2-ring bench-ring" :class="'text-' + ringVariant" width="34" height="34" viewBox="0 0 34 34" role="img" :aria-label="'Canvas size: ' + sizeText">
+            <circle cx="17" cy="17" r="14" pathLength="100" fill="none" stroke="currentColor" stroke-width="4" opacity="0.18" />
+            <circle cx="17" cy="17" r="14" pathLength="100" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" :stroke-dasharray="ringPercent + ' 100'" transform="rotate(-90 17 17)" />
+          </svg>
+          <b style="font-size: 13px">{{ sizeText }}</b>
         </div>
 
-        <!-- There is no Map card any more. Lock and Unlock were its two buttons, and there is
-             nothing left for them to do: the map is never held still for the view's sake, and the
-             only thing that narrows what a press means is `mode`, which the shapes and the map's
-             own clicks set by themselves. What is left of the idea is said where it is needed --
-             along the top of the map, while a shape is open, which is the only time it is true. -->
+        <input ref="fileInput" type="file" accept="image/*" class="d-none" data-testid="floorplan-file" @change="onFileChosen" />
+        <button type="button" class="kb kb-line" style="width: 100%" :disabled="busy" data-testid="add-floorplan" @click="fileInput.click()">{{ busy ? 'Shrinking...' : 'Add a floor plan' }}</button>
 
-        <!-- The areas come first: drawing them is what the bench is for, and the list of them
-             is what the planner keeps coming back to. -->
-        <div class="col-12" :class="{ 'col-md-6 col-xl-12': canEdit }">
-          <!-- Drawing -->
-          <div v-if="canEdit" class="card mb-3">
-            <div class="card-body">
-              <h2 class="h6 card-title">Areas</h2>
-
-              <template v-if="mode === 'polygons'">
-                <div class="d-flex flex-wrap gap-2">
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    :disabled="draftPoints.length < 3 || draftClosed || closeBlocked"
-                    :title="closeBlocked ? 'This shape would close across itself' : ''"
-                    data-testid="area-finish"
-                    @click="closeDraft"
-                  >
-                    Finish
-                  </button>
-                  <button
-                    class="btn btn-sm btn-outline-danger"
-                    :disabled="draftPoints.length === 0"
-                    data-testid="area-clear"
-                    @click="clearDraft"
-                  >
-                    Clear
-                  </button>
-                  <button class="btn btn-sm btn-outline-secondary" data-testid="area-done" @click="mode = null">
-                    Done
-                  </button>
-                </div>
-              </template>
-
-              <template v-else-if="editingArea">
-                <!-- The instruction is on the map, over the shape it is about. Saying it again here
-                     would be the same sentence twice on one screen, which is what the old bench
-                     did. An outline left crossing by an older build refuses every edit until it is
-                     put right: that is correct but looks like a broken page, so it is the one
-                     thing that does get said here, with the way out. -->
-                <p v-if="editingAreaCrosses" class="small text-danger mb-2" data-testid="area-crosses">
-                  This outline crosses itself. Drag a dot until the lines no longer cross.
-                </p>
-                <div class="d-flex flex-wrap gap-2">
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    :disabled="editingArea.points.length >= AREA_MAX_POINTS"
-                    :title="editingArea.points.length >= AREA_MAX_POINTS ? 'An area can have at most ' + AREA_MAX_POINTS + ' points' : ''"
-                    data-testid="area-add-point"
-                    @click="addAreaPoint"
-                  >
-                    Add point
-                  </button>
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    title="Copy this area to paste it again"
-                    data-testid="area-copy"
-                    @click="copyArea(editingArea)"
-                  >
-                    Copy
-                  </button>
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    data-testid="area-shape-done"
-                    @click="mode = null"
-                  >
-                    Done
-                  </button>
-                </div>
-              </template>
-
-              <div v-else class="d-flex flex-wrap gap-2">
-                <button
-                  class="btn btn-success flex-grow-1"
-                  data-testid="draw-areas"
-                  @click="mode = 'polygons'"
-                >
-                  Draw areas
-                </button>
-                <!-- Paste makes a SECOND area out of the last one copied, offset so it does not
-                     hide underneath it. It is offered here rather than on the list because an
-                     area is what is being made, and this is where areas are made. -->
-                <button
-                  class="btn btn-outline-secondary"
-                  :disabled="!canPasteArea"
-                  :title="canPasteArea ? 'Paste a copy of ' + clipboardAreaName : 'Copy an area first'"
-                  data-testid="area-paste"
-                  @click="pasteArea"
-                >
-                  Paste
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- The page drops the list of areas in here, so it lines up with the controls. -->
-          <slot />
-        </div>
-
-        <!-- Floor plans. One card each, because each one has its own name, its own show/hide
-             and its own placement. -->
-        <div v-if="canEdit" class="col-12 col-md-6 col-xl-12">
-          <div class="card">
-            <div class="card-body">
-              <!-- How full the bench is, against the 4 MB the database enforces, as a ring. This is
-                   the one number in the bench that the planner cannot see any other way, and the
-                   pictures BELOW are what make it big -- so it belongs on this heading, next to
-                   the thing that spends it, rather than off in the page header where it used to
-                   sit with no clue about what it was counting. The number itself is the database's
-                   (layout_bytes in 017), handed in by the page. -->
-              <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                <h2 class="h6 card-title mb-0">Floor plans</h2>
-                <div
-                  class="d-flex align-items-center gap-2 ms-auto"
-                  data-testid="canvas-size"
-                  :title="
-                    'Storage used by all areas and floor plans: ' + sizeText + '. Floor plan pictures take the most space.'
-                  "
-                >
-                  <span class="small text-muted">Storage: {{ sizeText }}</span>
-                  <svg
-                    class="bench-ring"
-                    :class="'text-' + ringVariant"
-                    width="34"
-                    height="34"
-                    viewBox="0 0 34 34"
-                    role="img"
-                    :aria-label="'Canvas size: ' + sizeText"
-                  >
-                    <!-- The full circle behind, then the part used, drawn as a dash of the
-                         circumference. `pathLength="100"` lets the numbers be percentages rather
-                         than a length in pixels. Rotated a quarter turn so the ring starts at the
-                         top and fills clockwise, the way a gauge is read. -->
-                    <circle
-                      cx="17"
-                      cy="17"
-                      r="14"
-                      pathLength="100"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="4"
-                      opacity="0.18"
-                    />
-                    <circle
-                      cx="17"
-                      cy="17"
-                      r="14"
-                      pathLength="100"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="4"
-                      stroke-linecap="round"
-                      :stroke-dasharray="ringPercent + ' 100'"
-                      transform="rotate(-90 17 17)"
-                    />
-                  </svg>
-                </div>
-              </div>
-
+        <p v-if="plans.length === 0" class="k2-empty" data-testid="no-plans">No floor plans yet.</p>
+        <div v-else style="margin-top: 8px" data-testid="plan-list">
+          <div
+            v-for="(plan, index) in plans"
+            :key="plan.id"
+            class="plan-row"
+            :class="{ 'is-locked': plan.locked }"
+            :data-testid="'plan-' + index"
+            @click="!plan.locked && pickPlanCard(plan, $event)"
+          >
+            <div class="k2-fp">
+              <img v-if="plan.image" class="k2-thumb" :src="plan.image" alt="" style="object-fit: cover" />
+              <span v-else class="k2-thumb"></span>
               <input
-                ref="fileInput"
-                type="file"
-                accept="image/*"
-                class="d-none"
-                data-testid="floorplan-file"
-                @change="onFileChosen"
+                class="kin"
+                style="flex: 1; min-width: 0; height: 40px; font-size: 14px"
+                :disabled="Boolean(plan.locked)"
+                :value="planLabel(plan, index)"
+                :maxlength="PLAN_NAME_MAX"
+                :aria-label="'Name of ' + planLabel(plan, index)"
+                :data-testid="'plan-name-' + index"
+                @change="renamePlan(plan, index, $event)"
               />
               <button
-                class="btn btn-outline-secondary w-100 mb-2"
-                :disabled="busy"
-                data-testid="add-floorplan"
-                @click="fileInput.click()"
-              >
-                {{ busy ? 'Shrinking...' : 'Add a floor plan' }}
-              </button>
-
-              <!-- Paste makes a COPY of the last floor plan copied: the same picture and size,
-                   a name of its own, and a position a short step from the original so the two
-                   are not stacked exactly on top of each other. -->
-              <button
-                class="btn btn-outline-secondary w-100 mb-3"
-                :disabled="!canPastePlan"
-                :title="canPastePlan ? 'Paste a copy of ' + clipboardPlanName : 'Copy a floor plan first'"
-                data-testid="paste-floorplan"
-                @click="pastePlan"
-              >
-                Paste a floor plan
-              </button>
-
-              <p v-if="plans.length === 0" class="small text-muted mb-0" data-testid="no-plans">
-                No floor plans yet.
-              </p>
-              <div v-else class="plan-scroll" data-testid="plan-list">
-                <div
-                  v-for="(plan, index) in plans"
-                  :key="plan.id"
-                  class="card mb-2 plan-row"
-                  :class="{ 'border-primary': mode === 'floorplan:' + plan.id, 'is-locked': plan.locked }"
-                  :data-testid="'plan-' + index"
-                  @click="!plan.locked && pickPlanCard(plan, $event)"
-                >
-                  <div class="card-body p-2">
-                    <div class="d-flex align-items-center gap-2">
-                      <!-- The padlock: a locked picture stays where it is and lets presses through. -->
-                      <button
-                        v-if="canEdit"
-                        type="button"
-                        class="btn btn-sm bench-lock-btn"
-                        :class="plan.locked ? 'btn-secondary' : 'btn-outline-secondary'"
-                        :aria-pressed="Boolean(plan.locked)"
-                        :aria-label="(plan.locked ? 'Unlock ' : 'Lock ') + planLabel(plan, index)"
-                        :title="plan.locked ? 'Locked: it cannot be moved. Press to unlock.' : 'Lock it so it cannot be moved by accident'"
-                        :data-testid="'plan-lock-' + index"
-                        @click.stop="togglePlanLock(plan)"
-                      >
-                        <svg v-if="plan.locked" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-                        <svg v-else viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 7V5a3 3 0 0 1 5.8-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-                      </button>
-                      <!-- The name is what the planner calls this level, and what identifies the
-                           picture on the map. -->
-                      <input
-                        v-if="canEdit"
-                        class="form-control form-control-sm"
-                        :disabled="Boolean(plan.locked)"
-                        :value="planLabel(plan, index)"
-                        :maxlength="PLAN_NAME_MAX"
-                        :aria-label="'Name of ' + planLabel(plan, index)"
-                        :data-testid="'plan-name-' + index"
-                        @change="renamePlan(plan, index, $event)"
-                      />
-                      <div v-else class="text-truncate">{{ planLabel(plan, index) }}</div>
-
-                      <div class="form-check form-switch mb-0" :title="'Show or hide this floor plan'">
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                          :checked="plan.visible !== false"
-                          :aria-label="'Show ' + planLabel(plan, index)"
-                          :data-testid="'plan-visible-' + index"
-                          @change="togglePlanVisible(plan)"
-                        />
-                      </div>
-                    </div>
-
-                    <div class="d-flex align-items-center gap-2 mt-2">
-                      <!-- Edit / Done deliberately does NOT toggle anything about the map: Done puts
-                           the picture down, and putting it down is the save. The view was never held
-                           still for this, so there is nothing to hand back -- but a press on the
-                           picture belongs to the picture, and Done is how it stops belonging. -->
-                      <button
-                        class="btn btn-sm"
-                        :class="mode === 'floorplan:' + plan.id ? 'btn-primary' : 'btn-outline-primary'"
-                        :data-testid="'plan-edit-' + index"
-                        :disabled="Boolean(plan.locked)"
-                        :title="plan.locked ? 'Unlock it first' : ''"
-                        @click="mode = mode === 'floorplan:' + plan.id ? null : 'floorplan:' + plan.id"
-                      >
-                        {{ mode === 'floorplan:' + plan.id ? 'Done' : 'Edit' }}
-                      </button>
-                      <button
-                        class="btn btn-sm btn-outline-secondary"
-                        title="Copy this floor plan to paste it again"
-                        :data-testid="'plan-copy-' + index"
-                        @click="copyPlan(plan)"
-                      >
-                        Copy
-                      </button>
-                      <button
-                        class="btn btn-sm btn-link text-danger ms-auto px-0"
-                        :data-testid="'plan-delete-' + index"
-                        :disabled="Boolean(plan.locked)"
-                        @click="deletePlan(plan)"
-                      >
-                        Delete
-                      </button>
-                    </div>
-
-                    <div v-if="mode === 'floorplan:' + plan.id" class="mt-2">
-                      <label class="form-label small mb-1" :for="'opacity-' + plan.id">
-                        Opacity {{ Math.round((plan.opacity || 0) * 100) }}%
-                      </label>
-                      <input
-                        :id="'opacity-' + plan.id"
-                        class="form-range"
-                        type="range"
-                        min="0.05"
-                        max="1"
-                        step="0.05"
-                        :value="plan.opacity"
-                        :data-testid="'plan-opacity-' + index"
-                        @input="setOpacity(plan, $event.target.value)"
-                      />
-                    </div>
-                  </div>
+                type="button"
+                class="tog"
+                :aria-pressed="plan.visible !== false ? 'true' : 'false'"
+                :aria-label="'Show ' + planLabel(plan, index) + ' on the map'"
+                title="Show on map"
+                :data-testid="'plan-visible-' + index"
+                @click.stop="togglePlanVisible(plan)"
+              ></button>
+              <div class="wrapm" data-menu>
+                <button type="button" class="ib" :aria-label="'Options for ' + planLabel(plan, index)" :aria-expanded="openMenu === plan.id ? 'true' : 'false'" :data-testid="'plan-menu-' + index" @click.stop="toggleMenu(plan.id)">
+                  <svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg>
+                </button>
+                <div v-if="openMenu === plan.id" class="menu r" role="menu">
+                  <!-- Done puts the picture down, and putting it down is the save -->
+                  <button type="button" role="menuitem" :disabled="Boolean(plan.locked)" :title="plan.locked ? 'Unlock it first' : ''" :data-testid="'plan-edit-' + index" @click.stop="closeMenu(); mode = mode === 'floorplan:' + plan.id ? null : 'floorplan:' + plan.id">{{ mode === 'floorplan:' + plan.id ? 'Done' : 'Edit position' }}</button>
+                  <button type="button" role="menuitem" title="Make a copy of this floor plan" :data-testid="'plan-duplicate-' + index" @click.stop="closeMenu(); emit('plan-duplicated', plan)">Duplicate</button>
+                  <button type="button" role="menuitem" :aria-pressed="plan.locked ? 'true' : 'false'" :data-testid="'plan-lock-' + index" @click.stop="closeMenu(); togglePlanLock(plan)">{{ plan.locked ? 'Unlock' : 'Lock' }}</button>
+                  <hr />
+                  <button type="button" role="menuitem" class="danger" :disabled="Boolean(plan.locked)" :data-testid="'plan-delete-' + index" @click.stop="closeMenu(); deletePlan(plan)">Delete</button>
                 </div>
               </div>
+            </div>
+            <div v-if="mode === 'floorplan:' + plan.id" style="padding-bottom: 10px">
+              <div class="row" style="justify-content: space-between">
+                <label class="lab" style="margin: 0" :for="'opacity-' + plan.id">Opacity {{ Math.round((plan.opacity || 0) * 100) }}%</label>
+                <button type="button" class="kb kb-lime kb-sm" title="Finish placing this floor plan" data-testid="plan-done" @click.stop="mode = null"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Done</button>
+              </div>
+              <input
+                :id="'opacity-' + plan.id"
+                class="form-range"
+                type="range"
+                min="0.05"
+                max="1"
+                step="0.05"
+                :value="plan.opacity"
+                :data-testid="'plan-opacity-' + index"
+                @input="setOpacity(plan, $event.target.value)"
+              />
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </aside>
   </div>
 </template>
 

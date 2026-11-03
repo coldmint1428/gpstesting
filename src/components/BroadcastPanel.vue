@@ -15,6 +15,7 @@ import { AUDIENCES, audienceText } from '../composables/useBroadcasts'
 import { askConfirm, toast } from '../composables/useNotify'
 import { formatTimeSeconds } from '../utils/time'
 import ExpandTransition from './ExpandTransition.vue'
+import { useOpenMenu } from '../composables/useOpenMenu'
 
 const props = defineProps({
   broadcasts: { type: Object, required: true }, // useBroadcasts()
@@ -23,7 +24,7 @@ const props = defineProps({
 })
 
 const QUICK = [
-  { key: 'shelter', label: '⚡ Lightning: shelter', urgent: true, body: 'Lightning alert: take shelter now and stay there until we say it is safe.' },
+  { key: 'shelter', label: 'Lightning: shelter', urgent: true, body: 'Lightning alert: take shelter now and stay there until we say it is safe.' },
   { key: 'hold', label: 'Hold in place', urgent: true, body: 'Hold in place. Do not move until the next message.' },
   { key: 'resume', label: 'All clear: resume', urgent: false, body: 'All clear. Go to your next position now: check your next moment in the app.' },
   { key: 'rain', label: 'Wet weather plan', urgent: false, body: 'The wet weather plan is now in effect. Your next moment in the app is updated.' },
@@ -32,6 +33,7 @@ const QUICK = [
 ]
 
 const open = ref(false)
+const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
 const audience = ref('everyone')
 const value = ref('')
 const body = ref('')
@@ -120,7 +122,97 @@ async function clearOne(b) {
 </script>
 
 <template>
-  <section class="card bc-panel" data-testid="broadcast-panel" :aria-busy="sending ? 'true' : null">
+  <!-- Website: the content of the Live page's "Message everyone" tab -->
+  <div v-if="!native" data-testid="broadcast-panel" :aria-busy="sending ? 'true' : null">
+    <form data-testid="broadcast-form" @submit.prevent="send">
+      <div class="k2-sub">Quick messages</div>
+      <div class="k2-qt" role="group" aria-label="Quick messages">
+        <button
+          v-for="q in QUICK"
+          :key="q.key"
+          type="button"
+          :class="{ urgent: q.urgent }"
+          :aria-pressed="quick === q.key ? 'true' : 'false'"
+          :data-testid="'broadcast-quick-' + q.key"
+          @click="useQuick(q)"
+        >{{ q.label }}</button>
+      </div>
+      <label class="k2-sub d-block" for="bc-audience">To</label>
+      <div class="ksel" style="width: 100%">
+        <select id="bc-audience" v-model="audience" style="width: 100%" data-testid="broadcast-audience">
+          <option v-for="a in AUDIENCES" :key="a.value" :value="a.value">{{ a.label }}</option>
+        </select>
+      </div>
+      <template v-if="audience === 'sector' || audience === 'category'">
+        <label class="k2-sub d-block" for="bc-value">{{ audience === 'sector' ? 'Sector' : 'Category' }}</label>
+        <div class="ksel" style="width: 100%">
+          <select id="bc-value" v-model="value" style="width: 100%" :disabled="!values.length" data-testid="broadcast-value">
+            <option v-if="!values.length" value="">None set in Group details</option>
+            <option v-for="v in values" :key="v" :value="v">{{ v }}</option>
+          </select>
+        </div>
+      </template>
+      <label class="k2-sub d-block" for="bc-body">Message</label>
+      <textarea
+        id="bc-body"
+        v-model="body"
+        class="kin"
+        style="width: 100%; min-height: 92px"
+        maxlength="300"
+        placeholder="e.g. Lightning alert: take shelter now."
+        data-testid="broadcast-body-input"
+        @input="quick = ''"
+      ></textarea>
+      <div class="row" style="margin-top: 8px">
+        <button type="button" class="tog" :aria-pressed="urgent ? 'true' : 'false'" aria-label="Urgent" data-testid="broadcast-urgent" @click="urgent = !urgent"></button>
+        <b style="font-size: 13px">Urgent</b>
+        <span class="sp"></span>
+        <span class="k2-count">{{ body.length }} / 300</span>
+      </div>
+      <p v-if="formError" class="k2-err" role="alert" data-testid="broadcast-error">{{ formError }}</p>
+      <button type="submit" class="kb kb-ink" style="width: 100%; margin-top: 12px" :disabled="!body.trim() || sending || broadcasts.busy.value" data-testid="broadcast-send">
+        <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-6 16-3-7z"></path></svg>{{ sending ? 'Checking…' : 'Send' }}
+      </button>
+    </form>
+
+    <template v-if="recent.length">
+      <div class="k2-sub" style="margin-top: 22px">Sent</div>
+      <div data-testid="broadcast-sent">
+        <div v-for="b in recent" :key="b.id" class="k2-msg">
+          <div class="row" style="gap: 8px; flex-wrap: wrap">
+            <b style="font-size: 13px">{{ formatTimeSeconds(b.at) }}</b>
+            <span class="mut" style="font-size: 12px">to {{ audienceText(b.audience, b.value) }}</span>
+            <span v-if="b.urgent" class="chip chip-warn" style="height: 22px">Urgent</span>
+            <span class="sp"></span>
+            <span class="chip" :class="b.cleared ? 'chip-soft' : 'chip-mint'" style="height: 22px">{{ b.cleared ? 'Taken down' : 'Active' }}</span>
+            <div v-if="!b.cleared" class="wrapm" data-menu>
+              <button type="button" class="ib" style="width: 30px; height: 30px" aria-label="Message options" :aria-expanded="openMenu === b.id ? 'true' : 'false'" @click="toggleMenu(b.id)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+              <div v-if="openMenu === b.id" class="menu r" role="menu">
+                <button type="button" role="menuitem" :data-testid="'broadcast-clear-' + b.id" @click="closeMenu(); clearOne(b)">Take down</button>
+              </div>
+            </div>
+          </div>
+          <p class="bc-text">{{ b.body }}</p>
+          <div v-if="statuses[b.id]" class="k2-got" data-testid="broadcast-count">
+            <b>Got it {{ statuses[b.id].acked }} of {{ statuses[b.id].total }}</b>
+            <span class="k2-bar"><i :style="{ width: (statuses[b.id].total ? (100 * statuses[b.id].acked) / statuses[b.id].total : 0) + '%' }"></i></span>
+            <span class="mut">Seen by {{ statuses[b.id].seen }}</span>
+            <button v-if="statuses[b.id].waiting.length" type="button" class="k2-link" :data-testid="'broadcast-who-' + b.id" @click="expanded = expanded === b.id ? null : b.id">
+              {{ expanded === b.id ? 'Hide' : 'Who hasn’t (' + statuses[b.id].waiting.length + ')' }}
+            </button>
+          </div>
+          <ul v-if="expanded === b.id && statuses[b.id]" class="mut" style="font-size: 13px; margin: 8px 0 0; padding-left: 18px" data-testid="broadcast-waiting">
+            <li v-for="(w, i) in statuses[b.id].waiting" :key="i">
+              {{ w.name }}<template v-if="w.group"> · {{ w.group }}{{ w.ic ? ' (IC)' : '' }}</template><template v-if="w.radio"> · radio {{ w.radio }}</template> · {{ w.seen ? 'seen, not confirmed' : 'not seen' }}
+            </li>
+          </ul>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Phone app: a button that opens the form in a bottom sheet -->
+  <section v-else class="card bc-panel" data-testid="broadcast-panel" :aria-busy="sending ? 'true' : null">
     <div class="card-body d-grid gap-2">
       <div class="d-flex flex-wrap align-items-center gap-2">
         <h3 class="kp-title" style="font-size: 16px">Message everyone</h3>

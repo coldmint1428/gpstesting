@@ -128,4 +128,9 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 .toast-container {
   z-index: 2000; /* above Leaflet maps (400-1000) and the dialog backdrop */
 }
+/* A question asked from inside a pop-up (Start event asks "Start the event now?") must sit above that pop-up's
+   scrim (.k2-scrim, 1200), not at Bootstrap's 1055 behind it, where its buttons cannot be pressed */
+.modal[data-testid='confirm-dialog'] {
+  z-index: 1300;
+}
 </style>

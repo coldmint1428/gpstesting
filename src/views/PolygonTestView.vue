@@ -30,6 +30,7 @@ import AreaList from '../components/AreaList.vue'
 import BenchAlert from '../components/BenchAlert.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import { useLoadGate } from '../composables/usePageReady'
+import { areaColour, areaLabel } from '../utils/areaKinds'
 
 // Who may change which shape (see composables/useBenchLocks.js). Created first, because the data layer
 // below reports a refusal through it: one strip of text, one source, whichever way the refusal arrived.
@@ -708,7 +709,18 @@ function copyPlan(plan) {
   clipboard.copyPlan(plan)
 }
 
-function pasteArea() {
+// Duplicate: a copy straight away, with nothing left to paste. Ctrl+C and Ctrl+V still use the clipboard.
+function duplicateArea(area) {
+  copyArea(area)
+  pasteArea()
+}
+
+function duplicatePlan(plan) {
+  copyPlan(plan)
+  pastePlan()
+}
+
+async function pasteArea() {
   const from = clipboard.area.value
   if (!from) return
   errorMsg.value = ''
@@ -724,14 +736,14 @@ function pasteArea() {
   }
   if (!area.code) delete area.code // demo bench: no codes
   // addArea records the step, like every other write (see the section above).
-  addArea(area)
+  await addArea(area)
   // Selected, so the copy is the thing on screen: its name is in the list, and its dots can be dragged
   // straight away. Pasting into the middle of a drawing session puts that down first, so the planner is
   // looking at what they just made.
-  mode.value = 'area:' + area.id
+  if (areas.value.some((a) => a.id === area.id)) mode.value = 'area:' + area.id
 }
 
-function pastePlan() {
+async function pastePlan() {
   const from = clipboard.plan.value
   if (!from) return
   errorMsg.value = ''
@@ -751,10 +763,10 @@ function pastePlan() {
     return
   }
   // addPlan records the step, like every other write (see the section above).
-  addPlan(plan)
+  await addPlan(plan)
   // Selected, so the copy is the thing on screen: its corners and its rotate knob appear straight away.
   // The bench draws them from the new mode on its own.
-  mode.value = 'floorplan:' + plan.id
+  if (plans.value.some((p) => p.id === plan.id)) mode.value = 'floorplan:' + plan.id
 }
 
 // A fresh id for a pasted thing. crypto.randomUUID is not available in every browser the app runs in
@@ -798,14 +810,16 @@ onUnmounted(() => {
   window.removeEventListener('pointerup', endGesture, GESTURE_LISTEN)
   window.removeEventListener('pointercancel', endGesture, GESTURE_LISTEN)
 })
+
 </script>
 
 <template>
   <component :is="embedded ? 'div' : 'main'" :class="embedded ? 'bench-embedded' : 'container py-3'">
-    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
-      <div>
-        <h1 v-if="!embedded" class="h4 mb-1">Polygon bench</h1>
-        <p v-else-if="!canEdit" class="small text-muted mb-1" data-testid="zones-intro">
+    <div class="k k2-h" style="align-items: flex-start">
+      <div style="flex: 1 1 auto; min-width: 0">
+        <h1 v-if="embedded">Map</h1>
+        <h1 v-else>Polygon bench</h1>
+        <p v-if="embedded && !canEdit" class="small text-muted mb-1" data-testid="zones-intro">
           <template v-if="!canEdit">Only the root and planners can edit zones.</template>
         </p>
         <!-- Who else is on the bench. A planner working alone sees nothing here at all, which is
@@ -829,7 +843,9 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="row" style="gap: 6px; flex-wrap: wrap">
+        <span v-if="saving" class="chip chip-soft" data-testid="saving-badge">Saving...</span>
+        <span v-else-if="canEdit" class="chip chip-soft" data-testid="history-steps" title="Changes that can be undone, one step per thing you did">{{ stepsText }}</span>
         <!-- Undo and redo of the WHOLE document, on the page rather than over the map or inside a
              panel. A step can be a dot, an area, a floor plan or a rename, so it belongs to none
              of them -- and a button that lived inside the thing being edited was the bug: it went
@@ -837,10 +853,10 @@ onUnmounted(() => {
              Arrows rather than the words: at this size the words are the wider half of the
              control and the meaning is in the direction. Both carry a title and an aria-label, so
              the word is still there for anyone who needs it, and Ctrl+Z / Ctrl+Shift+Z work too. -->
-        <div v-if="canEdit" class="btn-group btn-group-sm" role="group" aria-label="Undo and redo the whole bench">
+        <div v-if="canEdit" class="row" style="gap: 2px" role="group" aria-label="Undo and redo the whole bench">
           <button
             type="button"
-            class="btn btn-outline-secondary"
+            class="ib"
             :disabled="!canUndo"
             :title="canUndo ? 'Undo the last change, anywhere on the bench (Ctrl+Z)' : 'Nothing to undo'"
             aria-label="Undo"
@@ -854,7 +870,7 @@ onUnmounted(() => {
           </button>
           <button
             type="button"
-            class="btn btn-outline-secondary"
+            class="ib"
             :disabled="!canRedo"
             :title="canRedo ? 'Redo (Ctrl+Shift+Z)' : 'Nothing to redo'"
             aria-label="Redo"
@@ -868,18 +884,6 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- How far back the stack goes. A browser-side stack is invisible, and "nothing to undo"
-             is otherwise indistinguishable from "Undo is broken". -->
-        <span
-          v-if="canEdit"
-          class="badge text-bg-light"
-          data-testid="history-steps"
-          :title="'Changes that can be undone, one step per thing you did'"
-        >
-          {{ stepsText }}
-        </span>
-
-        <span v-if="saving" class="badge text-bg-light" data-testid="saving-badge">Saving...</span>
       </div>
     </div>
 
@@ -898,7 +902,6 @@ onUnmounted(() => {
       :view="startView"
       :locks="locks"
       :history="history"
-      :clipboard="clipboard"
       :presence="presence"
       :size-text="sizeText"
       :size-ratio="sizeRatio"
@@ -906,16 +909,29 @@ onUnmounted(() => {
       @plan-added="addPlan"
       @plan-updated="updatePlan"
       @plan-deleted="deletePlan"
-      @plan-copied="copyPlan"
-      @plan-pasted="pastePlan"
+      @plan-duplicated="duplicatePlan"
       @area-added="addArea"
       @area-updated="updateArea"
       @area-deleted="deleteArea"
       @area-frame="streamArea"
-      @area-copied="copyArea"
-      @area-pasted="pasteArea"
+      @area-duplicated="duplicateArea"
       @view-changed="setView"
     >
+      <template #under-map>
+        <div v-if="areas.length" class="k k2-arealist" data-testid="zone-overview">
+          <button
+            v-for="area in areas"
+            :key="area.id"
+            type="button"
+            :aria-pressed="selectedAreaId === area.id ? 'true' : 'false'"
+            :disabled="!canEdit || Boolean(area.locked)"
+            :title="areaLabel(area.kind)"
+            :data-testid="'zone-' + (area.code || area.name)"
+            @click="selectArea(area.id)"
+          ><i class="k2-sw" :style="{ background: areaColour(area.kind) }"></i>{{ area.name }}</button>
+        </div>
+        <p v-else-if="!loading" class="k2-hint" data-testid="zone-overview-empty">No zones yet.<template v-if="canEdit"> Press <strong>Draw area</strong> to add one.</template></p>
+      </template>
       <AreaList
         :key="listKey"
         :areas="areas"
@@ -923,11 +939,9 @@ onUnmounted(() => {
         :show-code="Boolean(eventId)"
         :locks="locks"
         :selected="selectedAreaId"
-        :clipboard="clipboard"
         :presence="presence"
         @area-updated="updateArea"
-        @area-copied="copyArea"
-        @area-pasted="pasteArea"
+        @area-duplicated="duplicateArea"
         @area-deleted="deleteArea"
         @area-edit="selectArea"
       />

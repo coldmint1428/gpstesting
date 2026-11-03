@@ -20,7 +20,7 @@ export default {
     // "the header mentions the plan" would also be true while a different plan is open.
     await left.assertThat(
       'the open plan is Show night — example',
-      `document.querySelector('.pv-board-head select').selectedOptions[0].textContent.trim().replace(/\\s+/g, ' ').startsWith('Show night — example')`,
+      `document.querySelector('[data-testid=plan-picker] b').textContent.trim() === 'Show night — example'`,
     )
     // The board opens on the first frame, so there is always something on the map.
     await left.assertContains('.pv-hint', 'Frame +0:00')
@@ -310,7 +310,7 @@ export default {
     await left.assertContains('.pv-hint', 'Frame +0:00')
     await left.assertThat(
       'after the reload the same plan is open',
-      `document.querySelector('.pv-board-head select').selectedOptions[0].textContent.trim().replace(/\\s+/g, ' ').startsWith('Show night — example')`,
+      `document.querySelector('[data-testid=plan-picker] b').textContent.trim() === 'Show night — example'`,
     )
 
     // ---------- 14. a second tab, opened on the same page, selects independently ----------

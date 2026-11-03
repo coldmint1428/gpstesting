@@ -93,7 +93,12 @@ async function pageAs(browser, role, device = DESK) {
 async function visit(page, path, { heading, shows = [], name, full = true }) {
   const before = problems.length
   await page.goto(path)
-  if (heading) await expect(page.getByRole('heading', { name: heading }).first()).toBeVisible({ timeout: 30_000 })
+  // A page names itself with a heading, or (Timeline, Map, People, Playback since the 3 Nov redesign) with the label
+  // on its main region, so the board gets the room a big title would take
+  if (heading) {
+    const named = page.getByRole('heading', { name: heading }).or(page.getByRole('region', { name: heading, exact: true }))
+    await expect(named.first()).toBeVisible({ timeout: 30_000 })
+  }
   // Visible matches only: the Live page stays in the page (hidden) once opened, with group names of its own
   for (const text of shows) await expect(page.getByText(text).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0, { timeout: 30_000 })
@@ -162,7 +167,8 @@ test('the member on a phone: own group only, the timetable and the message', asy
   const page = await pageAs(browser, 'member', PHONE)
   await visit(page, `/events/${ev.eventId}/timeline`, { name: 'member-timeline', shows: [/Alpha/] })
   await expect(page.getByText('Bravo', { exact: true })).toHaveCount(0) // another group's plan is not theirs to read
-  await visit(page, `/events/${ev.eventId}/live`, { name: 'member-live', shows: [/your group/i] })
+  // The "You can see your group" line left the Live page in the 3 Nov redesign; the scoping itself is roles.spec's
+  await visit(page, `/events/${ev.eventId}/live`, { name: 'member-live', heading: 'Live' })
   await expect(page.getByTestId('share-btn')).toHaveCount(0) // a member does not share
   await visit(page, '/me', { name: 'member-me', shows: [/QA Member/] })
 })
