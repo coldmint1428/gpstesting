@@ -3892,29 +3892,34 @@ watch(
             <template v-if="props.canEdit && selected">
               <!-- Hold and the flags act on the ticked groups; a stretch of frames can also act on everyone standing -->
               <div v-if="selectedGroups.size || selectionSpan.count > 1" class="k2-sel" data-testid="selection-panel">
-                <div class="row">
-                  <b style="font-size: 14px; flex: 1">{{ selectedGroups.size ? selectedGroups.size + (selectedGroups.size === 1 ? ' group' : ' groups') + ' selected' : 'All groups' }}</b>
-                  <button v-if="selectedGroups.size" type="button" class="k2-link" style="color: var(--lime)" data-testid="clear-groups" @click="clearGroups">Clear</button>
+                <div class="k2-sel-head">
+                  <b>{{ selectedGroups.size ? selectedGroups.size + (selectedGroups.size === 1 ? ' group' : ' groups') + ' selected' : 'All groups' }}</b>
+                  <button v-if="selectedGroups.size" type="button" class="k2-sel-clear" data-testid="clear-groups" @click="clearGroups">Clear</button>
                 </div>
-                <template v-if="selectionSpan.count === 1">
+                <!-- One line per action: what it does on the left, its choices on the right -->
+                <div v-if="selectionSpan.count === 1" class="k2-sel-row">
                   <!-- Hold: state these groups again, here, at a later moment -->
-                  <div class="k2-sub" data-testid="hold-target">Hold in place for</div>
-                  <div class="row" style="gap: 6px; flex-wrap: wrap">
-                    <button type="button" class="k2-pillbtn" data-testid="hold-60" :disabled="busy || !standingTargets.length" @click="hold(60)">+1m</button>
-                    <button type="button" class="k2-pillbtn" data-testid="hold-300" :disabled="busy || !standingTargets.length" @click="hold(300)">+5m</button>
-                    <button type="button" class="k2-pillbtn" data-testid="hold-600" :disabled="busy || !standingTargets.length" @click="hold(600)">+10m</button>
-                  </div>
-                </template>
-                <!-- The state buttons act on the open frame; the confirmation buttons on the whole selected stretch -->
-                <div class="k2-sub" data-testid="flag-target">On the map at {{ formatOffset(selected.t_s) }}</div>
-                <div class="row" style="gap: 6px; flex-wrap: wrap">
-                  <button type="button" class="k2-pillbtn" data-testid="bulk-state-on" :disabled="busy || !standingTargets.length" @click="bulkState('on_site')">On site</button>
-                  <button type="button" class="k2-pillbtn" data-testid="bulk-state-off" :disabled="busy || !standingTargets.length" @click="bulkState('off_site')">Off site</button>
+                  <span class="k2-sel-label" data-testid="hold-target">Hold</span>
+                  <span class="k2-sel-btns">
+                    <button type="button" data-testid="hold-60" title="Keep them here 1 minute longer" :disabled="busy || !standingTargets.length" @click="hold(60)">+1m</button>
+                    <button type="button" data-testid="hold-300" title="Keep them here 5 minutes longer" :disabled="busy || !standingTargets.length" @click="hold(300)">+5m</button>
+                    <button type="button" data-testid="hold-600" title="Keep them here 10 minutes longer" :disabled="busy || !standingTargets.length" @click="hold(600)">+10m</button>
+                  </span>
                 </div>
-                <div class="k2-sub" data-testid="verify-scope">Confirm positions</div>
-                <div class="row" style="gap: 6px; flex-wrap: wrap">
-                  <button type="button" class="k2-pillbtn" data-testid="bulk-verify-auto" :disabled="busy || !verifyRows" @click="bulkVerify('auto')">Automatic</button>
-                  <button type="button" class="k2-pillbtn" data-testid="bulk-verify-manual" :disabled="busy || !verifyRows" @click="bulkVerify('manual')">By hand</button>
+                <!-- The state buttons act on the open frame; the confirmation buttons on the whole selected stretch -->
+                <div class="k2-sel-row">
+                  <span class="k2-sel-label" data-testid="flag-target" :title="'On the map at ' + formatOffset(selected.t_s)">At {{ formatOffset(selected.t_s) }}</span>
+                  <span class="k2-sel-btns">
+                    <button type="button" data-testid="bulk-state-on" :disabled="busy || !standingTargets.length" @click="bulkState('on_site')">On site</button>
+                    <button type="button" data-testid="bulk-state-off" :disabled="busy || !standingTargets.length" @click="bulkState('off_site')">Off site</button>
+                  </span>
+                </div>
+                <div class="k2-sel-row">
+                  <span class="k2-sel-label" data-testid="verify-scope" title="Confirm positions">Confirm</span>
+                  <span class="k2-sel-btns">
+                    <button type="button" data-testid="bulk-verify-auto" title="Trusted as drawn" :disabled="busy || !verifyRows" @click="bulkVerify('auto')">Auto</button>
+                    <button type="button" data-testid="bulk-verify-manual" title="Somebody has to confirm by hand" :disabled="busy || !verifyRows" @click="bulkVerify('manual')">Manual</button>
+                  </span>
                 </div>
               </div>
               <p v-else class="k2-hint">Tick groups to hold them or set flags together.</p>
