@@ -372,6 +372,8 @@ function pageLabel(name) {
 watch(membership, async (now) => {
   if (loading.value || !event.value) return
   if (!now) {
+    // Logging out also leaves me without a membership: that is not being removed, and the router takes it from here
+    if (!auth.user) return
     if (members.value.length) {
       toast('You are no longer a member of this event.', 'warning')
       router.push('/events')
