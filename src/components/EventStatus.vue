@@ -13,7 +13,7 @@
 // Run sheet (merger Stage 4): retired in step 24 (060). A session runs a plan or nothing; the Start and Schedule
 // panels offer the event's plans and nothing else, and the run-sheet engine cannot be started at all.
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { formatTime, formatDay, formatDayTime, formatDuration, toDateTimeLocal } from '../utils/time'
+import { formatTime, formatDay, formatDayTime, formatDuration } from '../utils/time'
 import { remindIcsNow } from '../composables/usePushNotifications'
 import { askConfirm, toast } from '../composables/useNotify'
 import { supabase } from '../lib/supabase'

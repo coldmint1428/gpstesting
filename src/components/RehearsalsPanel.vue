@@ -219,7 +219,7 @@ function sendReason(rehearsal) {
               <div v-if="formErrors.endsAt" class="invalid-feedback">{{ formErrors.endsAt }}</div>
             </div>
           </div>
-          <div class="mt-2">
+          <div class="mt-3">
             <label for="rh-note" class="form-label">Notes (optional)</label>
             <textarea id="rh-note" v-model="form.note" class="form-control" rows="2" maxlength="500" placeholder="e.g. Meet at the main gate, bring water" data-testid="rehearsal-note"></textarea>
           </div>
@@ -276,6 +276,7 @@ function sendReason(rehearsal) {
           <li v-for="rehearsal in selectedRehearsals" :key="rehearsal.id" data-testid="rehearsal-item">
             <div class="rh-item-head">
               <strong data-testid="rehearsal-time">{{ formatRehearsal(rehearsal) }}</strong>
+              <span class="rh-item-actions">
               <button
                 v-if="canEdit && !hasStarted(rehearsal)"
                 type="button"
@@ -294,6 +295,7 @@ function sendReason(rehearsal) {
                 data-testid="rehearsal-remove"
                 @click="emit('remove', rehearsal.id)"
               >Remove</button>
+              </span>
             </div>
             <p v-if="rehearsal.note" class="rh-note" data-testid="rehearsal-item-note">{{ rehearsal.note }}</p>
 
@@ -447,6 +449,11 @@ function sendReason(rehearsal) {
   justify-content: space-between;
   gap: 10px;
 }
+.rh-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .rh-note {
   margin: 6px 0 0;
   color: var(--muted);
@@ -468,8 +475,11 @@ function sendReason(rehearsal) {
 .rh-mine-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 12px;
+}
+.rh-reason .form-text {
+  margin-top: 6px;
 }
 /* A phone's day is too narrow for a time: a coloured mark says something is on, and the card below says what */
 @media (max-width: 575.98px) {

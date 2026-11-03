@@ -35,7 +35,7 @@ const props = defineProps({
   showCode: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-duplicated'])
+const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-duplicated', 'area-show'])
 
 // Who has each area, keyed by the area's id. A plain object here rather than a ref, because a ref
 // inside a plain object is not unwrapped in a template.
@@ -137,6 +137,7 @@ function pick(row) {
   if (!props.editable) return
   openId.value = isOpen(row) ? null : row.area.id
   if (openId.value && !row.area.locked) emit('area-edit', row.area.id)
+  else if (openId.value) emit('area-show', row.area.id) // locked: it is not opened, but the map goes to it
 }
 
 </script>

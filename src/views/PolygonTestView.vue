@@ -778,6 +778,11 @@ function newId() {
 }
 
 // Clicking an area -- on the map or in the list -- selects it. Clicking it again puts it back down.
+// A locked zone is not opened for editing, but the map still goes to it
+const benchView = ref(null)
+function showArea(id) {
+  benchView.value?.showShape('area:' + id)
+}
 function selectArea(id) {
   mode.value = mode.value === 'area:' + id ? null : 'area:' + id
 }
@@ -895,6 +900,7 @@ onUnmounted(() => {
 
     <AreaBench
       v-else
+      ref="benchView"
       v-model:mode="mode"
       :can-edit="canEdit"
       :plans="plans"
@@ -924,10 +930,10 @@ onUnmounted(() => {
             :key="area.id"
             type="button"
             :aria-pressed="selectedAreaId === area.id ? 'true' : 'false'"
-            :disabled="!canEdit || Boolean(area.locked)"
+            :class="{ 'is-locked': area.locked }"
             :title="areaLabel(area.kind)"
             :data-testid="'zone-' + (area.code || area.name)"
-            @click="selectArea(area.id)"
+            @click="!canEdit || area.locked ? showArea(area.id) : selectArea(area.id)"
           ><i class="k2-sw" :style="{ background: areaColour(area.kind) }"></i>{{ area.name }}</button>
         </div>
         <p v-else-if="!loading" class="k2-hint" data-testid="zone-overview-empty">No zones yet.<template v-if="canEdit"> Press <strong>Draw area</strong> to add one.</template></p>
@@ -944,6 +950,7 @@ onUnmounted(() => {
         @area-duplicated="duplicateArea"
         @area-deleted="deleteArea"
         @area-edit="selectArea"
+        @area-show="showArea"
       />
     </AreaBench>
   </component>
@@ -971,5 +978,14 @@ onUnmounted(() => {
 .bench-who {
   border: 1px solid;
   font-weight: 600;
+  padding: 0.4em 0.8em;
+}
+/* The names sit a clear step below the title, and the line under them is not pushed against the map */
+[data-testid="bench-here-now"] {
+  margin-top: 10px;
+  gap: 8px !important;
+}
+[data-testid="zones-intro"] {
+  margin-top: 8px;
 }
 </style>

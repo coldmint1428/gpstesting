@@ -149,6 +149,12 @@ watch(
   },
 )
 
+// A locked shape cannot be opened, but the view still goes to it: a click on its row or its chip only moves the map.
+function showShape(value) {
+  framePick(value)
+}
+defineExpose({ showShape })
+
 function togglePlanLock(plan) {
   emit('plan-updated', { id: plan.id, patch: { locked: !plan.locked } })
 }
@@ -2984,7 +2990,7 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
             class="plan-row"
             :class="{ 'is-locked': plan.locked }"
             :data-testid="'plan-' + index"
-            @click="!plan.locked && pickPlanCard(plan, $event)"
+            @click="plan.locked ? showShape('floorplan:' + plan.id) : pickPlanCard(plan, $event)"
           >
             <div class="k2-fp">
               <img v-if="plan.image" class="k2-thumb" :src="plan.image" alt="" style="object-fit: cover" />

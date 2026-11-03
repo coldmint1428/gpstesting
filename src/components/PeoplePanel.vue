@@ -8,6 +8,7 @@
 // IC (a duty of a member) is switched on the Groups page (MembersPanel.vue); here it is a badge only.
 // An IC's arrival radius (063) stays here, beside the IC it belongs to.
 import { ref, computed, watch } from 'vue'
+import { textOn } from '../utils/groupColours'
 import EmptyState from './EmptyState.vue'
 import { initials } from '../utils/people'
 import { ROLE_RANK, ROLE_LABEL, topRole, canManage, assignableRoles, canSetIC, canRemove } from '../utils/permissions'
@@ -273,7 +274,7 @@ async function changeTolerance(m, input) {
         <div data-testid="people-list">
           <div v-for="r in rows" :key="r.m.id" class="k2-pp" :data-testid="'person-' + r.m.username">
             <div class="row" style="gap: 10px; min-width: 0">
-              <span class="av" :style="{ backgroundColor: groupColour(r.m.groupId), color: '#fff' }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
+              <span class="av" :style="{ backgroundColor: groupColour(r.m.groupId), color: textOn(groupColour(r.m.groupId)) }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
               <div style="min-width: 0">
                 <b class="d-block text-truncate" style="font-size: 14px">{{ r.m.display_name }}<span v-if="r.isMe" class="mut" style="font-weight: 500"> (you)</span></b>
                 <span class="mut d-block text-truncate" style="font-size: 12px">{{ groupName(r.m.groupId) }}<template v-if="r.m.isAdmin && r.role !== 'admin'"> · Group admin</template></span>

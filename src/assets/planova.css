@@ -1665,7 +1665,7 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
   height: 20px;
   border-radius: 50%;
   background: var(--pv-dot, var(--pv-primary));
-  color: #fff;
+  color: var(--pv-dot-ink, #fff);
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -2479,7 +2479,7 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
   border: 2px solid #fff;
   background: var(--pv-dot, var(--pv-primary));
   box-shadow: 0 1px 3px rgba(10, 31, 23, 0.45);
-  color: #fff;
+  color: var(--pv-dot-ink, #fff);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -2524,11 +2524,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
   color: var(--pv-ink);
 }
 
-.pv-route-pin:hover .pv-route-dot-label {
-  border-color: var(--pv-line);
-  background: #fff;
-  color: var(--pv-ink);
-}
 
 /* ---------- scrubbing and placing (QA 1 Nov) ----------
    The ruler is the cursor's handle: press anywhere on it and drag. The cursor itself can be grabbed too, with a hit

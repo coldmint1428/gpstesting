@@ -870,6 +870,7 @@ await phase('rehearsals', {
     { name: '080_rehearsal_details_absences.sql', sql: read('supabase/migrations/080_rehearsal_details_absences.sql') },
     { name: '085_edit_rehearsal.sql', sql: read('supabase/migrations/085_edit_rehearsal.sql') },
     { name: '086_recording_names.sql', sql: read('supabase/migrations/086_recording_names.sql') },
+    { name: '088_absence_one_per_day.sql', sql: read('supabase/migrations/088_absence_one_per_day.sql') },
   ],
   body: async (db) => {
     await runSql(db, read('supabase/tests/edit_rehearsal_and_recording_test.sql'), 'edit_rehearsal_and_recording_test.sql')

@@ -1,8 +1,9 @@
 <script setup>
 // RehearsalRequests - the Requests tab of the Rehearsals page, for the root and planners: "not available" requests to
 // approve or reject, then the ones already decided. The database reads and decides only for them (080).
-import { computed } from 'vue'
-import { formatRehearsal } from '../utils/rehearsalCalendar'
+import { computed, ref } from 'vue'
+import ExpandTransition from './ExpandTransition.vue'
+import { dayKey, formatRehearsal } from '../utils/rehearsalCalendar'
 
 const props = defineProps({
   absences: { type: Array, default: () => [] },
@@ -23,22 +24,32 @@ function groupOf(userId) {
   return group ? group.name : ''
 }
 
-/** Each request with its rehearsal, soonest rehearsal first. */
-const requests = computed(() =>
-  props.absences
-    .map((absence) => ({ ...absence, rehearsal: props.rehearsals.find((r) => r.id === absence.rehearsalId) }))
-    .filter((request) => request.rehearsal)
-    .sort((a, b) => a.rehearsal.startsAt - b.rehearsal.startsAt),
-)
+/** Each request with its rehearsal, soonest rehearsal first. A member has one request a day: should the list hold two for
+ *  the same day (an older one from before the database kept to that), only the newest is shown, so nothing sits there
+ *  that cannot be answered. */
+const requests = computed(() => {
+  const newest = new Map()
+  for (const absence of props.absences) {
+    const rehearsal = props.rehearsals.find((r) => r.id === absence.rehearsalId)
+    if (!rehearsal) continue
+    const key = absence.userId + '|' + dayKey(rehearsal.startsAt)
+    const seen = newest.get(key)
+    if (!seen || (absence.createdAt || 0) > (seen.createdAt || 0)) newest.set(key, { ...absence, rehearsal })
+  }
+  return [...newest.values()].sort((a, b) => a.rehearsal.startsAt - b.rehearsal.startsAt)
+})
 const pending = computed(() => requests.value.filter((request) => request.status === 'pending'))
-const decided = computed(() => requests.value.filter((request) => request.status !== 'pending'))
+const decided = computed(() => requests.value.filter((request) => request.status !== 'pending').reverse())
+// The answered ones are history: folded away once there are a few, so the ones waiting stay in view
+const decidedOpen = ref(false)
+const FOLD_AT = 3
 </script>
 
 <template>
   <div class="kp-stack" data-testid="rehearsal-requests">
     <section class="kp-card" data-testid="requests-pending">
       <h2 class="kp-title mb-2">Waiting for a decision</h2>
-      <ul v-if="pending.length" class="rq-list">
+      <ul v-if="pending.length" class="rq-list rq-scroll" data-testid="requests-pending-list">
         <li v-for="request in pending" :key="request.id" data-testid="request-row">
           <div class="rq-main">
             <strong>{{ nameOf(request.userId) }}</strong><span v-if="groupOf(request.userId)" class="rq-soft"> · {{ groupOf(request.userId) }}</span>
@@ -55,8 +66,12 @@ const decided = computed(() => requests.value.filter((request) => request.status
     </section>
 
     <section v-if="decided.length" class="kp-card" data-testid="requests-decided">
-      <h2 class="kp-title mb-2">Decided</h2>
-      <ul class="rq-list">
+      <div class="rq-head">
+        <h2 class="kp-title mb-0">Decided <span class="rq-soft">· {{ decided.length }}</span></h2>
+        <button v-if="decided.length > FOLD_AT" type="button" class="btn btn-sm btn-outline-secondary" :aria-expanded="decidedOpen ? 'true' : 'false'" data-testid="requests-decided-toggle" @click="decidedOpen = !decidedOpen">{{ decidedOpen ? 'Hide' : 'Show' }}</button>
+      </div>
+      <ExpandTransition><div v-if="decided.length <= FOLD_AT || decidedOpen">
+      <ul class="rq-list rq-scroll">
         <li v-for="request in decided" :key="request.id" data-testid="request-decided-row">
           <div class="rq-main">
             <strong>{{ nameOf(request.userId) }}</strong><span v-if="groupOf(request.userId)" class="rq-soft"> · {{ groupOf(request.userId) }}</span>
@@ -76,6 +91,8 @@ const decided = computed(() => requests.value.filter((request) => request.status
           </div>
         </li>
       </ul>
+      </div>
+      </ExpandTransition>
     </section>
   </div>
 </template>
@@ -98,6 +115,20 @@ const decided = computed(() => requests.value.filter((request) => request.status
 }
 .rq-list li:first-child {
   border-top: 0;
+}
+/* Many requests scroll inside their card instead of growing the page */
+.rq-scroll {
+  max-height: min(50vh, 460px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+}
+.rq-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 .rq-main {
   flex: 1 1 240px;

@@ -392,7 +392,7 @@ html:not(.native-app) body .ev .pv-frame.is-bad .pv-frame-dot{background:#c2410c
 .k2-schedsub{margin:6px 0 0;font-size:14px}
 html body .ev .pv-route.is-embedded .pv-route-stage{aspect-ratio:16/9;height:auto;min-height:0;border-radius:24px;overflow:hidden;margin-bottom:16px}
 html body .ev .pv-route.is-embedded .pv-map{height:100%;min-height:0}
-html:not(.native-app) body .ev .pv-route-dot-mark{width:26px;height:26px;background:var(--pv-dot);color:#fff;font:800 11px Manrope;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
+html:not(.native-app) body .ev .pv-route-dot-mark{width:26px;height:26px;background:var(--pv-dot);color:var(--pv-dot-ink,#fff);font:800 11px Manrope;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
 html:not(.native-app) body .ev .pv-route-dot.is-focused .pv-route-dot-mark{width:32px;height:32px;background:var(--lime);color:var(--ink);box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink),3px 4px 0 var(--ink)}
 .k2-srowwrap .k2-srow{color:var(--ink);cursor:pointer}
 .k2-srowwrap .k2-srow:disabled{cursor:default;opacity:1}
@@ -461,11 +461,14 @@ html:not(.native-app) body .ev .bench-map{height:min(66vh,620px);border-radius:2
 .k-topbar .k2-sos{color:#fff;font:800 14px Unbounded}
 html:not(.native-app) body .ev .pv-stage .pv-map{position:relative}
 html:not(.native-app) body .ev .k2-transport-top{background:transparent}
-html:not(.native-app) body .ev .pv-sched{background:transparent;padding:0;border:0;box-shadow:none}
+html:not(.native-app) body .ev .pv-sched{background:transparent;padding:0;border:0;box-shadow:none;gap:16px;overflow:visible}
+html:not(.native-app) body .ev .pv-sched-card{background:#fff;border-radius:24px;overflow:hidden;display:flex;flex-direction:column}
+html:not(.native-app) body .ev .pv-sched-list{max-height:min(60vh,520px);overflow-y:auto;overscroll-behavior:contain}
+html:not(.native-app) body .ev .k2-schedhead{margin-bottom:0}
 /* A zone's caption never covers what stands on it */
 html:not(.native-app) body .pv-map .leaflet-marker-pane,html:not(.native-app) body .live-map .leaflet-marker-pane{z-index:660}
-html:not(.native-app) body .ev .pv-route-dot-label{display:none}
-html:not(.native-app) body .ev .pv-route-dot.is-focused .pv-route-dot-label{display:block}
+html:not(.native-app) body .ev .pv-route.is-crowded .pv-route-dot-label{display:none}
+html:not(.native-app) body .ev .pv-route.is-crowded .pv-route-dot.is-focused .pv-route-dot-label{display:block}
 .k2-maplegend{bottom:28px}
 @media (max-width: 767.98px){.k-topbar .k2-sos{font-size:12px}}
 
@@ -873,3 +876,102 @@ html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:clamp(560p
   .k2-liveside-body{overflow:visible;padding-right:10px}
   .k2-mapp,.k2-sched,.k2-tl{grid-template-columns:minmax(0,1fr)}
 }
+/* Spacing: a row of buttons under a form's fields, and the zone chips under the map, never sit tight to what is above */
+.kp-card form > .kp-actions:not(:first-child),.kp-card > .kp-actions:not(:first-child){margin-top:16px}
+.k2-arealist{gap:8px;margin-top:16px;margin-bottom:4px}
+.k2-arealist button.is-locked{background:var(--k-bg2,#f3f4ee)}
+.plan-row.is-locked{padding:8px 12px;border-radius:14px}
+.plan-scroll{display:flex;flex-direction:column;gap:8px;padding-right:6px}
+
+/* A pale group colour (yellow, sky) still reads on the map: a thin ink ring beside the white one */
+.pv-marker{box-shadow:0 0 0 1px rgba(10,31,23,.55),0 1px 4px rgba(10,31,23,.4)}
+html:not(.native-app) body .ev .pv-route-dot-mark{box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
+/* The zoom buttons sit clear of the rounded corner of the card the map is in, instead of being clipped by it */
+.pv-route-stage .leaflet-top.leaflet-left,.pv-stage .leaflet-top.leaflet-left{margin:10px 0 0 10px}
+
+/* A list that can grow without end (a roll call of hundreds, a long log, every recording) scrolls inside its own card
+   instead of pushing the page down; the page's own scroll bar stays for the page. */
+.k2-longlist{max-height:min(52vh,460px);overflow-y:auto;overscroll-behavior:contain;padding-right:6px}
+.k2-longlist-tall{max-height:min(70vh,640px)}
+
+/* Schedule: one white card (title, map, list), the same as on the phone */
+html:not(.native-app) body .ev .pv-sched-head{padding:16px 20px;background:#fff;border-bottom:1px solid var(--k-line)}
+html:not(.native-app) body .ev .pv-sched-title{font:800 20px/1.2 Unbounded;letter-spacing:-.04em;margin:0}
+html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded{padding:12px 16px 4px}
+html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded .pv-route-stage{margin-bottom:0}
+html:not(.native-app) body .ev .pv-sched-listhead{padding:14px 20px 10px;background:#fff}
+html:not(.native-app) body .ev .pv-sched-moment{padding-left:20px;padding-right:20px}
+html:not(.native-app) body .ev .pv-sched-line{margin:0;padding:8px 20px;background:#fff}
+
+/* The Problems panel is a solid white card: header, list and rows each paint their own white, so nothing behind it (the
+   page, the timeline, the inspector) shows through while it scrolls */
+html:not(.native-app) body .ev .pv-probs{background:#fff;border:0;border-radius:24px;isolation:isolate}
+html:not(.native-app) body .ev .pv-probs-head{background:#fff;position:relative;z-index:2}
+html:not(.native-app) body .ev .pv-probs-list{background:#fff;border-radius:0 0 24px 24px}
+html:not(.native-app) body .ev .pv-prob,html:not(.native-app) body .ev .pv-probs-section,html:not(.native-app) body .ev .pv-probs-lock+*{background:#fff}
+html:not(.native-app) body .ev .pv-probs-toggle{background:#fff}
+
+/* Segmented controls: one pill that slides to the chosen item (src/lib/segSlide.js). Until the script has placed it
+   (or without it) the chosen item paints its own background as before. */
+.seg[data-slide],.kp-seg[data-slide]{position:relative;--seg-bg:var(--ink,#0a1f17)}
+.k2-sel .seg[data-slide]{--seg-bg:var(--k-lime)}
+.kl-views .seg[data-slide]{--seg-bg:var(--lime)}
+.seg[data-slide]::before,.kp-seg[data-slide]::before{content:"";position:absolute;left:0;top:0;width:var(--seg-w);height:var(--seg-h);transform:translate(var(--seg-x),var(--seg-y));border-radius:inherit;border-radius:999px;background:var(--seg-bg);pointer-events:none}
+.seg[data-slide="on"]::before,.kp-seg[data-slide="on"]::before{transition:transform .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1),height .28s cubic-bezier(.4,0,.2,1)}
+.seg[data-slide] > button,.kp-seg[data-slide] > label{position:relative;z-index:1;transition:color .2s}
+.k .seg[data-slide] button[aria-pressed="true"],.k .seg[data-slide] button[aria-selected="true"],.k2-sel .seg[data-slide] button[aria-pressed="true"],.kl-views .seg[data-slide] button[aria-pressed="true"],.kp-seg[data-slide] input:checked + label{background:transparent}
+.kp-seg[data-slide] > input{z-index:0}
+@media (prefers-reduced-motion: reduce){.seg[data-slide="on"]::before,.kp-seg[data-slide="on"]::before{transition:none}}
+
+/* A page's title keeps clear of what is under it (a control row, a card) and of a banner above it */
+html body .ev:not(.ev-native) .k2-pagehead{margin-bottom:24px}
+html body .ev:not(.ev-native) .ev-main > .kp-banner + .k2-pagehead,html body .ev:not(.ev-native) .ev-main > .kp-stack + .k2-pagehead{margin-top:8px}
+
+/* An alert with a close button: the text, then a round X that sits centred at the right (not Bootstrap's corner X) */
+.alert.k2-alert{display:flex;align-items:center;gap:12px;padding-right:12px}
+.k2-alert-text{flex:1;min-width:0}
+.k2-alert-x{flex:none;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer;transition:background-color .12s}
+.k2-alert-x:hover{background:rgba(10,31,23,.1)}
+.k2-alert-x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+
+/* ===== One button system for the website =====
+   Big 44px (.btn, .kb), small 36px (.btn-sm, .kb-sm), mini 32px (the buttons inside lists, rows and cards), and round
+   icon buttons. The older plan/ops/schedule buttons (.pv-btn, .pv-sched-show, .pv-sched-here, .pv-sched-ack,
+   .pv-ops-act, .pv-strip-action) are the mini size and look: an ink-ringed pill, the same as .k2-pillbtn. */
+html:not(.native-app) body .k2-pillbtn,
+html:not(.native-app) body .pv-btn,
+html:not(.native-app) body .pv-sched-show,
+html:not(.native-app) body .pv-sched-here,
+html:not(.native-app) body .pv-sched-ack,
+html:not(.native-app) body .pv-ops-act,
+html:not(.native-app) body .pv-strip-action{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;min-height:32px;padding:0 14px;border:0;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink);color:var(--ink);font:700 13px/1 Manrope,system-ui,sans-serif;letter-spacing:0;white-space:nowrap;cursor:pointer;text-decoration:none}
+html:not(.native-app) body .k2-pillbtn:hover:not(:disabled),
+html:not(.native-app) body .pv-btn:hover:not(:disabled),
+html:not(.native-app) body .pv-sched-show:hover:not(:disabled),
+html:not(.native-app) body .pv-sched-ack:hover:not(:disabled),
+html:not(.native-app) body .pv-ops-act:hover:not(:disabled),
+html:not(.native-app) body .pv-strip-action:hover:not(:disabled){background:var(--canvas,#eef0e8);color:var(--ink)}
+html:not(.native-app) body .pv-sched-here{background:var(--lime);box-shadow:inset 0 0 0 1.5px var(--ink)}
+html:not(.native-app) body .pv-sched-here:hover:not(:disabled){background:var(--ink);color:var(--lime)}
+html:not(.native-app) body .pv-btn.is-primary{background:var(--ink);color:var(--lime);box-shadow:none}
+html:not(.native-app) body .pv-btn.is-danger{color:var(--k-red);box-shadow:inset 0 0 0 1.5px var(--k-red)}
+html:not(.native-app) body .pv-btn.is-quiet{background:transparent;box-shadow:none}
+html:not(.native-app) body .k2-pillbtn:disabled,
+html:not(.native-app) body .pv-btn:disabled,
+html:not(.native-app) body .pv-sched-show:disabled,
+html:not(.native-app) body .pv-sched-here:disabled,
+html:not(.native-app) body .pv-ops-act:disabled{opacity:.4;cursor:not-allowed}
+html:not(.native-app) body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here,.pv-sched-ack,.pv-ops-act,.pv-strip-action):focus-visible,
+html:not(.native-app) body :is(.kb,.btn,.ib,.k2-lock):focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+/* Icons in buttons: one stroke, and a size that goes with the button */
+html body :is(.kb,.btn) .ki{width:18px;height:18px}
+html body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here,.pv-ops-act) .ki{width:16px;height:16px}
+html body .ki{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* Round icon-only buttons: the lock beside a name is the same height as the mini buttons */
+.k2-lock,.k .k2-lockbtn{width:32px;height:32px}
+/* Bootstrap's own close X, wherever one is left: the round X of the alerts */
+html body .btn-close{width:30px;height:30px;padding:0;border-radius:50%;opacity:1;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a1f17' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6 6 18'/%3E%3C/svg%3E") center/16px no-repeat}
+html body .btn-close:hover{background-color:rgba(10,31,23,.1)}
+html body .btn-close-white{filter:invert(1)}
+/* "Got it for all": a button like its neighbour, not loose text */
+.bb-pile-head .btn-ghost{box-shadow:inset 0 0 0 1.5px var(--ink)}

@@ -64,7 +64,7 @@ import {
 } from '../../utils/planFrames'
 import { readSheet, sheetFileName, sheetGaps, sheetText } from '../../utils/planSheet'
 import '../../assets/planova.css'
-import { GROUP_PALETTE } from '../../utils/groupColours'
+import { GROUP_PALETTE, textOn } from '../../utils/groupColours'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -122,8 +122,8 @@ const sheetFile = ref(null)
 // groups are already here, and the artefact's Playback tab is this same picture with the clock running.
 const playhead = ref(null) // seconds from T+0 while a run is on the strip, or null
 const playing = ref(false)
-const speed = ref(60) // 1x, 10x or 60x: a thirty-minute plan at 60x is half a minute
-const PLAY_SPEEDS = [1, 10, 60]
+const speed = ref(60) // 1x, 10x, 60x or 120x: a thirty-minute plan at 60x is half a minute
+const PLAY_SPEEDS = [1, 10, 60, 120]
 let playRaf = null
 let playLast = 0
 let playDrawnAt = 0
@@ -1036,6 +1036,14 @@ function drawLines() {
   }
 }
 
+// What a badge says when the pointer rests on it
+function markerText(group, point, run, other) {
+  const when = run
+    ? point.moving ? 'walking to ' + formatOffset(point.next.t_s) : 'held at ' + formatOffset(point.t_s)
+    : (point.defined ? 'set at ' : 'unchanged since ') + formatOffset(point.t_s)
+  return `${group.name} · ${when}` + (other ? ` · ${other.display_name || 'Somebody'} is editing` : '')
+}
+
 function drawMarkers() {
   if (!map || !markerLayer) return
   // A hand is on the board. Redrawing replaces the very marker Leaflet is dragging -- the drag ends with the marker
@@ -1070,6 +1078,7 @@ function drawMarkers() {
     if (reuse && markers.has(group.id)) {
       const there = markers.get(group.id)
       there.setLatLng([point.lat, point.lng])
+      there.setTooltipContent(markerText(group, point, run, null))
       continue
     }
     const color = colorOf.value.get(group.id) || '#0b3d2e'
@@ -1084,7 +1093,7 @@ function drawMarkers() {
     const own = run || !frame || other ? null : ownCells.value.get(cell) || null
     const icon = L.divIcon({
       className: 'pv-marker-wrap',
-      html: `<div class="pv-marker${dim ? ' is-dim' : ''}${bad ? ' is-bad' : ''}${run ? ' is-walking' : ''}${other ? ' is-busy' : ''}${own ? ' is-held' : ''}" style="background:${color}">${initials(group.name)}</div>`,
+      html: `<div class="pv-marker${dim ? ' is-dim' : ''}${bad ? ' is-bad' : ''}${run ? ' is-walking' : ''}${other ? ' is-busy' : ''}${own ? ' is-held' : ''}" style="background:${color};color:${textOn(color)}">${initials(group.name)}</div>`,
       iconSize: [26, 26],
       iconAnchor: [13, 13],
     })
@@ -1103,9 +1112,8 @@ function drawMarkers() {
       marker.on('drag', () => onGroupDrag(group.id))
       marker.on('dragend', () => endGroupDrag(group.id))
     }
-    // No hover text of its own: the group's name and its time are in the Groups list beside the map. The one thing that
-    // is not there is that somebody else has their hand on the badge.
-    if (other) marker.bindTooltip(`${group.name} · ${other.display_name || 'Somebody'} is editing`, { direction: 'top', offset: [0, -14] })
+    // Hover: the group's name and its time, and whose hand is on the badge when somebody else has it.
+    marker.bindTooltip(markerText(group, point, run, other), { direction: 'top', offset: [0, -14] })
     markers.set(group.id, marker)
     marker.addTo(markerLayer)
     // The ids a browser check holds on to. A badge is drawn by Leaflet, so it has no Vue template to put them in; the
@@ -1898,13 +1906,40 @@ function startDrag(frame, event) {
   // Selecting a locked frame is fine, and is all this press does: it cannot be dragged until the errors are fixed.
   if (!selectedFrames.value.every((f) => editAllowed(errors.value, f.t_s))) return
   const startX = event.clientX
+  const track = trackEl.value
+  const startScroll = track ? track.scrollLeft : 0
+  let lastX = event.clientX
+  let edgeFrame = 0
   dragState.value = { delta: 0, from_s: span.from_s, to_s: span.to_s }
-  const move = (e) => {
-    const raw = Math.round((e.clientX - startX) / pxPerSecond.value)
+  const place = () => {
+    // The strip may have scrolled under the pointer: the distance dragged includes it
+    const raw = Math.round((lastX - startX + (track ? track.scrollLeft - startScroll : 0)) / pxPerSecond.value)
     const delta = Math.max(snap(raw, SNAP_S), -span.from_s)
     dragState.value = { delta, from_s: span.from_s, to_s: span.to_s }
   }
+  // A frame dragged to the edge of the strip carries the strip with it, faster the nearer the edge (as the map does)
+  const EDGE = 48
+  const edgeScroll = () => {
+    edgeFrame = 0
+    if (!track) return
+    const rect = track.getBoundingClientRect()
+    let v = 0
+    if (lastX < rect.left + EDGE) v = -Math.ceil((rect.left + EDGE - lastX) / 4)
+    else if (lastX > rect.right - EDGE) v = Math.ceil((lastX - (rect.right - EDGE)) / 4)
+    if (!v) return
+    const before = track.scrollLeft
+    track.scrollLeft = Math.max(0, before + Math.min(Math.max(v, -40), 40))
+    if (track.scrollLeft !== before) place()
+    edgeFrame = requestAnimationFrame(edgeScroll)
+  }
+  const move = (e) => {
+    lastX = e.clientX
+    place()
+    if (!edgeFrame) edgeFrame = requestAnimationFrame(edgeScroll)
+  }
   const up = async () => {
+    if (edgeFrame) cancelAnimationFrame(edgeFrame)
+    edgeFrame = 0
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     window.removeEventListener('pointercancel', up)
@@ -2061,8 +2096,57 @@ function countLabel(n) {
 // Frames can be a second apart, and a dot is 16 px across: this is the zoom that tells them apart
 const MAX_PX_PER_SECOND = 34
 
-function zoom(factor) {
-  pxPerSecond.value = Math.min(MAX_PX_PER_SECOND, Math.max(0.08, pxPerSecond.value * factor))
+/**
+ * Zoom the strip. The view goes to what the planner is looking at: the open frame when there is one, else the cursor,
+ * else the time under the pointer (a Ctrl+wheel) or the middle of what is on screen. Without that the strip zoomed about
+ * its left edge and the frame being worked on slid out of view.
+ */
+function zoom(factor, pointerX = null) {
+  const track = trackEl.value
+  const before = pxPerSecond.value
+  const next = Math.min(MAX_PX_PER_SECOND, Math.max(0.08, before * factor))
+  if (next === before) return
+  let anchor = null // the time that stays in place, and where on screen it stays
+  if (track) {
+    const half = track.clientWidth / 2
+    if (selected.value) anchor = { t: selected.value.t_s, at: half }
+    else if (playhead.value != null) anchor = { t: playhead.value, at: half }
+    else {
+      const rect = track.getBoundingClientRect()
+      const at = pointerX != null ? pointerX - rect.left : half
+      anchor = { t: (track.scrollLeft + at - PAD_LEFT) / before, at }
+    }
+  }
+  pxPerSecond.value = next
+  if (!anchor) return
+  nextTick(() => {
+    track.scrollLeft = Math.max(0, PAD_LEFT + anchor.t * next - anchor.at)
+  })
+}
+
+/** Ctrl (or Cmd) and the wheel zooms the strip, the way the map does; a plain wheel scrolls it as before. */
+function onTrackWheel(event) {
+  if (!(event.ctrlKey || event.metaKey)) return
+  event.preventDefault()
+  zoom(event.deltaY < 0 ? 1.25 : 0.8, event.clientX)
+}
+
+// Opening a frame that is out of view (from the Problems list, an undo) brings it into view
+watch(
+  () => (selected.value ? selected.value.id : null),
+  (id) => {
+    if (id && selected.value) nextTick(() => scrollToTime(selected.value.t_s))
+  },
+)
+
+/** Keep a frame in view: the strip scrolls just far enough, and no further. */
+function scrollToTime(t_s) {
+  const track = trackEl.value
+  if (!track) return
+  const x = xOf(t_s)
+  const margin = 40
+  if (x < track.scrollLeft + margin) track.scrollLeft = Math.max(0, x - margin)
+  else if (x > track.scrollLeft + track.clientWidth - margin) track.scrollLeft = x - track.clientWidth + margin
 }
 
 // ---------- writing frames ----------
@@ -2565,10 +2649,40 @@ function onKeydown(event) {
 function deleteFromKeyboard() {
   const span = selectionSpan.value
   if (span && span.count > 1) {
-    toast('That is a stretch of frames. Open the one you want to delete first.', 'warning', 3600)
+    removeSelectedFrames()
     return
   }
   removeFrame()
+}
+
+/** Every selected frame at once, after one question, and one Undo puts them all back. A frame a copy starts at stays. */
+async function removeSelectedFrames() {
+  const doomed = selectedFrames.value.filter((f) => !isCutFrame(f))
+  if (!doomed.length) return
+  const kept = selectedFrames.value.length - doomed.length
+  const ok = await askConfirm({
+    title: `Delete ${countLabel(doomed.length)}?`,
+    message: kept ? `${countLabel(kept)} stay, because a copy starts there.` : undefined,
+    confirmText: 'Delete',
+    danger: true,
+  })
+  if (!ok) return
+  const copies = doomed.map((f) => frameCopy(f))
+  const gone = []
+  try {
+    // Latest first, so the strip is emptied from its end
+    for (const frame of [...doomed].sort((a, b) => b.t_s - a.t_s)) {
+      await api.deleteFrame(frame.id, frame.rev)
+      gone.push(copies.find((c) => c.id === frame.id))
+    }
+  } catch (error) {
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
+  }
+  if (gone.length) {
+    selection.value = new Set()
+    selectedId.value = null
+    edits.deletedMany(gone, `deleted ${countLabel(gone.length)}`)
+  }
 }
 
 /** Step back, then put the planner on the frame the change was about (an undone delete gives one back). */
@@ -3485,7 +3599,7 @@ watch(
             <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)">+</button>
           </span>
         </div>
-        <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }">
+        <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }" @wheel="onTrackWheel">
           <!-- A sweep anywhere on the strip that is not a dot selects the run it touches. -->
           <div class="pv-track-inner" :style="{ width: trackWidth + 'px' }" @pointerdown="startSweep">
             <!-- The ruler is the scrub handle: press anywhere on it and drag to move the cursor to any moment. -->
@@ -3641,6 +3755,9 @@ watch(
                 <button type="button" class="k2-pillbtn" data-testid="push-60" :disabled="busy" title="1 minute later" @click="push(60)">+1m</button>
                 <button type="button" class="k2-pillbtn" data-testid="push-300" :disabled="busy" title="5 minutes later" @click="push(300)">+5m</button>
               </div>
+              <p v-if="selectionSpan.count > 1" style="margin: 14px 0 0">
+                <button type="button" class="k2-link danger" data-testid="frames-delete" :disabled="busy" @click="removeSelectedFrames">Delete {{ countLabel(selectionSpan.count) }}</button>
+              </p>
               <p v-if="selectionSpan.count === 1" style="margin: 14px 0 0">
                 <button
                   type="button"
@@ -3697,7 +3814,7 @@ watch(
                     :aria-label="'Select ' + group.name"
                     @click="toggleGroup(group.id)"
                   ><svg v-if="isGroupSelected(group.id)" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></button>
-                  <span class="pv-marker k2-rowmarker" :style="{ background: colorOf.get(group.id) }" aria-hidden="true" data-testid="group-row-marker">{{ initials(group.name) }}</span>
+                  <span class="pv-marker k2-rowmarker" :style="{ background: colorOf.get(group.id), color: textOn(colorOf.get(group.id)) }" aria-hidden="true" data-testid="group-row-marker">{{ initials(group.name) }}</span>
                   <b class="text-truncate" style="font-size: 14px; flex: 1; min-width: 0">{{ group.name }}</b>
                   <span class="mut" style="font-size: 12px; font-weight: 700">{{ stateWord(framePosition(selected, group.id)) }}</span>
                 </div>

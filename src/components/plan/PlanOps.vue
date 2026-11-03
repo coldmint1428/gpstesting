@@ -666,9 +666,6 @@ watch(
 
       <div v-if="groups.length" class="pv-ops-hand">
         <span class="pv-ops-with" data-testid="ops-handback">{{ handText }}</span>
-        <button type="button" class="pv-ops-act" data-testid="ops-take" :disabled="busy === 'take'" @click="takeBoard">
-          Take board
-        </button>
       </div>
 
       <!-- The plan's own log (step 22). Messages a planner sends, and the changes the plan itself made, with the one
@@ -699,7 +696,7 @@ watch(
         </form>
 
         <p v-if="!log.length" class="pv-log-empty" data-testid="log-empty">Nothing sent yet.</p>
-        <ul v-else class="pv-log-list">
+        <ul v-else class="pv-log-list k2-longlist">
           <li
             v-for="row in log"
             :key="row.id"

@@ -161,6 +161,29 @@ begin
     raise exception 'FAIL 9b: the withdrawal did not remove the request';
   end if;
 
+  -- 10. One request per member per day: asking for a second rehearsal that day replaces the earlier one that was not
+  --     approved, and is refused when one that day is approved
+  perform pg_temp.zz_as('80000000-0000-0000-0000-000000000002');
+  declare r1 uuid; r2 uuid; r3 uuid; base timestamptz := (date_trunc('day', now() at time zone 'Asia/Singapore') + interval '5 days 9 hours') at time zone 'Asia/Singapore';
+  begin
+    insert into public.event_rehearsals (event_id, starts_at) values ('80000000-0000-0000-0000-0000000000e1', base) returning id into r1;
+    insert into public.event_rehearsals (event_id, starts_at) values ('80000000-0000-0000-0000-0000000000e1', base + interval '5 hours') returning id into r2;
+    insert into public.event_rehearsals (event_id, starts_at) values ('80000000-0000-0000-0000-0000000000e1', base + interval '10 hours') returning id into r3;
+    perform pg_temp.zz_as('80000000-0000-0000-0000-000000000003');
+    perform public.rehearsal_absence_request(r1, 'First');
+    perform public.rehearsal_absence_request(r2, 'Second');
+    select count(*) into n from public.rehearsal_absences where user_id = '80000000-0000-0000-0000-000000000003' and rehearsal_id in (r1, r2, r3);
+    if n <> 1 or not exists (select 1 from public.rehearsal_absences where rehearsal_id = r2 and reason = 'Second') then
+      raise exception 'FAIL 10a: a second request that day did not replace the first (% rows)', n;
+    end if;
+    perform pg_temp.zz_as('80000000-0000-0000-0000-000000000002');
+    perform public.rehearsal_absence_decide((select id from public.rehearsal_absences where rehearsal_id = r2), true);
+    perform pg_temp.zz_as('80000000-0000-0000-0000-000000000003');
+    if pg_temp.zz_refused(format($q$select public.rehearsal_absence_request(%L, 'Third')$q$, r3)) = '' then
+      raise exception 'FAIL 10b: a request was made on a day with an approved one';
+    end if;
+  end;
+
   raise notice 'rehearsal_absences_test: all checks passed';
 end $$;
 

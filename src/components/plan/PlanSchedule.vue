@@ -44,6 +44,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatDay, formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { scheduleOf } from '../../utils/scheduleRows'
+import { textOn } from '../../utils/groupColours'
 import { formatOffset } from '../../utils/planFrames'
 import { isNativeApp } from '../../lib/platform'
 import { stopsOf, walksOf } from '../../utils/planWalk'
@@ -557,40 +558,10 @@ watch(
 <template>
   <div class="pv">
     <section class="pv-sched" data-testid="plan-schedule">
-      <!-- Website: the page's header, with what runs and what comes next as chips -->
+      <!-- Website: the page's title; everything else is in the one card below, as on the phone -->
       <div v-if="web" class="k k2-h k2-schedhead">
-        <div style="flex: 1 1 260px; min-width: 0">
-          <h1>Schedule</h1>
-          <p class="mut k2-schedsub" data-testid="sched-title">Where <b style="color: var(--ink)">{{ whole ? 'groups' : groupName || 'your group' }}</b> should be</p>
-        </div>
-        <span v-if="phase !== 'ended'" class="chip" :class="isLive ? 'chip-ink' : 'chip-soft'" data-testid="sched-phase">{{ phaseWord.charAt(0).toUpperCase() + phaseWord.slice(1) }}</span>
-        <span v-if="planName" class="chip chip-soft" data-testid="sched-plan"><span>{{ planName }}<template v-if="rev != null"> · v<span data-testid="sched-rev">{{ rev }}</span></template></span></span>
-        <span v-if="phase === 'scheduled'" class="chip chip-mint" data-testid="sched-scheduled">Starts {{ formatDayTime(session.startsAt) }}</span>
-        <span v-if="comingUp" class="chip chip-mint" data-testid="sched-coming-up">{{ comingUp.replace(':', ' ·') }}</span>
+        <h1>Schedule</h1>
       </div>
-
-      <header v-if="!web" class="pv-sched-head">
-        <h2 class="pv-sched-title" data-testid="sched-title">
-          {{ whole ? 'Where groups should be' : 'Where ' + (groupName || 'your group') + ' should be' }}
-        </h2>
-        <p class="pv-sched-sub">
-          <span v-if="phase !== 'ended'" class="pv-badge" :class="{ 'is-live': isLive }" data-testid="sched-phase">{{ phaseWord }}</span>
-          <template v-if="planName">
-            <span class="pv-sched-plan" data-testid="sched-plan">{{ planName }}</span>
-            <span v-if="rev != null">· version <span data-testid="sched-rev">{{ rev }}</span></span>
-          </template>
-        </p>
-      </header>
-
-      <p v-if="!web && phase === 'scheduled'" class="pv-sched-line" data-testid="sched-scheduled">
-        Starts {{ formatDayTime(session.startsAt) }}.
-      </p>
-      <p v-if="!web && comingUp" class="pv-sched-line" data-testid="sched-coming-up">{{ comingUp }}</p>
-
-      <!-- A read that failed says so and keeps the last answer: a schedule that blanks itself is worse than an old one. -->
-      <p v-if="errorMsg" class="pv-sched-line is-warn" data-testid="sched-error">
-        {{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template>
-      </p>
 
       <!-- New messages from a planner, and "your times changed" when a publish moved this group's walk (step 22). -->
       <section v-if="web && myMessages.length" class="k k2-card k2-updates" data-testid="sched-log">
@@ -639,6 +610,30 @@ watch(
         </article>
       </div>
 
+      <div class="pv-sched-card">
+      <header class="pv-sched-head">
+        <h2 class="pv-sched-title" data-testid="sched-title">
+          {{ whole ? 'Where groups should be' : 'Where ' + (groupName || 'your group') + ' should be' }}
+        </h2>
+        <p class="pv-sched-sub">
+          <span v-if="phase !== 'ended'" class="pv-badge" :class="{ 'is-live': isLive }" data-testid="sched-phase">{{ phaseWord }}</span>
+          <template v-if="planName">
+            <span class="pv-sched-plan" data-testid="sched-plan">{{ planName }}</span>
+            <span v-if="rev != null">· version <span data-testid="sched-rev">{{ rev }}</span></span>
+          </template>
+        </p>
+      </header>
+
+      <p v-if="phase === 'scheduled'" class="pv-sched-line" data-testid="sched-scheduled">
+        Starts {{ formatDayTime(session.startsAt) }}.
+      </p>
+      <p v-if="comingUp" class="pv-sched-line" data-testid="sched-coming-up">{{ comingUp }}</p>
+
+      <!-- A read that failed says so and keeps the last answer: a schedule that blanks itself is worse than an old one. -->
+      <p v-if="errorMsg" class="pv-sched-line is-warn" data-testid="sched-error">
+        {{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template>
+      </p>
+
       <PlanRoute
         v-if="session"
         ref="routeMap"
@@ -668,51 +663,6 @@ watch(
         data-testid="sched-empty"
       />
 
-      <!-- Website: a row for each place, the whole row showing it on the map -->
-      <section v-else-if="web && (!whole || !isLive)" class="k k2-card k2-schedlist">
-        <div class="row" style="margin-bottom: 8px; flex-wrap: wrap">
-          <b class="U" style="font-size: 18px; letter-spacing: -0.04em; flex: 1">{{ scheduleTitle }}</b>
-          <span class="mut" style="font-size: 13px; font-weight: 700">{{ scheduleDay ? scheduleDay + ' · ' : '' }}{{ placesText }}</span>
-        </div>
-        <div class="k2-srow hd" aria-hidden="true"><span>#</span><span>Time</span><span>Where</span><span></span></div>
-        <div
-          v-for="row in schedule"
-          :key="row.rows[0].group_id + row.rows[0].frame_id"
-          class="k2-srowwrap"
-          :class="{ 'is-now': rowNow(row) }"
-          data-testid="sched-moment"
-          :data-frame="row.rows[0].frame_id"
-          :data-t="row.rows[0].t_s"
-        >
-          <button
-            type="button"
-            class="k2-srow"
-            :style="{ '--c': colourOfGroup(row.rows[0].group_id) }"
-            :aria-pressed="rowShown(row) ? 'true' : 'false'"
-            :disabled="!row.point"
-            data-testid="sched-place-link"
-            @click="showOnMap(row.point.frame_id, row.point.t_s, row.point.group_id)"
-          >
-            <span class="k2-sn" :style="{ background: row.number ? 'var(--c)' : 'transparent' }" data-testid="sched-num">{{ row.number }}</span>
-            <span class="k2-stime" :data-testid="'sched-at-' + row.rows[0].t_s">{{ rowWhen(row) }}</span>
-            <span class="row" style="gap: 8px; min-width: 0">
-              <i v-if="KIND_SWATCH[row.kind]" class="k2-sw" :style="{ background: KIND_SWATCH[row.kind] }"></i>
-              <span class="k2-szone" data-testid="sched-place"><template v-if="whole">{{ row.rows[0].group_name }} · </template>{{ row.name }}</span>
-              <span v-if="KIND_WORD[row.kind]" class="mut k2-hm" style="font-size: 12px">{{ KIND_WORD[row.kind] }}</span>
-            </span>
-            <span class="k2-show"><svg v-if="row.point" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg></span>
-          </button>
-          <div v-if="rowNotes(row).length || rowNow(row) || rowNext === row || statusOf(rowRowOf(row)) || canHere(rowRowOf(row))" class="k2-srowextra" data-testid="sched-row" :data-group="row.rows[0].group_id" :data-state="rowRowOf(row).state">
-            <span v-if="rowNow(row)" class="chip chip-ink" style="height: 24px">Now</span>
-            <span v-else-if="rowNext === row && isLive" class="chip chip-mint" style="height: 24px">{{ nextText(new Date(row.startsAt)) }}</span>
-            <span v-if="statusOf(rowRowOf(row))" class="chip" :class="statusOf(rowRowOf(row)).tone === 'ok' ? 'chip-mint' : 'chip-warn'" style="height: 24px" data-testid="sched-state">{{ statusOf(rowRowOf(row)).text }}</span>
-            <span v-for="note in rowNotes(row)" :key="note.id" class="mut" style="font-size: 13px" data-testid="sched-note">{{ note.text }}</span>
-            <span class="sp"></span>
-            <button v-if="canHere(rowRowOf(row))" type="button" class="kb kb-lime kb-sm" data-testid="sched-here" :disabled="busyHere === rowRowOf(row).frame_id" @click="here(rowRowOf(row))">{{ busyHere === rowRowOf(row).frame_id ? 'Saving…' : 'We’re here' }}</button>
-          </div>
-        </div>
-      </section>
-
       <ol v-else-if="!whole || !isLive" class="pv-sched-list">
         <li
           v-for="(stop, i) in stops"
@@ -741,7 +691,7 @@ watch(
                   <span
                     v-if="stop.number"
                     class="pv-sched-num"
-                    :style="{ '--pv-dot': colourOfGroup(stop.rows[0].group_id) }"
+                    :style="{ '--pv-dot': colourOfGroup(stop.rows[0].group_id), '--pv-dot-ink': textOn(colourOfGroup(stop.rows[0].group_id)) }"
                     data-testid="sched-num"
                   >{{ stop.number }}</span>
                 </span>
@@ -846,6 +796,7 @@ watch(
           </div>
         </li>
       </ol>
+      </div>
     </section>
   </div>
 </template>

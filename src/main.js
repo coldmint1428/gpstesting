@@ -22,6 +22,7 @@ import './assets/kinetic-2.css' // Kinetic v2: the event workspace and its pages
 import { isNativeApp } from './lib/platform'
 import { installFormErrors } from './lib/formErrors'
 import { installTooltips } from './lib/tooltips'
+import { installSegSlide } from './lib/segSlide'
 
 // The phone app gets its own layout (Figma: Phone app — native prototype); the website keeps its own
 if (isNativeApp) document.documentElement.classList.add('native-app')
@@ -30,6 +31,7 @@ if (isNativeApp) document.documentElement.classList.add('native-app')
 installFormErrors()
 // Hover hints (an element's title) as a pill in the site's style, not the browser's grey box
 installTooltips()
+installSegSlide() // the lit pill of a segmented control slides to the chosen item
 // iPhone browsers only apply :active (the press-in effect in motion.css) once the page listens for touches at all
 document.addEventListener('touchstart', () => {}, { passive: true })
 

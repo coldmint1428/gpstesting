@@ -312,7 +312,7 @@ const history = computed(() =>
           <div>
             <h3 class="kp-label">Not yet</h3>
             <p v-if="!roster.waiting.length" class="small text-success">Everyone is marked.</p>
-            <ul class="kp-list">
+            <ul class="kp-list k2-longlist">
               <li v-for="w in roster.waiting" :key="w.m.id" class="kp-row py-2" :data-testid="'att-waiting-' + w.m.username">
                 <span class="me-auto text-truncate">{{ w.m.display_name }}</span>
                 <template v-if="canMark">
@@ -324,7 +324,7 @@ const history = computed(() =>
           </div>
           <div>
             <h3 class="kp-label">Present</h3>
-            <ul class="kp-list">
+            <ul class="kp-list k2-longlist">
               <li v-for="p in roster.present" :key="p.m.id" class="kp-row py-2" :data-testid="'att-present-' + p.m.username">
                 <span class="text-success" aria-hidden="true">✓</span>
                 <span class="me-auto text-truncate">{{ p.m.display_name }}</span>
@@ -334,7 +334,7 @@ const history = computed(() =>
             </ul>
             <template v-if="roster.excused.length">
               <h3 class="kp-label mt-3">Excused</h3>
-              <ul class="kp-list">
+              <ul class="kp-list k2-longlist">
                 <li v-for="x in roster.excused" :key="x.m.id" class="kp-row py-2">
                   <span class="me-auto text-truncate">{{ x.m.display_name }}</span>
                   <button v-if="canMark" type="button" class="btn btn-sm btn-ghost" :disabled="busy" @click="mark(x.m, null)">Undo</button>
@@ -368,7 +368,7 @@ const history = computed(() =>
     <section class="kp-card" data-testid="attendance-history">
       <h2 class="kp-title mb-2">Past roll calls</h2>
       <p v-if="!history.length" class="text-muted mb-0">None yet.</p>
-      <ul v-else class="kp-list">
+      <ul v-else class="kp-list k2-longlist">
         <li v-for="h in history" :key="h.r.id" class="kp-row">
           <span class="kp-dot" :style="{ backgroundColor: h.group.colour }" aria-hidden="true"></span>
           <div class="kp-row-main">

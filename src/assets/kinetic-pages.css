@@ -161,10 +161,6 @@ html body .kp-label {
 .kp-inline > .btn {
   flex: none;
 }
-.kp-addbar {
-  display: grid;
-  gap: 10px;
-}
 html body .kp-colour {
   flex: none;
   width: 46px;
@@ -211,9 +207,6 @@ html body .btn-ghost-danger:hover:not(:disabled) {
 }
 .kp-chip-mint {
   background: var(--mint);
-}
-.kp-chip-lime {
-  background: var(--lime);
 }
 .kp-chip-peach {
   background: var(--peach);
@@ -412,31 +405,10 @@ html body .ev .alert {
   min-width: 0;
   font-size: 14px;
 }
-.kp-status-panel {
-  margin-top: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
 .kp-status-extra {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
-}
-.kp-opt {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--soft);
-  color: var(--ink);
-  font: 700 14px var(--font-body);
-}
-.kp-opt:hover {
-  background: var(--track-off);
-}
-.kp-opt.is-on {
-  background: var(--ink);
-  color: var(--lime);
 }
 
 /* Banners */
@@ -464,14 +436,6 @@ html body .ev .alert {
   margin-top: 2px;
   font-size: 13px;
 }
-
-/* Overview */
-.kp-overview {
-  display: grid;
-  gap: 16px;
-  /* side by side, the two cards share one height */
-  align-items: stretch;
-}
 .kp-invite {
   display: grid;
   gap: 18px;
@@ -482,30 +446,6 @@ html body .ev .alert {
 }
 html body .kp-invite .kp-label {
   color: var(--lime);
-}
-.kp-invite-code {
-  margin: 0;
-  font: 800 clamp(32px, 4vw, 46px)/1.1 var(--font-display);
-  letter-spacing: 0.02em;
-  overflow-wrap: anywhere;
-}
-.kp-invite-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 4px 4px 16px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.1);
-}
-html body .kp-invite-link input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--on-forest-body);
-  font: 600 14px var(--font-body);
-  text-overflow: ellipsis;
 }
 html body .kp-invite .btn-lime,
 html body .btn-lime {
@@ -527,20 +467,6 @@ html body .btn-lime:hover {
 }
 html body .kp-invite :focus-visible {
   outline-color: var(--lime);
-}
-.kp-invite-qr {
-  justify-self: start;
-  width: 148px;
-  height: 148px;
-  padding: 8px;
-  border-radius: 18px;
-  background: var(--surface);
-  box-shadow: var(--offset-lime);
-}
-.kp-invite-qr img {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 .kp-invite-warn {
   margin: 0;
@@ -637,16 +563,6 @@ html body .kp-switches .form-check-input {
 html body .kp-switches .form-check-label {
   font-size: 14px;
   font-weight: 700;
-}
-.kp-tol {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--muted);
-}
-html body .kp-tol input {
-  width: 76px;
 }
 .kp-stepped {
   width: auto;
@@ -815,10 +731,6 @@ html body .gps-map {
   border: 0 !important;
   border-radius: 22px !important;
 }
-.kp-readings summary {
-  font: 700 14px var(--font-body);
-  cursor: pointer;
-}
 
 /* Step-by-step phone set-up */
 .kp-setup {
@@ -984,28 +896,6 @@ html body .ev .pv-toolbar {
   flex-wrap: wrap;
   gap: 6px;
 }
-html body .ev .pv-toolbar .pv-sep {
-  align-self: stretch;
-  width: 1px;
-  margin: 4px;
-  background: var(--line);
-}
-html body .ev .pv-name-field {
-  flex: 1 1 200px;
-  min-width: 0;
-  max-width: 340px;
-}
-
-/* ---------- Map page: zones at a glance, then the bench ---------- */
-.kp-zones {
-  display: flex;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
 /* On a phone a sideways strip looks cut off at the edge, so the chips wrap onto new lines instead */
 @media (max-width: 767.98px) {
   .kp-zones {
@@ -1015,31 +905,6 @@ html body .ev .pv-name-field {
   .kp-zone {
     max-width: 100%;
   }
-}
-.kp-zone {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 14px 0 8px;
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  font-size: 14px;
-  font-weight: 700;
-}
-.kp-zone code {
-  padding: 2px 6px;
-  border-radius: var(--radius-xs);
-  background: var(--soft);
-  color: var(--muted);
-  font: 700 11px var(--font-body);
-}
-.kp-zone-sw {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
 }
 html body .ev-surface {
   padding: 16px;
@@ -1129,26 +994,8 @@ html body .modal-header.bg-danger .btn-close {
   html body .ev-nav {
     padding: 16px 8px;
   }
-  html body .ev-nav-btn {
-    position: relative;
-    flex-direction: column;
-    justify-content: center;
-    gap: 3px;
-    min-height: 58px;
-    padding: 0 2px;
-    font-size: 11px;
-    text-align: center;
-  }
   html body .ev-nav-text {
     flex: none;
-  }
-  html body .ev-nav-badge {
-    position: absolute;
-    top: 3px;
-    right: 3px;
-    margin: 0;
-    padding: 0 5px;
-    font-size: 10px;
   }
   html body .k-you {
     display: none;
@@ -1234,10 +1081,6 @@ html body input[type='file'].form-control::file-selector-button {
   font-weight: 700;
 }
 @media (max-width: 575.98px) {
-  /* The logo already goes home; the bar has to fit the account button on the narrowest phones */
-  .k-nav-tabs .tab:first-child {
-    display: none !important;
-  }
   .kp-head h1 {
     flex-basis: 100%;
     font-size: 26px;
@@ -1273,23 +1116,6 @@ input[type='time'].form-control::-webkit-date-and-time-value {
   text-align: left;
 }
 
-/* The time bar's Lock button (PlanBoard): a padlock that closes, and a dark pill while locked so it is obvious
-   why nothing drags. */
-html body .pv-lock svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-html body .pv-btn.is-quiet.pv-lock.is-locked,
-html body .pv-btn.is-quiet.pv-lock.is-locked:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--lime);
-}
-
 /* ---------- Timeline board: one layout language (QA 2 Nov) ----------
    Header: which plan and publishing on the first row, the plan's own file actions on the second.
    Time bar: playing on the left, frame tools (Add, Copy, Paste), Lock and zoom on the right.
@@ -1297,20 +1123,6 @@ html body .pv-btn.is-quiet.pv-lock.is-locked:hover:not(:disabled) {
 html body .ev .pv-toolbar {
   padding: 12px 16px;
   gap: 6px;
-}
-html body .ev .pv-board .pv-btn .pv-ico {
-  width: 15px;
-  height: 15px;
-  flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-html body .ev .pv-board .pv-btn .pv-ico.is-fill {
-  fill: currentColor;
-  stroke: none;
 }
 html body .ev .pv-btn.is-quiet.is-danger-text,
 html body .ev .pv-btn.is-quiet.is-danger-text:hover:not(:disabled) {
@@ -1325,38 +1137,6 @@ html body .ev .pv-bar-head {
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px 12px;
-}
-html body .ev .pv-bar-count {
-  margin-left: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  white-space: nowrap;
-}
-html body .ev .pv-bar-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  margin-left: auto;
-}
-html body .ev .pv-bar-head .pv-sep {
-  align-self: stretch;
-  width: 1px;
-  margin: 6px 4px;
-  background: var(--line);
-}
-html body .ev .pv-zoom {
-  display: inline-flex;
-  margin-left: 4px;
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-html body .ev .pv-zoom .pv-btn {
-  min-width: 32px;
-  padding: 0 10px;
-  font-size: 16px;
 }
 /* map hint */
 html body .ev .pv-hint {
@@ -1375,17 +1155,6 @@ html body .ev .pv-inspector > .pv-warnings {
 }
 html body .ev .pv-inspector > .pv-warnings:first-child {
   margin-top: 12px;
-}
-html body .ev .pv-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 0;
-  border-top: 1px solid var(--line);
-}
-html body .ev .pv-sec:first-of-type,
-html body .ev .pv-inspector > .pv-warnings:first-child + .pv-sec {
-  border-top: 0;
 }
 html body .ev .pv-inspector h3 {
   margin: 0;
@@ -1408,56 +1177,11 @@ html body .ev .pv-inspector > .pv-note,
 html body .ev .pv-inspector > .pv-stack {
   margin-top: 8px;
 }
-html body .ev .pv-field-row {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 8px;
-}
-html body .ev .pv-field > label,
-html body .ev .pv-act-label,
-html body .ev .pv-flag-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-html body .ev .pv-act,
-html body .ev .pv-flag-row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-}
-html body .ev .pv-act-label,
-html body .ev .pv-flag-label {
-  flex: 0 0 84px;
-}
-html body .ev .pv-flag-row .pv-flag-label {
-  flex-basis: 100%;
-}
 html body .ev .pv-inspector .pv-stack {
   gap: 6px;
 }
 html body .ev .pv-inspector .pv-stack .pv-btn {
   min-width: 52px;
-}
-html body .ev .pv-act-delete {
-  margin-left: -10px;
-}
-
-html body .ev .pv-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-}
-html body .ev .pv-head-actions .pv-sep {
-  align-self: stretch;
-  width: 1px;
-  margin: 4px;
-  background: var(--line);
 }
 /* Phone: the plan picker, then undo/redo/publish on one row, then the plan's file actions two to a row */
 @media (max-width: 767.98px) {

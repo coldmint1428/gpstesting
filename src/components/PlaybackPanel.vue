@@ -285,7 +285,7 @@ onUnmounted(() => clearInterval(liveTimer))
         <SkeletonLoader v-if="loadingList && !items.length" :rows="3" label="Loading recordings…" />
         <EmptyState v-else-if="!items.length" compact icon="play" title="No recordings yet" text="Each time the event runs, a recording appears here." data-testid="no-recordings" />
 
-        <div data-testid="recording-list">
+        <div class="k2-longlist k2-longlist-tall" data-testid="recording-list">
           <div v-for="item in items" :key="item.key" class="k2-rec" :data-testid="'recording-' + item.kind">
             <button
               v-if="!item.expired"
