@@ -340,6 +340,16 @@ const myNoGo = computed(() => {
 
 // Latest positions (one connection for the map and the "Not sharing yet" badges)
 const live = useLiveLocations(props.id)
+// The Live map's markers: only the run that is live, or the one that ended under a minute ago (useEventSessions)
+const mapPositions = computed(() => {
+  const since = sessions.mapSince.value
+  if (since === null) return {}
+  const all = live.positions.value
+  if (since === 0) return all
+  const shown = {}
+  for (const id in all) if (all[id].time.getTime() >= since) shown[id] = all[id]
+  return shown
+})
 
 // ---------- Pages and my role ----------
 // The page is in the address (the router guard already checked I may view it)
@@ -1037,7 +1047,7 @@ async function removeEvent() {
                 :people-to="native ? null : '#k2-onmap'"
                 :active="tab === 'live'"
                 :event-id="id"
-                :positions="live.positions.value"
+                :positions="mapPositions"
                 :live-since="liveSession ? liveSession.startsAt.getTime() : null"
                 :session="liveSession"
                 :on-reading="live.onReading"
