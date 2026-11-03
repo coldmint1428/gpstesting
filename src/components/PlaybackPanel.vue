@@ -23,6 +23,8 @@ const props = defineProps({
   eventName: { type: String, default: '' },
   members: { type: Array, default: () => [] }, // names for people who start sharing during a live rewind
   active: { type: Boolean, default: true }, // tab visible
+  // The event page's live session id: the Live badge shows only on that session's recording, and only while it is live
+  liveSessionId: { type: String, default: null },
 })
 const emit = defineEmits(['go-live'])
 
@@ -301,7 +303,7 @@ onUnmounted(() => clearInterval(liveTimer))
             <span v-else></span>
             <div style="min-width: 0">
               <div class="row" style="gap: 8px; flex-wrap: wrap">
-                <span v-if="item.live" class="chip chip-ink" style="height: 22px"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+                <span v-if="item.live && item.key === liveSessionId" class="chip chip-ink" style="height: 22px"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
                 <form v-if="renamingKey === item.key" class="row" style="gap: 6px; flex-wrap: nowrap" @submit.prevent="saveRename(item)">
                   <label class="visually-hidden" :for="'rec-name-' + item.key">Recording name</label>
                   <input :id="'rec-name-' + item.key" v-model="renameText" class="kin" style="min-width: 0; width: 260px; max-width: 100%" maxlength="80" :placeholder="item.timesTitle" data-testid="rename-recording-input" @keydown.esc.prevent="renamingKey = null" />

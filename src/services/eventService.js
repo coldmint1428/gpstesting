@@ -92,12 +92,15 @@ export async function joinEventByCode(code) {
 // Members may read their events' sessions (007_event_sessions.sql, "members see sessions").
 export async function getLiveEventIds(eventIds) {
   if (!eventIds.length) return []
+  const now = new Date().toISOString()
   const { data, error } = await db()
     .from('event_sessions')
     .select('event_id')
     .in('event_id', eventIds)
     .is('ended_at', null)
-    .lte('starts_at', new Date().toISOString())
+    .lte('starts_at', now)
+    // The same rule as the event page (useEventSessions): a session past its scheduled end is no longer live
+    .or('scheduled_end.is.null,scheduled_end.gt.' + now)
   if (error) throw fail(error)
   return data.map((r) => r.event_id)
 }

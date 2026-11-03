@@ -45,13 +45,24 @@ import '../../assets/planova.css'
 import SkeletonLoader from '../SkeletonLoader.vue'
 import EmptyState from '../EmptyState.vue'
 import { useLoadGate } from '../../composables/usePageReady'
+import { GROUP_PALETTE } from '../../utils/groupColours'
+import { useAuthStore } from '../../stores/auth'
 
 const props = defineProps({
   // The live session on a plan: { id, planId, t0At, planRev } from useEventSessions. Null while there is none.
   session: { type: Object, default: null },
   // Seam for a check; in the app this is absent and the read goes to the database.
   api: { type: Object, default: null },
+  // What to draw: 'all' (the phone's Ops tab, everything stacked), or one tab of the website's Live panel: 'ops' (the
+  // run clock, the board and the groups) or 'log' (the plan log). The reads are the same in every case.
+  view: { type: String, default: 'all' },
+  // The event's groups, for each group's colour on the website's cards (the read has names, not colours)
+  groups: { type: Array, default: () => [] },
 })
+
+// The website's Live panel shows the log's length on its tab
+const emit = defineEmits(['counts'])
+const auth = useAuthStore()
 
 const POLL_MS = 5000 // the midpoint moves with the readings; the statuses move at the moments (wake)
 const TICK_MS = 1000
@@ -416,6 +427,117 @@ function audienceWord(row) {
   return 'every group'
 }
 
+// ---------- the website's Live panel: arrangement only, from the same read ----------
+
+const DUE_SOON_MS = 30000 // a group under way whose next move is this close is "due soon"
+const QUIET_MS = 120000 // a sharing group whose last reading is older than this has "no update"
+const filter = ref('all') // 'all' | 'soon' | 'quiet'
+
+const colourById = computed(() => {
+  const out = new Map()
+  props.groups.forEach((g, i) => out.set(g.id, g.colour || GROUP_PALETTE[i % GROUP_PALETTE.length]))
+  return out
+})
+const colourOf = (id) => colourById.value.get(id) || GROUP_PALETTE[0]
+function colourOfName(name) {
+  const g = props.groups.find((x) => x.name === name)
+  return g ? colourOf(g.id) : 'var(--muted)'
+}
+
+/** The moment a group is counting down to: its next while under way, its first while not started. */
+function targetOf(group) {
+  return group.active ? group.next : group.status === 'pending' ? group.first : null
+}
+function leftMs(group) {
+  const moment = targetOf(group)
+  return moment ? new Date(moment.planned_at).getTime() - now.value : null
+}
+const isDueSoon = (group) => group.status === 'active' && !!group.next && leftMs(group) <= DUE_SOON_MS
+
+/** "Live", "No update 3 min" or "No signal", from the same columns as the place line. */
+function signalOf(group) {
+  const moment = group.active || (group.status === 'pending' ? group.first : group.last)
+  if (!moment || !moment.actual_ics) return { kind: 'none', text: 'No signal' }
+  const age = moment.actual_at ? now.value - new Date(moment.actual_at).getTime() : null
+  if (age != null && age > QUIET_MS) return { kind: 'quiet', text: 'No update ' + Math.floor(age / 60000) + ' min' }
+  return { kind: 'live', text: 'Live' }
+}
+
+/** "in 37 s", "in 1 min 22 s", "Due now"; nothing for a finished walk. */
+function pillText(group) {
+  const left = leftMs(group)
+  if (left == null) return ''
+  if (left <= 0) return 'Due now'
+  const secs = Math.ceil(left / 1000)
+  if (secs < 60) return 'in ' + secs + ' s'
+  if (secs < 3600) return 'in ' + Math.floor(secs / 60) + ' min' + (secs % 60 ? ' ' + (secs % 60) + ' s' : '')
+  return 'in ' + formatDuration(left)
+}
+
+/** How far along the leg the group is on: 0 before its walk starts, 100 once it is done. */
+function progressOf(group) {
+  if (group.status === 'done') return 100
+  if (!group.active || !group.next) return 0
+  const from = new Date(group.active.planned_at).getTime()
+  const to = new Date(group.next.planned_at).getTime()
+  if (to <= from) return 100
+  return Math.min(100, Math.max(0, ((now.value - from) / (to - from)) * 100))
+}
+
+/** The card's headline: "Now +5:25 → Next +7:25", "Starts +0:45", "Finished +1:45". */
+function moveOf(group) {
+  if (group.active) {
+    return { a: 'Now', at: formatOffset(group.active.t_s), b: group.next ? 'Next' : '', bt: group.next ? formatOffset(group.next.t_s) : '' }
+  }
+  if (group.status === 'pending') return { a: 'Starts', at: formatOffset(group.first.t_s), b: '', bt: '' }
+  return { a: 'Finished', at: formatOffset(group.last.t_s), b: '', bt: '' }
+}
+
+/** What the moment says, if anything: the note the planner wrote on it. */
+function noteOf(group) {
+  const moment = group.active || (group.status === 'pending' ? group.first : group.last)
+  return moment && moment.note ? moment.note : ''
+}
+
+// Soonest next move first; finished walks last
+const sortedGroups = computed(() =>
+  [...groups.value].sort((a, b) => {
+    const la = leftMs(a)
+    const lb = leftMs(b)
+    if ((la == null) !== (lb == null)) return la == null ? 1 : -1
+    if (la != null && la !== lb) return la - lb
+    return a.name.localeCompare(b.name)
+  }),
+)
+const dueSoonCount = computed(() => groups.value.filter(isDueSoon).length)
+const quietCount = computed(() => groups.value.filter((g) => signalOf(g).kind !== 'live').length)
+const shownGroups = computed(() => {
+  if (filter.value === 'soon') return sortedGroups.value.filter(isDueSoon)
+  if (filter.value === 'quiet') return sortedGroups.value.filter((g) => signalOf(g).kind !== 'live')
+  return sortedGroups.value
+})
+const FILTER_EMPTY = { soon: 'No group is due to move in the next 30 seconds.', quiet: 'Every group is sending its position.' }
+
+// The run clock's bar: under way, not started and done, as shares of the groups
+const share = (n) => (groups.value.length ? (n / groups.value.length) * 100 : 0)
+
+const boardName = computed(() => (latestHand.value ? latestHand.value.to_name : ''))
+const iHaveBoard = computed(() => !!(latestHand.value && auth.user && latestHand.value.to_user === auth.user.id))
+function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
+  return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+}
+
+const LOG_TAG = { timeline: 'Times changed', zones: 'Zones changed' }
+const ackShare = (row) => (row.recipients ? ((row.acked || 0) / row.recipients) * 100 : 0)
+const ackHead = (row) => (row.acked || 0) + ' of ' + row.recipients + ' got it'
+
+watch(
+  () => log.value.length,
+  (n) => emit('counts', { log: n }),
+  { immediate: true },
+)
+
 // ---------- lifecycle ----------
 function onLook() {
   if (document.hidden) return
@@ -465,8 +587,9 @@ watch(
 </script>
 
 <template>
-  <div class="pv" :aria-busy="busy || sending ? 'true' : null">
-    <section class="pv-ops" data-testid="plan-ops">
+  <div class="pv" :class="{ 'k2-ops': view !== 'all' }" :aria-busy="busy || sending ? 'true' : null">
+    <!-- The phone's Ops tab: everything in one column -->
+    <section v-if="view === 'all'" class="pv-ops" data-testid="plan-ops">
       <header class="pv-ops-head">
         <div class="pv-ops-id">
           <h2 class="pv-ops-title">Operations</h2>
@@ -607,6 +730,186 @@ watch(
           </li>
         </ul>
       </section>
+    </section>
+
+    <!-- The website's Live panel, Operations tab: the run clock, who has the board, and a card per group -->
+    <section v-else-if="view === 'ops'" class="k2-opsview" data-testid="plan-ops">
+      <div class="k2-runclock">
+        <div class="k2-rc-top">
+          <span class="k2-rc-live" data-testid="ops-live"><i aria-hidden="true"></i>Live</span>
+          <span v-if="rev != null" class="k2-rc-rev">Plan version <span data-testid="ops-rev">{{ rev }}</span></span>
+        </div>
+        <div class="k2-rc-mid">
+          <strong v-if="elapsedText" class="k2-rc-elapsed" aria-label="Time since T+0">{{ elapsedText }}</strong>
+          <div class="k2-rc-times">
+            <span><span data-testid="ops-clock">{{ clockText }}</span> now</span>
+            <span v-if="t0">T+0 at <span data-testid="ops-t0">{{ t0Text }}</span></span>
+          </div>
+        </div>
+        <div class="k2-rc-bar" aria-hidden="true">
+          <i class="is-active" :style="{ width: share(underWay) + '%' }"></i>
+          <i class="is-pending" :style="{ width: share(notStarted) + '%' }"></i>
+          <i class="is-done" :style="{ width: share(finished) + '%' }"></i>
+        </div>
+        <div class="k2-rc-legend" data-testid="ops-counts">
+          <span><i class="is-active"></i>{{ underWay }} under way</span>
+          <span><i class="is-pending"></i>{{ notStarted }} not started</span>
+          <span><i class="is-done"></i>{{ finished }} done</span>
+          <b class="k2-rc-n">{{ groups.length }} {{ groups.length === 1 ? 'group' : 'groups' }}</b>
+        </div>
+      </div>
+
+      <p v-if="errorMsg" class="k2-ops-error" role="alert" data-testid="ops-error">
+        <span>{{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template></span>
+        <button type="button" class="k2-ops-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError">×</button>
+      </p>
+
+      <div v-if="loaded && groups.length" class="k2-board">
+        <span class="k2-board-av" aria-hidden="true">{{ boardName ? initials(boardName) : '–' }}</span>
+        <div class="k2-board-txt">
+          <b>{{ boardName ? (iHaveBoard ? 'You have the board' : boardName + ' has the board') : 'Nobody has the board yet' }}</b>
+          <span data-testid="ops-handback">{{ handText }}</span>
+        </div>
+        <button
+          type="button"
+          class="k2-opsbtn"
+          data-testid="ops-take"
+          :disabled="busy === 'take' || iHaveBoard"
+          @click="takeBoard"
+        >{{ iHaveBoard ? 'You have it' : busy === 'take' ? 'Taking…' : 'Take board' }}</button>
+      </div>
+
+      <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the ops board…" data-testid="ops-loading" />
+      <EmptyState v-else-if="!groups.length" compact icon="plan" title="Nothing planned" text="This plan has no moments yet." data-testid="ops-empty" />
+
+      <template v-else>
+        <div class="k2-opsfilter" role="group" aria-label="Show groups">
+          <button type="button" :aria-pressed="filter === 'all' ? 'true' : 'false'" data-testid="ops-filter-all" @click="filter = 'all'">All <span>{{ groups.length }}</span></button>
+          <button type="button" :aria-pressed="filter === 'soon' ? 'true' : 'false'" data-testid="ops-filter-soon" @click="filter = 'soon'">Due soon <span>{{ dueSoonCount }}</span></button>
+          <button type="button" :aria-pressed="filter === 'quiet' ? 'true' : 'false'" data-testid="ops-filter-quiet" @click="filter = 'quiet'">No signal <span>{{ quietCount }}</span></button>
+        </div>
+
+        <p v-if="!shownGroups.length" class="k2-ops-none">{{ FILTER_EMPTY[filter] }}</p>
+        <ul v-else class="k2-gcards">
+          <li
+            v-for="group in shownGroups"
+            :key="group.id"
+            class="k2-gcard"
+            :class="['is-' + group.status, { 'is-soon': isDueSoon(group) }]"
+            data-testid="ops-row"
+            :data-group="group.id"
+            :data-status="group.status"
+          >
+            <div class="k2-gc-top">
+              <i class="k2-gc-dot" :style="{ background: colourOf(group.id) }" aria-hidden="true"></i>
+              <b class="k2-gc-name" data-testid="ops-group" :title="group.name">{{ group.name }}</b>
+              <span class="k2-gc-state" :class="'is-' + group.status" data-testid="ops-state">{{ STATE_WORD[group.status] }}</span>
+              <span class="k2-gc-sig" :class="'is-' + signalOf(group).kind" :title="placeText(group)">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="10" width="2.6" height="4" rx=".6" /><rect x="5.2" y="7" width="2.6" height="7" rx=".6" /><rect x="9.4" y="4" width="2.6" height="10" rx=".6" /><rect x="13.6" y="1" width="1.4" height="13" rx=".6" /></svg>{{ signalOf(group).text }}
+              </span>
+            </div>
+            <div class="k2-gc-move">
+              <span class="k2-gc-moves" aria-hidden="true">
+                <small>{{ moveOf(group).a }}</small> {{ moveOf(group).at }}
+                <template v-if="moveOf(group).b"><span class="k2-gc-arrow">→</span><small>{{ moveOf(group).b }}</small> {{ moveOf(group).bt }}</template>
+              </span>
+              <span class="k2-sr" data-testid="ops-when">{{ whenText(group) }}</span>
+              <span class="k2-sr" data-testid="ops-next">{{ nextText(group) }}</span>
+              <span v-if="pillText(group)" class="k2-gc-pill" :class="{ 'is-due': leftMs(group) <= 0 || isDueSoon(group) }" aria-hidden="true">{{ pillText(group) }}</span>
+            </div>
+            <div class="k2-gc-bar" aria-hidden="true"><i :style="{ width: progressOf(group) + '%' }"></i></div>
+            <div class="k2-gc-foot">
+              <span class="k2-gc-meta">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="4" r="2" /><path d="m9 20 3-6 3 3v4M7 12l3-4 4 1 2 3h3" /></svg>
+                <span data-testid="ops-travel">{{ travelText(group) }}</span>
+                <template v-if="noteOf(group)"> · {{ noteOf(group) }}</template>
+                <span class="k2-sr" data-testid="ops-place">{{ placeText(group) }}</span>
+              </span>
+              <span v-if="markText(group)" class="k2-gc-marked" :class="group.current.marked_state === 'missed' ? 'is-miss' : 'is-arrived'" data-testid="ops-mark">{{ markText(group) }}</span>
+              <span v-else-if="canMark(group)" class="k2-gc-acts">
+                <button
+                  type="button"
+                  class="k2-gc-act"
+                  aria-pressed="false"
+                  data-testid="ops-mark-arrived"
+                  :disabled="busy === 'mark:' + group.id + ':arrived'"
+                  @click="mark(group, 'arrived')"
+                ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>Arrived</button>
+                <button
+                  type="button"
+                  class="k2-gc-act is-miss"
+                  aria-pressed="false"
+                  data-testid="ops-mark-missed"
+                  :disabled="busy === 'mark:' + group.id + ':missed'"
+                  @click="mark(group, 'missed')"
+                >Missed</button>
+              </span>
+            </div>
+          </li>
+        </ul>
+      </template>
+    </section>
+
+    <!-- The website's Live panel, Plan log tab: send to the plan's groups, and who has read what -->
+    <section v-else-if="view === 'log'" class="k2-logview" data-testid="plan-ops">
+      <p v-if="errorMsg" class="k2-ops-error" role="alert" data-testid="ops-error">
+        <span>{{ errorMsg }}</span>
+        <button type="button" class="k2-ops-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError">×</button>
+      </p>
+      <div v-if="planId" class="k2-logwrap" data-testid="plan-log">
+        <form class="k2-logform" @submit.prevent="send">
+          <select v-model="toWhom" class="pv-log-select" data-testid="log-audience" aria-label="Who gets this message">
+            <option value="all">Every group</option>
+            <option value="ops">The ops team</option>
+            <option v-for="group in groups" :key="group.id" :value="'group:' + group.id">{{ group.name }}</option>
+          </select>
+          <div class="k2-logrow">
+            <input
+              v-model="draft"
+              class="kin"
+              data-testid="log-draft"
+              maxlength="300"
+              placeholder="Message to the groups"
+              aria-label="Message to the groups"
+            />
+            <button type="submit" class="k2-opsbtn is-ink" data-testid="log-send" :disabled="!canSend">{{ sending ? 'Sending…' : 'Send' }}</button>
+          </div>
+        </form>
+
+        <SkeletonLoader v-if="!loaded" variant="board" :rows="3" label="Reading the plan log…" />
+        <p v-else-if="!log.length" class="k2-ops-none" data-testid="log-empty">Nothing sent yet.</p>
+        <ul v-else class="k2-logs">
+          <li
+            v-for="row in log"
+            :key="row.id"
+            class="k2-logentry"
+            data-testid="log-row"
+            :data-kind="row.kind"
+            :data-log="row.id"
+          >
+            <span class="k2-logtag" :class="'is-' + row.kind">{{ LOG_TAG[row.kind] || 'Message' }}</span>
+            <div class="k2-logmeta" data-testid="log-from">{{ formatTime(row.at) }} · {{ row.from_name }} → {{ audienceWord(row) }}</div>
+            <p class="k2-logbody" data-testid="log-body">{{ row.body }}</p>
+            <span class="k2-sr" data-testid="log-tally">{{ tally(row) }}</span>
+            <div v-if="row.recipients != null" class="k2-logack" aria-hidden="true">
+              <span class="k2-logbar"><i :style="{ width: ackShare(row) + '%' }"></i></span>{{ ackHead(row) }}
+            </div>
+            <div v-else-if="tally(row)" class="k2-logack" aria-hidden="true">{{ tally(row) }}</div>
+            <div v-if="row.waiting && row.waiting.length" class="k2-logwait" aria-hidden="true">
+              <span class="k2-logwait-h">Waiting on</span>
+              <span v-for="name in row.waiting" :key="name" class="k2-waitchip"><i :style="{ background: colourOfName(name) }"></i>{{ name }}</span>
+            </div>
+            <button
+              v-if="row.i_recipient && !row.i_acked"
+              type="button"
+              class="k2-opsbtn"
+              data-testid="log-ack"
+              :disabled="acking === row.id"
+              @click="ack(row)"
+            >Got it</button>
+          </li>
+        </ul>
+      </div>
     </section>
   </div>
 </template>

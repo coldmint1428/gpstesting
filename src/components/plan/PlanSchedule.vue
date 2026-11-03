@@ -475,6 +475,25 @@ async function ack(row) {
   }
 }
 
+/**
+ * "Mark all as read": the same one-tap ack for every unread message, then one re-read. A refusal part-way keeps what
+ * landed (each ack is its own write) and says why, like a single tap would.
+ */
+async function ackAll() {
+  if (!api.ackLog || busyAck.value || !myMessages.value.length) return
+  busyAck.value = -1
+  errorSticky.value = false
+  try {
+    for (const row of [...myMessages.value]) await api.ackLog(row.id)
+  } catch (error) {
+    errorSticky.value = true
+    errorMsg.value = planErrorMessage(error) || 'Could not record that.'
+  } finally {
+    await read()
+    busyAck.value = 0
+  }
+}
+
 // ---------- lifecycle ----------
 
 function onLook() {
@@ -572,6 +591,7 @@ watch(
         <div class="row" style="margin-bottom: 6px">
           <b class="U" style="font-size: 16px; letter-spacing: -0.04em">Updates</b>
           <span class="chip chip-ink" style="height: 22px">{{ myMessages.length }} new</span>
+          <button type="button" class="k2-readall" data-testid="sched-ack-all" :disabled="busyAck !== 0" @click="ackAll">Mark all as read</button>
         </div>
         <article v-for="row in myMessages" :key="row.id" class="k2-upd" data-testid="sched-msg" :data-kind="row.kind">
           <span class="k2-uico" :class="row.kind === 'timeline' ? 'change' : 'msg'">
@@ -582,11 +602,12 @@ watch(
             <b style="font-size: 14px">{{ row.kind === 'timeline' ? 'Your times changed' : row.from_name }}</b><span class="mut" style="font-size: 13px"> · {{ formatTime(row.at) }}</span>
             <div class="k2-updtxt" data-testid="sched-msg-body">{{ row.body }}</div>
           </div>
-          <button type="button" class="k2-pillbtn" data-testid="sched-ack" :disabled="busyAck === row.id" @click="ack(row)">Got it</button>
+          <button type="button" class="k2-pillbtn" data-testid="sched-ack" :disabled="busyAck === row.id || busyAck === -1" @click="ack(row)">Got it</button>
         </article>
       </section>
 
       <div v-else-if="myMessages.length" class="pv-sched-log" data-testid="sched-log">
+        <button type="button" class="pv-sched-ack pv-sched-ackall" data-testid="sched-ack-all" :disabled="busyAck !== 0" @click="ackAll">Mark all as read</button>
         <article
           v-for="row in myMessages"
           :key="row.id"
@@ -602,7 +623,7 @@ watch(
               type="button"
               class="pv-sched-ack"
               data-testid="sched-ack"
-              :disabled="busyAck === row.id"
+              :disabled="busyAck === row.id || busyAck === -1"
               @click="ack(row)"
             >
               Got it

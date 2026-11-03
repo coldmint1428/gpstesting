@@ -553,7 +553,19 @@ const overviewPlan = computed(() => {
   const shown = list.find((p) => p.status === 'live') || list[0]
   return shown ? shown.name : ''
 })
-const liveSide = ref('people') // the Live page's side panel: 'people' | 'message'
+const liveSide = ref('ops') // the Live page's side panel: 'ops' | 'plan' | 'message' | 'people'
+// The tabs this person has: Operations and the Plan log for staff who see the whole event (the log only while a plan
+// runs), Messages for whoever may send them, and the people on the map for everyone
+const liveTabs = computed(() => {
+  const out = []
+  if (seesWholeEvent.value) out.push('ops')
+  if (seesWholeEvent.value && planSession.value) out.push('plan')
+  if (canManage.value) out.push('message')
+  out.push('people')
+  return out
+})
+const liveTab = computed(() => (liveTabs.value.includes(liveSide.value) ? liveSide.value : liveTabs.value[0]))
+const planLogCount = ref(0) // the plan log's length, as PlanOps last read it
 const barStatus = ref(null) // the top bar's controls: the Live page's Schedule button opens their dialog
 
 // ---------- The location button and its popover, and the In-Charge banner (anyone who can share) ----------
@@ -1028,19 +1040,30 @@ async function removeEvent() {
             </div>
           </div>
           <div v-if="!native" class="kp-live-side">
-            <aside class="k k2-card" style="padding-top: 6px">
+            <aside class="k k2-card k2-liveside">
               <div class="k2-tabs" role="tablist" aria-label="Live side panel">
-                <button type="button" role="tab" :aria-selected="liveSide === 'people' || !canManage ? 'true' : 'false'" data-testid="live-tab-people" @click="liveSide = 'people'">On the map<span class="n">{{ liveMap ? liveMap.peopleCount : 0 }}</span></button>
-                <button v-if="canManage" type="button" role="tab" :aria-selected="liveSide === 'message' ? 'true' : 'false'" data-testid="live-tab-message" @click="liveSide = 'message'">Message everyone</button>
+                <button v-if="liveTabs.includes('ops')" type="button" role="tab" :aria-selected="liveTab === 'ops' ? 'true' : 'false'" data-testid="live-tab-ops" @click="liveSide = 'ops'">Operations</button>
+                <button v-if="liveTabs.includes('plan')" type="button" role="tab" :aria-selected="liveTab === 'plan' ? 'true' : 'false'" data-testid="live-tab-plan" @click="liveSide = 'plan'">Plan<span class="n">{{ planLogCount }}</span></button>
+                <button v-if="liveTabs.includes('message')" type="button" role="tab" :aria-selected="liveTab === 'message' ? 'true' : 'false'" data-testid="live-tab-message" @click="liveSide = 'message'">Messages<span class="n">{{ broadcasts.active.value.length }}</span></button>
+                <button type="button" role="tab" :aria-selected="liveTab === 'people' ? 'true' : 'false'" data-testid="live-tab-people" @click="liveSide = 'people'">On the map<span class="n">{{ liveMap ? liveMap.peopleCount : 0 }}</span></button>
               </div>
-              <div v-show="liveSide === 'people' || !canManage" id="k2-onmap" role="tabpanel"></div>
-              <!-- "Message everyone" (032): planners send one message to many groups at once (phone: on the Ops tab) -->
-              <div v-if="canManage" v-show="liveSide === 'message'" role="tabpanel"><BroadcastPanel :broadcasts="broadcasts" :groups="groups" /></div>
+              <div class="k2-liveside-body">
+                <!-- A plan session's staff picture of the walk (step 20) and the plan's log (step 22): one PlanOps, two
+                     tabs. Mounted only while the Live page is shown: the page itself is kept alive by v-show for the
+                     map, and a panel that polls every five seconds must not run behind a planner drawing the plan. -->
+                <div v-if="tab === 'live' && planSession && seesWholeEvent" v-show="liveTab === 'ops' || liveTab === 'plan'" role="tabpanel">
+                  <PlanOps :session="liveSession" :groups="groups" :view="liveTab === 'plan' ? 'log' : 'ops'" @counts="(c) => (planLogCount = c.log)" />
+                </div>
+                <div v-else-if="liveTab === 'ops'" role="tabpanel" class="k2-ops-empty" data-testid="ops-not-live">
+                  <strong>{{ isLive ? 'No plan running' : 'Not live yet' }}</strong>
+                  <span>{{ isLive ? 'The event is live without a plan: the map shows where everyone is.' : 'Operations appear once the event starts.' }}</span>
+                </div>
+                <!-- "Message everyone" (032): planners send one message to many groups at once (phone: on the Ops tab) -->
+                <div v-if="canManage" v-show="liveTab === 'message'" role="tabpanel"><BroadcastPanel :broadcasts="broadcasts" :groups="groups" /></div>
+                <!-- The people list is teleported here by LiveMap, so this stays in the page on every tab -->
+                <div v-show="liveTab === 'people'" id="k2-onmap" role="tabpanel"></div>
+              </div>
             </aside>
-            <!-- A plan session's staff picture of the walk: a row per group, its moment, its leg and where its ICs are
-                 (step 20). Mounted only while the Live page is shown: the page itself is kept alive by v-show for the
-                 map, and a panel that polls every five seconds must not run behind a planner who is drawing the plan. -->
-            <PlanOps v-if="tab === 'live' && planSession && seesWholeEvent" :session="liveSession" />
           </div>
         </div>
 
@@ -1170,6 +1193,7 @@ async function removeEvent() {
           :event-id="id"
           :event-name="event.name"
           :members="members"
+          :live-session-id="liveSession ? liveSession.id : null"
           @go-live="goLive"
         />
 

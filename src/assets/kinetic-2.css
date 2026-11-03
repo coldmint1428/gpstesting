@@ -690,3 +690,163 @@ html body ::-webkit-scrollbar-corner{background:transparent}
 .k2-lock,.k .k2-lockbtn{padding:0;display:inline-grid;place-items:center}
 .k2-lock{width:30px;height:30px}
 .k2-lock .ki,.k2-lockbtn .ki{display:block;margin:0}
+
+/* ===== Live: the map and the side panel share one height (the tabs stay put and the panel body scrolls).
+   `contain: size` keeps the panel content from stretching the row, so the row is the map height. ===== */
+html:not(.native-app) body .ev .kp-live.k2-live{grid-template-columns:minmax(0,1fr) 400px;align-items:stretch}
+html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:clamp(520px,calc(100vh - 190px),980px);min-height:0}
+html:not(.native-app) body .ev .k2-live .kp-live-map .position-relative.mb-3{margin-bottom:0!important}
+.k2-live .kp-live-side{display:flex;flex-direction:column;min-height:0}
+.k2-liveside{flex:1;display:flex;flex-direction:column;contain:size;min-height:0;overflow:hidden;padding:6px 6px 0 16px}
+.k2-liveside > .k2-tabs{flex:none;gap:0;margin:0 10px 0 -6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.k2-liveside > .k2-tabs::-webkit-scrollbar{display:none}
+.k2-liveside > .k2-tabs button{flex:none;padding:0 10px;white-space:nowrap}
+.k2-liveside-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 10px 18px 0}
+.k2-liveside-body::-webkit-scrollbar{width:8px}
+.k2-liveside-body::-webkit-scrollbar-track{background:rgba(10,31,23,.05);border-radius:999px}
+.k2-liveside-body::-webkit-scrollbar-thumb{background:rgba(10,31,23,.28);border-radius:999px}
+.k2-liveside-body::-webkit-scrollbar-button{display:none;width:0;height:0}
+.k2-ops-empty{display:grid;gap:6px;justify-items:center;text-align:center;padding:48px 16px;color:var(--muted);font-size:14px}
+.k2-ops-empty strong{font:800 18px/1.2 Unbounded;letter-spacing:-.04em;color:var(--ink)}
+@media (max-width: 991.98px){
+  html:not(.native-app) body .ev .kp-live.k2-live{grid-template-columns:minmax(0,1fr)}
+  html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:62vh;min-height:360px}
+  .k2-liveside{contain:none;overflow:visible}
+  .k2-liveside-body{overflow:visible;padding-right:10px}
+}
+
+/* ===== Live: Operations ===== */
+.k2-ops .k2-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.k2-opsview,.k2-logview{display:grid;gap:14px;min-width:0}
+.k2-runclock{background:var(--forest);color:var(--on-forest-body);border-radius:20px;padding:16px 18px;display:grid;gap:12px}
+.k2-rc-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.k2-rc-live{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--lime);color:var(--ink);font:800 11px Manrope;letter-spacing:.08em;text-transform:uppercase}
+.k2-rc-live i{width:7px;height:7px;border-radius:50%;background:var(--ink);animation:kpulse 1.6s infinite}
+.k2-rc-rev{font:700 13px Manrope;color:var(--on-forest-muted)}
+.k2-rc-mid{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.k2-rc-elapsed{font:800 40px/1 Unbounded;letter-spacing:-.05em;color:var(--lime);font-variant-numeric:tabular-nums}
+.k2-rc-times{display:grid;gap:2px;font:600 12px/1.4 Manrope;color:var(--on-forest-body)}
+.k2-rc-bar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.12)}
+.k2-rc-bar i{display:block;height:100%;transition:width .4s ease}
+.k2-rc-bar .is-active,.k2-rc-legend .is-active{background:var(--mint)}
+.k2-rc-bar .is-pending,.k2-rc-legend .is-pending{background:rgba(255,255,255,.35)}
+.k2-rc-bar .is-done,.k2-rc-legend .is-done{background:var(--lime)}
+.k2-rc-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font:600 12px Manrope;color:var(--on-forest-body)}
+.k2-rc-legend span{display:inline-flex;align-items:center;gap:6px}
+.k2-rc-legend i{width:8px;height:8px;border-radius:50%}
+.k2-rc-n{flex-basis:100%;font:700 13px Manrope;color:#fff}
+.k2-ops-error{display:flex;align-items:flex-start;gap:10px;margin:0;padding:10px 12px;border-radius:14px;background:var(--danger-bg);color:var(--danger-strong);font:600 13px/1.4 Manrope}
+.k2-ops-error > span{flex:1;min-width:0}
+.k2-ops-x{flex:none;width:24px;height:24px;border:0;border-radius:50%;background:transparent;color:inherit;font:700 16px/1 Manrope;cursor:pointer}
+.k2-ops-none{margin:0;padding:18px 4px;color:var(--muted);font-size:14px;text-align:center}
+.k2-board{display:flex;align-items:center;gap:12px;padding:2px 0}
+.k2-board-av{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--lime);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink);font:800 12px Manrope}
+.k2-board-txt{flex:1;min-width:0;display:grid;gap:1px}
+.k2-board-txt b{font:700 14px Manrope;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k2-board-txt span{font-size:12px;color:var(--muted)}
+.k2-opsbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 14px;border:0;border-radius:999px;background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink);font:700 13px Manrope;white-space:nowrap;cursor:pointer;transition:transform .15s,box-shadow .15s,background-color .15s}
+.k2-opsbtn.is-ink{background:var(--ink);color:#fff;box-shadow:2px 3px 0 var(--lime-shadow)}
+.k2-opsbtn:disabled{cursor:not-allowed;opacity:.5;box-shadow:inset 0 0 0 1.5px var(--k-line)}
+.k2-opsbtn.is-ink:disabled{background:rgba(10,31,23,.12);color:var(--muted);box-shadow:none;opacity:1}
+.k2-opsfilter{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--canvas);width:max-content;max-width:100%}
+.k2-opsfilter button{height:32px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--muted);font:700 13px Manrope;white-space:nowrap;cursor:pointer;transition:background-color .15s,color .15s}
+.k2-opsfilter button span{opacity:.7;margin-left:2px}
+.k2-opsfilter button[aria-pressed="true"]{background:var(--ink);color:var(--lime)}
+.k2-gcards{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.k2-gcard{position:relative;display:grid;gap:8px;padding:12px 14px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1px var(--k-line);transition:background-color .15s}
+.k2-gcard.is-soon{background:#f7fbea;box-shadow:inset 3px 0 0 var(--lime-shadow),inset 0 0 0 1px rgba(122,168,46,.25)}
+.k2-gc-top{display:flex;align-items:center;gap:8px;min-width:0}
+.k2-gc-dot{flex:none;width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(10,31,23,.25)}
+.k2-gc-name{min-width:0;font:700 15px Manrope;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k2-gc-state{flex:none;height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;font:700 12px Manrope;background:var(--soft);color:var(--ink)}
+.k2-gc-state.is-active{background:var(--ink);color:var(--lime)}
+.k2-gc-state.is-done{background:var(--mint);color:var(--ink)}
+.k2-gc-sig{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:4px;font:700 11px Manrope;white-space:nowrap}
+.k2-gc-sig svg{width:12px;height:12px;fill:currentColor}
+.k2-gc-sig.is-none{color:var(--danger-strong)}
+.k2-gc-sig.is-quiet{color:#9a6a00}
+.k2-gc-sig.is-live{color:#1d4ed8}
+.k2-gc-move{display:flex;align-items:center;gap:8px;min-width:0}
+.k2-gc-moves{flex:1;min-width:0;font:700 15px Manrope;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.k2-gc-moves small{font:600 12px Manrope;color:var(--muted)}
+.k2-gc-arrow{margin:0 6px;color:var(--muted);font-weight:600}
+.k2-gc-pill{flex:none;height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;background:var(--canvas);color:var(--ink);font:700 12px Manrope;font-variant-numeric:tabular-nums}
+.k2-gc-pill.is-due{background:var(--lime);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.k2-gc-bar{height:5px;border-radius:999px;background:rgba(10,31,23,.08);overflow:hidden}
+.k2-gc-bar i{display:block;height:100%;background:var(--forest);border-radius:inherit;transition:width 1s linear}
+.k2-gc-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:30px}
+.k2-gc-meta{flex:1;min-width:0;display:inline-flex;align-items:center;gap:5px;font:600 12px Manrope;color:var(--muted)}
+.k2-gc-meta svg{flex:none;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.k2-gc-acts{display:inline-flex;gap:6px;margin-left:auto}
+.k2-gc-act{height:30px;display:inline-flex;align-items:center;gap:4px;padding:0 12px;border:0;border-radius:999px;background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--k-line);font:700 12px Manrope;cursor:pointer;transition:box-shadow .15s,background-color .15s,color .15s}
+.k2-gc-act svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.k2-gc-act.is-miss{color:var(--danger-strong)}
+.k2-gc-act:disabled{opacity:.5;cursor:not-allowed}
+.k2-gc-marked{margin-left:auto;height:30px;display:inline-flex;align-items:center;padding:0 12px;border-radius:999px;font:700 12px Manrope;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k2-gc-marked.is-arrived{background:var(--lime);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.k2-gc-marked.is-miss{background:var(--danger);color:#fff}
+
+/* ===== Live: Plan log ===== */
+.k2-logform{display:grid;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--k-line)}
+.k2-logform select{width:100%}
+.k2-logrow{display:flex;gap:8px}
+.k2-logrow .kin{flex:1;min-width:0;height:40px}
+.k2-logrow .k2-opsbtn{height:40px;padding:0 18px}
+.k2-logs{list-style:none;margin:0;padding:0}
+.k2-logentry{display:grid;gap:6px;justify-items:start;padding:14px 0;border-top:1px solid var(--k-line)}
+.k2-logentry:first-child{border-top:0;padding-top:0}
+.k2-logtag{height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;background:var(--mint);color:var(--ink);font:700 12px Manrope}
+.k2-logtag.is-timeline{background:var(--danger-bg);color:var(--danger-strong)}
+.k2-logmeta{font:600 12px Manrope;color:var(--muted)}
+.k2-logbody{margin:0;font:600 14px/1.45 Manrope;color:var(--ink)}
+.k2-logack{display:inline-flex;align-items:center;gap:10px;font:700 12px Manrope;color:var(--ink)}
+.k2-logbar{width:64px;height:5px;border-radius:999px;background:rgba(10,31,23,.1);overflow:hidden}
+.k2-logbar i{display:block;height:100%;background:var(--forest)}
+.k2-logwait{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.k2-logwait-h{font:600 12px Manrope;color:var(--muted)}
+.k2-waitchip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--canvas);font:700 12px Manrope;color:var(--ink)}
+.k2-waitchip i{width:8px;height:8px;border-radius:50%}
+
+/* ===== Schedule: Mark all as read ===== */
+.k2-readall{margin-left:auto;height:30px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--k-line);font:700 13px Manrope;cursor:pointer;transition:background-color .15s,box-shadow .15s}
+.k2-readall:disabled{opacity:.5;cursor:not-allowed}
+.pv-sched-ackall{align-self:flex-end;margin-bottom:6px}
+
+/* ===== Timeline: a taller map, and the right panel exactly as tall as it (the frame strip runs underneath both) ===== */
+html:not(.native-app) body .ev .pv-map{height:clamp(480px,calc(100vh - 250px),900px)}
+html:not(.native-app) body .ev .pv-inspector.k2-insp{grid-row:1}
+html:not(.native-app) body .ev .pv-bar{grid-column:1/-1}
+@media (max-width: 767.98px){
+  html:not(.native-app) body .ev .pv-map{height:56vh;min-height:320px}
+  html:not(.native-app) body .ev .pv-inspector.k2-insp,html:not(.native-app) body .ev .pv-bar{grid-column:1;grid-row:auto}
+}
+
+/* ===== Hover: the play buttons, Add frame, outline buttons and the Live panel ===== */
+.rp-play{transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease;cursor:pointer}
+@media (hover: hover){
+  .rp-play:hover:not(:disabled){transform:translate(-1px,-1px);background:#d4f88a;box-shadow:0 0 0 2px var(--ink) inset,3px 4px 0 var(--ink)}
+  html body .k .kb.kb-ink:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:5px 6px 0 var(--lime-shadow)}
+  html body .k .kb.kb-line:hover:not(:disabled){background:var(--canvas);box-shadow:0 0 0 2px var(--ink) inset;transform:translate(-1px,-1px)}
+  html body .k .kb.kb-lime:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:0 0 0 2px var(--ink) inset,4px 5px 0 var(--ink)}
+  .k2-opsbtn:hover:not(:disabled){transform:translateY(-1px);box-shadow:inset 0 0 0 2px var(--ink),0 4px 10px rgba(10,31,23,.12)}
+  .k2-opsbtn.is-ink:hover:not(:disabled){box-shadow:3px 5px 0 var(--lime-shadow),0 4px 10px rgba(10,31,23,.12)}
+  .k2-opsfilter button:hover:not([aria-pressed="true"]){background:var(--soft);color:var(--ink)}
+  .k2-gcard:hover{background:#fafbf8}
+  .k2-gcard.is-soon:hover{background:#f2f8e0}
+  .k2-gc-act:hover:not(:disabled){box-shadow:inset 0 0 0 1.5px var(--ink)}
+  .k2-gc-act.is-miss:hover:not(:disabled){box-shadow:inset 0 0 0 1.5px var(--danger);background:var(--danger-bg)}
+  .k2-ops-x:hover{background:rgba(154,51,10,.12)}
+  .k2-readall:hover:not(:disabled){background:var(--canvas);box-shadow:inset 0 0 0 1.5px var(--ink)}
+}
+.k2-opsbtn:focus-visible,.k2-opsfilter button:focus-visible,.k2-gc-act:focus-visible,.k2-readall:focus-visible,.rp-play:focus-visible,.k2-liveside > .k2-tabs button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  .k2-rc-live i{animation:none}
+  .rp-play:hover,.k2-opsbtn:hover,html body .k .kb:hover{transform:none!important}
+}
+/* `.k button{font:inherit}` outranks a bare class: the Live panel and Schedule buttons say their own type */
+.k .k2-opsbtn,.k .k2-opsfilter button,.k .k2-readall{font:700 13px Manrope,system-ui,sans-serif}
+.k .k2-gc-act{font:700 12px Manrope,system-ui,sans-serif}
+.k .k2-ops-x{font:700 16px/1 Manrope,system-ui,sans-serif}
+/* Playback: Play is already dark, so under the pointer it turns forest with lime type (the jumps beside it fill dark) */
+@media (hover: hover){html body .k .pb-transport .kb.kb-ink:hover:not(:disabled){background:var(--forest);color:var(--lime);transform:translate(-1px,-1px);box-shadow:5px 6px 0 var(--lime-shadow)}}
+.k .pb-transport .kb.kb-ink{transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease,color .15s ease}
