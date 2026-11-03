@@ -7,6 +7,8 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 
+const MAP_CLEAR_AFTER_MS = 60 * 1000 // an ended run's markers stay on the Live map this long
+
 export function useEventSessions(eventId) {
   const sessions = ref([]) // newest first: { id, startsAt: Date, endedAt: Date|null, endReason, scheduledEnd, planId, t0At, planRev }
   const loaded = ref(false)
@@ -51,6 +53,19 @@ export function useEventSessions(eventId) {
     openSession.value && openSession.value.startsAt.getTime() > now.value ? openSession.value.startsAt : null,
   )
   const scheduledEnd = computed(() => (openSession.value ? openSession.value.scheduledEnd : null))
+
+  // Whose markers the Live map shows: readings from this time (ms) on, or null for nobody. Positions are only ever
+  // added to, so without this every IC of the last rehearsal stayed on the map until the next one replaced them.
+  // The run that is live shows its own readings; one that ended stays up for MAP_CLEAR_AFTER_MS (so a planner sees
+  // everyone stop), then the map is empty until the next run starts. Same cut as Playback: recorded_at >= starts_at.
+  const mapSince = computed(() => {
+    if (liveSession.value) return liveSession.value.startsAt.getTime()
+    if (!loaded.value) return errorMsg.value ? 0 : null // not read yet: no stale flash; unreadable: hide nobody
+    const last = sessions.value.find((s) => s.startsAt.getTime() <= now.value) // newest run that started
+    const end = last && (last.endedAt || last.scheduledEnd)
+    if (end && now.value - end.getTime() < MAP_CLEAR_AFTER_MS) return last.startsAt.getTime()
+    return null
+  })
 
   // Reload exactly when a scheduled start or end is reached (also catches a start that was
   // cancelled meanwhile: Realtime doesn't tell other viewers about deleted rows)
@@ -136,6 +151,7 @@ export function useEventSessions(eventId) {
     isLive,
     scheduledStart,
     scheduledEnd,
+    mapSince,
     load,
     startEvent,
     scheduleStart,
