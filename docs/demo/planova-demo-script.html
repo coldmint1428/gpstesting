@@ -285,13 +285,13 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     <article class="seg" id="s10">
       <div class="clock"><span class="t">7:30</span><span class="d">40 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
-        <h3>Live location <span class="where">split screen: <b>the walk and the Live page</b></span></h3>
+        <h3>Live location <span class="where">simulated walk: <b>the IC's phone and the Live page</b></span></h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Left: a teammate walking from the casing location; right: the Live page. Click their badge</li><li>The dashed plan line; they walk into the No-Go area</li><li>On their phone: Stop sharing, then confirm</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>The Live page, with the phone inset: the IC's badge moves from the casing location to the Padang. Click their badge</li><li>The dashed plan line beside the badge</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Our Contingent 3 IC is out walking from the casing location, and on the Live map their badge moves with them. Clicking it shows the group, the area they're in and when the phone last updated. The dashed line is where the plan says they should be heading, so drifting off is easy to spot. Walking into a No-Go area lights it up at once. Only ICs share, only while the event is live, and once they stop, it stays stopped.</p></div>
+            <p>Our Contingent 3 IC is heading from the casing location to the Padang, and on the Live map their badge moves with them. For this video the phone's location is simulated along that route; on the day it comes from the phone's GPS. Clicking the badge shows the group, the area they're in and when the phone last updated. The dashed line is where the plan says they should be heading, so drifting off is easy to spot, and walking into a No-Go area lights it up at once. Only ICs share, only while the event is live, and once they stop, it stays stopped.</p></div>
         </div>
-        <p class="warn">Record this at the Padang, a ten-minute walk from SMU. Start at the casing location pin, and walk when Contingent 3 steps off at T+0:30.</p>
+        <p class="warn">No walk to record: the demo script moves the IC's location from the casing location to the Padang every 5 s, starting when they share in segment 8.</p>
         <div class="shows"><span class="tag">GPS</span><span class="tag">Realtime</span></div>
       </div>
     </article>
@@ -397,7 +397,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
           <li>Root on the laptop; a planner in a second browser, for segment 4's two-planner edit.</li>
           <li>The IC of P&amp;C Contingent 3 on a phone with the new APK (rebuilt after 3 Nov), location on and notifications allowed.</li>
           <li>A second phone as a cadet in Contingent 3, for the QR scan and SOS.</li>
-          <li>A teammate to walk at the Padang with the IC phone; record their screen or film them.</li>
+          <li>No one walks: the IC's location is simulated by <code>tools/demo/director.mjs</code>, moving from the casing location to the Padang.</li>
           <li>The QA accounts show as "QA Root" and so on. Rename them on the Profile page, or say they're test accounts.</li>
         </ul>
       </div>
@@ -416,6 +416,53 @@ td.t { font-family: var(--mono); white-space: nowrap; }
           <li>Laptop: 1920 × 1080 at 100 %; Snipping Tool (Win + Shift + R) or Game Bar (Win + Alt + R).</li>
           <li>Phone over USB: <code>adb shell screenrecord --size 1080x2340 --time-limit 180 /sdcard/clip.mp4</code>, then <code>adb pull</code>. Turn on Show taps first.</li>
           <li>Edit in Clipchamp: put the phone clip beside the laptop clip in segments 8 to 11. Export 1080p and check it's under 12:00.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-vo">
+    <h2 id="h-vo">Voice-over</h2>
+    <p class="lede">The screens are recorded for you. Each speaker gets their segments as video clips and records their lines over them. The clips are then put back together into one video.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Video clip</th><th>Speaker</th><th>Clip</th><th>Slot</th></tr></thead>
+        <tbody>
+          <tr><td>01 Komin - Intro, roles and how it works</td><td>Komin</td><td class="t">54 s</td><td class="t">55 s</td></tr>
+          <tr><td>02 Ern - Create an event</td><td>Ern</td><td class="t">24 s</td><td class="t">40 s</td></tr>
+          <tr><td>03 Komin - Draw the venue</td><td>Komin</td><td class="t">26 s</td><td class="t">40 s</td></tr>
+          <tr><td>04 Linus - Build the timeline</td><td>Linus</td><td class="t">69 s</td><td class="t">95 s</td></tr>
+          <tr><td>05 Ern - Groups and people</td><td>Ern</td><td class="t">12 s</td><td class="t">25 s</td></tr>
+          <tr><td>06 Ern - Rehearsals</td><td>Ern</td><td class="t">13 s</td><td class="t">20 s</td></tr>
+          <tr><td>07 Ern - Taking attendance</td><td>Ern</td><td class="t">27 s</td><td class="t">40 s</td></tr>
+          <tr><td>08 Komin - Run it live</td><td>Komin</td><td class="t">42 s</td><td class="t">55 s</td></tr>
+          <tr><td>09 Hazel - What members and ICs see</td><td>Hazel</td><td class="t">62 s</td><td class="t">80 s</td></tr>
+          <tr><td>10 Komin - Live location</td><td>Komin</td><td class="t">27 s</td><td class="t">40 s</td></tr>
+          <tr><td>11 Ern - Messages and SOS</td><td>Ern</td><td class="t">52 s</td><td class="t">45 s</td></tr>
+          <tr><td>12 Komin - End and playback</td><td>Komin</td><td class="t">47 s</td><td class="t">60 s</td></tr>
+          <tr><td>13 rui - Simulator and the planner phone</td><td>rui</td><td class="t">40 s</td><td class="t">40 s</td></tr>
+          <tr><td>14 rui - How we tested it</td><td>rui</td><td class="t">41 s</td><td class="t">45 s</td></tr>
+          <tr><td>15 Komin - Close</td><td>Komin</td><td class="t">15 s</td><td class="t">20 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Clip lengths are from the 3 Nov test take, with every still moment over 1.5 s cut: 9:08 in all. The final take is recorded with tighter pacing, so expect slightly different lengths; the file names stay the same.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Recording your lines</h3>
+        <ul>
+          <li>Play your clip and talk over it with your segment's lines from the run sheet above. A phone voice memo is fine; record somewhere quiet.</li>
+          <li>One audio file per segment, named by number and speaker: <code>05 Ern.m4a</code>. MP3, M4A and WAV all work.</li>
+          <li>Start talking within a second of pressing record; the start of your file lines up with the start of the clip.</li>
+          <li>Running longer than the clip is fine: the last frame holds until you finish. Running far over the slot isn't, as the whole video must stay under 12:00.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>How it's put together</h3>
+        <ul>
+          <li>The laptop screen is full size, with the real phone's screen inset bottom-right, recorded and kept in sync by <code>tools/demo/director.mjs</code>.</li>
+          <li>Each voice file goes on its clip. A clip shorter than its voice-over holds its last frame. The 15 clips are then joined into one 1080p MP4.</li>
+          <li>Before the phone records: turn on Do Not Disturb with Planova allowed through, and clear the notification shade, so other apps' banners stay out of the video.</li>
         </ul>
       </div>
     </div>
