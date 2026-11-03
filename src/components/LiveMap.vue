@@ -46,10 +46,11 @@ import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
-import { areaStyle } from '../utils/areaKinds'
+import { areaStyle, zoneLabelClass } from '../utils/areaKinds'
 import { textOn } from '../utils/groupColours'
 
 const props = defineProps({
+  peopleTo: { type: String, default: null }, // website: the side panel the people list is shown in
   eventId: { type: String, required: true },
   positions: { type: Object, required: true }, // from useLiveLocations (EventView)
   now: { type: Number, required: true }, // ticking clock from useLiveLocations
@@ -652,7 +653,7 @@ function focusSos(id) {
   s.marker.openPopup()
 }
 
-defineExpose({ focusSos })
+defineExpose({ focusSos, peopleCount: computed(() => people.value.length) })
 // ---------- Zones layer (merger Stage 1) ----------
 // The event's zones, drawn under the people: outlines in their kind's colour (the same colours as the
 // Zones tab), No-Go dashed red, with "Name · CODE" labels once zoomed in. Not clickable, so tapping a
@@ -664,7 +665,6 @@ let zoneLabels = []
 let zoneShapes = {} // zone id -> { shape, kind }
 let zoneChannel = null
 let zoneTimer = null
-const LABEL_ZOOM = 16
 
 async function loadZones() {
   if (!map || !supabase) return
@@ -677,7 +677,7 @@ async function loadZones() {
   for (const z of data || []) {
     const shape = L.geoJSON(z.geojson, { style: areaStyle(z.kind), interactive: false })
     shape.addTo(zoneLayer)
-    const label = L.tooltip({ permanent: true, direction: 'center', className: 'zone-label', interactive: false })
+    const label = L.tooltip({ permanent: true, direction: 'center', className: 'zone-label ' + zoneLabelClass(z.kind), interactive: false })
       .setLatLng(shape.getBounds().getCenter())
     label.zone = z
     zoneLabels.push(label)
@@ -716,7 +716,7 @@ watch(() => [props.zoneCounts, props.noGoOccupied], refreshZoneState, { deep: tr
 
 function placeZoneLabels() {
   if (!map) return
-  const show = showZones.value && map.getZoom() >= LABEL_ZOOM
+  const show = showZones.value
   for (const label of zoneLabels) {
     if (show && !map.hasLayer(label)) label.addTo(map)
     else if (!show && map.hasLayer(label)) label.remove()
@@ -917,58 +917,83 @@ onUnmounted(() => {
         <span class="text-truncate">Following <strong>{{ followedName }}</strong></span>
         <button class="btn btn-sm btn-outline-secondary py-0" data-testid="stop-follow-btn" @click="stopFollowing">Stop</button>
       </div>
+      <!-- Website: the Zones and Plan toggles and the legend float on the map -->
+      <div v-if="peopleTo && (zoneCount || planLine)" class="k kfloat k2-maptogs">
+        <span v-if="zoneCount" class="row" data-testid="zones-toggle"><button type="button" class="tog" :aria-pressed="showZones ? 'true' : 'false'" aria-label="Show zones" @click="showZones = !showZones"></button><span>Zones ({{ zoneCount }})</span></span>
+        <span v-if="planLine" class="row" data-testid="plan-toggle"><button type="button" class="tog" :aria-pressed="showPlan ? 'true' : 'false'" aria-label="Show the plan" @click="showPlan = !showPlan"></button><span>Plan<template v-if="planRev != null"> (v{{ planRev }})</template></span></span>
+      </div>
+      <!-- What the marker styles mean -->
+      <div :class="peopleTo ? 'k k2-legend k2-maplegend' : 'd-flex flex-wrap gap-3 small text-muted mt-3'" data-testid="map-legend">
+        <span><span class="dot d-inline-block align-middle me-1" style="background-color: #0072B2"></span>Live</span>
+        <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0072B2"></span>No update 2–10 min</span>
+        <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact 10+ min</span>
+        <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
+        <!-- The plan under the people (step 30): what a dashed line is, and which one is loud. -->
+        <span v-if="planLine" data-testid="map-plan-legend">
+          <span class="plan-swatch" aria-hidden="true"></span>Plan · bold is due now
+        </span>
+        <span v-if="sosAlerts.length" class="text-danger fw-semibold"><span class="dot d-inline-block align-middle me-1" style="background-color: #dc3545"></span>SOS</span>
+        <label v-if="!peopleTo && zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
+          <input v-model="showZones" class="form-check-input" type="checkbox" />
+          <span class="form-check-label">Zones ({{ zoneCount }})</span>
+        </label>
+        <label v-if="!peopleTo && planLine" class="form-check form-check-inline mb-0" :class="{ 'ms-auto': !zoneCount }" data-testid="plan-toggle">
+          <input v-model="showPlan" class="form-check-input" type="checkbox" />
+          <span class="form-check-label">Plan<template v-if="planRev != null"> (v{{ planRev }})</template></span>
+        </label>
+      </div>
     </div>
 
-    <!-- What the marker styles mean -->
-    <div class="d-flex flex-wrap gap-3 small text-muted mb-3" data-testid="map-legend">
-      <span><span class="dot d-inline-block align-middle me-1" style="background-color: #0072B2"></span>Live</span>
-      <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0072B2"></span>No update for 2–10 min</span>
-      <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact (10+ min)</span>
-      <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
-      <!-- The plan under the people (step 30): what a dashed line is, and which one is loud. -->
-      <span v-if="planLine" data-testid="map-plan-legend">
-        <span class="plan-swatch" aria-hidden="true"></span>Plan · bold is due now
-      </span>
-      <span v-if="sosAlerts.length" class="text-danger fw-semibold"><span class="dot d-inline-block align-middle me-1" style="background-color: #dc3545"></span>SOS</span>
-      <label v-if="zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
-        <input v-model="showZones" class="form-check-input" type="checkbox" />
-        <span class="form-check-label">Zones ({{ zoneCount }})</span>
-      </label>
-      <label
-        v-if="planLine"
-        class="form-check form-check-inline mb-0"
-        :class="{ 'ms-auto': !zoneCount }"
-        data-testid="plan-toggle"
-      >
-        <input v-model="showPlan" class="form-check-input" type="checkbox" />
-        <span class="form-check-label">Plan<template v-if="planRev != null"> (v{{ planRev }})</template></span>
-      </label>
-    </div>
+    <!-- People on the map. Website: rows in the side panel's first tab; phone app: a list under the map. -->
+    <Teleport v-if="peopleTo" defer :to="peopleTo">
+      <p v-if="people.length === 0" class="k2-empty" data-testid="no-positions">No one is sharing yet.</p>
+      <div v-else data-testid="people-list">
+        <button
+          v-for="p in people"
+          :key="p.userId"
+          type="button"
+          class="k2-row k2-personrow"
+          :aria-pressed="p.userId === followedId ? 'true' : 'false'"
+          :data-testid="'person-' + p.username"
+          @click="focus(p)"
+        >
+          <span class="av" :style="{ background: p.colour, color: textOn(p.colour) }">{{ initials(p.name) }}</span>
+          <span style="flex: 1; min-width: 0">
+            <b class="d-block text-truncate" style="font-size: 14px">{{ p.name }}</b>
+            <span class="mut d-block text-truncate" style="font-size: 12px">{{ p.groupName }}</span>
+          </span>
+          <span class="k2-personstat" data-testid="last-seen"><span class="dot" :class="'dot-' + p.state" :style="{ backgroundColor: p.colour }"></span>{{ statusText(p) }}</span>
+        </button>
+      </div>
+      <p class="k2-hint">Only In-Charges appear here, while they share.</p>
+    </Teleport>
+    <template v-else>
+      <h2 class="kp-title mb-2 mt-3" style="font-size: 16px">People on the map</h2>
+      <p v-if="people.length === 0" class="text-muted small" data-testid="no-positions">
+        No one is sharing yet.
+      </p>
+      <ul v-else class="list-group small" data-testid="people-list">
+        <li
+          v-for="p in people"
+          :key="p.userId"
+          class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+          :class="{ active: p.userId === followedId }"
+          role="button"
+          :data-testid="'person-' + p.username"
+          @click="focus(p)"
+        >
+          <span class="dot" :class="'dot-' + p.state" :style="{ backgroundColor: p.colour }"></span>
+          <span class="flex-grow-1 text-truncate">
+            <strong>{{ p.name }}</strong>
+            <span class="text-muted"> · {{ p.groupName }}</span>
+          </span>
+          <span class="text-nowrap" :class="{ 'text-muted': p.state !== 'live' }" data-testid="last-seen">
+            {{ statusText(p) }}
+          </span>
+        </li>
+      </ul>
+    </template>
 
-    <h2 class="kp-title mb-2" style="font-size: 16px">People on the map</h2>
-        <p v-if="people.length === 0" class="text-muted small" data-testid="no-positions">
-      No one is sharing yet.
-    </p>
-    <ul v-else class="list-group small" data-testid="people-list">
-      <li
-        v-for="p in people"
-        :key="p.userId"
-        class="list-group-item list-group-item-action d-flex align-items-center gap-2"
-        :class="{ active: p.userId === followedId }"
-        role="button"
-        :data-testid="'person-' + p.username"
-        @click="focus(p)"
-      >
-        <span class="dot" :class="'dot-' + p.state" :style="{ backgroundColor: p.colour }"></span>
-        <span class="flex-grow-1 text-truncate">
-          <strong>{{ p.name }}</strong>
-          <span class="text-muted"> · {{ p.groupName }}</span>
-        </span>
-        <span class="text-nowrap" :class="{ 'text-muted': p.state !== 'live' }" data-testid="last-seen">
-          {{ statusText(p) }}
-        </span>
-      </li>
-    </ul>
   </div>
 </template>
 

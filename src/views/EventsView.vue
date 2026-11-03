@@ -3,7 +3,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { getMyEvents, createQuickEvent, joinEventByCode, getLiveEventIds } from '../services/eventService'
+import { getMyEvents, joinEventByCode, getLiveEventIds } from '../services/eventService'
 import BenchAlert from '../components/BenchAlert.vue'
 import BottomSheet from '../components/BottomSheet.vue'
 import { isNativeApp } from '../lib/platform'
@@ -11,7 +11,6 @@ import { useLocationTracker } from '../composables/useLocationTracker'
 import { formatDayTime } from '../utils/time'
 import { ROLE_LABEL, topRole, viewRole } from '../utils/permissions'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
-import ExpandTransition from '../components/ExpandTransition.vue'
 import KVenueMap from '../components/kinetic/KVenueMap.vue'
 import { cachedMyEvents, saveMyEvents } from '../lib/myEventsCache'
 
@@ -23,7 +22,6 @@ const router = useRouter()
 const cached = cachedMyEvents(auth.user && auth.user.id)
 const events = ref(cached ? cached.events : []) // [{ id, name, roles: ['root', ...], isAdmin, isIC }]
 const loading = ref(!cached)
-const simName = ref('') // merger Stage 3: a name-only test event for virtual groups
 const joinCode = ref('')
 // A pasted code keeps working with spaces or dashes in it ("9Z8-GGZ"): no maxlength, the six are counted after cleaning
 function onJoinInput(event) {
@@ -46,16 +44,6 @@ async function loadEvents() {
     errorMsg.value = error.message
   } finally {
     loading.value = false
-  }
-}
-
-async function createSimulation() {
-  errorMsg.value = ''
-  try {
-    const id = await createQuickEvent(simName.value, true)
-    router.push({ name: 'event', params: { id } })
-  } catch (error) {
-    errorMsg.value = error.message
   }
 }
 
@@ -179,9 +167,6 @@ function closeJoinPop(event) {
 }
 onMounted(() => document.addEventListener('pointerdown', closeJoinPop))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeJoinPop))
-
-// "Create a simulation event": opens and closes with the shared unfold (ExpandTransition)
-const simOpen = ref(false)
 
 // The role pills: Root ink, Planner mint, In-Charge peach, anyone else soft
 function roleChip(ev) {
@@ -429,22 +414,6 @@ function roleTone(label) {
           </Transition>
         </div>
       </section>
-
-      <!-- A name-only test event for virtual groups (Stage 3) -->
-      <div class="ek-sim">
-        <button type="button" class="link" :aria-expanded="simOpen ? 'true' : 'false'" aria-controls="sim-form" @click="simOpen = !simOpen">
-          Create a simulation event (virtual groups for testing)
-        </button>
-        <ExpandTransition>
-          <div v-if="simOpen" id="sim-form">
-            <form class="row ek-sim-form" @submit.prevent="createSimulation">
-              <label for="sim-name" class="visually-hidden">Simulation name</label>
-              <input id="sim-name" v-model="simName" class="kin" placeholder="Simulation name" maxlength="80" required data-testid="sim-event-name" />
-              <button class="kb kb-line" type="submit" data-testid="create-sim-btn">Create</button>
-            </form>
-          </div>
-        </ExpandTransition>
-      </div>
     </main>
   </div>
 </template>
@@ -458,8 +427,6 @@ function roleTone(label) {
 .ek-empty { padding: 50px 0; text-align: center; }
 .ek-empty-title { font-size: 20px; font-weight: 700; }
 .ek-empty p { margin: 8px 0 0; }
-.ek-sim { margin-top: 20px; font-size: 14px; }
-.ek-sim-form { padding-top: 10px; max-width: 28rem; }
 @container k (max-width: 767.98px) {
   .ek-row { grid-template-columns: 56px minmax(0, 1fr) 20px; gap: 12px; }
   .ek-row .ke2-tags { display: none; }

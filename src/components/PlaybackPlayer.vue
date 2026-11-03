@@ -12,7 +12,7 @@ import { venueBounds } from '../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
 import { supabase } from '../lib/supabase'
-import { areaStyle } from '../utils/areaKinds'
+import { areaStyle, zoneCaption } from '../utils/areaKinds'
 import { positionAt, trailAt, timelineMarks, TRAIL_MS } from '../utils/playback'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml } from '../utils/people'
@@ -373,6 +373,8 @@ async function loadZones() {
   if (error || !map || !zoneLayer) return
   for (const z of data || []) {
     const shape = L.geoJSON(z.geojson, { style: areaStyle(z.kind), interactive: false }).addTo(zoneLayer)
+    const caption = zoneCaption(L, shape, z.kind, z.name)
+    if (caption) caption.addTo(zoneLayer)
     const b = shape.getBounds()
     if (b.isValid()) zoneBounds = zoneBounds ? zoneBounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast())
   }
@@ -415,13 +417,13 @@ onUnmounted(() => {
 <template>
   <div data-testid="playback-player">
     <!-- Header -->
-    <button type="button" class="kp-back" data-testid="playback-back" @click="emit('close')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>Recordings</button>
-    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-      <h2 class="kp-title me-auto">{{ title }}</h2>
-      <button v-if="canDownload" class="btn btn-sm btn-outline-secondary kp-btn-icon" data-testid="player-download" title="Download this recording as a CSV file" @click="emit('download')">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>CSV
+    <div class="k k2-h">
+      <button type="button" class="k2-link" data-testid="playback-back" @click="emit('close')">‹ Recordings</button>
+      <b class="U text-truncate" style="flex: 1 1 200px; font-size: 18px; letter-spacing: -0.04em">{{ title }}</b>
+      <button v-if="canDownload" type="button" class="kb kb-line kb-sm" data-testid="player-download" title="Download this recording as a CSV file" @click="emit('download')">
+        <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"></path></svg>CSV
       </button>
-      <button v-if="live" class="btn btn-sm btn-live" data-testid="go-live-btn" @click="emit('go-live')">Back to live</button>
+      <button v-if="live" type="button" class="kb kb-lime kb-sm" data-testid="go-live-btn" @click="emit('go-live')">Back to live</button>
     </div>
     <div v-if="fileName" class="alert alert-info py-2 small" role="status" data-testid="file-banner">
       From file: <strong>{{ fileName }}</strong>
@@ -429,7 +431,8 @@ onUnmounted(() => {
 
     <!-- Map + selected person's card -->
     <div class="position-relative mb-2">
-      <div ref="mapEl" class="playback-map rounded border" data-testid="playback-map"></div>
+      <div ref="mapEl" class="playback-map" data-testid="playback-map"></div>
+      <span v-if="peopleNow.length === 0" class="k2-nobody" data-testid="playback-nobody">Nobody is sharing at this moment</span>
       <div v-if="selectedInfo" class="person-card shadow-sm small" data-testid="person-card">
         <div class="d-flex align-items-start gap-2">
           <div class="flex-grow-1">
@@ -459,11 +462,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Controls -->
-    <div class="card mb-2">
-      <div class="card-body py-2">
-        <div class="d-flex align-items-baseline gap-2 mb-1">
-          <span class="fs-4 fw-semibold" data-testid="playback-time">{{ formatTimeSeconds(t) }}</span>
-          <span class="text-muted small">{{ formatDay(t) }}</span>
+    <div class="k k2-player mb-2">
+      <div>
+        <div class="row" style="align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 4px">
+          <span class="k2-clock" data-testid="playback-time">{{ formatTimeSeconds(t) }}</span>
+          <span class="mut" style="font-size: 13px; font-weight: 700">{{ formatDay(t) }}</span>
+          <span class="sp"></span>
+          <span class="mut" style="font-size: 13px; font-weight: 700" data-testid="replay-length">{{ replayLength }}</span>
         </div>
 
         <!-- Timeline with start (green) / stop (grey) marks -->
@@ -496,76 +501,55 @@ onUnmounted(() => {
         </div>
 
         <!-- Back, Play, forward: the site's own pill buttons with drawn arrows (no emoji); on a phone, Play on top and the jumps in a row below -->
-        <div class="pb-transport mb-2">
+        <div class="k2-ctl pb-transport">
           <button
             v-for="s in SKIPS.slice(0, 2)"
             :key="'b' + s.label"
             type="button"
-            class="btn btn-sm btn-outline-dark pb-skip is-back"
+            class="k2-pillbtn"
             :aria-label="'Back ' + s.label"
             @click="seek(t + s.ms)"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17 6 12l5-5M18 17l-5-5 5-5" /></svg>
-            {{ s.label }}
-          </button>
-          <button type="button" class="btn btn-sm btn-primary pb-play" data-testid="play-btn" @click="togglePlay">
-            <svg v-if="playing" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-            <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="is-fill"><path d="M7 4.5v15l12-7.5z" /></svg>
+          >« {{ s.label }}</button>
+          <button type="button" class="kb kb-ink kb-sm" data-testid="play-btn" @click="togglePlay">
+            <svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="fill: currentColor; stroke: none"><path :d="playing ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M7 4.5v15l12-7.5z'"></path></svg>
             {{ playing ? 'Pause' : 'Play' }}
           </button>
           <button
             v-for="s in SKIPS.slice(2)"
             :key="'f' + s.label"
             type="button"
-            class="btn btn-sm btn-outline-dark pb-skip is-fwd"
+            class="k2-pillbtn"
             :aria-label="'Forward ' + s.label"
             @click="seek(t + s.ms)"
-          >
-            {{ s.label }}
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 17 5-5-5-5M6 17l5-5-5-5" /></svg>
-          </button>
+          >{{ s.label }} »</button>
         </div>
 
-        <div class="d-flex flex-wrap align-items-center gap-3">
-          <!-- Speed: one rounded track of choices that wraps on a narrow screen (a button group never wraps, and its
-               seven buttons made the page wider than a phone, which then shrank the whole page to fit) -->
-          <div class="pb-speeds" role="group" aria-label="Speed">
-            <button
-              v-for="s in SPEEDS"
-              :key="s"
-              type="button"
-              class="pb-speed"
-              :class="{ 'is-on': speed === s }"
-              :aria-pressed="speed === s ? 'true' : 'false'"
-              :data-testid="'speed-' + s"
-              @click="speed = s"
-            >
-              {{ s }}×
-            </button>
+        <div class="k2-ctl k2-speed">
+          <!-- Speed: a segmented track that wraps on a narrow screen -->
+          <div class="seg k2-wrapseg" role="group" aria-label="Speed">
+            <button v-for="s in SPEEDS" :key="s" type="button" :aria-pressed="speed === s ? 'true' : 'false'" :data-testid="'speed-' + s" @click="speed = s">{{ s }}×</button>
           </div>
-          <div class="form-check form-switch mb-0">
-            <input id="show-trails" v-model="showTrails" class="form-check-input" type="checkbox" data-testid="trails-switch" />
-            <label class="form-check-label small" for="show-trails">Trails</label>
-          </div>
-          <select v-model="groupFilter" class="form-select form-select-sm w-auto" aria-label="Group filter" data-testid="group-filter">
-            <option value="">All groups</option>
-            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-          </select>
         </div>
-        <div class="small text-muted mt-1" data-testid="replay-length">{{ replayLength }}</div>
+        <div class="k2-ctl">
+          <button type="button" class="tog" :aria-pressed="showTrails ? 'true' : 'false'" aria-label="Trails" data-testid="trails-switch" @click="showTrails = !showTrails"></button><b style="font-size: 13px">Trails</b>
+          <div class="ksel">
+            <select v-model="groupFilter" class="k2-sel-sm" aria-label="Group filter" data-testid="group-filter">
+              <option value="">All groups</option>
+              <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+            </select>
+          </div>
+          <div class="k2-pblegend">
+            <span><span class="dot me-1" style="background-color: #0072B2"></span>Sharing</span>
+            <span><span class="dot dot-stale me-1" style="background-color: #0072B2"></span>No update 2–10 min</span>
+            <span><span class="dot dot-offline me-1"></span>Lost contact</span>
+            <span><span class="dot dot-stopped me-1"></span>Stopped</span>
+            <span>┄ No readings</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="d-flex flex-wrap gap-3 small text-muted mb-2">
-      <span><span class="dot me-1" style="background-color: #0072B2"></span>Sharing</span>
-      <span><span class="dot dot-stale me-1" style="background-color: #0072B2"></span>No update for 2–10 min</span>
-      <span><span class="dot dot-offline me-1"></span>Lost contact (10+ min)</span>
-      <span><span class="dot dot-stopped me-1"></span>Stopped sharing</span>
-      <span>Dashed = no readings</span>
-    </div>
-
-        <p v-if="peopleNow.length === 0" class="small text-muted" data-testid="playback-nobody">Nobody is sharing at this moment.</p>
-    <ul v-else class="list-group small" data-testid="playback-people">
+    <ul v-if="peopleNow.length" class="list-group small" data-testid="playback-people">
       <li
         v-for="p in peopleNow"
         :key="p.userId"

@@ -38,7 +38,7 @@ import L from 'leaflet'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
-import { areaStyle } from '../../utils/areaKinds'
+import { areaStyle, zoneCaption } from '../../utils/areaKinds'
 import { escapeHtml } from '../../utils/people'
 import { stopsOf, walksOf, whereAt } from '../../utils/planWalk'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
@@ -62,6 +62,8 @@ const props = defineProps({
   groups: { type: Array, default: () => [] },
   // A moment to open the map on, from the schedule's place link (`?t=300`). Null opens on the whole walk.
   focusT: { type: [String, Number], default: null },
+  // The Schedule page's row numbers ('group|frame' -> number), so a pin always matches its row.
+  pinNumbers: { type: Map, default: null },
   // True on the Schedule page: the map and its cards, drawing walkRows instead of reading them again.
   embedded: { type: Boolean, default: false },
   walkRows: { type: Array, default: () => [] },
@@ -215,7 +217,8 @@ const hereText = computed(() => {
 })
 
 function stopName(stop) {
-  return stop.name || (stop.number ? 'Stop ' + stop.number : '')
+  const pin = props.pinNumbers && stop.point ? props.pinNumbers.get(stop.point.group_id + '|' + stop.point.frame_id) : null
+  return stop.name || (pin || stop.number ? 'Stop ' + (pin || stop.number) : '')
 }
 
 /** What a dot says. Live: its clock time and its place, or the time alone at a route point. Static: just its place. */
@@ -234,8 +237,9 @@ function drawZones() {
   for (const zone of zones.value) {
     if (!zone.geojson) continue
     const shape = L.geoJSON(zone.geojson, { style: areaStyle(zone.kind), interactive: false })
-    shape.bindTooltip(escapeHtml(zone.name) + (zone.code ? ' · ' + escapeHtml(zone.code) : ''), { sticky: true })
     shape.addTo(zoneLayer)
+    const caption = zoneCaption(L, shape, zone.kind, zone.name)
+    if (caption) caption.addTo(zoneLayer)
   }
 }
 
@@ -290,13 +294,15 @@ function draw() {
         html:
           `<span class="${classes.join(' ')}" style="--pv-dot:${track.colour}"` +
           ` data-testid="route-dot" data-group="${track.id}" data-t="${row.t_s}">` +
-          `<span class="pv-route-dot-mark">${stop.number}</span>` +
+          `<span class="pv-route-dot-mark">${(props.pinNumbers && props.pinNumbers.get(track.id + '|' + row.frame_id)) || stop.number}</span>` +
           `<span class="pv-route-dot-label" data-testid="route-dot-label">${escapeHtml(dotText(track, stop))}</span>` +
           `</span>`,
         iconSize: [20, 20],
         iconAnchor: [10, 10],
       })
-      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, title: dotText(track, stop) })
+      // Later stops stand on top of earlier ones, as they would in the plan
+      const order = (props.pinNumbers && props.pinNumbers.get(track.id + '|' + row.frame_id)) || stop.number || 0
+      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, title: dotText(track, stop), zIndexOffset: order * 100 })
       marker.bindTooltip(dotText(track, stop), { direction: 'top', offset: [0, -12] })
       marker.addTo(dotLayer)
     }
@@ -343,7 +349,9 @@ function showMoment(t_s, groupId) {
   })
 }
 
-defineExpose({ showMoment })
+watch(() => props.pinNumbers, () => draw())
+
+defineExpose({ showMoment, zones })
 
 /** Open on the moment the schedule's link named, once, and mark it. */
 function applyFocus() {

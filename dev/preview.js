@@ -3,6 +3,7 @@
 // the real src/components/plan/PlanBoard.vue.
 import { computed, createApp, h, ref } from 'vue'
 import PlanBoard from '../src/components/plan/PlanBoard.vue'
+import NotifyHost from '../src/components/NotifyHost.vue'
 
 const eventId = 'preview-event'
 
@@ -35,7 +36,14 @@ const zones = ref([
 
 let nextId = 1
 function frame(t_s, positions, note) {
-  return { id: `f${nextId++}`, t_s, note: note || null, rev: 1, positions }
+  // A position from the database always carries both flags (046 made them NOT NULL with defaults), and the board's
+  // inverse commands compare whole rows -- so a fixture that left them off would make an undo write badges that had
+  // not changed, which is a dev page that behaves worse than the app.
+  const map = {}
+  for (const [group, at] of Object.entries(positions || {})) {
+    map[group] = { lat: at.lat, lng: at.lng, state: at.state || 'on_site', verify: at.verify || 'auto' }
+  }
+  return { id: `f${nextId++}`, t_s, note: note || null, rev: 1, positions: map }
 }
 
 // A walk from the stage up to backstage in 20 m steps, then one deliberate 90 m jump so the warning styling
@@ -55,8 +63,219 @@ const busy = ref(false)
 const errorMsg = ref('')
 const livePlan = computed(() => plans.value.find((p) => p.status === 'live') || null)
 
+// ---------- who is editing (081), as far as a fixture can have it ----------
+//
+// The real holds live in public.plan_cell_locks and are decided by the database; the fixture keeps the same facts in
+// memory and says the same sentences, so the ownership UI (a ring on somebody else's badge, the stack of who is
+// editing, a drag that is refused) can be seen and checked in a browser without a second account.
+//
+// `?peer=1` puts a colleague's hand on one badge from the start -- Sound at the first moment -- which is the case the
+// strip, the ring and the snap-back all exist for.
+const PEER = new URLSearchParams(location.search).has('peer')
+const refusals = new Map() // cell key -> the name of whoever has it, for a colleague's hold
+const momentRefusals = new Map() // frame id -> the name of whoever is retiming it (083)
+const mine = new Set() // cells this page is holding
+
+function cellKey(frame, group) {
+  return `${frame}|${group}`
+}
+
+function clockOf(frameId) {
+  const f = findFrame(frameId)
+  if (!f) return '?'
+  return `+${Math.floor(f.t_s / 60)}:${String(f.t_s % 60).padStart(2, '0')}`
+}
+
+function groupName(id) {
+  const group = groups.value.find((g) => g.id === id)
+  return group ? group.name : 'that group'
+}
+
+function lockRefusal(message) {
+  return Object.assign(new Error(message), { code: 'PT423' })
+}
+
+// ---------- the structural doors (083), as far as a fixture can have them ----------
+//
+// The real rule is one sentence: a door that would take away or overwrite something a live hold is guarding refuses,
+// and names the holder. The fixture keeps the same two facts the doors read -- a cell somebody else has, and a moment
+// somebody else is retiming -- and says the same sentences, so the strip and the confirmations can be seen and checked
+// without a database. Nothing here decides anything: the database's own refusal is the fact.
+const BLOCKED = {
+  deleted: 'this moment cannot be deleted yet',
+  moved: 'this moment cannot be moved yet',
+  pushed: 'the stretch cannot be moved yet',
+  held: 'this hold cannot be made yet',
+  confirmed: 'the confirmation cannot be changed yet',
+}
+
+/** The first cell of a frame somebody else has, as the sentence a delete or a hold is refused with. */
+function heldInFrame(frameId) {
+  for (const [cell, name] of refusals) {
+    const [frame, group] = cell.split('|')
+    if (frame === frameId) return { name, group }
+  }
+  return null
+}
+
+function momentHolder(frameId) {
+  return momentRefusals.get(frameId) || null
+}
+
+if (PEER) refusals.set(cellKey('f1', 'g2'), 'Priya')
+
+/** The hold the drag takes as it begins (081's plan_lock_cells): all or none, and somebody else's is refused. */
+async function holdCells(cells) {
+  for (const cell of cells || []) {
+    const blocker = refusals.get(cellKey(cell.frame, cell.group))
+    if (blocker) {
+      throw lockRefusal(`${blocker} is editing ${groupName(cell.group)} at ${clockOf(cell.frame)}.`)
+    }
+  }
+  for (const cell of cells || []) mine.add(cellKey(cell.frame, cell.group))
+  return (cells || []).length
+}
+
+async function releaseCells(cells) {
+  for (const cell of cells || []) mine.delete(cellKey(cell.frame, cell.group))
+}
+
+/** Who is editing what, shaped like plan_lock_holders (081). */
+async function lockHolders() {
+  const rows = []
+  for (const cell of mine) {
+    const [frame, group] = cell.split('|')
+    const f = findFrame(frame)
+    if (!f) continue
+    rows.push({
+      kind: 'badge',
+      frame_id: frame,
+      group_id: group,
+      t_s: f.t_s,
+      group_name: groupName(group),
+      user_id: 'me',
+      display_name: 'You',
+      mine: true,
+    })
+  }
+  for (const [cell, name] of refusals) {
+    const [frame, group] = cell.split('|')
+    const f = findFrame(frame)
+    if (!f) continue
+    rows.push({
+      kind: 'badge',
+      frame_id: frame,
+      group_id: group,
+      t_s: f.t_s,
+      group_name: groupName(group),
+      user_id: 'peer',
+      display_name: name,
+      mine: false,
+    })
+  }
+  return rows
+}
+
+async function releaseAllHolds() {
+  mine.clear()
+}
+
+// ---------- where a colleague's drag is going (phase 4) ----------
+//
+// The real stream is a Realtime broadcast (usePlanStream): a page publishes where the badge under its finger is going,
+// twenty times a second, and every other page draws it as a ghost. The fixture has no socket, so it keeps the board's
+// renderer and hands it whatever a check asks a "colleague" to publish -- the same rows, through the same seam the app
+// uses. Nothing here writes anything, which is the point of a draft.
+let draftHandler = null
+const draftRows = new Map()
+
+function startDrafts() {}
+
+function stopDrafts() {
+  draftRows.clear()
+  if (draftHandler) draftHandler([])
+}
+
+function planDraft() {} // this page has no colleague to tell
+
+function clearDrafts() {}
+
+function onDraft(fn) {
+  draftHandler = fn
+}
+
+/**
+ * The real one is 082's two doors under ONE hold (usePlanLocks.rewrite): every cell an inverse touches -- the ones to
+ * place and the ones to take away -- is checked before a single row is written, so a badge somebody else is holding
+ * refuses the whole undo. The fixture checks exactly that, first, and writes nothing at all when it is refused.
+ */
+async function rewriteCells(frameId, target) {
+  const frame = findFrame(frameId)
+  if (!frame) throw new Error('That frame is not in the plan, so there is nothing to put back.')
+  const wanted = target || {}
+  const current = frame.positions || {}
+  const changed = {}
+  for (const [group, at] of Object.entries(wanted)) {
+    const was = current[group]
+    if (!was || was.lat !== at.lat || was.lng !== at.lng || was.state !== at.state || was.verify !== at.verify) {
+      changed[group] = at
+    }
+  }
+  const gone = Object.keys(current).filter((group) => !(group in wanted))
+  for (const group of [...Object.keys(changed), ...gone]) {
+    const blocker = refusals.get(cellKey(frameId, group))
+    if (blocker) throw lockRefusal(`${blocker} is editing ${groupName(group)} at ${clockOf(frameId)}.`)
+  }
+  if (Object.keys(changed).length) await api.placeCells(frameId, changed)
+  if (gone.length) await api.unplaceCells(frameId, gone)
+  return { placed: Object.keys(changed).length, removed: gone.length }
+}
+
+// A seam for the browser checks (dev/checks/board-smoke.mjs): what this page is holding, so a gesture can be watched
+// taking a badge and giving it up without a database. In the app the answer is public.plan_cell_locks, which no page
+// reads directly -- it is the doors that read it -- so this exists only where the doors are faked.
+globalThis.__planPreview = {
+  holds: () => ({ mine: [...mine].sort(), refusals: [...refusals.keys()].sort() }),
+  /** Where the fixture has a badge standing, so a check can aim a ghost at a place it can measure on screen. */
+  at: (frameId, groupId) => {
+    const f = findFrame(frameId)
+    const at = f && f.positions ? f.positions[groupId] : null
+    return at ? { lat: at.lat, lng: at.lng } : null
+  },
+  /** A "colleague" dragging a badge: the rows the stream would have delivered. No coordinates means "let go". */
+  draft: (frameId, groupId, lat, lng) => {
+    const key = cellKey(frameId, groupId)
+    if (lat == null || lng == null) draftRows.delete(key)
+    else draftRows.set(key, { cell: key, frame: frameId, group: groupId, lat, lng, from: 'peer-tag' })
+    if (draftHandler) draftHandler([...draftRows.values()])
+  },
+  /** Put a colleague's hand on a badge, or take it off: the refusal case, driven from a check. */
+  block: (key, name) => {
+    refusals.set(key, name || 'Priya')
+  },
+  unblock: (key) => {
+    refusals.delete(key)
+  },
+  /** ...and the same for a MOMENT (083): somebody retiming the frame, which a delete, a push or a hold waits for. */
+  blockMoment: (frameId, name) => {
+    momentRefusals.set(frameId, name || 'Priya')
+  },
+  unblockMoment: (frameId) => {
+    momentRefusals.delete(frameId)
+  },
+}
+
 function findFrame(id) {
   return frames.value.find((f) => f.id === id)
+}
+
+/**
+ * The real doors are followed by a read (usePlan's "a write is followed by a read"): `loadFrames` replaces the array,
+ * and that is what makes the board draw the new positions. The fixture's array IS its read, so a nested mutation alone
+ * would leave the markers where the hand put them -- a dev page disagreeing with the app about when a screen redraws.
+ */
+function reread() {
+  frames.value = frames.value.map((frame) => ({ ...frame }))
 }
 
 /** The position that stands at a moment: the last thing the group said at or before it (the database resolves the
@@ -89,11 +308,21 @@ const api = {
   async renamePlan() {},
   async deletePlan() {},
   async forkPlan() {},
-  async publishPlan() {},
+  async publishPlan() {
+    // The real one writes a version and makes this the timetable everyone follows (054). The fixture only needs the
+    // two facts the board reads back: the status, and that the button is now "Publish again".
+    plan.value.status = 'live'
+    plan.value.rev = (plan.value.rev || 1) + 1
+    plan.value.published_at = new Date().toISOString()
+  },
   async saveFrame(input) {
     const existing = input.id ? findFrame(input.id) : frames.value.find((f) => f.t_s === input.t_s)
     if (existing) {
-      if (input.positions !== undefined) existing.positions = input.positions
+      // 082: a frame that already stands refuses a badge map, because the map is what carried everybody else's
+      // positions back. The fixture says the same thing, so a page that starts sending one is caught here.
+      if (input.positions !== undefined) {
+        throw new Error('This frame already has badges, and they are edited one at a time. Reload the board.')
+      }
       if (input.note !== undefined) existing.note = input.note
       existing.rev += 1
     } else {
@@ -101,19 +330,88 @@ const api = {
       frames.value.sort((a, b) => a.t_s - b.t_s)
     }
   },
+  // One badge, one row (082). The real one is frame_place_many(), checked against a hold; the fixture has no server
+  // and one page, so there is nothing to hold and no revision to bump -- a badge move is not a change to the frame's
+  // time or note, and the dev page should not pretend it is.
+  async placeCells(frameId, map) {
+    const target = findFrame(frameId)
+    if (!target) throw new Error('That frame is not in this plan.')
+    // 082 checks every cell against a live hold before it writes. The fixture checks the one fact it has: somebody
+    // else's hand on that badge.
+    for (const groupId of Object.keys(map || {})) {
+      if (refusals.has(cellKey(frameId, groupId))) {
+        throw lockRefusal('This badge stopped being yours to edit. Try again.')
+      }
+    }
+    let written = 0
+    for (const [groupId, at] of Object.entries(map || {})) {
+      const was = target.positions[groupId] || {}
+      target.positions[groupId] = {
+        lat: at.lat,
+        lng: at.lng,
+        state: at.state || was.state || 'on_site',
+        verify: at.verify || was.verify || 'auto',
+      }
+      written += 1
+    }
+    if (written) reread()
+    return written
+  },
+  // The only way a position disappears (082).
+  async unplaceCells(frameId, groupIds) {
+    const target = findFrame(frameId)
+    if (!target) return 0
+    let removed = 0
+    for (const id of groupIds || []) {
+      if (target.positions[id]) {
+        delete target.positions[id]
+        removed += 1
+      }
+    }
+    if (removed) reread()
+    return removed
+  },
+  // Ownership (081): the hold a gesture takes, the hold it gives up, who is editing, and the way out of it.
+  holdCells,
+  releaseCells,
+  lockHolders,
+  releaseAllHolds,
+  // Where a colleague's drag is going (phase 4): in the app a Realtime broadcast, here the board's renderer plus a
+  // seam a check can push a draft through. Nothing in this pair writes anything.
+  startDrafts,
+  stopDrafts,
+  planDraft,
+  clearDrafts,
+  onDraft,
+  // An undo or a redo of a badge map, under one hold for both directions (phase 4).
+  rewriteCells,
   async moveFrame(id, t_s) {
     const target = findFrame(id)
-    if (target) {
-      target.t_s = t_s
-      target.rev += 1
-    }
+    if (!target) throw new Error('That frame does not exist.')
+    // 083: a retime is a gesture on the moment, so a colleague retiming the same one is refused by name.
+    const holder = momentHolder(id)
+    if (holder) throw lockRefusal(`${holder} is editing the moment at ${clockOf(id)}, so ${BLOCKED.moved}.`)
+    target.t_s = t_s
+    target.rev += 1
   },
   async deleteFrame(id) {
+    // 083: a frame with somebody's hand in it -- a badge being dragged in it, or its own clock -- is not taken away.
+    const held = heldInFrame(id)
+    if (held) {
+      throw lockRefusal(`${held.name} is editing ${groupName(held.group)} at ${clockOf(id)}, so ${BLOCKED.deleted}.`)
+    }
+    const retiming = momentHolder(id)
+    if (retiming) throw lockRefusal(`${retiming} is editing the moment at ${clockOf(id)}, so ${BLOCKED.deleted}.`)
     frames.value = frames.value.filter((f) => f.id !== id)
   },
   async shiftFrom(from_s, delta_s, to_s = null) {
     const inRange = frames.value.filter((f) => f.t_s >= from_s && (to_s == null || f.t_s <= to_s))
     if (!inRange.length) return 0
+    // 083: a push is refused by a MOMENT hold in the stretch, never by a badge (a clock does not move a badge).
+    for (const f of inRange) {
+      const holder = momentHolder(f.id)
+      if (holder) throw lockRefusal(`${holder} is editing the moment at ${clockOf(f.id)}, so ${BLOCKED.pushed}.`)
+    }
     // A chunk moves rigidly: it stops at T+0 rather than squashing its first frames onto it (044 does the same).
     const first = Math.min(...inRange.map((f) => f.t_s))
     const delta = Math.max(delta_s, -first)
@@ -132,6 +430,19 @@ const api = {
       ? groupIds
       : groups.value.map((g) => g.id).filter((id) => standingAt(source.t_s, id))
     let target = frames.value.find((f) => f.t_s === target_s) || null
+    // 083: a hold writes a badge at the later moment, and bumps that moment's revision. Either can be somebody's.
+    if (target) {
+      for (const id of wanted) {
+        const blocker = refusals.get(cellKey(target.id, id))
+        if (blocker) {
+          throw lockRefusal(`${blocker} is editing ${groupName(id)} at ${clockOf(target.id)}, so ${BLOCKED.held}.`)
+        }
+      }
+      const retiming = momentHolder(target.id)
+      if (retiming) {
+        throw lockRefusal(`${retiming} is editing the moment at ${clockOf(target.id)}, so ${BLOCKED.held}.`)
+      }
+    }
     const existed = !!target
     let created = 0
     let written = 0
@@ -151,7 +462,7 @@ const api = {
         frames.value.sort((a, b) => a.t_s - b.t_s)
         created = 1
       }
-      target.positions[id] = { lat: at.lat, lng: at.lng }
+      target.positions[id] = { lat: at.lat, lng: at.lng, state: at.state || 'on_site', verify: at.verify || 'auto' }
       written += 1
     }
     if (existed && written) target.rev += 1
@@ -174,6 +485,25 @@ const api = {
   async setVerify(frameIds, groupIds, verify) {
     const wantedFrames = new Set(frameIds)
     const named = groupIds && groupIds.length ? groupIds : null
+    // 083: the rows this call would CHANGE are the ones somebody's hand can be on -- a row already saying what was
+    // asked for is not written at all, and so is not in anybody's way. The moment is checked for every named frame,
+    // because a frame this call touches has its revision bumped even when the flag did not move.
+    for (const f of frames.value) {
+      if (!wantedFrames.has(f.id)) continue
+      const wanted = named || Object.keys(f.positions || {})
+      for (const id of wanted) {
+        const row = f.positions && f.positions[id]
+        if (!row || (row.verify === 'manual' ? 'manual' : 'auto') === verify) continue
+        const blocker = refusals.get(cellKey(f.id, id))
+        if (blocker) {
+          throw lockRefusal(`${blocker} is editing ${groupName(id)} at ${clockOf(f.id)}, so ${BLOCKED.confirmed}.`)
+        }
+      }
+      const retiming = momentHolder(f.id)
+      if (retiming) {
+        throw lockRefusal(`${retiming} is editing the moment at ${clockOf(f.id)}, so ${BLOCKED.confirmed}.`)
+      }
+    }
     const touched = new Set()
     let set = 0
     let skipped = 0
@@ -201,5 +531,8 @@ const api = {
 }
 
 createApp({
-  render: () => h(PlanBoard, { eventId, canEdit: true, api }),
+  // The host as well as the board: the questions ("Delete the frame at +0:00?", "Publish while somebody is editing?")
+  // and the toasts live in one component the app mounts once (App.vue), and a preview without it would leave every
+  // confirmation waiting for an answer nothing could give.
+  render: () => h('div', [h(PlanBoard, { eventId, canEdit: true, api }), h(NotifyHost)]),
 }).mount('#app')

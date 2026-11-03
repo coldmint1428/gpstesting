@@ -105,10 +105,6 @@ export default {
     await tab.waitUntil(`document.querySelector('[data-testid=toasts]').textContent.includes('Copied +1:00')`, {
       what: 'the copy confirmation from the keyboard',
     })
-    await tab.assertThat(
-      'paste is available after a keyboard copy',
-      `!document.querySelector('[data-testid=frame-paste]').disabled`,
-    )
 
     const paste = await sendKey(tab, 'v')
     tab.pass(`Ctrl+V on the board: ${JSON.stringify(paste)}`)

@@ -6,8 +6,10 @@ import { ref, computed, watch } from 'vue'
 import { ROLE_LABEL, can } from '../utils/permissions'
 import { formatDayTime, toDateTimeLocal } from '../utils/time'
 import InvitePanel from './InvitePanel.vue'
+import KDateTimePicker from './kinetic/KDateTimePicker.vue'
 
 const props = defineProps({
+  planName: { type: String, default: '' }, // the published plan, when this person can see the plans
   event: { type: Object, required: true },
   role: { type: String, default: null }, // view role: root | planner | admin | ic | member
   mode: { type: String, default: 'view' }, // 'edit' (root) | 'view'
@@ -84,7 +86,7 @@ function saveDetails() {
 
 <template>
   <div class="kp-stack" data-testid="overview" :data-mode="mode">
-    <div class="kp-overview">
+    <div>
       <!-- Root: edit the details -->
       <form v-if="editing" class="kp-card kp-fields" data-testid="overview-edit" @submit.prevent="saveDetails">
         <h2 class="kp-title">Edit details</h2>
@@ -104,12 +106,12 @@ function saveDetails() {
         <div class="kp-fields-2">
           <div>
             <label for="ov-start" class="form-label">Starts</label>
-            <input id="ov-start" v-model="form.startsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': formErrors.startsAt }" data-testid="overview-start" />
+            <KDateTimePicker id="ov-start" v-model="form.startsAt" label="Starts" :invalid="Boolean(formErrors.startsAt)" testid="overview-start" />
             <div v-if="formErrors.startsAt" class="invalid-feedback">{{ formErrors.startsAt }}</div>
           </div>
           <div>
             <label for="ov-end" class="form-label">Ends</label>
-            <input id="ov-end" v-model="form.endsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': formErrors.endsAt }" data-testid="overview-end" />
+            <KDateTimePicker id="ov-end" v-model="form.endsAt" label="Ends" clearable :invalid="Boolean(formErrors.endsAt)" testid="overview-end" />
             <div v-if="formErrors.endsAt" class="invalid-feedback">{{ formErrors.endsAt }}</div>
           </div>
         </div>
@@ -119,46 +121,63 @@ function saveDetails() {
         </div>
       </form>
 
-      <div v-else class="kp-card">
-        <div class="kp-card-head">
-          <h2 class="kp-title">Details</h2>
-          <button v-if="mode === 'edit'" type="button" class="btn btn-sm btn-outline-secondary" data-testid="overview-edit-btn" @click="startEditing">Edit</button>
+      <template v-else>
+        <header class="k ov2-head">
+          <div class="row" style="gap: 6px; flex-wrap: wrap">
+            <span v-if="status === 'Live'" class="chip chip-ink"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+            <span v-else class="chip chip-soft">{{ status }}</span>
+            <span class="chip" :class="role === 'root' ? 'rl-root' : role === 'planner' ? 'rl-planner' : 'chip-soft'">{{ ROLE_LABEL[role] }}</span>
+            <span v-if="myGroup" class="chip chip-soft">{{ myGroup.name }}</span>
+          </div>
+          <div class="row" style="align-items: flex-end; gap: 16px; flex-wrap: wrap">
+            <div style="min-width: 0; flex: 1 1 280px">
+              <h1 class="U ov2-title">{{ event.name }}</h1>
+              <p v-if="event.description" class="ov2-desc kp-prewrap" data-testid="overview-description-text">{{ event.description }}</p>
+            </div>
+            <button v-if="mode === 'edit'" type="button" class="kb kb-line" data-testid="overview-edit-btn" @click="startEditing">
+              <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>Edit details
+            </button>
+          </div>
+        </header>
+
+        <div class="k ov2-grid">
+          <section aria-label="Event details">
+            <span class="ey">Details</span>
+            <dl class="ov2-dl">
+              <template v-if="event.starts_at">
+                <dt>When</dt>
+                <dd>{{ when }}</dd>
+              </template>
+              <template v-if="event.venue">
+                <dt>Where</dt>
+                <dd>{{ event.venue }}</dd>
+              </template>
+              <dt>Status</dt>
+              <dd data-testid="overview-status">{{ status }}</dd>
+              <dt>Your role</dt>
+              <dd>{{ ROLE_LABEL[role] }}</dd>
+              <!-- planners (and the root) run the whole event and are never in a group -->
+              <template v-if="role !== 'root' && role !== 'planner'">
+                <dt>Your group</dt>
+                <dd>{{ myGroup ? myGroup.name : 'None yet' }}</dd>
+              </template>
+              <!-- ICs and members see only their own group, so they have no count for the event -->
+              <template v-if="role !== 'ic' && role !== 'member'">
+                <dt>People</dt>
+                <dd>{{ members.length }} in {{ groupCount }}</dd>
+              </template>
+              <template v-if="planName">
+                <dt>Plan</dt>
+                <dd data-testid="overview-plan">{{ planName }}</dd>
+              </template>
+            </dl>
+            <button v-if="mode === 'edit'" type="button" class="link" style="color: var(--danger); margin-top: 26px" :disabled="busy" data-testid="delete-event" @click="emit('delete')">Delete event</button>
+            <button v-else type="button" class="link" style="color: var(--danger); margin-top: 26px" data-testid="leave-event" @click="emit('leave')">Leave event</button>
+          </section>
+
+          <InvitePanel v-if="can('invite', role)" :event-name="event.name" :join-code="event.join_code" />
         </div>
-        <p v-if="event.description" class="kp-prewrap mb-2" data-testid="overview-description-text">{{ event.description }}</p>
-        <dl class="kp-dl">
-          <template v-if="event.starts_at">
-            <dt>When</dt>
-            <dd>{{ when }}</dd>
-          </template>
-          <template v-if="event.venue">
-            <dt>Venue</dt>
-            <dd>{{ event.venue }}</dd>
-          </template>
-          <dt>Status</dt>
-          <dd data-testid="overview-status">{{ status }}</dd>
-          <dt>Your role</dt>
-          <dd>{{ ROLE_LABEL[role] }}</dd>
-          <!-- planners (and the root) run the whole event and are never in a group -->
-          <template v-if="role !== 'root' && role !== 'planner'">
-            <dt>Your group</dt>
-            <dd>{{ myGroup ? myGroup.name : 'None yet' }}</dd>
-          </template>
-          <!-- ICs and members see only their own group, so they have no count for the event -->
-          <template v-if="role !== 'ic' && role !== 'member'">
-            <dt>People</dt>
-            <dd>{{ members.length }} in {{ groupCount }}</dd>
-          </template>
-        </dl>
-      </div>
-
-      <InvitePanel v-if="can('invite', role)" :event-name="event.name" :join-code="event.join_code" />
-    </div>
-
-    <div>
-      <button v-if="mode === 'edit'" type="button" class="btn btn-sm btn-ghost-danger kp-btn-icon" :disabled="busy" data-testid="delete-event" @click="emit('delete')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
-        Delete event
-      </button>
-      <button v-else type="button" class="btn btn-sm btn-ghost-danger" data-testid="leave-event" @click="emit('leave')">Leave event</button>
+      </template>
     </div>
   </div>
 </template>

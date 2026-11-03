@@ -59,7 +59,11 @@ test('a finger a little off a frame dot still opens that frame', async () => {
   await page.reload()
   await expect(page.locator('.pv-frame')).toHaveCount(3)
   const dot = page.locator('.pv-frame').nth(2)
-  await dot.scrollIntoViewIfNeeded()
+  // Once the board under the strip is in (the page is too short to scroll before), then mid-screen, as a thumb would
+  // scroll it: "in view" alone can leave it under the floating bottom bar
+  await expect(page.getByTestId('insp-tab-frame')).toBeVisible()
+  await dot.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await expect.poll(() => dot.evaluate((el) => Math.round(el.getBoundingClientRect().top))).toBeLessThan(600)
   const box = await dot.boundingBox()
   // 14 px below the 12 px dot and 10 px to its side: where a thumb lands, not where a cursor would
   await touch([{ x: box.x + box.width / 2 + 10, y: box.y + 12 + 14 }])

@@ -34,8 +34,9 @@ import {
   isValidAreaName,
 } from './areaKinds'
 import { MAX_SIZE_M, isValidPlanName } from './floorPlan'
-
-const SG = { minLat: 1.1, maxLat: 1.5, minLng: 103.5, maxLng: 104.2 }
+// The box, and the test for it, live in one place because the plan board needs the same one for a live draft
+// (utils/planDraft.js). It is public.point_in_sg() in 005_layouts.sql either way.
+import { inSingapore } from './geo'
 
 // Per kind, and nothing else may travel. `points` and `centre` are what the drags change on every
 // frame; the rest are the ordinary edits (a rename, a retype, a hide) that a planner would expect
@@ -45,19 +46,6 @@ const PLAN_FIELDS = ['centre', 'angleDeg', 'widthM', 'heightM', 'opacity', 'visi
 
 function isNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
-}
-
-// Exactly two finite numbers inside Singapore -- the same four tests point_in_sg() makes, including
-// "exactly two members": a third would be a value the database refuses.
-export function inSingapore(point) {
-  if (!Array.isArray(point) || point.length !== 2) return false
-  if (!isNumber(point[0]) || !isNumber(point[1])) return false
-  return (
-    point[0] >= SG.minLat &&
-    point[0] <= SG.maxLat &&
-    point[1] >= SG.minLng &&
-    point[1] <= SG.maxLng
-  )
 }
 
 function ringInSingapore(points) {

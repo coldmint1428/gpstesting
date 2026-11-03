@@ -16,6 +16,7 @@ import PlaybackPlayer from './PlaybackPlayer.vue'
 import SkeletonLoader from './SkeletonLoader.vue'
 import EmptyState from './EmptyState.vue'
 import { useLoadGate } from '../composables/usePageReady'
+import { useOpenMenu } from '../composables/useOpenMenu'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -216,6 +217,7 @@ watch(
   },
 )
 onMounted(loadList)
+const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
 onUnmounted(() => clearInterval(liveTimer))
 </script>
 
@@ -241,45 +243,76 @@ onUnmounted(() => clearInterval(liveTimer))
     />
 
     <template v-else>
-      <section class="kp-card">
+      <div class="k k2-h" style="margin-bottom: 0">
+        <h1>Playback</h1>
+        <span v-if="items.length" class="cnt">{{ items.length }}</span>
+        <span class="sp"></span>
+        <span class="mut" style="font-size: 13px; font-weight: 700">Recordings are kept for 7 days</span>
+      </div>
+
+      <section class="k k2-card">
         <SkeletonLoader v-if="loadingList && !items.length" :rows="3" label="Loading recordings…" />
         <EmptyState v-else-if="!items.length" compact icon="play" title="No recordings yet" text="Each time the event runs, a recording appears here." data-testid="no-recordings" />
 
-        <ul class="kp-list" data-testid="recording-list">
-          <li v-for="item in items" :key="item.key" class="kp-row" :data-testid="'recording-' + item.kind">
-            <div class="kp-row-main">
-              <strong><span v-if="item.live" class="kp-chip kp-chip-ink me-1"><span class="kp-dot kp-pulse"></span>Live</span>{{ item.title }}</strong>
-              <span>
+        <div data-testid="recording-list">
+          <div v-for="item in items" :key="item.key" class="k2-rec" :data-testid="'recording-' + item.kind">
+            <button
+              v-if="!item.expired"
+              type="button"
+              class="rp-play"
+              :disabled="busyKey !== null || item.readings === 0"
+              :aria-label="item.live ? 'Rewind' : 'Play'"
+              :title="item.readings === 0 ? 'Nothing to play — no readings' : item.live ? 'Rewind' : 'Play'"
+              data-testid="play-recording-btn"
+              @click="play(item)"
+            >
+              <svg v-if="item.live" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17 6 12l5-5M18 17l-5-5 5-5"></path></svg>
+              <svg v-else class="ki" viewBox="0 0 24 24" aria-hidden="true" style="fill: currentColor; stroke: none"><path d="M7 4.5v15l12-7.5z"></path></svg>
+            </button>
+            <span v-else></span>
+            <div style="min-width: 0">
+              <div class="row" style="gap: 8px; flex-wrap: wrap">
+                <span v-if="item.live" class="chip chip-ink" style="height: 22px"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+                <b>{{ item.title }}</b>
+                <span v-if="!item.expired && item.expiresSoon" class="chip chip-warn" style="height: 22px">Download to keep</span>
+              </div>
+              <div class="mut" style="font-size: 13px">
                 <template v-if="item.expired">Deleted after {{ untilText(item) }}. Replay it from your CSV.</template>
                 <template v-else>
                   {{ item.people }} {{ item.people === 1 ? 'person' : 'people' }} · {{ item.readings.toLocaleString() }} {{ item.readings === 1 ? 'reading' : 'readings' }}
-                  <template v-if="item.availableUntil"> · until {{ untilText(item) }}</template>
                   <template v-if="item.endReason === 'auto'"> · ended automatically</template>
+                  <template v-if="busyKey === item.key"> · {{ progress }}</template>
                 </template>
-              </span>
-              <span v-if="!item.expired && item.expiresSoon" class="kp-chip kp-chip-warn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" /></svg>Download to keep</span>
+              </div>
             </div>
-            <div class="kp-row-actions">
-              <template v-if="!item.expired">
-                <span v-if="busyKey === item.key" class="small text-muted">{{ progress }}</span>
-                <button class="btn btn-sm kp-btn-icon" :class="item.live ? 'btn-outline-secondary' : 'btn-success'" :disabled="busyKey !== null || item.readings === 0" data-testid="play-recording-btn" @click="play(item)">
-                  <svg v-if="item.live" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17 6 12l5-5M18 17l-5-5 5-5" /></svg>
-                  <svg v-else viewBox="0 0 24 24" aria-hidden="true" class="is-fill"><path d="M7 4.5v15l12-7.5z" /></svg>
-                  {{ item.live ? 'Rewind' : 'Play' }}
-                </button>
-                <button v-if="!item.live" class="btn btn-sm btn-ghost kp-btn-icon" :disabled="busyKey !== null || item.readings === 0" data-testid="download-csv-btn" title="Download this recording as a CSV file" @click="download(item)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>CSV</button>
-              </template>
-              <button v-if="!item.live" class="btn btn-sm btn-ghost-danger kp-btn-icon" :disabled="busyKey !== null" title="Delete this recording" data-testid="delete-recording-btn" @click="remove(item)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>Delete</button>
+            <span class="mut k2-hm" style="font-size: 13px"><template v-if="!item.expired && item.availableUntil">Until {{ untilText(item) }}</template></span>
+            <button
+              v-if="!item.live && !item.expired"
+              type="button"
+              class="ib"
+              :disabled="busyKey !== null || item.readings === 0"
+              aria-label="Download this recording as a CSV file"
+              data-testid="download-csv-btn"
+              title="Download this recording as a CSV file"
+              @click="download(item)"
+            ><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"></path></svg></button>
+            <span v-else></span>
+            <div v-if="!item.live" class="wrapm" data-menu>
+              <button type="button" class="ib" aria-label="Recording options" :aria-expanded="openMenu === item.key ? 'true' : 'false'" data-testid="recording-menu" @click="toggleMenu(item.key)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+              <div v-if="openMenu === item.key" class="menu r" role="menu">
+                <button type="button" role="menuitem" class="danger" :disabled="busyKey !== null" data-testid="delete-recording-btn" @click="closeMenu(); remove(item)">Delete recording</button>
+              </div>
             </div>
-          </li>
-        </ul>
-        <p class="kp-note mb-0">Recordings are kept for 7 days. Download a CSV to keep one longer.</p>
+            <span v-else></span>
+          </div>
+        </div>
+        <p class="k2-hint">Download a CSV to keep one longer.</p>
       </section>
 
-      <section class="kp-card">
-        <h3 class="kp-title mb-2" style="font-size: 16px">Replay a CSV</h3>
+      <section class="k k2-card">
+        <div class="k2-sub">Replay a CSV</div>
         <input ref="fileInput" type="file" accept=".csv,text/csv" class="form-control" aria-label="CSV file to replay" data-testid="csv-input" @change="openFile" />
-        <p class="kp-note mb-0">The file stays on this device.</p>
+        <p class="k2-hint">The file stays on this device.</p>
       </section>
     </template>
   </div>

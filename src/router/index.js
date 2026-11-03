@@ -22,7 +22,18 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     // The phone app opens on My events: the home page is a list of test pages, useful on the website only
-    { path: '/', name: 'home', component: HomeView, beforeEnter: () => (isNativeApp ? { name: 'events' } : true) },
+    {
+      path: '/',
+      name: 'home',
+      component: HomeView,
+      // Home is the Events page. Visitors still get the landing page; the phone app and anyone signed in go to Events.
+      beforeEnter: async () => {
+        if (isNativeApp) return { name: 'events' }
+        const auth = useAuthStore()
+        await auth.init()
+        return auth.isLoggedIn ? { name: 'events' } : true
+      },
+    },
     // The DEMO drawing bench (no event). Zones are drawn in each event's Zones tab now, so this page is
     // out of the menu and only reachable on local dev (npm run dev) -- for the teammate's editor tests and
     // tools/bench_harness.mjs. On the deployed site it redirects to the events list. To be removed once

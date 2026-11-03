@@ -33,14 +33,14 @@ describe('AreaList padlock', () => {
   it('closes every field of a locked area and keeps its row from opening it', async () => {
     const wrapper = mountList()
     expect(wrapper.find('[data-testid="area-lock-Stage"]').attributes('aria-pressed')).toBe('true')
+    await wrapper.find('[data-testid="area-open-Stage"]').trigger('click')
     expect(wrapper.find('[data-testid="area-name-Stage"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="area-code-Stage"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="area-kind-select-Stage"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="area-delete-Stage"]').attributes('disabled')).toBeDefined()
 
-    await wrapper.find('[data-testid="area-row-Stage"]').trigger('click')
     expect(wrapper.emitted('area-edit')).toBeUndefined()
-    await wrapper.find('[data-testid="area-row-Gate A"]').trigger('click')
+    await wrapper.find('[data-testid="area-open-Gate A"]').trigger('click')
     expect(wrapper.emitted('area-edit')).toEqual([['a1']])
   })
 

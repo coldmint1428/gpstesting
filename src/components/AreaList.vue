@@ -18,7 +18,7 @@
 //
 // This component never writes to the database: it reports what changed and the page decides
 // when to save (which, in this app, is always "when the planner locks something").
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { AREA_KINDS, AREA_NAME_MAX, areaColour, areaKind, isValidAreaName } from '../utils/areaKinds'
 import { outlinePoints } from '../utils/areaOutline'
 import { askConfirm } from '../composables/useNotify'
@@ -27,9 +27,6 @@ const props = defineProps({
   areas: { type: Array, default: () => [] },
   editable: { type: Boolean, default: false },
   selected: { type: String, default: '' }, // the id of the area being worked on, if any
-  // What has been copied, so the Paste button can say whether it has anything to paste. The
-  // clipboard itself lives on the page (composables/useBenchClipboard.js).
-  clipboard: { type: Object, default: null },
   // Who else has each area open (composables/useBenchPresence.js). A row shows the same names in
   // the same colours as the chip on the shape, so the list and the map are recognisably telling
   // the planner the same thing. This component only draws it and decides nothing.
@@ -38,11 +35,7 @@ const props = defineProps({
   showCode: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-copied', 'area-pasted'])
-
-// Whether there is a copied area to paste, and what it is called -- so the button can promise
-// exactly what it will make.
-const copiedArea = computed(() => (props.clipboard ? props.clipboard.area.value : null))
+const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-duplicated'])
 
 // Who has each area, keyed by the area's id. A plain object here rather than a ref, because a ref
 // inside a plain object is not unwrapped in a template.
@@ -134,199 +127,120 @@ function toggleLock(area) {
   emit('area-updated', { id: area.id, patch: { locked: !area.locked } })
 }
 
-function copy(row) {
-  emit('area-copied', row.area)
+// One row open at a time. Opening an unlocked row also selects its shape on the map, as a click on a row always has.
+const openId = ref(null)
+watch(() => props.selected, (id) => {
+  if (id) openId.value = id
+})
+const isOpen = (row) => openId.value === row.area.id
+function pick(row) {
+  if (!props.editable) return
+  openId.value = isOpen(row) ? null : row.area.id
+  if (openId.value && !row.area.locked) emit('area-edit', row.area.id)
 }
 
-// Paste is offered on the list as well as on the Areas panel, because the list is where the
-// planner sees what they have: making a second one from the row in front of them is the obvious
-// place for it.
-function paste() {
-  if (!copiedArea.value) return
-  emit('area-pasted')
-}
 </script>
 
 <template>
-  <div class="card">
-    <div class="card-body">
-      <h2 class="h6 card-title d-flex align-items-center flex-wrap gap-2">
-        <span>
-          List of areas
-          <span v-if="total > 0" class="badge text-bg-secondary ms-1" data-testid="area-count">
-            {{ total }}
-          </span>
-        </span>
-        <!-- Paste makes a second area out of the last one copied: same shape and type, a name of
-             its own, and a position a short step away so the two are not stacked. -->
-        <button
-          v-if="editable"
-          class="btn btn-sm btn-outline-secondary ms-auto py-0"
-          :disabled="!copiedArea"
-          :title="copiedArea ? 'Paste a copy of ' + copiedArea.name : 'Copy an area first'"
-          data-testid="area-list-paste"
-          @click.stop="paste"
+  <div data-testid="area-list-card">
+    <p v-if="total === 0" class="k2-empty" data-testid="no-areas">No areas yet.</p>
+
+    <div v-else class="area-scroll" data-testid="area-list">
+      <section v-for="group in groups" :key="group.key || 'other'">
+        <div class="k2-sub" :data-testid="'area-group-' + (group.key || 'other')">{{ group.label }} ({{ group.rows.length }})</div>
+        <div
+          v-for="row in group.rows"
+          :key="row.area.id"
+          class="k2-area"
+          :data-open="isOpen(row) ? 'true' : 'false'"
+          :style="otherMark(row.area.id)"
+          :data-testid="'area-row-' + row.area.name"
         >
-          Paste area
-        </button>
-      </h2>
-
-      <p v-if="total === 0" class="small text-muted mb-0" data-testid="no-areas">
-        No areas yet.
-      </p>
-
-      <div v-else class="area-scroll" data-testid="area-list">
-        <section v-for="group in groups" :key="group.key || 'other'">
-          <!-- The heading sticks to the top of the card while its own rows scroll past, so the
-               list never leaves the reader wondering which type they are looking at. -->
-          <h3 class="area-group" :data-testid="'area-group-' + (group.key || 'other')">
-            <span class="area-swatch-square" :style="{ background: group.colour }"></span>
-            {{ group.label }}
-            <span class="badge text-bg-secondary ms-auto">{{ group.rows.length }}</span>
-          </h3>
-
-          <ul class="list-group list-group-flush">
-            <li
-              v-for="row in group.rows"
-              :key="row.area.id"
-              class="list-group-item py-2 area-row"
-              :class="{
-                'area-row-active': selected === row.area.id,
-                'area-row-pickable': editable && !row.area.locked,
-                'area-row-locked': row.area.locked,
-              }"
-              :style="otherMark(row.area.id)"
-              :data-testid="'area-row-' + row.area.name"
-              @click="editable && !row.area.locked && emit('area-edit', row.area.id)"
+          <div class="hd">
+            <button type="button" class="k2-areaopen" :aria-expanded="editable ? (isOpen(row) ? 'true' : 'false') : null" :data-testid="'area-open-' + row.area.name" @click="pick(row)">
+              <i class="k2-sw" :style="{ background: row.colour }"></i>
+              <b>{{ row.area.name }}</b>
+            </button>
+            <!-- Who else has this area open: the same names in the same colours as the chip on the shape -->
+            <span
+              v-for="who in watchersFor(row.area.id)"
+              :key="who.presenceId"
+              class="badge rounded-pill area-who"
+              :style="{ color: who.colour, borderColor: who.colour, background: who.colour + '22' }"
+              :data-testid="'area-who-' + who.name"
             >
-              <div class="d-flex align-items-center gap-2 flex-wrap">
-                <button
-                  v-if="editable"
-                  type="button"
-                  class="btn btn-sm area-lock-btn"
-                  :class="row.area.locked ? 'btn-secondary' : 'btn-outline-secondary'"
-                  :disabled="Boolean(blocked(row.area.id))"
-                  :aria-pressed="Boolean(row.area.locked)"
-                  :aria-label="(row.area.locked ? 'Unlock ' : 'Lock ') + row.area.name"
-                  :title="row.area.locked ? 'Locked: it cannot be moved or edited. Press to unlock.' : 'Lock it so it cannot be moved by accident'"
-                  :data-testid="'area-lock-' + row.area.name"
-                  @click.stop="toggleLock(row.area)"
-                >
-                  <svg v-if="row.area.locked" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-                  <svg v-else viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 7V5a3 3 0 0 1 5.8-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-                </button>
-                <!-- The drawn shape, drawn small. -->
-                <svg
-                  v-if="row.outline"
-                  class="area-thumb"
-                  viewBox="0 0 30 30"
-                  width="30"
-                  height="30"
-                  aria-hidden="true"
-                >
-                  <polygon
-                    :points="row.outline"
-                    :fill="row.colour"
-                    fill-opacity="0.35"
-                    :stroke="row.colour"
-                    stroke-width="1.5"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                <!-- Fallback for a ring too small to draw (fewer than 3 points). -->
-                <span
-                  v-else-if="row.kind.icon === 'square'"
-                  class="area-swatch-square"
-                  :style="{ background: row.colour }"
-                ></span>
-                <span
-                  v-else
-                  class="area-swatch-triangle"
-                  :style="{ borderBottomColor: row.colour }"
-                ></span>
+              {{ who.label }}
+            </span>
+            <span v-if="showCode && row.area.code" class="chip chip-soft" style="height: 22px">{{ row.area.code }}</span>
+            <span v-if="!editable" class="mut" style="font-size: 12px">{{ row.kind.label }}</span>
+            <button
+              v-if="editable"
+              type="button"
+              class="k2-lock"
+              :disabled="Boolean(blocked(row.area.id))"
+              :aria-pressed="row.area.locked ? 'true' : 'false'"
+              :aria-label="(row.area.locked ? 'Unlock ' : 'Lock ') + row.area.name"
+              :title="row.area.locked ? 'Locked: it cannot be moved or edited. Press to unlock.' : 'Lock it so it cannot be moved by accident'"
+              :data-testid="'area-lock-' + row.area.name"
+              @click="toggleLock(row.area)"
+            >
+              <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>
+            </button>
+          </div>
 
-                <!-- Who else has this area open: the same names in the same colours as the chip on
-                     the shape, so the list and the map tell the planner the same thing. -->
-                <span
-                  v-for="who in watchersFor(row.area.id)"
-                  :key="who.presenceId"
-                  class="badge rounded-pill area-who"
-                  :style="{ color: who.colour, borderColor: who.colour, background: who.colour + '22' }"
-                  :data-testid="'area-who-' + who.name"
-                >
-                  {{ who.label }}
-                </span>
-
-                <input
-                  v-if="editable"
-                  class="form-control form-control-sm flex-grow-1 area-name-input"
-                  :value="row.area.name"
-                  :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
-                  :maxlength="AREA_NAME_MAX"
-                  :aria-label="'Name of ' + row.area.name"
-                  :data-testid="'area-name-' + row.area.name"
-                  @click.stop
-                  @change="rename(row.area, $event.target.value)"
-                />
-                <span v-else class="flex-grow-1 text-truncate">{{ row.area.name }}</span>
-
-                <!-- The zone code (event benches). Filled in by the database from the name when the
-                     area is first saved, and kept through renames; a planner may change it. -->
-                <input
-                  v-if="showCode && editable"
-                  class="form-control form-control-sm area-code-input"
-                  :value="row.area.code || ''"
-                  :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
-                  maxlength="40"
-                  placeholder="CODE"
-                  :aria-label="'Zone code of ' + row.area.name"
-                  :data-testid="'area-code-' + row.area.name"
-                  @click.stop
-                  @change="recode(row.area, $event.target.value)"
-                />
-                <code v-else-if="showCode && row.area.code" class="small">{{ row.area.code }}</code>
-
+          <!-- Expanded: its fields. The inputs and Delete wait while it is locked or someone else has it. -->
+          <template v-if="editable && isOpen(row)">
+            <div class="k2-ed">
+              <input
+                class="kin"
+                :value="row.area.name"
+                :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
+                :maxlength="AREA_NAME_MAX"
+                :aria-label="'Name of ' + row.area.name"
+                :data-testid="'area-name-' + row.area.name"
+                @change="rename(row.area, $event.target.value)"
+              />
+              <!-- The zone code (event benches). Filled in by the database from the name when the area is first
+                   saved, and kept through renames; a planner may change it. -->
+              <input
+                v-if="showCode"
+                class="kin"
+                :value="row.area.code || ''"
+                :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
+                maxlength="40"
+                placeholder="CODE"
+                :aria-label="'Zone code of ' + row.area.name"
+                :data-testid="'area-code-' + row.area.name"
+                @change="recode(row.area, $event.target.value)"
+              />
+              <div class="ksel" style="width: 100%; grid-column: 1 / -1">
                 <select
-                  v-if="editable"
-                  class="form-select form-select-sm area-kind-select"
+                  style="width: 100%"
                   :value="row.area.kind"
                   :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
                   :aria-label="'Type of ' + row.area.name"
                   :data-testid="'area-kind-select-' + row.area.name"
-                  @click.stop
                   @change="retype(row.area, $event.target.value)"
                 >
-                  <option v-for="kind in AREA_KINDS" :key="kind.value" :value="kind.value">
-                    {{ kind.label }}
-                  </option>
+                  <option v-for="kind in AREA_KINDS" :key="kind.value" :value="kind.value">{{ kind.label }}</option>
                 </select>
-                <span v-else class="badge text-bg-secondary">{{ row.kind.label }}</span>
-
-                <button
-                  v-if="editable"
-                  class="btn btn-sm btn-outline-secondary px-1"
-                  :aria-label="'Copy ' + row.area.name"
-                  :data-testid="'area-copy-' + row.area.name"
-                  @click.stop="copy(row)"
-                >
-                  Copy
-                </button>
-
-                <button
-                  v-if="editable"
-                  class="btn btn-sm btn-link text-danger px-1"
-                  :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
-                  :aria-label="'Delete ' + row.area.name"
-                  :data-testid="'area-delete-' + row.area.name"
-                  @click.stop="remove(row.area)"
-                >
-                  Delete
-                </button>
               </div>
-            </li>
-          </ul>
-        </section>
-      </div>
+            </div>
+            <div class="row" style="margin-top: 8px">
+              <button type="button" class="k2-pillbtn" :aria-label="'Duplicate ' + row.area.name" :data-testid="'area-duplicate-' + row.area.name" @click="emit('area-duplicated', row.area)">Duplicate</button>
+              <span class="sp"></span>
+              <button
+                type="button"
+                class="k2-link danger"
+                :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
+                :aria-label="'Delete ' + row.area.name"
+                :data-testid="'area-delete-' + row.area.name"
+                @click="remove(row.area)"
+              >Delete</button>
+            </div>
+          </template>
+        </div>
+      </section>
     </div>
   </div>
 </template>

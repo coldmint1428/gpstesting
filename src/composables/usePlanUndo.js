@@ -31,7 +31,7 @@
 // sentence saying why, and the key works again once the frame is out of the way -- rather than quietly swallowing
 // the one thing that could have put the plan back.
 import { computed, ref, watch } from 'vue'
-import { planErrorMessage } from './usePlan'
+import { isLockRefusal, planErrorMessage } from './usePlan'
 import { toast } from './useNotify'
 
 /**
@@ -42,7 +42,12 @@ export const UNDO_LIMIT = 40
 
 const STORE_PREFIX = 'planUndo:'
 
-export function usePlanUndo({ plan, frames, api }) {
+/**
+ * `onRefused(label, error)` is the board's strip: an undo that could not happen because somebody else is editing a
+ * badge is not a toast -- it is the same kind of answer a refused drag gets, and it belongs in the same place. The
+ * stack is untouched either way, so the key still works once the badge is free.
+ */
+export function usePlanUndo({ plan, frames, api, onRefused = null }) {
   const past = ref([])
   const future = ref([])
 
@@ -129,10 +134,20 @@ export function usePlanUndo({ plan, frames, api }) {
     return new Error('That frame is no longer in the plan, so there is nothing to put back.')
   }
 
+  /**
+   * Put a frame's badges back the way the command remembers them.
+   *
+   * A badge is written on its own now (082), so "as it was" is not one payload: it is the cells that differ from
+   * what the frame states at this moment -- the ones that moved or appeared are placed, the ones that were taken
+   * away are unplaced. That difference is the plan's to work out (usePlan.rewriteCells), and so is the one hold that
+   * covers both directions: every cell the inverse touches is asked for in a single call before anything is written,
+   * so an inverse refused by a badge somebody else is holding writes NOTHING and leaves the command on the stack
+   * (phase 4). Before that it was two calls with a hold each, and a refusal could arrive between them.
+   */
   async function writePositions(frameId, positions) {
     const frame = liveFrame(frameId)
     if (!frame) throw missing()
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: positions || {} })
+    await api.rewriteCells(frame.id, positions || {})
   }
 
   async function writeNote(frameId, note) {
@@ -286,7 +301,9 @@ export function usePlanUndo({ plan, frames, api }) {
     try {
       await apply(command, 'back')
     } catch (error) {
-      toast(planErrorMessage(error), 'danger', 6000)
+      // A badge somebody else is holding is the board's strip, not a toast: nothing moved, and the sentence says who.
+      if (onRefused && isLockRefusal(error)) onRefused('Undo did not happen', error)
+      else toast(planErrorMessage(error), 'danger', 6000)
       return null
     }
     past.value = past.value.slice(0, -1)
@@ -305,7 +322,8 @@ export function usePlanUndo({ plan, frames, api }) {
     try {
       await apply(command, 'again')
     } catch (error) {
-      toast(planErrorMessage(error), 'danger', 6000)
+      if (onRefused && isLockRefusal(error)) onRefused('Redo did not happen', error)
+      else toast(planErrorMessage(error), 'danger', 6000)
       return null
     }
     future.value = future.value.slice(0, -1)

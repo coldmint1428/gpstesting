@@ -1,19 +1,11 @@
 <script setup>
 // Wizard step 1: event details
 import { useEventWizardStore } from '../../stores/eventWizard'
+import KDateTimePicker from '../kinetic/KDateTimePicker.vue'
 
 defineProps({ errors: { type: Object, default: () => ({}) } })
 const wizard = useEventWizardStore()
 
-// A tap anywhere on a date field opens the date-and-time picker (on a phone a tap only selected "dd" before;
-// the picker was behind the small calendar icon)
-function openPicker(e) {
-  try {
-    e.target.showPicker()
-  } catch {
-    // older browsers: they open their own picker
-  }
-}
 </script>
 
 <template>
@@ -41,12 +33,12 @@ function openPicker(e) {
     <div class="kp-fields-2">
       <div>
         <label for="ev-start" class="form-label">Starts <span class="text-danger">*</span></label>
-        <input id="ev-start" v-model="wizard.details.startsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': errors.startsAt }" data-testid="wiz-start" @click="openPicker" />
+        <KDateTimePicker id="ev-start" v-model="wizard.details.startsAt" label="Starts" :invalid="Boolean(errors.startsAt)" testid="wiz-start" />
         <div v-if="errors.startsAt" class="invalid-feedback">{{ errors.startsAt }}</div>
       </div>
       <div>
         <label for="ev-end" class="form-label">Ends <span class="text-danger">*</span></label>
-        <input id="ev-end" v-model="wizard.details.endsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': errors.endsAt }" :min="wizard.details.startsAt || undefined" data-testid="wiz-end" @click="openPicker" />
+        <KDateTimePicker id="ev-end" v-model="wizard.details.endsAt" label="Ends" :min="wizard.details.startsAt" :invalid="Boolean(errors.endsAt)" testid="wiz-end" />
         <div v-if="errors.endsAt" class="invalid-feedback">{{ errors.endsAt }}</div>
       </div>
     </div>
