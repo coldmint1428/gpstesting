@@ -122,8 +122,8 @@ const sheetFile = ref(null)
 // groups are already here, and the artefact's Playback tab is this same picture with the clock running.
 const playhead = ref(null) // seconds from T+0 while a run is on the strip, or null
 const playing = ref(false)
-const speed = ref(60) // 1x, 10x or 60x: a thirty-minute plan at 60x is half a minute
-const PLAY_SPEEDS = [1, 10, 60]
+const speed = ref(60) // 1x to 120x: a thirty-minute plan at 60x is half a minute, at 120x a quarter of one
+const PLAY_SPEEDS = [1, 10, 60, 120]
 let playRaf = null
 let playLast = 0
 let playDrawnAt = 0
@@ -1739,7 +1739,9 @@ async function onMapClick(event) {
 // ---------- the time bar ----------
 
 const spanEnd = computed(() => {
-  const last = frames.value.length ? Math.max(...frames.value.map((f) => f.t_s)) : 0
+  // A stretch being dragged later counts where it is going, so the bar grows ahead of it and the strip can follow it
+  const moving = dragState.value ? dragState.value.delta : 0
+  const last = frames.value.length ? Math.max(...frames.value.map((f) => f.t_s + (selection.value.has(f.id) ? moving : 0))) : 0
   return Math.max(last + 120, 600)
 })
 
@@ -1898,16 +1900,27 @@ function startDrag(frame, event) {
   // Selecting a locked frame is fine, and is all this press does: it cannot be dragged until the errors are fixed.
   if (!selectedFrames.value.every((f) => editAllowed(errors.value, f.t_s))) return
   const startX = event.clientX
+  const startScroll = trackEl.value ? trackEl.value.scrollLeft : 0
+  let pointerX = startX
   dragState.value = { delta: 0, from_s: span.from_s, to_s: span.to_s }
-  const move = (e) => {
-    const raw = Math.round((e.clientX - startX) / pxPerSecond.value)
+  // The distance is the hand's AND the strip's: when the strip scrolls under a still pointer, the dots go with it.
+  const place = () => {
+    const scrolled = (trackEl.value ? trackEl.value.scrollLeft : startScroll) - startScroll
+    const raw = Math.round((pointerX - startX + scrolled) / pxPerSecond.value)
     const delta = Math.max(snap(raw, SNAP_S), -span.from_s)
     dragState.value = { delta, from_s: span.from_s, to_s: span.to_s }
+  }
+  const follow = followEdge(event, place)
+  const move = (e) => {
+    pointerX = e.clientX
+    follow.move(e)
+    place()
   }
   const up = async () => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     window.removeEventListener('pointercancel', up)
+    follow.stop()
     const state = dragState.value
     if (!state || !state.delta) {
       dragState.value = null
@@ -1929,6 +1942,58 @@ function startDrag(frame, event) {
   // A touch the browser takes over (a scroll) ends in pointercancel, never pointerup: without this the drag never
   // ended and the badges were never redrawn again.
   window.addEventListener('pointercancel', up)
+}
+
+// ---------- the strip follows a drag past its edge ----------
+// The area editor's law (AreaBench: EDGE_PX, panSpeed), on one axis: inside EDGE_PX of the strip's edge the view
+// starts to follow, at AUTO_SCROLL_EDGE_PX a frame by the edge itself, and AUTO_SCROLL_GAIN faster for every further
+// pixel out, up to AUTO_SCROLL_MAX_PX. Without it, moving a frame to a moment that is off screen was drop, scroll,
+// pick it up again.
+const EDGE_PX = 40
+const AUTO_SCROLL_EDGE_PX = 8
+const AUTO_SCROLL_GAIN = 0.1
+const AUTO_SCROLL_MAX_PX = 32
+
+function scrollSpeed(distance) {
+  const speed = distance <= EDGE_PX
+    ? (distance / EDGE_PX) * AUTO_SCROLL_EDGE_PX
+    : AUTO_SCROLL_EDGE_PX + (distance - EDGE_PX) * AUTO_SCROLL_GAIN
+  return Math.max(1, Math.round(Math.min(AUTO_SCROLL_MAX_PX, speed)))
+}
+
+/**
+ * Scroll the strip while a held pointer is near or past its edge, and call `onScroll` after every step so the thing
+ * being dragged keeps up with the view. It runs every frame for as long as the drag lasts, as the area editor's does:
+ * a held pointer can sit at the edge without sending a move, and the strip still has to keep going.
+ */
+function followEdge(event, onScroll) {
+  let clientX = event.clientX
+  let raf = null
+  const step = () => {
+    raf = null
+    const track = trackEl.value
+    if (!track) return
+    const box = track.getBoundingClientRect()
+    let dx = 0
+    if (clientX < box.left + EDGE_PX) dx = -scrollSpeed(box.left + EDGE_PX - clientX)
+    else if (clientX > box.right - EDGE_PX) dx = scrollSpeed(clientX - (box.right - EDGE_PX))
+    if (dx) {
+      const before = track.scrollLeft
+      track.scrollLeft = before + dx
+      if (track.scrollLeft !== before) onScroll()
+    }
+    raf = requestAnimationFrame(step)
+  }
+  raf = requestAnimationFrame(step)
+  return {
+    move(e) {
+      clientX = e.clientX
+    },
+    stop() {
+      if (raf) cancelAnimationFrame(raf)
+      raf = null
+    },
+  }
 }
 
 // ---------- scrubbing: the cursor dragged by hand (QA 1 Nov) ----------
@@ -1985,16 +2050,26 @@ function startSweep(event) {
     return
   }
   if (!props.canEdit || event.button !== 0) return
-  const left = event.currentTarget.getBoundingClientRect().left
-  const x0 = event.clientX - left
+  // Measured against the bar itself every time, not once: the strip may scroll under the sweep (followEdge)
+  const inner = event.currentTarget
+  const xIn = (clientX) => clientX - inner.getBoundingClientRect().left
+  const x0 = xIn(event.clientX)
+  let pointerX = event.clientX
   sweep.value = { x0, x1: x0 }
+  const reach = () => {
+    if (sweep.value) sweep.value = { x0, x1: xIn(pointerX) }
+  }
+  const follow = followEdge(event, reach)
   const move = (e) => {
-    if (sweep.value) sweep.value = { x0, x1: e.clientX - left }
+    pointerX = e.clientX
+    follow.move(e)
+    reach()
   }
   const up = (e) => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     window.removeEventListener('pointercancel', up)
+    follow.stop()
     const walked = sweep.value
     sweep.value = null
     // A gesture the browser took over is not a sweep: nothing was chosen, so nothing is said.
@@ -2061,8 +2136,47 @@ function countLabel(n) {
 // Frames can be a second apart, and a dot is 16 px across: this is the zoom that tells them apart
 const MAX_PX_PER_SECOND = 34
 
-function zoom(factor) {
-  pxPerSecond.value = Math.min(MAX_PX_PER_SECOND, Math.max(0.08, pxPerSecond.value * factor))
+const MIN_PX_PER_SECOND = 0.08
+
+/**
+ * Zoom the strip about a moment that stays put on screen. The open frame is that moment when there is one -- it stays
+ * where it was, or comes to the middle if it was scrolled out of sight -- so zooming in never loses the frame being
+ * worked on. With no frame open it is the run's cursor, then the pointer (Ctrl+wheel), then the middle of the view.
+ */
+async function zoom(factor, clientX = null) {
+  const before = pxPerSecond.value
+  const next = Math.min(MAX_PX_PER_SECOND, Math.max(MIN_PX_PER_SECOND, before * factor))
+  if (next === before) return
+  const track = trackEl.value
+  if (!track) {
+    pxPerSecond.value = next
+    return
+  }
+  const view = track.clientWidth
+  const focus = selected.value ? selected.value.t_s : playhead.value
+  let t
+  let offset
+  if (focus != null) {
+    t = focus
+    const x = xOf(t) - track.scrollLeft
+    offset = x >= 0 && x <= view ? x : view / 2
+  } else {
+    offset = clientX != null ? clientX - track.getBoundingClientRect().left : view / 2
+    t = (track.scrollLeft + offset - PAD_LEFT) / before
+  }
+  pxPerSecond.value = next
+  // The bar has to be its new width before it can be scrolled to a place that only exists at that width
+  await nextTick()
+  track.scrollLeft = PAD_LEFT + t * next - offset
+}
+
+/** Ctrl (or Cmd) + wheel zooms the strip, and a trackpad pinch arrives as the same event. A plain wheel still scrolls. */
+function onTrackWheel(event) {
+  if (!event.ctrlKey && !event.metaKey) return
+  event.preventDefault()
+  // A wheel notch is ~100 px of deltaY and a pinch a few px a step: an exponent zooms both by the same feel
+  const delta = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaY
+  zoom(Math.exp(-delta * 0.0025), event.clientX)
 }
 
 // ---------- writing frames ----------
@@ -2558,16 +2672,8 @@ function onKeydown(event) {
   }
 }
 
-/**
- * Delete removes the open frame, after the question the button asks. A stretch is not one frame, so the key says so
- * instead of guessing which of the selected moments was meant.
- */
+/** Delete removes what is selected, after the question the button asks: the open frame, or the whole stretch. */
 function deleteFromKeyboard() {
-  const span = selectionSpan.value
-  if (span && span.count > 1) {
-    toast('That is a stretch of frames. Open the one you want to delete first.', 'warning', 3600)
-    return
-  }
   removeFrame()
 }
 
@@ -2599,24 +2705,52 @@ function revealFrame(frameId) {
   }
 }
 
+/**
+ * Delete what is selected: the whole stretch when there is one, else the open frame. Several frames are one question
+ * and one step of the undo stack, so Ctrl+Z gives the stretch back in one go. They are deleted latest first, one call
+ * each (the server deletes one moment at a time); if one is refused part-way, the ones already gone are still
+ * recorded, so undo can give back exactly those.
+ */
 async function removeFrame() {
-  const frame = selected.value
-  if (!frame) return
-  if (blockedByErrors([frame.t_s])) return
-  if (!(await askConfirm({ title: `Delete the frame at ${formatOffset(frame.t_s)}?`, confirmText: 'Delete', danger: true }))) return
+  const list = (selectedFrames.value.length ? [...selectedFrames.value] : selected.value ? [selected.value] : []).sort((a, b) => a.t_s - b.t_s)
+  if (!list.length) return
+  const cut = list.find(isCutFrame)
+  if (cut) {
+    toast(`A copy starts at ${formatOffset(cut.t_s)}, so that frame cannot be deleted.`, 'warning', 4000)
+    return
+  }
+  if (blockedByErrors(list.map((f) => f.t_s))) return
+  const one = list.length === 1
+  const what = one
+    ? `the frame at ${formatOffset(list[0].t_s)}`
+    : `${list.length} frames, ${formatOffset(list[0].t_s)} to ${formatOffset(list[list.length - 1].t_s)}`
+  if (!(await askConfirm({ title: `Delete ${what}?`, confirmText: 'Delete', danger: true }))) return
   // What is about to be deleted, kept before the write: the row is gone afterwards, so this copy is the only place
   // the frame's note and its positions still exist (step 13, and 041 is why the id can be reused).
-  const copy = frameCopy(frame)
-  try {
-    await api.deleteFrame(frame.id, frame.rev)
+  const copies = list.map(frameCopy)
+  const gone = []
+  let failure = null
+  for (const copy of [...copies].reverse()) {
+    // Read the frame again each time: every delete re-reads the plan, and the revision is the one it holds now
+    const live = frames.value.find((f) => f.id === copy.id)
+    if (!live) continue
+    try {
+      await api.deleteFrame(live.id, live.rev)
+      gone.push(copy)
+    } catch (error) {
+      failure = error
+      break
+    }
+  }
+  if (gone.length) {
     selection.value = new Set()
     selectedId.value = null
-    edits.deleted(copy, `deleted the frame at ${formatOffset(copy.t_s)}`)
-  } catch (error) {
-    // A delete refused because somebody's hand is in the moment (083): the strip, not a toast. The sentence names
-    // them and says the moment cannot be deleted yet, which is the whole story.
-    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
+    if (gone.length === 1) edits.deleted(gone[0], `deleted the frame at ${formatOffset(gone[0].t_s)}`)
+    else edits.batch(gone.map((copy) => ({ kind: 'delete', frame: copy })), `deleted ${gone.length} frames`)
   }
+  // A delete refused because somebody's hand is in the moment (083): the strip, not a toast. The sentence names
+  // them and says the moment cannot be deleted yet, which is the whole story.
+  if (failure && !refusedBecauseHeld(failure)) toast(planErrorMessage(failure), 'danger', 5000)
 }
 
 /**
@@ -3481,11 +3615,11 @@ watch(
             <svg v-else class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 6.9-.8"></path></svg></button>
           </template>
           <span class="k2-mini" role="group" aria-label="Zoom the time bar">
-            <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)">−</button>
-            <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)">+</button>
+            <button type="button" data-testid="zoom-out" title="Zoom the strip out (Ctrl + wheel)" aria-label="Zoom timeline out" @click="zoom(0.5)">−</button>
+            <button type="button" data-testid="zoom-in" title="Zoom the strip in (Ctrl + wheel)" aria-label="Zoom timeline in" @click="zoom(2)">+</button>
           </span>
         </div>
-        <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }">
+        <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }" @wheel="onTrackWheel">
           <!-- A sweep anywhere on the strip that is not a dot selects the run it touches. -->
           <div class="pv-track-inner" :style="{ width: trackWidth + 'px' }" @pointerdown="startSweep">
             <!-- The ruler is the scrub handle: press anywhere on it and drag to move the cursor to any moment. -->
@@ -3641,15 +3775,15 @@ watch(
                 <button type="button" class="k2-pillbtn" data-testid="push-60" :disabled="busy" title="1 minute later" @click="push(60)">+1m</button>
                 <button type="button" class="k2-pillbtn" data-testid="push-300" :disabled="busy" title="5 minutes later" @click="push(300)">+5m</button>
               </div>
-              <p v-if="selectionSpan.count === 1" style="margin: 14px 0 0">
+              <p style="margin: 14px 0 0">
                 <button
                   type="button"
                   class="k2-link danger"
                   data-testid="frame-delete"
-                  :disabled="busy || isCutFrame(selected)"
-                  :title="isCutFrame(selected) ? 'A copy starts here, so this frame cannot be deleted.' : ''"
+                  :disabled="busy || flagFrames.some(isCutFrame)"
+                  :title="flagFrames.some(isCutFrame) ? 'A copy starts here, so this frame cannot be deleted.' : 'Delete (Del)'"
                   @click="removeFrame"
-                >Delete frame</button>
+                >{{ flagFrames.length > 1 ? `Delete ${flagFrames.length} frames` : 'Delete frame' }}</button>
               </p>
               <p v-if="moveLock" class="k2-hint" data-testid="lock-hint">Locked: frames and groups can't be dragged. Press the lock to change that.</p>
             </template>
