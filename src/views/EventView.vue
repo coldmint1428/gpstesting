@@ -22,6 +22,7 @@ import { useZoneActivity } from '../composables/useZoneActivity'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
 import { formatDayTime, formatTimeSeconds } from '../utils/time'
 import { groupRoleLabel } from '../utils/people'
+import { textOn } from '../utils/groupColours'
 import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, viewRole, canView, pageMode } from '../utils/permissions'
 import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, updateEventDetails, deleteEvent } from '../services/memberService'
 import { isNativeApp } from '../lib/platform'
@@ -36,7 +37,6 @@ import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
 import PlanBoard from '../components/plan/PlanBoard.vue'
 import PlanSchedule from '../components/plan/PlanSchedule.vue'
-import PlanRoute from '../components/plan/PlanRoute.vue'
 import PlanOps from '../components/plan/PlanOps.vue'
 import { usePlan } from '../composables/usePlan'
 import { useBroadcasts } from '../composables/useBroadcasts'
@@ -223,7 +223,7 @@ async function onAttScan(text) {
 
 // Rehearsals (079, 080): a calendar for everyone, scheduled by the root and planners. Anyone can say they are not
 // available, and the root or a planner decides. The page emits what was asked.
-const rehearsals = useRehearsals(props.id)
+const rehearsals = useRehearsals(props.id, computed(() => (auth.user ? auth.user.id : null)))
 const rehearsalError = ref('')
 async function onRehearsalAdd(details) {
   rehearsalError.value = await rehearsals.add(details)
@@ -416,6 +416,11 @@ watch(
 const tracker = useLocationTracker()
 const { isTracking, sharingEventId, errorMsg: shareError, busy: shareBusy } = tracker
 const sharingHere = computed(() => isTracking.value && sharingEventId.value === props.id)
+// The chip for my group wears the group's own colour, with text that reads on it
+const groupChipStyle = computed(() => {
+  const colour = myGroup.value && myGroup.value.colour
+  return colour ? { background: colour, color: textOn(colour), boxShadow: 'inset 0 0 0 1.5px rgba(10,31,23,.55)' } : null
+})
 const isIC = computed(() => !!(me.value && me.value.isIC && myGroup.value))
 
 // Phone app: anything missing (location "all the time", battery, notifications...) opens "Set up sharing"
@@ -482,9 +487,16 @@ watch(
     exactAllowed.value = await exactRemindersAllowed()
   },
 )
+let askingExact = false // the system settings page opens once per tap, not twice on a double tap
 async function allowExact() {
-  exactAllowed.value = await allowExactReminders()
-  syncStartReminders(auth.user.id, sharingEventId.value)
+  if (askingExact) return
+  askingExact = true
+  try {
+    exactAllowed.value = await allowExactReminders()
+    syncStartReminders(auth.user.id, sharingEventId.value)
+  } finally {
+    askingExact = false
+  }
 }
 
 // ---------- Who is sharing (for planners while live) ----------
@@ -676,7 +688,7 @@ const MORE_HINT = computed(() => ({
   overview: 'Details, invite, and leave the event',
   timeline: modeOf('timeline') === 'edit' ? 'The plan board' : 'Where to be and when',
   rehearsals: 'When to practise',
-  map: canManage.value ? 'Areas, doors and No-Go areas' : 'Your route on the plan',
+  map: 'Areas, doors and No-Go areas',
   people: 'Who is in it, roles',
   groups: 'Groups and their ICs',
   attendance: 'Roll calls',
@@ -859,11 +871,11 @@ async function removeEvent() {
       />
       <div v-if="isIC" class="wrapm" data-menu>
         <button type="button" class="k2-loc" aria-label="My location" :aria-expanded="openMenu === 'loc' ? 'true' : 'false'" data-testid="loc-btn" @click="toggleMenu('loc')">
-          <i class="dot" :style="{ background: isLive && sharingHere ? '#2563eb' : '#9aa89f' }"></i>
+          <i class="dot" :style="{ background: isLive && sharingHere ? '#0072B2' : '#9aa89f' }"></i>
           <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg>
           <span>{{ locLabel }}</span>
         </button>
-        <div v-if="openMenu === 'loc'" class="menu r" style="width: 280px; padding: 14px">
+        <div v-if="openMenu === 'loc'" class="menu r" style="width: min(280px, calc(100vw - 32px)); padding: 14px">
           <div style="padding: 6px 8px 12px"><b style="font-size: 14px">My location</b><div class="mut" style="font-size: 12px; margin-top: 2px" data-testid="loc-hint">{{ locHint }}</div></div>
           <button v-if="sharingHere" type="button" class="kb kb-line" :disabled="shareBusy" data-testid="loc-stop" @click="closeMenu(); stopSharing()">{{ shareBusy ? 'Stopping…' : 'Stop sharing' }}</button>
           <button v-else type="button" class="kb kb-lime" :disabled="!isLive || shareBusy" data-testid="loc-share" @click="closeMenu(); startSharing()">{{ shareBusy ? 'Please wait…' : 'Share my location' }}</button>
@@ -913,7 +925,7 @@ async function removeEvent() {
           <span class="k-you-label">You</span>
           <div class="k-you-pills">
             <span class="chip" :class="topRole(me) === 'root' ? 'rl-root' : topRole(me) === 'planner' ? 'rl-planner' : 'chip-soft'" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
-            <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
+            <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" :style="groupChipStyle" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
           </div>
         </div>
       </nav>
@@ -962,13 +974,13 @@ async function removeEvent() {
                   <template v-else>Sharing opens when the event starts</template>
                 </span>
               </span>
-              <button v-if="sharingHere" class="btn btn-sm btn-outline-secondary" :disabled="shareBusy" data-testid="stop-share-btn" @click="stopSharing">
+              <button type="button" v-if="sharingHere" class="btn btn-sm btn-outline-secondary" :disabled="shareBusy" data-testid="stop-share-btn" @click="stopSharing">
                 {{ shareBusy ? 'Stopping…' : 'Stop sharing' }}
               </button>
-              <button v-else-if="isLive" class="btn btn-sm btn-success" :disabled="shareBusy" data-testid="share-btn" @click="startSharing">
+              <button type="button" v-else-if="isLive" class="btn btn-sm btn-success" :disabled="shareBusy" data-testid="share-btn" @click="startSharing">
                 {{ shareBusy ? 'Please wait…' : 'Share my location' }}
               </button>
-              <button v-else class="btn btn-sm btn-success" disabled data-testid="share-btn-locked">Share my location</button>
+              <button type="button" v-else class="btn btn-sm btn-success" disabled data-testid="share-btn-locked">Share my location</button>
               <RouterLink :to="{ name: 'share', params: { id } }" class="btn btn-sm btn-ghost" data-testid="share-details-link">
                 My GPS
               </RouterLink>
@@ -978,7 +990,7 @@ async function removeEvent() {
 
         <div v-if="isIC && scheduledStart && tracker.isNative && !exactAllowed" class="kp-banner">
           <span class="kp-banner-text">Allow alarms to get your reminder on time.</span>
-          <button class="btn btn-sm btn-outline-secondary" @click="allowExact">Allow alarms</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" @click="allowExact">Allow alarms</button>
         </div>
 
         <!-- I (an IC) am inside a No-Go area right now -->
@@ -1200,17 +1212,6 @@ async function removeEvent() {
             <PolygonTestView :event-id="id" embedded />
           </div>
         </template>
-
-        <!-- Map: the follower's own walk for everyone the board is not for (step 29) -->
-        <PlanRoute
-          v-if="tab === 'map' && !canManage"
-          :event-id="id"
-          :session="scheduleSession"
-          :whole="seesWholeEvent"
-          :my-group="myGroup"
-          :groups="groups"
-          :focus-t="route.query.t"
-        />
 
         <!-- Timeline: the plan board for the people who draw it, and the timetable for the people who follow it
              (step 16). Root and planner get the strip, the map and the inspector; a member, an IC or a group admin gets

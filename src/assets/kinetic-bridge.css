@@ -144,15 +144,10 @@ html body .text-secondary {
 html body .text-success {
   color: var(--olive) !important;
 }
-html body .text-danger,
-html body .text-warning,
-html body .text-warning-emphasis {
+html body .text-danger,html body .text-warning {
   color: var(--danger) !important;
 }
-html body .font-monospace,
-html body .mono,
-html body .show-num,
-html body .ops-num {
+html body .mono,html body .show-num {
   font-family: var(--font-body) !important;
   font-variant-numeric: tabular-nums;
 }
@@ -543,9 +538,12 @@ html body .toast {
   font-weight: 700;
   box-shadow: var(--offset-lime);
 }
-html body .toast.text-bg-danger,
-html body .toast.text-bg-warning {
+html body .toast.text-bg-danger {
   background: var(--danger-strong) !important;
+}
+/* A warning is a nudge, not a failure: the dark toast with an amber edge, so it never looks like an error */
+html body .toast.text-bg-warning {
+  box-shadow: inset 5px 0 0 var(--stale), 4px 5px 0 var(--stale);
 }
 html body .toast .btn-close {
   filter: invert(1) grayscale(1) brightness(2);
@@ -643,13 +641,6 @@ html body .k-topbar .ks-brand {
 .k-nav-context:empty {
   display: none;
 }
-.k-nav-tabs {
-  display: flex;
-  gap: 4px;
-}
-.k-nav-context:not(:empty) + .k-nav-tabs {
-  display: none;
-}
 .k-nav-actions {
   display: flex;
   align-items: center;
@@ -687,12 +678,6 @@ html body .k-sos:hover {
   }
   html body .k-topbar .ks-brand span {
     display: none;
-  }
-  .k-nav-tabs .tab {
-    display: inline-flex !important;
-    height: 36px !important;
-    padding: 0 12px !important;
-    font-size: 14px !important;
   }
   html body .k-ev-name {
     font-size: 15px;
@@ -757,55 +742,9 @@ html body .ev-nav ul {
   padding: 0;
   list-style: none;
 }
-html body .ev-nav-btn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 16px;
-  background: transparent;
-  color: var(--muted);
-  font: 700 15px var(--font-body);
-  text-decoration: none;
-}
-html body .ev-nav-btn svg {
-  width: 20px;
-  height: 20px;
-  flex: none;
-}
-html body .ev-nav-btn:hover {
-  background: var(--hover);
-  color: var(--ink);
-}
-html body .ev-nav-btn[aria-current='page'] {
-  background: var(--ink);
-  color: var(--lime);
-  box-shadow: none;
-}
-html body .ev-nav-btn[aria-current='page']::before {
-  display: none;
-}
 html body .ev-nav-text {
   flex: 1;
   min-width: 0;
-}
-html body .ev-nav-badge {
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--soft);
-  color: var(--ink);
-  font: 800 12px var(--font-body);
-}
-html body .ev-nav-btn[aria-current='page'] .ev-nav-badge {
-  background: var(--lime);
-  color: var(--ink);
-}
-html body .ev-nav-badge-live {
-  background: var(--lime);
-  color: var(--ink);
 }
 /* Who you are, at the foot of the side menu: a row lined up with the menu's own icons and text rather than a
    separate floating card. */
@@ -841,9 +780,6 @@ html body .k-you > svg {
 }
 /* The kinetic menu marks the open page with its dark fill alone: the old theme's side bar (motion.css) showed as a
    stray lime sliver on hover. */
-html body .ev-nav-btn::before {
-  display: none;
-}
 .k-you-pills .chip {
   display: inline-flex;
   align-items: center;
@@ -894,32 +830,10 @@ html body .ev-page-head p {
   color: var(--muted);
   font-size: 15px;
 }
-html body .ev-page-head .ev-when {
-  color: var(--ink);
-  font-weight: 700;
-}
 html body .ev-surface {
   background: var(--surface);
   border: 0;
   border-radius: var(--radius-xl);
-}
-html body .ev-chip {
-  border: 0;
-  border-radius: var(--radius-pill);
-  font: 800 12px var(--font-body);
-  letter-spacing: 0;
-}
-html body .ev-chip-live {
-  background: var(--ink);
-  color: var(--lime);
-}
-html body .ev-chip-off {
-  background: var(--soft);
-  color: var(--ink);
-}
-html body .ev-chip-sched {
-  background: var(--mint);
-  color: var(--ink);
 }
 @media (max-width: 767.98px) {
   html body .ev:not(.ev-native) .ev-body {
@@ -964,36 +878,9 @@ html body .ev-chip-sched {
   html body .ev:not(.ev-native) .ev-nav li {
     flex: 1 0 68px;
   }
-  html body .ev:not(.ev-native) .ev-nav-btn {
-    flex-direction: column;
-    justify-content: center;
-    gap: 3px;
-    height: 56px;
-    min-height: 56px;
-    padding: 0 4px;
-    border-radius: 18px;
-    color: var(--on-ink-muted);
-    font-size: 11px;
-    position: relative;
-  }
-  html body .ev:not(.ev-native) .ev-nav-btn:hover {
-    background: transparent;
-    color: var(--on-forest);
-  }
-  html body .ev:not(.ev-native) .ev-nav-btn[aria-current='page'] {
-    background: var(--lime);
-    color: var(--ink);
-  }
   html body .ev:not(.ev-native) .ev-nav-text {
     flex: none;
     white-space: nowrap;
-  }
-  html body .ev:not(.ev-native) .ev-nav-badge {
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    padding: 0 5px;
-    font-size: 10px;
   }
   html body .ev:not(.ev-native) .k-you {
     display: none;
@@ -1001,9 +888,7 @@ html body .ev-chip-sched {
 }
 
 /* ---------- Every other website page (create event, profile, phone check, share) ---------- */
-html body .pl-page,
-html body .container,
-html body .container-fluid {
+html body .pl-page,html body .container {
   --bs-gutter-x: 28px;
 }
 html body .pl-h-page {
@@ -1017,8 +902,7 @@ html body .pl-meta {
   html body .pl-h-page {
     font-size: 28px;
   }
-  html body .container,
-  html body .container-fluid {
+  html body .container {
     --bs-gutter-x: 28px;
   }
 }
@@ -1128,14 +1012,6 @@ html body .nav-loading-bar {
 html body .ev-page-head {
   display: block;
 }
-html body .ev-page-head .ev-when {
-  margin-bottom: 4px;
-}
-@container k (max-width: 767.98px) {
-  .k .chip.ks-hide-m {
-    display: none;
-  }
-}
 
 /* Overview: label and value rows with hairlines, the invite card in forest */
 html body [data-testid='overview'] dl dt,
@@ -1149,50 +1025,6 @@ html body [data-testid='overview'] dl dt {
   font-weight: 700;
   color: var(--muted);
 }
-html body .k-invite {
-  background: var(--forest);
-  color: var(--on-forest);
-  border-radius: var(--radius-2xl);
-}
-html body .k-invite h2 {
-  font: 800 12px var(--font-body);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--lime);
-}
-html body .k-invite [data-testid='join-code-display'] {
-  font: 800 clamp(26px, 2.6vw, 46px)/1.1 var(--font-display) !important;
-  letter-spacing: 0.02em;
-  color: var(--on-forest);
-}
-html body .k-invite .text-muted,
-html body .k-invite .text-warning-emphasis {
-  color: var(--on-forest-muted) !important;
-}
-html body .k-invite .form-control {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: transparent;
-  color: var(--on-forest);
-}
-html body .k-invite .input-group > .btn {
-  background: var(--lime);
-  color: var(--ink);
-  box-shadow: none;
-}
-html body .k-invite .d-flex > .btn {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: none;
-}
-html body .k-invite .d-flex > .btn:hover {
-  background: var(--surface);
-  color: var(--ink);
-  transform: translate(-1px, -1px);
-  box-shadow: var(--offset-lime);
-}
-html body .k-invite :focus-visible {
-  outline-color: var(--lime);
-}
 
 html body [data-testid='overview'] dl.row {
   margin-inline: 0;
@@ -1202,10 +1034,7 @@ html body [data-testid='overview'] dl dt {
 }
 
 /* The phone app: the same display face for names and titles */
-html.native-app .pv-name,
-html.native-app .pv-title,
-html.native-app .pv-logo,
-html.native-app .pv-live-name {
+html.native-app .pv-name,html.native-app .pv-title,html.native-app .pv-live-name {
   font-family: var(--font-display);
   letter-spacing: -0.04em;
 }

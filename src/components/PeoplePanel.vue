@@ -8,7 +8,7 @@
 // IC (a duty of a member) is switched on the Groups page (MembersPanel.vue); here it is a badge only.
 // An IC's arrival radius (063) stays here, beside the IC it belongs to.
 import { ref, computed, watch } from 'vue'
-import { textOn } from '../utils/groupColours'
+import { textOn, NO_GROUP_COLOUR } from '../utils/groupColours'
 import EmptyState from './EmptyState.vue'
 import { initials } from '../utils/people'
 import { ROLE_RANK, ROLE_LABEL, topRole, canManage, assignableRoles, canSetIC, canRemove } from '../utils/permissions'
@@ -43,7 +43,7 @@ const myRoleOptions = computed(() => assignableRoles(myRole.value))
 
 const groupById = computed(() => Object.fromEntries(props.groups.map((g) => [g.id, g])))
 const groupName = (id) => (groupById.value[id] ? groupById.value[id].name : 'No group')
-const groupColour = (id) => (groupById.value[id] ? groupById.value[id].colour : '#6c757d')
+const groupColour = (id) => (groupById.value[id] ? groupById.value[id].colour : NO_GROUP_COLOUR)
 
 // The sort picked above: by group (A-Z, people without a group last), by name, or highest role first.
 // Ties always fall back to role, then name.
@@ -231,7 +231,7 @@ async function changeTolerance(m, input) {
             <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
           </select>
         </div>
-        <button type="submit" class="kb kb-lime" :disabled="!canFind" data-testid="add-email-btn">{{ finding ? 'Checking...' : 'Add' }}</button>
+        <button type="submit" class="kb kb-lime" :disabled="!canFind" data-testid="add-email-btn">{{ finding ? 'Checking…' : 'Add' }}</button>
       </form>
       <p v-if="addMessage" class="k2-err" role="status" data-testid="add-none">{{ addMessage }}</p>
       <p v-if="!managesAll" class="k2-hint">They join {{ myAdminGroupName }}.</p>

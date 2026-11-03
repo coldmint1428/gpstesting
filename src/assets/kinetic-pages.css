@@ -436,37 +436,16 @@ html body .ev .alert {
   margin-top: 2px;
   font-size: 13px;
 }
-.kp-invite {
-  display: grid;
-  gap: 18px;
-  padding: 22px;
-  border-radius: 26px;
-  background: var(--forest);
-  color: var(--on-forest);
-}
-html body .kp-invite .kp-label {
-  color: var(--lime);
-}
-html body .kp-invite .btn-lime,
 html body .btn-lime {
   background: var(--lime);
   color: var(--ink);
   box-shadow: none;
 }
-html body .kp-invite .btn-paper {
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: none;
-}
-html body .kp-invite .btn-paper:hover,
 html body .btn-lime:hover {
   background: var(--surface);
   color: var(--ink);
   transform: translate(-1px, -1px);
   box-shadow: var(--offset-lime);
-}
-html body .kp-invite :focus-visible {
-  outline-color: var(--lime);
 }
 .kp-invite-warn {
   margin: 0;
@@ -897,15 +876,6 @@ html body .ev .pv-toolbar {
   gap: 6px;
 }
 /* On a phone a sideways strip looks cut off at the edge, so the chips wrap onto new lines instead */
-@media (max-width: 767.98px) {
-  .kp-zones {
-    flex-wrap: wrap;
-    overflow-x: visible;
-  }
-  .kp-zone {
-    max-width: 100%;
-  }
-}
 html body .ev-surface {
   padding: 16px;
   border-radius: 22px;
@@ -944,18 +914,8 @@ html body .modal-header.bg-danger .btn-close {
   .kp-card {
     padding: 22px;
   }
-  .kp-addbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .kp-addbar.has-group {
-    grid-template-columns: minmax(0, 1fr) 200px auto;
-  }
   .kp-groups {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .kp-invite {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
   }
 }
 
@@ -1004,10 +964,6 @@ html body .modal-header.bg-danger .btn-close {
 
 /* lg: side by side */
 @media (min-width: 992px) {
-  .kp-overview {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-    gap: 24px;
-  }
   .kp-share {
     grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
     align-items: start;
@@ -1043,10 +999,6 @@ html body .modal-header.bg-danger .btn-close {
   }
   .kp-wizard-foot .btn {
     flex: 1 1 0;
-  }
-  html body .ev .pv-name-field {
-    flex-basis: 100%;
-    max-width: none;
   }
 }
 @media (max-width: 575.98px) {
@@ -1185,31 +1137,16 @@ html body .ev .pv-inspector .pv-stack .pv-btn {
 }
 /* Phone: the plan picker, then undo/redo/publish on one row, then the plan's file actions two to a row */
 @media (max-width: 767.98px) {
-  html body .ev .pv-head-actions {
-    flex: 1 1 100%;
-  }
-  html body .ev .pv-head-actions .pv-btn.is-primary {
-    margin-left: auto;
-  }
-  html body .ev .pv-head-actions .pv-sep,
-  html body .ev .pv-bar-tools .pv-sep,
-  html body .ev .pv-toolbar.is-second .pv-sep,
-  html body .ev .pv-toolbar.is-second .pv-spacer {
-    display: none;
-  }
   html body .ev .pv-toolbar.is-second {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
-  html body .ev .pv-toolbar.is-second .pv-name-field {
-    grid-column: 1 / -1;
-  }
   html body .ev .pv-toolbar.is-second .pv-btn {
     justify-content: flex-start;
   }
-  html body .ev .pv-bar-tools {
-    flex: 1 1 100%;
-    justify-content: flex-start;
-    margin-left: 0;
-  }
 }
+
+/* The roll-call QR's countdown: full when a code appears, empty when it expires, steadily in between */
+.kp-qr-bar .kp-qr-run{width:100%;transition:none;animation:kp-qr-drain linear forwards}
+@keyframes kp-qr-drain{from{width:100%}to{width:0}}
+@media (prefers-reduced-motion: reduce){.kp-qr-bar .kp-qr-run{animation:none;width:100%}}

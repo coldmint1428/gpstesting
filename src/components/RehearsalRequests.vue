@@ -39,6 +39,8 @@ const requests = computed(() => {
   return [...newest.values()].sort((a, b) => a.rehearsal.startsAt - b.rehearsal.startsAt)
 })
 const pending = computed(() => requests.value.filter((request) => request.status === 'pending'))
+// A request is answered before its rehearsal starts; afterwards it is a record
+const started = (request) => request.rehearsal.startsAt.getTime() <= Date.now()
 const decided = computed(() => requests.value.filter((request) => request.status !== 'pending').reverse())
 // The answered ones are history: folded away once there are a few, so the ones waiting stay in view
 const decidedOpen = ref(false)
@@ -56,7 +58,8 @@ const FOLD_AT = 3
             <div class="rq-soft">{{ formatRehearsal(request.rehearsal) }}</div>
             <p class="rq-reason" data-testid="request-reason">{{ request.reason }}</p>
           </div>
-          <div class="rq-actions">
+          <div v-if="started(request)" class="rq-actions"><span class="rq-soft" data-testid="request-started">The rehearsal has started</span></div>
+          <div v-else class="rq-actions">
             <button type="button" class="btn btn-sm btn-primary" :disabled="busy" data-testid="request-approve" @click="emit('decide', { id: request.id, approve: true })">Approve</button>
             <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="request-reject" @click="emit('decide', { id: request.id, approve: false })">Reject</button>
           </div>
@@ -80,7 +83,7 @@ const FOLD_AT = 3
             <p class="rq-reason">{{ request.reason }}</p>
             <div v-if="request.decidedBy" class="rq-soft">Decided by {{ nameOf(request.decidedBy) }}</div>
           </div>
-          <div class="rq-actions">
+          <div v-if="!started(request)" class="rq-actions">
             <button
               type="button"
               class="btn btn-sm btn-outline-secondary"

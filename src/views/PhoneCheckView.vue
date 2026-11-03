@@ -135,7 +135,7 @@ onUnmounted(() => {
     <div v-if="!readiness.isNative" class="kp-card kp-setup">
       <h1>Set up sharing</h1>
       <p class="kp-sub mb-3">This is for the phone app. In a browser, just allow location when asked.</p>
-      <button class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to event</button>
+      <button type="button" class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to event</button>
     </div>
 
     <p v-else-if="!loaded" class="kp-empty">Checking your phone…</p>
@@ -144,7 +144,7 @@ onUnmounted(() => {
     <section v-else-if="current" class="kp-card kp-setup" :data-testid="'step-' + current.key">
       <div class="kp-inline mb-2" style="justify-content: space-between">
         <span class="small text-muted" data-testid="step-count">Step {{ stepNumber }} of {{ steps.length }}</span>
-        <button class="btn btn-sm btn-ghost" data-testid="check-back" @click="leave">Not now</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-testid="check-back" @click="leave">Not now</button>
       </div>
       <div class="kp-progress" role="progressbar" :aria-valuenow="stepNumber - 1" :aria-valuemax="steps.length"><span :style="{ width: progressPct + '%' }"></span></div>
 
@@ -159,10 +159,10 @@ onUnmounted(() => {
       <p v-else class="kp-note mt-3">{{ current.tapHint }}</p>
 
       <div class="d-grid gap-2 mt-3">
-        <button v-if="current.action" class="btn btn-primary btn-lg" :disabled="busy" data-testid="step-action" @click="doStep(current)">
+        <button type="button" v-if="current.action" class="btn btn-primary btn-lg" :disabled="busy" data-testid="step-action" @click="doStep(current)">
           {{ current.action }}
         </button>
-        <button v-if="!current.required" class="btn btn-ghost" data-testid="step-skip" @click="skip(current)">Skip for now</button>
+        <button type="button" v-if="!current.required" class="btn btn-ghost" data-testid="step-skip" @click="skip(current)">Skip for now</button>
       </div>
     </section>
 
@@ -189,8 +189,8 @@ onUnmounted(() => {
       <p v-if="skippedItems.length" class="kp-note">Skipped items make sharing less reliable.</p>
 
       <div class="d-grid gap-2 mt-3">
-        <button v-if="wantsToShare && startError" class="btn btn-success btn-lg" @click="startSharing">Try again</button>
-        <button v-if="!wantsToShare || startError" class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to event</button>
+        <button type="button" v-if="wantsToShare && startError" class="btn btn-success btn-lg" @click="startSharing">Try again</button>
+        <button type="button" v-if="!wantsToShare || startError" class="btn btn-outline-secondary" data-testid="check-back" @click="leave">Back to event</button>
       </div>
     </section>
 

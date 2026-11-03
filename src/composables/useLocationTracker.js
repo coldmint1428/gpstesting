@@ -145,6 +145,14 @@ function createTracker() {
     if (isTracking.value) await stopNow() // sharing for another event/group: stop that first
 
     errorMsg.value = ''
+    // Browser: ask for the first position BEFORE anything on screen says "sharing". The permission prompt (or a block
+    // that was already there) is answered first, so a refusal never flashes the sharing look and then snaps back.
+    let firstFix = null
+    if (!isNative) {
+      const probe = await probeWebLocation()
+      if (probe.refused) return
+      firstFix = probe.position
+    }
     if (ids.eventId !== eventId) {
       // New event: start with an empty table
       readings.value = []
@@ -159,7 +167,7 @@ function createTracker() {
 
     let session = null
     if (dbEnabled) {
-      dbStatus.value = 'Signing in...'
+      dbStatus.value = 'Signing in…'
       session = await ensureSignedIn()
       if (session) dbStatus.value = 'Waiting for first reading'
     }
@@ -168,7 +176,34 @@ function createTracker() {
     if (!isTracking.value) return
 
     if (isNative) await startNative(session)
-    else startWeb(session)
+    else {
+      startWeb(session)
+      if (firstFix && isTracking.value) onWebPosition(firstFix)
+    }
+  }
+
+  /**
+   * One look at the device's position, waited for. { refused: true } when the person said no (the sentence is set);
+   * { position } when it came; { position: null } for a slow or missing fix, which the watch keeps working on.
+   * An unsupported browser or an insecure page is left to startWeb, which says so.
+   */
+  async function probeWebLocation() {
+    if (!window.isSecureContext || !('geolocation' in navigator)) return { refused: false, position: null }
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => resolve({ refused: false, position }),
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            errorMsg.value = 'Location permission denied. Allow location for this site in your browser settings.'
+            forgetSharing()
+            resolve({ refused: true, position: null })
+          } else {
+            resolve({ refused: false, position: null })
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      )
+    })
   }
 
   async function stopNow(recordStop = true) {
@@ -307,7 +342,7 @@ function createTracker() {
     } else if (err.code === err.POSITION_UNAVAILABLE) {
       errorMsg.value = 'No GPS fix yet. Move to an open area and wait a moment.'
     } else if (err.code === err.TIMEOUT) {
-      errorMsg.value = 'Location request timed out. Still trying...'
+      errorMsg.value = 'Location request timed out. Still trying…'
     } else {
       errorMsg.value = 'Location error: ' + err.message
     }

@@ -23,6 +23,7 @@ import { isNativeApp } from './lib/platform'
 import { installFormErrors } from './lib/formErrors'
 import { installTooltips } from './lib/tooltips'
 import { installSegSlide } from './lib/segSlide'
+import { installNotifyMotion, hushNotifyMotion } from './lib/notifyMotion'
 
 // The phone app gets its own layout (Figma: Phone app — native prototype); the website keeps its own
 if (isNativeApp) document.documentElement.classList.add('native-app')
@@ -32,8 +33,10 @@ installFormErrors()
 // Hover hints (an element's title) as a pill in the site's style, not the browser's grey box
 installTooltips()
 installSegSlide() // the lit pill of a segmented control slides to the chosen item
+installNotifyMotion() // banners and alerts ease in and out
 // iPhone browsers only apply :active (the press-in effect in motion.css) once the page listens for touches at all
 document.addEventListener('touchstart', () => {}, { passive: true })
 
 // Pinia must be installed before the router, because the router guard uses the auth store
+router.beforeEach(() => hushNotifyMotion()) // a page's notices show with it, not slide in after it
 createApp(App).use(createPinia()).use(router).mount('#app')

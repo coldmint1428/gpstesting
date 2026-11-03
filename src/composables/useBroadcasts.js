@@ -51,7 +51,7 @@ export function useBroadcasts(eventIdRef, { myUserIdRef, staffRef, onNew } = {})
       .is('cleared_at', null)
       .gte('at', new Date(Date.now() - STILL_UP).toISOString())
       .order('at', { ascending: false })
-      .limit(10)
+      .limit(50)
     if (error || eid !== eventIdRef.value) return
     mine.value = (data || [])
       .map((b) => {

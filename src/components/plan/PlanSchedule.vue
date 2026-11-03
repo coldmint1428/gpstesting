@@ -44,7 +44,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatDay, formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { scheduleOf } from '../../utils/scheduleRows'
-import { textOn } from '../../utils/groupColours'
+import { textOn, NO_GROUP_COLOUR } from '../../utils/groupColours'
 import { formatOffset } from '../../utils/planFrames'
 import { isNativeApp } from '../../lib/platform'
 import { stopsOf, walksOf } from '../../utils/planWalk'
@@ -382,17 +382,17 @@ function notesOf(stop) {
 
 const zones = computed(() => (routeMap.value && routeMap.value.zones) || [])
 const schedule = computed(() => scheduleOf(rows.value, zones.value))
-// Every stated point of a row carries the row's number, so the pins read the same as the list
+// The number on a pin is the stop's number in the list under the map: every moment a stop covers carries it
 const pinNumbers = computed(() => {
   if (isNativeApp) return null
   const out = new Map()
-  for (const row of schedule.value) {
-    for (const stop of row.stops) if (stop.point) out.set(stop.point.group_id + '|' + stop.point.frame_id, row.number)
+  for (const stop of stops.value) {
+    if (!stop.number) continue
+    for (const row of stop.rows) out.set(row.group_id + '|' + row.frame_id, stop.number)
   }
   return out
 })
 const KIND_WORD = { zone: 'Zone', stage: 'Stage', no_go: 'No-go', obstacle: 'Obstacle', entrance: 'Entrance' }
-const KIND_SWATCH = { zone: '#0B3D2E', stage: '#c6f36b', no_go: '#C2410C', obstacle: '#56685F', entrance: '#14523E' }
 
 /** When this run starts on the clock: the session's own times, else the next rehearsal, else no clock (null). */
 const scheduleBase = computed(() => {
@@ -431,7 +431,7 @@ const web = !isNativeApp
 
 function colourOfGroup(groupId) {
   const group = props.groups.find((g) => g.id === groupId)
-  return (group && group.colour) || '#244f3f'
+  return (group && group.colour) || NO_GROUP_COLOUR
 }
 
 /** For each row of the ops list: the point the group should be at then (a carried moment keeps the last one), and how to say it. */
@@ -576,7 +576,7 @@ watch(
             <svg v-else class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l2.5-3A8 8 0 1 1 21 12z"></path></svg>
           </span>
           <div style="flex: 1; min-width: 0">
-            <b style="font-size: 14px">{{ row.kind === 'timeline' ? 'Your times changed' : row.from_name }}</b><span class="mut" style="font-size: 13px"> · {{ formatTime(row.at) }}</span>
+            <b style="font-size: 14px">{{ row.kind === 'timeline' ? 'Your times changed' : row.from_name }}</b><span class="mut" style="font-size: 12px"> · {{ formatTime(row.at) }}</span>
             <div class="k2-updtxt" data-testid="sched-msg-body">{{ row.body }}</div>
           </div>
           <button type="button" class="k2-pillbtn" data-testid="sched-ack" :disabled="busyAck === row.id || busyAck === -1" @click="ack(row)">Got it</button>

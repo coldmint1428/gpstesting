@@ -59,7 +59,7 @@ const myGpsText = computed(() => {
 </script>
 
 <template>
-  <div v-if="mine || others.length" class="kp-stack" style="gap: 8px; margin-bottom: 14px" data-testid="sos-banners">
+  <div v-if="mine || others.length" class="kp-stack k2-notice-pile" style="gap: 8px; margin-bottom: 14px" data-testid="sos-banners">
     <!-- My SOS -->
     <div v-if="mine" class="kp-banner kp-banner-danger" role="alert" aria-live="assertive" data-testid="sos-mine">
       <div class="kp-banner-text">

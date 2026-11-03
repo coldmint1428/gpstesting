@@ -37,7 +37,7 @@ onUnmounted(() => document.removeEventListener('visibilitychange', markVisible))
 </script>
 
 <template>
-  <div v-if="top" class="kp-stack" style="gap: 8px; margin-bottom: 14px" role="alert" aria-live="assertive" data-testid="broadcast-banner">
+  <div v-if="top" class="kp-stack k2-notice-pile" style="gap: 8px; margin-bottom: 14px" role="alert" aria-live="assertive" data-testid="broadcast-banner">
     <div class="kp-banner" :class="{ 'kp-banner-danger': top.urgent }">
       <div class="kp-banner-text">
         <strong>{{ top.urgent ? '⚠ ' : '' }}{{ top.from }}</strong>

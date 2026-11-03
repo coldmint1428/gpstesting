@@ -95,12 +95,12 @@ function untilText(item) {
 // ---------- Play / download from the database ----------
 async function fetchRecording(item) {
   busyKey.value = item.key
-  progress.value = 'Loading...'
+  progress.value = 'Loading…'
   errorMsg.value = ''
   try {
     const to = item.endedAt ? item.endedAt.getTime() : Date.now()
     const recording = await loadRecording(props.eventId, item.startsAt, to, (n) => {
-      progress.value = 'Loading ' + n.toLocaleString() + ' readings...'
+      progress.value = 'Loading ' + n.toLocaleString() + ' readings…'
     })
     return markRaw(recording) // large: keep it out of Vue's reactivity
   } catch (err) {

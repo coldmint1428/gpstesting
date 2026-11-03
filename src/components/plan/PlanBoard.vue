@@ -36,6 +36,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import { zoneHoverShape } from '../../utils/areaKinds'
 import { useOpenMenu } from '../../composables/useOpenMenu'
+import { useEscape } from '../../composables/useEscape'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createOneMapLayer } from '../../utils/onemap'
@@ -771,23 +772,15 @@ let fitted = false
 let fittedWithFrames = false
 let zoneBounds = null
 
-const ZONE_STYLE = {
-  zone: { color: '#0b3d2e', weight: 2.5, fillOpacity: 0.6, fillColor: '#9be7c4' },
-  no_go: { color: '#c2410c', weight: 2.5, dashArray: '10 7', fillOpacity: 0.35, fillColor: '#ff8a65' },
-  obstacle: { color: '#56685f', weight: 1.5, dashArray: '3 3', fillOpacity: 0.16, fillColor: '#56685f' },
-  stage: { color: '#0a1f17', weight: 2.5, fillOpacity: 0.75, fillColor: '#c6f36b' },
-  entrance: { color: '#14523e', weight: 1.5, fillOpacity: 0.08, fillColor: '#14523e' },
-}
-
 function drawZones() {
   if (!map || !zoneLayer) return
   zoneLayer.clearLayers()
   const bounds = L.latLngBounds([])
   for (const zone of zones.value) {
     if (!zone.geojson) continue
-    // The planner reads the areas and never edits them here; a name shows only while the pointer is over a zone
+    // The planner reads the areas and never edits them here; a name shows only while the pointer is over a zone.
+    // The same colour per type as the Zones tab and the live map
     const layer = zoneHoverShape(L, zone.geojson, zone.kind, zone.name)
-    layer.setStyle(ZONE_STYLE[zone.kind] || ZONE_STYLE.zone)
     layer.addTo(zoneLayer)
     try {
       bounds.extend(layer.getBounds())
@@ -1003,9 +996,9 @@ function drawLines() {
   }
   // A fix on show: the walk it covers, and the new frames it would add along it.
   if (walkFix.value && walkFix.value.route.length > 1) {
-    L.polyline(walkFix.value.route.map((p) => [p.lat, p.lng]), { color: '#15803d', weight: 4, opacity: 0.9, interactive: false }).addTo(lineLayer)
+    L.polyline(walkFix.value.route.map((p) => [p.lat, p.lng]), { color: '#16a34a', weight: 4, opacity: 0.9, interactive: false }).addTo(lineLayer)
     for (const spot of walkFix.value.fills.flatMap((fill) => fill.spots)) {
-      L.circleMarker([spot.lat, spot.lng], { radius: 6, color: '#15803d', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(lineLayer)
+      L.circleMarker([spot.lat, spot.lng], { radius: 6, color: '#16a34a', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(lineLayer)
     }
   }
   // Warnings the planner has not dismissed, amber where an error is red; and the walk "Show on map" asked for, wide.
@@ -1020,7 +1013,7 @@ function drawLines() {
     if (problem.level === 'warning') L.polyline(line, { color: '#d97706', weight: 3, opacity: 0.95, dashArray: '2 4', interactive: false }).addTo(lineLayer)
     const spot = shown && !walkFix.value ? spotOf(problem) : null
     if (spot) {
-      L.polyline([[from.lat, from.lng], [spot.lat, spot.lng]], { color: '#15803d', weight: 3, dashArray: '6 6', interactive: false }).addTo(lineLayer)
+      L.polyline([[from.lat, from.lng], [spot.lat, spot.lng]], { color: '#16a34a', weight: 3, dashArray: '6 6', interactive: false }).addTo(lineLayer)
       L.marker([spot.lat, spot.lng], {
         interactive: false,
         keyboard: false,
@@ -1868,6 +1861,7 @@ function fromMenu(action) {
 }
 const inspectorTab = ref('frame') // 'frame' | 'groups'
 const renaming = ref(false)
+useEscape(() => renaming.value, () => (renaming.value = false))
 const renameValue = ref('')
 function openRename() {
   renameValue.value = plan.value ? plan.value.name : ''
@@ -3432,7 +3426,7 @@ watch(
           <!-- The whole plan as a file (step 23): the picker is hidden and the menu item is the product's own. -->
           <input ref="sheetFile" type="file" accept=".csv,text/csv" class="pv-file" data-testid="sheet-file" @change="onSheetPicked" />
           <button
-            class="pv-btn is-primary kb kb-ink kb-sm"
+            class="kb kb-ink kb-sm"
             data-testid="plan-publish"
             type="button"
             :disabled="busy"
@@ -3445,7 +3439,7 @@ watch(
       </div>
 
       <form v-if="creating" class="k row k2-createplan" @submit.prevent="confirmCreate">
-        <input v-model="newPlanName" class="kin" style="height: 40px; flex: 1; min-width: 160px" data-testid="plan-create-name" placeholder="Plan name" aria-label="Plan name" />
+        <input v-model="newPlanName" class="kin" style="height: 40px; flex: 1; min-width: min(160px, 100%)" data-testid="plan-create-name" placeholder="Plan name" aria-label="Plan name" />
         <button type="submit" class="kb kb-lime kb-sm" :disabled="busy || !newPlanName.trim()">Create</button>
         <button type="button" class="kb kb-ghost kb-sm" @click="creating = false">Cancel</button>
       </form>
@@ -3453,7 +3447,8 @@ watch(
 
       <!-- Rename plan: one input, the same save as always -->
       <Teleport to="body">
-        <div v-if="renaming" class="k k2-scrim" @click.self="renaming = false" @keydown.esc="renaming = false">
+        <Transition name="k2-pop">
+        <div v-if="renaming" class="k k2-scrim" @click.self="renaming = false">
           <form class="modal k2-dialog" role="dialog" aria-modal="true" aria-label="Rename plan" data-testid="rename-dialog" @submit.prevent="saveRename">
             <h3>Rename plan</h3>
             <label class="lab" for="plan-rename-input">Plan name</label>
@@ -3464,6 +3459,7 @@ watch(
             </div>
           </form>
         </div>
+        </Transition>
       </Teleport>
 
       <!-- The running plan's revision, and the warning that it moved while this page was open (step 15). -->
@@ -3504,9 +3500,7 @@ watch(
             aria-label="Dismiss"
             data-testid="plan-refusal-dismiss"
             @click="clearRefusal"
-          >
-            ×
-          </button>
+          ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
         </div>
 
         <!-- Who else is editing, and what: the stack answers "why will that badge not move?" before the planner has to
@@ -3595,8 +3589,8 @@ watch(
             <svg v-else class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 6.9-.8"></path></svg></button>
           </template>
           <span class="k2-mini" role="group" aria-label="Zoom the time bar">
-            <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)">−</button>
-            <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)">+</button>
+            <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg></button>
+            <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"></path></svg></button>
           </span>
         </div>
         <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }" @wheel="onTrackWheel">
@@ -3637,7 +3631,7 @@ watch(
             ></div>
 
             <div class="pv-frames">
-              <button
+              <button type="button"
                 v-for="frame in frames"
                 :key="frame.id"
                 class="pv-frame"
@@ -3799,7 +3793,7 @@ watch(
                   <svg v-if="allGroupsTicked" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>
                   <svg v-else-if="selectedGroups.size" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg>
                 </button>
-                <b id="k2-selectall-label" style="font-size: 14px; cursor: pointer" @click="toggleAllGroups">{{ visibleGroups.length < shownGroups.length ? 'Select the ' + visibleGroups.length + ' showing' : 'Select all' }}</b>
+                <button id="k2-selectall-label" type="button" class="k2-selectall" @click="toggleAllGroups">{{ visibleGroups.length < shownGroups.length ? 'Select the ' + visibleGroups.length + ' showing' : 'Select all' }}</button>
               </div>
               <p v-if="!visibleGroups.length" class="k2-hint" data-testid="group-none-match">No group matches.</p>
               <div class="k2-gscroll" data-testid="group-scroll">
@@ -3887,7 +3881,7 @@ watch(
             At each moment you set where every group is, and the app works out the walk in between.<template v-if="props.canEdit"> Add the first frame, then place each group on the map.</template>
           </p>
           <div v-if="props.canEdit" class="pv-stack">
-            <button class="pv-btn is-primary" data-testid="frame-add-first" :disabled="busy" @click="addFrame">
+            <button type="button" class="pv-btn is-primary" data-testid="frame-add-first" :disabled="busy" @click="addFrame">
               Add the first frame
             </button>
           </div>

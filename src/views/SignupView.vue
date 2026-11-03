@@ -123,7 +123,7 @@ async function submit() {
           <BenchAlert v-if="errorMsg" data-testid="auth-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
           <button type="submit" class="kb kb-lime kb-lg" style="width: 100%; margin-top: 20px" :disabled="!canSubmit" data-testid="auth-submit">
-            {{ busy ? 'Please wait...' : 'Create account' }}
+            {{ busy ? 'Please wait…' : 'Create account' }}
           </button>
           <div class="kg-or">or</div>
           <p style="text-align: center; margin: 0; font-size: 15px">

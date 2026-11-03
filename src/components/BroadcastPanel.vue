@@ -91,15 +91,24 @@ async function send() {
 // ---------- Who has read it ----------
 const statuses = ref({}) // id -> { total, seen, acked, waiting }
 const expanded = ref(null)
-const recent = computed(() => props.broadcasts.active.value.slice(0, 10))
-const history = computed(() => props.broadcasts.history.value)
+// A message everybody it reached has confirmed is finished: it moves to History instead of staying up for the 12 hours
+const upNow = computed(() => props.broadcasts.active.value.slice(0, 30))
+const everyoneGotIt = (b) => {
+  const s = statuses.value[b.id]
+  return !!s && s.total > 0 && s.acked >= s.total
+}
+const recent = computed(() => upNow.value.filter((b) => !everyoneGotIt(b)).slice(0, 10))
+const history = computed(() =>
+  [...upNow.value.filter(everyoneGotIt), ...props.broadcasts.history.value].sort((a, b) => b.at.getTime() - a.at.getTime()),
+)
 // The two lists fold away: what is up now opens by default, the record of what came down stays shut until wanted
 const activeOpen = ref(true)
 const historyOpen = ref(false)
 const stamp = (d) => d.toLocaleString('en-SG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' })
 async function refreshStatus() {
-  for (const b of recent.value) {
+  for (const b of upNow.value) {
     if (b.cleared && statuses.value[b.id]) continue
+    if (everyoneGotIt(b)) continue // nothing left to wait for
     const s = await props.broadcasts.status(b.id)
     if (!s.error) statuses.value = { ...statuses.value, [b.id]: s }
   }
@@ -108,20 +117,24 @@ let timer = null
 function watchStatus() {
   refreshStatus()
 }
-watch(recent, refreshStatus, { immediate: true })
+watch(upNow, refreshStatus, { immediate: true })
 timer = setInterval(() => {
   if (document.visibilityState === 'visible' && recent.value.some((b) => !b.cleared)) refreshStatus()
 }, 5000)
 onUnmounted(() => clearInterval(timer))
 
+const clearing = ref(null) // the message being taken down, so a second tap does not send it twice
 async function clearOne(b) {
+  if (clearing.value) return
   const ok = await askConfirm({
     title: 'Take this message down?',
     message: '"' + b.body + '" disappears from everyone\'s screen, including messages another planner sent. It moves to History as a record.',
     confirmText: 'Take down',
   })
   if (!ok) return
+  clearing.value = b.id
   const err = await props.broadcasts.clear(b.id)
+  clearing.value = null
   if (err) toast(err, 'danger', 8000)
 }
 </script>
@@ -189,9 +202,8 @@ async function clearOne(b) {
         <p v-if="!recent.length" class="mut" style="font-size: 13px; margin: 0" data-testid="broadcast-none">Nothing is up. Taken-down messages are in History.</p>
         <div v-else data-testid="broadcast-sent">
           <div v-for="b in recent" :key="b.id" class="k2-msg">
-            <div class="row" style="gap: 8px; flex-wrap: wrap">
+            <div class="row" style="gap: 8px">
               <b style="font-size: 13px">{{ formatTimeSeconds(b.at) }}</b>
-              <span class="mut" style="font-size: 12px">{{ b.from }} · to {{ audienceText(b.audience, b.value) }}</span>
               <span v-if="b.urgent" class="chip chip-warn" style="height: 22px">Urgent</span>
               <span class="sp"></span>
               <div class="wrapm" data-menu>
@@ -201,6 +213,7 @@ async function clearOne(b) {
                 </div>
               </div>
             </div>
+            <div class="mut bc-meta">{{ b.from }} · to {{ audienceText(b.audience, b.value) }}</div>
             <p class="bc-text">{{ b.body }}</p>
             <div v-if="statuses[b.id]" class="k2-got" data-testid="broadcast-count">
               <b>Got it {{ statuses[b.id].acked }} of {{ statuses[b.id].total }}</b>
@@ -230,11 +243,11 @@ async function clearOne(b) {
           <div v-for="b in history" :key="b.id" class="k2-msg">
             <div class="row" style="gap: 8px; flex-wrap: wrap">
               <b style="font-size: 13px">{{ stamp(b.at) }}</b>
-              <span class="mut" style="font-size: 12px">{{ b.from }} · to {{ audienceText(b.audience, b.value) }}</span>
               <span v-if="b.urgent" class="chip chip-warn" style="height: 22px">Urgent</span>
               <span class="sp"></span>
-              <span class="chip chip-soft" style="height: 22px">{{ b.cleared ? 'Taken down ' + stamp(b.clearedAt) : 'Expired' }}</span>
+              <span class="chip chip-soft" style="height: 22px">{{ b.cleared ? 'Taken down ' + stamp(b.clearedAt) : everyoneGotIt(b) ? 'Everyone got it' : 'Expired' }}</span>
             </div>
+            <div class="mut bc-meta">{{ b.from }} · to {{ audienceText(b.audience, b.value) }}</div>
             <p class="bc-text">{{ b.body }}</p>
           </div>
         </div>
@@ -344,7 +357,7 @@ async function clearOne(b) {
                 </button>
               </span>
             </span>
-            <button v-if="!b.cleared" type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" :data-testid="'broadcast-clear-' + b.id" @click="clearOne(b)">
+            <button v-if="!b.cleared" type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" :disabled="clearing === b.id" :data-testid="'broadcast-clear-' + b.id" @click="clearOne(b)">
               Take down
             </button>
           </div>
@@ -372,6 +385,10 @@ async function clearOne(b) {
 }
 .bc-text {
   overflow-wrap: anywhere;
+}
+.bc-meta {
+  margin-top: 2px;
+  font-size: 12px;
 }
 .min-w-0 {
   min-width: 0;

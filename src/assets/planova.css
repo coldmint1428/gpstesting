@@ -25,7 +25,7 @@
   --pv-shadow: 0 1px 2px rgba(10, 31, 23, 0.06), 0 8px 22px rgba(10, 31, 23, 0.06);
 
   color: var(--pv-ink);
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-body);
   font-feature-settings: 'tnum' 1;
 }
 
@@ -118,10 +118,6 @@
   letter-spacing: -0.01em;
 }
 
-.pv-spacer {
-  flex: 1 1 auto;
-}
-
 .pv-btn {
   appearance: none;
   border: 1px solid var(--pv-line-strong);
@@ -166,7 +162,6 @@
   border-color: var(--danger-bg);
 }
 
-.pv-select,
 .pv-log-select {
   font: inherit;
   font-size: 13px;
@@ -331,7 +326,7 @@
   background: var(--danger-bg);
   color: var(--danger);
   box-shadow: var(--pv-shadow);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -383,7 +378,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--pv-shadow);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--pv-ink-soft);
 }
 
@@ -394,9 +389,9 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #64748b;
+  background: var(--muted);
   color: #fff;
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -564,12 +559,6 @@
   background: repeating-linear-gradient(to bottom, var(--pv-warn) 0 3px, transparent 3px 6px);
 }
 
-.pv-cut-note {
-  border-left: 2px solid var(--pv-warn);
-  padding-left: 8px;
-  color: var(--pv-ink-soft);
-}
-
 .pv-band {
   position: absolute;
   top: 52px;
@@ -631,19 +620,6 @@
   color: var(--pv-ink-faint);
 }
 
-.pv-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.pv-field > label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--pv-ink-faint);
-}
-
 .pv-input {
   font: inherit;
   font-size: 13px;
@@ -655,18 +631,9 @@
   width: 100%;
 }
 
-.pv-input:focus,
-.pv-select:focus,
-.pv-btn:focus-visible {
+.pv-input:focus,.pv-btn:focus-visible {
   outline: 2px solid var(--pv-primary);
   outline-offset: 1px;
-}
-
-.pv-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  overflow-y: auto;
 }
 
 /* The inspector has a set height on a laptop and scrolls (QA 1 Nov). Its sections must keep their own height while it
@@ -674,36 +641,6 @@
    vanished -- rows, Place on map and all -- once the content was taller than the panel. */
 .pv-inspector > * {
   flex-shrink: 0;
-}
-
-.pv-group-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--pv-line);
-  border-radius: var(--pv-radius-sm);
-  background: none;
-  font: inherit;
-  font-size: 13px;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.pv-group-row:hover {
-  background: rgba(11, 61, 46, 0.04);
-}
-
-.pv-group-row.is-selected {
-  border-color: var(--pv-primary-deep);
-  background: rgba(11, 61, 46, 0.08);
-}
-
-.pv-group-row.is-bad {
-  border-color: var(--danger-bg);
-  background: var(--pv-danger-soft);
 }
 
 /* A group that is not ticked steps back, so a planner can look at one without losing the rest of the picture. */
@@ -759,100 +696,8 @@
   pointer-events: none;
 }
 
-.pv-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-
-.pv-group-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pv-group-state {
-  font-size: 11px;
-  color: var(--pv-ink-faint);
-  white-space: nowrap;
-}
-
-/* One group: the row that ticks it, and beneath it the two flag controls. The chips are siblings of the row, never
-   inside it — a button inside a button is not a thing a browser can honour. */
-.pv-group-item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.pv-seg {
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  padding-left: 18px; /* lines the chips up under the group's name, past the swatch */
-}
-
-.pv-seg-btn {
-  appearance: none;
-  border: 1px solid var(--pv-line);
-  background: var(--pv-surface);
-  color: var(--pv-ink-faint);
-  font: inherit;
-  font-size: 11px;
-  line-height: 1;
-  padding: 4px 7px;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.pv-seg-btn:hover:not(:disabled) {
-  border-color: var(--pv-line-strong);
-  color: var(--pv-ink-soft);
-}
-
-.pv-seg-btn.is-on {
-  background: var(--pv-primary);
-  border-color: var(--pv-primary);
-  color: var(--canvas);
-}
 
 /* Off site drawn hollow and dashed, the way the plan draws a place nobody is: the same shape the badge used to have. */
-.pv-seg-btn[data-testid='state-off'].is-on {
-  background: var(--pv-surface);
-  border: 1px dashed var(--pv-primary);
-  color: var(--pv-primary);
-}
-
-.pv-seg-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.pv-seg-btn:focus-visible {
-  outline: 2px solid var(--pv-primary);
-  outline-offset: 1px;
-}
-
-.pv-seg-sep {
-  width: 1px;
-  margin: 3px 3px;
-  background: var(--pv-line);
-}
-
-.pv-flag-row {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.pv-flag-label {
-  font-size: 11px;
-  color: var(--pv-ink-faint);
-}
 
 .pv-warnings {
   display: flex;
@@ -868,41 +713,7 @@
   color: var(--danger-strong);
 }
 
-/* One warning plus the button that fixes it. The text takes the width and wraps; the button keeps its size. */
-.pv-gap {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
 
-.pv-gap-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.pv-gap-fill {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  font-size: 11px;
-}
-
-/* The database's own rows: separated from the walks by a rule, because the control beside them is "Show", not
-   "Fill" -- a crossing is fixed by time or another waypoint, and only the planner knows which one. They keep the
-   gap rows' layout but not their class: a "gap" is the board's own 25 m warning, and a count of gaps must not
-   start counting the database's sentences. */
-.pv-block {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  border-top: 1px dashed var(--danger-bg);
-  padding-top: 4px;
-  margin-top: 2px;
-}
-
-.pv-block-text {
-  flex: 1;
-  min-width: 0;
-}
 
 /* The Problems panel, under the time bar: a quiet list, where only the dots and the pills carry colour. */
 .pv-probs {
@@ -1325,7 +1136,7 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
 .pv-suggest-dot {
   position: absolute;
   inset: 0;
-  border: 3px dashed #15803d;
+  border: 3px dashed #16a34a;
   border-radius: 50%;
   background: rgba(21, 128, 61, 0.22);
 }
@@ -1337,19 +1148,12 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
   transform: translateY(-50%);
   padding: 2px 8px;
   border-radius: 999px;
-  background: #15803d;
+  background: #16a34a;
   color: #fff;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.5;
   white-space: nowrap;
-}
-
-.pv-board-empty {
-  padding: 24px 16px;
-  text-align: center;
-  color: var(--pv-ink-soft);
-  font-size: 13px;
 }
 
 .pv-stack {
@@ -1439,16 +1243,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
 .pv-sched-line.is-warn {
   background: var(--danger-bg);
   color: var(--pv-warn);
-}
-
-.pv-sched-empty {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 28px 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--pv-ink-soft);
-  text-align: center;
 }
 
 .pv-sched-list {
@@ -1701,19 +1495,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
 
 /* The sentence about the press, on its own line: whitespace between a text node and an element is condensed by the
    template compiler, so a space typed there disappears and the two sentences run together (seen in step 28's shot). */
-.pv-sched-foot-more {
-  display: block;
-  margin-top: 3px;
-}
-
-.pv-sched-foot {
-  margin: 0;
-  padding: 9px 14px 11px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--pv-ink-faint);
-  border-top: 1px solid var(--pv-line);
-}
 
 @media (max-width: 640px) {
   .pv-sched-moment {
@@ -1829,16 +1610,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
 
 .pv-ops-error-x:hover {
   opacity: 1;
-}
-
-.pv-ops-empty {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 26px 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--pv-ink-soft);
-  text-align: center;
 }
 
 .pv-ops-list {
@@ -2000,31 +1771,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
 }
 
 /* The hand-back line: who has the board, and the one button that says "it is mine now". */
-.pv-ops-hand {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--pv-line);
-}
-
-.pv-ops-with {
-  flex: 1 1 220px;
-  font-size: 12px;
-  color: var(--pv-ink-soft);
-  font-variant-numeric: tabular-nums;
-}
-
-.pv-ops-foot {
-  margin: 0;
-  padding: 8px 14px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--pv-ink-faint);
-  background: var(--canvas);
-  border-top: 1px solid var(--pv-line);
-}
 
 @media (max-width: 640px) {
   .pv-ops-head {
@@ -2104,12 +1850,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
   font-size: 13px;
   font-weight: 650;
   color: var(--pv-ink);
-}
-
-.pv-log-note {
-  flex: 1 1 260px;
-  font-size: 12px;
-  color: var(--pv-ink-faint);
 }
 
 .pv-log-form {
@@ -2234,12 +1974,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
   font-size: 12px;
   color: var(--pv-ink-faint);
   font-variant-numeric: tabular-nums;
-}
-
-.pv-sched-msg-done {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--pv-ok);
 }
 
 .pv-sched-ack {
@@ -2437,23 +2171,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
   color: var(--pv-ink-soft);
 }
 
-.pv-route-empty {
-  max-width: 64ch;
-  padding: 22px 16px 26px;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--pv-ink-soft);
-}
-
-.pv-route-foot {
-  margin: 0;
-  padding: 10px 14px 12px;
-  border-top: 1px solid var(--pv-line);
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--pv-ink-faint);
-}
-
 /* A moment on the map: a 12 px dot with the group's colour, and a label hanging out to its right. Leaflet's divIcon
    wrapper must not paint anything -- the dot and the label are the whole mark. */
 .pv-route-pin {
@@ -2572,12 +2289,6 @@ html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
 .pv-hint.is-placing .pv-btn {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.6);
-}
-
-.pv-place-btn {
-  align-self: flex-start;
-  font-size: 12px;
-  padding: 3px 10px;
 }
 
 /* A finger is wider than a 22 px dot: on a touch screen each frame takes a 36 px column, and the ruler is taller so the

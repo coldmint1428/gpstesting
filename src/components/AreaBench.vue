@@ -343,7 +343,7 @@ const DUPLICATE_PX = 2
 // The red shared by every "this is the thing that will not be allowed to exist": the loose end of
 // the rubber band while it would cross a line already drawn, and an existing outline while a dot
 // is being dragged somewhere it would cross itself. One colour for one idea.
-const CROSS_COLOUR = '#dc3545'
+const CROSS_COLOUR = '#C2410C'
 
 // The few things worth a sentence, and no more than a sentence each. The red on the outline says
 // "not there" while the planner is still moving, so a message that only repeats it is noise: there
@@ -684,7 +684,7 @@ function presenceAnchor(objectId) {
 // shape read as a small stack instead of one smudged label; the constant 22px is what clears the
 // area's own name label, which Leaflet pins to the same centre point.
 function chipHtml(who, offset) {
-  const lock = who.active ? '<span class="bench-chip-lock" aria-hidden="true">&#128274;</span>' : ''
+  const lock = who.active ? '<svg class="bench-chip-lock" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6z" fill="currentColor"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>' : ''
   return (
     '<div class="bench-chip" style="--chip:' +
     who.colour +
@@ -1439,7 +1439,7 @@ function drawDraftVertices() {
       radius: index === 0 ? 7 : 5,
       color: '#fff',
       weight: 2,
-      fillColor: index === 0 ? '#0d6efd' : '#fd7e14',
+      fillColor: index === 0 ? '#0072B2' : '#f97316',
       fillOpacity: 1,
       interactive: false,
     }).addTo(map)
@@ -1476,8 +1476,8 @@ function applySnapLook() {
   if (!draftVertexMarkers.length) return
   draftVertexMarkers[0].setStyle(
     snapActive.value
-      ? { radius: 9, color: '#198754', weight: 3, fillColor: '#fff' }
-      : { radius: 7, color: '#fff', weight: 2, fillColor: '#0d6efd' },
+      ? { radius: 9, color: '#16a34a', weight: 3, fillColor: '#fff' }
+      : { radius: 7, color: '#fff', weight: 2, fillColor: '#0072B2' },
   )
 }
 
@@ -1497,7 +1497,7 @@ function drawDraftLine() {
   draftLine = L.polyline(path, {
     // Red is the line that will not be allowed to exist: it would cross one already drawn,
     // and the click that would end it here is refused.
-    color: crossWarn.value ? '#dc3545' : snapActive.value ? '#198754' : '#0d6efd',
+    color: crossWarn.value ? '#C2410C' : snapActive.value ? '#16a34a' : '#0072B2',
     weight: snapActive.value ? 3 : 2,
     dashArray: draftClosed.value ? null : '6 6',
     interactive: false,
@@ -2913,10 +2913,10 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
           </select>
 
           <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-success flex-grow-1" data-testid="area-save" @click="finishDraft">
+            <button type="button" class="btn btn-sm btn-success flex-grow-1" data-testid="area-save" @click="finishDraft">
               Save area
             </button>
-            <button class="btn btn-sm btn-outline-secondary" data-testid="area-cancel" @click="clearDraft">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-testid="area-cancel" @click="clearDraft">
               Cancel
             </button>
           </div>
@@ -2980,7 +2980,7 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
         </div>
 
         <input ref="fileInput" type="file" accept="image/*" class="d-none" data-testid="floorplan-file" @change="onFileChosen" />
-        <button type="button" class="kb kb-line" style="width: 100%" :disabled="busy" data-testid="add-floorplan" @click="fileInput.click()">{{ busy ? 'Shrinking...' : 'Add a floor plan' }}</button>
+        <button type="button" class="kb kb-line" style="width: 100%" :disabled="busy" data-testid="add-floorplan" @click="fileInput.click()">{{ busy ? 'Shrinking…' : 'Add a floor plan' }}</button>
 
         <p v-if="plans.length === 0" class="k2-empty" data-testid="no-plans">No floor plans yet.</p>
         <div v-else style="margin-top: 8px" data-testid="plan-list">
@@ -3284,7 +3284,7 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
   border: 1px solid var(--chip);
   background: #fff;
   color: var(--chip);
-  font-size: 0.7rem;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.4;
   white-space: nowrap;
@@ -3292,6 +3292,13 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
   pointer-events: none;
 }
 :global(.bench-chip-lock) {
-  font-size: 0.65rem;
+  flex: none;
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 </style>

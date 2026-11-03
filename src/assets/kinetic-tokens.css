@@ -27,7 +27,7 @@
   --track-off: #cdd6d0;
   --live: #16a34a;
   --stale: #f59e0b;
-  --lost: #dc2626;
+  --lost: #c2410c; /* the same red as --danger */
   --stopped: #9aa89f;
   --map-road: #ffffff;
   --map-road-edge: #dcd6c8;

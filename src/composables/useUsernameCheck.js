@@ -39,7 +39,7 @@ export function useUsernameCheck(username, currentUsername = () => '') {
       ({
         empty: '3-20 lowercase letters, numbers or _. Others add you to events with it.',
         invalid: 'Use 3-20 lowercase letters, numbers or _.',
-        checking: 'Checking...',
+        checking: 'Checking…',
         free: '✓ Available',
         taken: '✗ That username is taken',
         same: 'Your current username',

@@ -68,7 +68,7 @@ function roleChanged(p) {
     <form class="kp-inline" @submit.prevent="addByEmail">
       <input id="people-email" v-model="email" type="email" class="form-control" placeholder="name@example.com" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="email" data-testid="wiz-email" />
       <button type="submit" class="btn btn-primary" :disabled="!canFind" data-testid="wiz-email-add">
-        {{ finding ? 'Checking...' : 'Add' }}
+        {{ finding ? 'Checking…' : 'Add' }}
       </button>
     </form>
     <p class="kp-note">People can also join later with the event code.</p>

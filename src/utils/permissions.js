@@ -66,13 +66,14 @@ export const PAGE_LABEL = {
 }
 
 const EVERYONE = ['root', 'planner', 'admin', 'ic', 'member']
-// Everyone opens Timeline and Map: members, ICs and admins see their own group's timetable and map (the planning
-// stage, 040 and later); only root and planners edit them (EDIT_ACCESS).
+// Everyone opens Timeline: members, ICs and admins see their own group's timetable and route on it (the Schedule page);
+// only root and planners edit it (EDIT_ACCESS). The Map page (zones) is for root and planners: for anyone else it
+// would show the same route as the Schedule.
 export const PAGE_ACCESS = {
   overview: EVERYONE,
   timeline: EVERYONE,
   rehearsals: EVERYONE, // a calendar; only root and planners schedule them (EDIT_ACCESS, 079)
-  map: EVERYONE,
+  map: ['root', 'planner'],
   groups: EVERYONE, // ICs and members: their own group only
   people: ['root', 'planner', 'admin'], // ICs and members cannot see everyone in the event (073)
   attendance: EVERYONE, // checking in; ICs, admins and planners also run roll calls (071)

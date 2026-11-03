@@ -18,6 +18,7 @@ import { remindIcsNow } from '../composables/usePushNotifications'
 import { askConfirm, toast } from '../composables/useNotify'
 import { supabase } from '../lib/supabase'
 import { useOpenMenu } from '../composables/useOpenMenu'
+import { useEscape } from '../composables/useEscape'
 import KDatePicker from './kinetic/KDatePicker.vue'
 import KTimePicker from './kinetic/KTimePicker.vue'
 
@@ -136,6 +137,7 @@ async function run(action, successText) {
 
 // ---------- Form: 'schedule' (start + optional end, before the start) or 'end' (while live) ----------
 const form = ref('')
+useEscape(() => !!form.value && !busy.value, () => (form.value = ''))
 const startDate = ref('') // "2026-10-13"
 const startTime = ref('') // "15:00"
 const endDate = ref('')
@@ -416,19 +418,19 @@ function remind() {
 
         <template v-if="canManage && !form">
           <template v-if="live">
-            <button v-if="sharingCount < icCount" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="remind-ics-btn" @click="remind">Remind ICs</button>
-            <button class="btn btn-sm btn-ghost" :disabled="busy" data-testid="schedule-end-btn" @click="openEnd">{{ scheduledEnd ? 'Change end' : 'Set end' }}</button>
-            <button v-if="scheduledEnd" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="remove-end-btn" @click="removeEnd">Clear end</button>
-            <button class="btn btn-sm btn-danger" :disabled="busy" data-testid="end-event-btn" @click="endNow">End event</button>
+            <button type="button" v-if="sharingCount < icCount" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="remind-ics-btn" @click="remind">Remind ICs</button>
+            <button type="button" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="schedule-end-btn" @click="openEnd">{{ scheduledEnd ? 'Change end' : 'Set end' }}</button>
+            <button type="button" v-if="scheduledEnd" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="remove-end-btn" @click="removeEnd">Clear end</button>
+            <button type="button" class="btn btn-sm btn-danger" :disabled="busy" data-testid="end-event-btn" @click="endNow">End event</button>
           </template>
           <template v-else-if="scheduledStart">
-            <button class="btn btn-sm btn-ghost" :disabled="busy" data-testid="cancel-schedule-btn" @click="cancelSchedule">Cancel schedule</button>
-            <button class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Edit schedule</button>
-            <button class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start now</button>
+            <button type="button" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="cancel-schedule-btn" @click="cancelSchedule">Cancel schedule</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Edit schedule</button>
+            <button type="button" class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start now</button>
           </template>
           <template v-else>
-            <button class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Schedule</button>
-            <button class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start now</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="busy" data-testid="schedule-btn" @click="openSchedule">Schedule</button>
+            <button type="button" class="btn btn-sm btn-success" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">Start now</button>
           </template>
         </template>
       </div>
@@ -440,7 +442,8 @@ function remind() {
 
   <!-- The dialogs: on <body>, so the top bar's stacking cannot clip them -->
   <Teleport to="body">
-    <div v-if="form" class="k k2-scrim" @click.self="form = ''" @keydown.esc="form = ''">
+    <Transition name="k2-pop">
+    <div v-if="form" class="k k2-scrim" @click.self="form = ''">
       <!-- Start now: which published plan runs -->
       <form v-if="form === 'start'" class="modal k2-dialog" role="dialog" aria-modal="true" aria-label="Start event" data-testid="start-form" @submit.prevent="startNow">
         <h3>Start event</h3>
@@ -516,5 +519,6 @@ function remind() {
         </div>
       </form>
     </div>
+    </Transition>
   </Teleport>
 </template>

@@ -186,9 +186,6 @@ html.native-app .kin {
     animation: none;
   }
 }
-.pv-num {
-  font-variant-numeric: tabular-nums;
-}
 
 /* ---------- Event page (phone) ---------- */
 html.native-app .ev {
@@ -197,9 +194,7 @@ html.native-app .ev {
   background: var(--pv-ground);
   min-height: 100vh;
 }
-html.native-app .mono,
-html.native-app .show-num,
-html.native-app .ops-num {
+html.native-app .mono,html.native-app .show-num {
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
@@ -260,11 +255,6 @@ html.native-app .ev-native .ev-main {
   padding: 16px 14px 0;
   gap: 14px;
 }
-.pv-card {
-  background: var(--pv-card);
-  border-radius: var(--radius-xl);
-  padding: 16px;
-}
 .pv-empty {
   background: var(--pv-card);
   border-radius: var(--radius-xl);
@@ -312,9 +302,7 @@ html.native-app .show-bar {
   background: var(--forest);
   border-radius: var(--radius-xl);
 }
-html.native-app .show-panel,
-html.native-app .ops-summary,
-html.native-app .next-move {
+html.native-app .show-panel,html.native-app .next-move {
   border-radius: var(--radius-xl);
   border-color: var(--pv-line);
 }

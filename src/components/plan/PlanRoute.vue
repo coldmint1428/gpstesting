@@ -40,7 +40,7 @@ import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
 import { zoneHoverShape } from '../../utils/areaKinds'
 import { escapeHtml } from '../../utils/people'
-import { textOn } from '../../utils/groupColours'
+import { textOn, NO_GROUP_COLOUR } from '../../utils/groupColours'
 import { stopsOf, walksOf, whereAt } from '../../utils/planWalk'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { usePlanWalk } from '../../composables/usePlanWalk'
@@ -183,7 +183,7 @@ const nextIn = computed(() => {
 
 function colourOf(groupId) {
   const group = props.groups.find((g) => g.id === groupId)
-  return (group && group.colour) || '#244f3f'
+  return (group && group.colour) || NO_GROUP_COLOUR
 }
 
 /**

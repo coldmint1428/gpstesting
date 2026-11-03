@@ -1,7 +1,8 @@
-// segSlide - the lit pill of a segmented control (.seg buttons, .kp-seg radios) slides to the chosen one instead of
+// segSlide - the lit pill of a segmented control (.seg / .k2-mini / .k2-opsfilter buttons, .kp-seg radios) and the
+// underline of a tab row (.k2-tabs) slide to the chosen one instead of
 // jumping. It adds nothing to the markup, so Vue's own rendering is untouched: the pill is the container's ::before, and
 // this only tells it where the chosen item is (--seg-x/-y/-w/-h on the container). The CSS is at the end of kinetic-2.css.
-const CONTAINERS = '.seg, .kp-seg'
+const CONTAINERS = '.seg, .kp-seg, .k2-mini, .k2-opsfilter, .k2-tabs'
 const CHOSEN = '[aria-pressed="true"], [aria-selected="true"], input:checked + label'
 
 // A control that changes size (the side menu folding, a window resize, the row wrapping) moves its items without any

@@ -6,6 +6,7 @@
 //
 // The recording comes from the database (session or day) or from a CSV file; this
 // component doesn't care which (see utils/playback.js).
+import { NO_GROUP_COLOUR } from '../utils/groupColours'
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import L from 'leaflet'
 import { venueBounds } from '../utils/venueFrame'
@@ -109,7 +110,7 @@ function draw(force = false) {
     const groupId = track.points[pos.index].groupId
     if (groupFilter.value && groupId !== groupFilter.value) continue
     const group = groupOf(groupId)
-    const colour = group ? group.colour : '#6c757d'
+    const colour = group ? group.colour : NO_GROUP_COLOUR
     const selected = selectedId.value === track.userId
     const faded = selectedId.value !== null && !selected
     const iconKey = pos.state + colour + faded + selected + track.name
@@ -440,7 +441,7 @@ onUnmounted(() => {
               <span class="dot me-1" :style="{ backgroundColor: selectedInfo.colour }"></span>{{ selectedInfo.groupName }}
             </div>
           </div>
-          <button class="btn-close" aria-label="Close" @click="deselect"></button>
+          <button type="button" class="btn-close" aria-label="Close" @click="deselect"></button>
         </div>
         <div class="mt-1">
           {{ selectedInfo.stateText }} · reading at {{ formatTimeSeconds(selectedInfo.readingTime) }}
@@ -453,7 +454,7 @@ onUnmounted(() => {
         <div class="text-muted">
           {{ selectedInfo.lat.toFixed(6) }}, {{ selectedInfo.lng.toFixed(6) }} (±{{ Math.round(selectedInfo.accuracy || 0) }} m)
         </div>
-        <button class="btn btn-sm mt-1" :class="following ? 'btn-primary' : 'btn-outline-primary'" data-testid="follow-btn" @click="toggleFollow">
+        <button type="button" class="btn btn-sm mt-1" :class="following ? 'btn-primary' : 'btn-outline-primary'" data-testid="follow-btn" @click="toggleFollow">
           {{ following ? 'Following' : 'Follow' }}
         </button>
       </div>
@@ -537,8 +538,8 @@ onUnmounted(() => {
             </select>
           </div>
           <div class="k2-pblegend">
-            <span><span class="dot me-1" style="background-color: #0072B2"></span>Sharing</span>
-            <span><span class="dot dot-stale me-1" style="background-color: #0072B2"></span>No update 2–10 min</span>
+            <span><span class="dot me-1" style="background-color: var(--ink)"></span>Sharing</span>
+            <span><span class="dot dot-stale me-1" style="background-color: var(--ink)"></span>No update 2–10 min</span>
             <span><span class="dot dot-offline me-1"></span>Lost contact</span>
             <span><span class="dot dot-stopped me-1"></span>Stopped</span>
             <span>┄ No readings</span>
@@ -672,7 +673,7 @@ onUnmounted(() => {
 }
 .pb-speed.is-on {
   background: var(--ink, #0a1f17);
-  color: var(--lime, #d4f36b);
+  color: var(--lime, #c6f36b);
 }
 @media (hover: hover) {
   .pb-speed:not(.is-on):hover {

@@ -67,7 +67,7 @@ async function submit() {
           </div>
 
           <button type="submit" class="kb kb-lime kb-lg" style="width: 100%; margin-top: 26px" :disabled="busy" data-testid="auth-submit">
-            {{ busy ? 'Please wait...' : 'Log in' }}
+            {{ busy ? 'Please wait…' : 'Log in' }}
           </button>
           <div class="kg-or">or</div>
           <p style="text-align: center; margin: 0; font-size: 15px">

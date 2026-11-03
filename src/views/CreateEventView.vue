@@ -146,7 +146,7 @@ async function startOver() {
       <button v-if="wizard.step > 1" type="button" class="btn btn-outline-secondary" :disabled="saving" @click="back">Back</button>
       <button v-if="wizard.step < 4" type="button" class="btn btn-primary" data-testid="wiz-next" @click="next">Next</button>
       <button v-else type="button" class="btn btn-success" :disabled="saving" data-testid="wiz-confirm" @click="confirm">
-        {{ saving ? 'Creating...' : 'Create event' }}
+        {{ saving ? 'Creating…' : 'Create event' }}
       </button>
     </div>
   </main>

@@ -849,7 +849,7 @@ onUnmounted(() => {
       </div>
 
       <div class="row" style="gap: 6px; flex-wrap: wrap">
-        <span v-if="saving" class="chip chip-soft" data-testid="saving-badge">Saving...</span>
+        <span v-if="saving" class="chip chip-soft" data-testid="saving-badge">Saving…</span>
         <span v-else-if="canEdit" class="chip chip-soft" data-testid="history-steps" title="Changes that can be undone, one step per thing you did">{{ stepsText }}</span>
         <!-- Undo and redo of the WHOLE document, on the page rather than over the map or inside a
              panel. A step can be a dot, an area, a floor plan or a rename, so it belongs to none

@@ -29,22 +29,7 @@
 /* ---------- Hover and press ---------- */
 
 /* Every button, field and nav link eases between its states instead of snapping. */
-html .btn,
-html .pv-btn,
-html .nav-link,
-html .navbar-text,
-html .ev-nav-btn,
-html .form-control,
-html .form-select,
-html .form-check-input,
-html .pl-tab,
-html .pv-tab,
-html .pl-wz-step__mk,
-html .pl-wz-step__txt,
-html .list-group-item-action,
-html .dropdown-item,
-html .page-link,
-html a {
+html .btn,html .pv-btn,html .nav-link,html .navbar-text,html .form-control,html .form-select,html .form-check-input,html .pl-tab,html .pv-tab,html .pl-wz-step__mk,html .pl-wz-step__txt,html .list-group-item-action,html .dropdown-item,html .page-link,html a {
   transition:
     color var(--motion-fast) var(--ease-out),
     background-color var(--motion-fast) var(--ease-out),
@@ -70,10 +55,7 @@ html a {
     box-shadow: 0 4px 12px rgba(15, 92, 80, 0.22);
   }
 }
-html .btn:not(:disabled):not(.disabled):active,
-html .pv-btn:not(:disabled):active,
-html .ev-nav-btn:active,
-html .pl-tab:active {
+html .btn:not(:disabled):not(.disabled):active,html .pv-btn:not(:disabled):active,html .pl-tab:active {
   transform: translateY(0) scale(0.97);
   transition-duration: 60ms;
 }
@@ -149,22 +131,12 @@ html .pv-also-row:active {
 }
 
 /* On a touch screen the browser flashes a grey box over whatever is tapped; the press effect replaces it. */
-html a,
-html button,
-html .btn,
-html .pv-tab,
-html .ev-nav-btn,
-html .pl-tab,
-html summary,
-html label {
+html a,html button,html .btn,html .pv-tab,html .pl-tab,html summary,html label {
   -webkit-tap-highlight-color: transparent;
 }
 
 /* A field coming into focus: the ring grows in rather than appearing. */
-html .form-control:focus,
-html .form-select:focus,
-html .pv-input:focus,
-html .pv-select:focus {
+html .form-control:focus,html .form-select:focus,html .pv-input:focus {
   transition-duration: var(--motion-base);
 }
 
@@ -173,46 +145,6 @@ html .pv-select:focus {
  * full size. The marker is the underline on the top bar and the Events tabs, the bar beside the row in the event's
  * side menu, the pill on the phone's tab bar, and the bar over each step when creating an event. */
 
-/* Top bar. One underline, drawn here: the theme's inset shadow under the current link is switched off in
-   planova-theme.css, because the two together drew a double line. */
-html .app-nav .nav-link,
-html .app-nav .navbar-text {
-  position: relative;
-}
-html .app-nav .nav-link::after,
-html .app-nav .navbar-text::after {
-  content: '';
-  position: absolute;
-  left: var(--bs-navbar-nav-link-padding-x, 0.5rem);
-  right: var(--bs-navbar-nav-link-padding-x, 0.5rem);
-  bottom: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--chrome-indicator, var(--on-forest-muted));
-  opacity: 0;
-  transform: scaleX(0.3);
-  transition:
-    transform var(--motion-base) var(--ease-out),
-    opacity var(--motion-fast) var(--ease-out);
-  pointer-events: none;
-}
-html .app-nav .navbar-text::after {
-  left: 0;
-  right: 0;
-  bottom: -6px;
-}
-@media (hover: hover) {
-  html .app-nav .nav-link:hover::after,
-  html .app-nav .navbar-text:hover::after {
-    opacity: 0.55;
-    transform: scaleX(0.6);
-  }
-}
-html .app-nav .nav-link.router-link-exact-active::after,
-html .app-nav .navbar-text.router-link-exact-active::after {
-  opacity: 1;
-  transform: scaleX(1);
-}
 
 /* Events page tabs: the same underline. */
 html .pl-tab::after {
@@ -261,69 +193,11 @@ html .pl-tabs-ink {
 html .pl-tabs-ink.is-ready {
   transition: transform var(--motion-slow) var(--ease-out);
 }
-/* The list under the tabs slides out one way and the next one in from the side its tab is on. */
-.tabswap-enter-active {
-  transition:
-    opacity var(--motion-base) var(--ease-out) 60ms,
-    transform var(--motion-base) var(--ease-out) 60ms;
-}
 /* The old list leaves on top of the new one, so the page below never jumps up while neither is there. */
 .pl-tabswap {
   position: relative;
 }
-.tabswap-leave-active {
-  position: absolute;
-  inset: 0 0 auto;
-  pointer-events: none;
-  transition:
-    opacity 90ms var(--ease-in),
-    transform 90ms var(--ease-in);
-}
-/* --tab-shift is +16px when moving to a tab on the right, -16px to the left (set by EventsView). */
-.tabswap-enter-from {
-  opacity: 0;
-  transform: translateX(var(--tab-shift, 16px));
-}
-.tabswap-leave-to {
-  opacity: 0;
-  transform: translateX(calc(var(--tab-shift, 16px) * -1));
-}
 
-/* Event side menu: the row's colour eases over, the bar beside the chosen row grows in from its middle, and
-   the icon nudges towards the pointer. */
-html .ev-nav-btn::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--chrome-indicator);
-  opacity: 0;
-  transform: scaleY(0.3);
-  transition:
-    transform var(--motion-base) var(--ease-spring),
-    opacity var(--motion-fast) var(--ease-out);
-}
-@media (hover: hover) {
-  html .ev-nav-btn:hover::before {
-    opacity: 0.45;
-    transform: scaleY(0.5);
-  }
-}
-html .ev-nav-btn[aria-current='page']::before {
-  opacity: 1;
-  transform: scaleY(1);
-}
-html .ev-nav-btn svg {
-  transition: transform var(--motion-base) var(--ease-out);
-}
-@media (hover: hover) {
-  html .ev-nav-btn:hover svg {
-    transform: translateX(2px);
-  }
-}
 
 /* Phone tab bar: the pill behind the chosen tab's icon widens in from the middle; a tap presses the pill. */
 html .pv-tab-pill {
@@ -439,9 +313,7 @@ html.native-app .page-enter-from {
 
 /* Dropdown lists (the styled <select> list from controls.css). */
 @supports (appearance: base-select) {
-  html select.form-select::picker(select),
-  html select.pv-select::picker(select),
-  html select.pv-log-select::picker(select) {
+  html select.form-select::picker(select),html select.pv-log-select::picker(select) {
     opacity: 0;
     transform: translateY(-4px) scaleY(0.96);
     transform-origin: top center;
@@ -451,16 +323,12 @@ html.native-app .page-enter-from {
       overlay var(--motion-base) allow-discrete,
       display var(--motion-base) allow-discrete;
   }
-  html select.form-select:open::picker(select),
-  html select.pv-select:open::picker(select),
-  html select.pv-log-select:open::picker(select) {
+  html select.form-select:open::picker(select),html select.pv-log-select:open::picker(select) {
     opacity: 1;
     transform: none;
   }
   @starting-style {
-    html select.form-select:open::picker(select),
-    html select.pv-select:open::picker(select),
-    html select.pv-log-select:open::picker(select) {
+    html select.form-select:open::picker(select),html select.pv-log-select:open::picker(select) {
       opacity: 0;
       transform: translateY(-4px) scaleY(0.96);
     }
@@ -535,18 +403,6 @@ html .collapsing {
   opacity: 0;
 }
 
-/* Something shown by a class change rather than added (the phone's "Manage" row on People). */
-.reveal-in {
-  transition:
-    opacity var(--motion-base) var(--ease-out),
-    transform var(--motion-base) var(--ease-out);
-}
-@starting-style {
-  .reveal-in {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
 
 /* ---------- Dialogs, sheets and toasts ---------- */
 
@@ -599,6 +455,8 @@ html .collapsing {
     transform var(--motion-slow) var(--ease-spring);
 }
 .toast-leave-active {
+  position: absolute; /* out of the stack at once, so the toasts below glide up (.toast-move) instead of jumping */
+  right: 1rem;
   transition:
     opacity var(--motion-fast) var(--ease-in),
     transform var(--motion-fast) var(--ease-in);
@@ -645,9 +503,6 @@ html .collapsing {
 .skeleton-pill {
   height: 22px;
   border-radius: 999px;
-}
-.skeleton-circle {
-  border-radius: 50%;
 }
 .skeleton-on-dark {
   --skeleton-base: rgba(255, 255, 255, 0.08);

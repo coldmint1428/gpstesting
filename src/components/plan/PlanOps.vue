@@ -46,7 +46,6 @@ import SkeletonLoader from '../SkeletonLoader.vue'
 import EmptyState from '../EmptyState.vue'
 import { useLoadGate } from '../../composables/usePageReady'
 import { GROUP_PALETTE } from '../../utils/groupColours'
-import { useAuthStore } from '../../stores/auth'
 
 const props = defineProps({
   // The live session on a plan: { id, planId, t0At, planRev } from useEventSessions. Null while there is none.
@@ -62,14 +61,12 @@ const props = defineProps({
 
 // The website's Live panel shows the log's length on its tab
 const emit = defineEmits(['counts'])
-const auth = useAuthStore()
 
 const POLL_MS = 5000 // the midpoint moves with the readings; the statuses move at the moments (wake)
 const TICK_MS = 1000
 const WAKE_MAX_MS = 120000 // a moment further out than this is left to the poll
 
 const rows = ref([]) // the read, exactly as it answered
-const handover = ref([]) // the hand-back chain, newest first (057)
 const log = ref([]) // what was sent to the plan's groups, and what the plan changed (058)
 const loaded = ref(false) // one answer has arrived (an empty read is still an answer)
 // Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
@@ -105,13 +102,6 @@ async function ask(id) {
   return data || []
 }
 
-async function askHandover(id) {
-  if (props.api) return props.api.readHandover(id)
-  const { data, error } = await supabase.rpc('handover_log_list', { p_session: id })
-  if (error) throw error
-  return data || []
-}
-
 /** The plan's log. Read by plan, not by session: the log outlives tonight's session (058). */
 async function askLog(id) {
   if (!id) return []
@@ -135,15 +125,13 @@ async function read() {
   running = true
   const plan = planId.value
   try {
-    // All three answers in one wait: the board is not on screen until the hand-back line and the log are too, and a
-    // session or plan whose chain cannot be read is the same kind of failure as one whose moments cannot be.
-    const [answered, hands, messages] = await Promise.all([ask(id), askHandover(id), askLog(plan)])
+    // Both answers in one wait: the board is not on screen until the log is too
+    const [answered, messages] = await Promise.all([ask(id), askLog(plan)])
     if (sessionId.value !== id) {
       again = true
       return
     }
     rows.value = answered
-    handover.value = hands
     log.value = messages
     if (!errorSticky.value) errorMsg.value = ''
     readAt.value = new Date()
@@ -265,16 +253,6 @@ function placeText(group) {
   return where + ' · ' + icsText + (age != null ? ' · ' + age + ' s ago' : '')
 }
 
-/**
- * Whether the current moment can be recorded from here: it has happened, its group is on site, and nobody (and no tick)
- * has said anything about it yet. The two refusals the database also makes -- a future moment, an off-site one -- are
- * therefore not offered as buttons in the first place.
- */
-function canMark(group) {
-  const moment = group.current
-  return !!moment && moment.plan_state === 'on_site' && !moment.marked_state
-}
-
 /** What was recorded about the current moment, in the read's own words and with who said it. */
 function markText(group) {
   const moment = group.current
@@ -297,57 +275,6 @@ function dismissError() {
  * another person already recorded it (064), a moment that is off site -- keeps its sentence on screen and re-reads,
  * so the buttons the stale row was still offering go away.
  */
-async function mark(group, state) {
-  const moment = group.current
-  if (!moment || busy.value) return
-  busy.value = 'mark:' + group.id + ':' + state
-  errorSticky.value = false
-  try {
-    const { error } = await supabase.rpc('progress_mark', {
-      p_session: sessionId.value,
-      p_frame: moment.frame_id,
-      p_group: group.id,
-      p_state: state,
-    })
-    if (error) throw error
-    errorMsg.value = ''
-    await read()
-  } catch (error) {
-    errorSticky.value = true
-    errorMsg.value = planErrorMessage(error) || 'Could not record that.'
-    await read()
-  } finally {
-    busy.value = ''
-  }
-}
-
-/** The chain's newest row: who has the board, and since when. */
-const latestHand = computed(() => handover.value[0] || null)
-const handText = computed(() => {
-  const row = latestHand.value
-  if (!row) return 'No hand-back yet'
-  const when = formatTime(row.handed_at)
-  if (row.from_name) return 'Handed from ' + row.from_name + ' to ' + row.to_name + ' at ' + when
-  return 'Board with ' + row.to_name + ' since ' + when
-})
-
-/** Take the board: the database works out who had it, dates the row itself, and copies the plan revision on. */
-async function takeBoard() {
-  if (busy.value) return
-  busy.value = 'take'
-  errorSticky.value = false
-  try {
-    const { error } = await supabase.rpc('handover_take', { p_session: sessionId.value })
-    if (error) throw error
-    errorMsg.value = ''
-    await read()
-  } catch (error) {
-    errorSticky.value = true
-    errorMsg.value = planErrorMessage(error) || 'Could not take the board.'
-  } finally {
-    busy.value = ''
-  }
-}
 
 // ---------- the plan log (step 22) ----------
 
@@ -521,13 +448,6 @@ const FILTER_EMPTY = { soon: 'No group is due to move in the next 30 seconds.', 
 // The run clock's bar: under way, not started and done, as shares of the groups
 const share = (n) => (groups.value.length ? (n / groups.value.length) * 100 : 0)
 
-const boardName = computed(() => (latestHand.value ? latestHand.value.to_name : ''))
-const iHaveBoard = computed(() => !!(latestHand.value && auth.user && latestHand.value.to_user === auth.user.id))
-function initials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
-  return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
-}
-
 const LOG_TAG = { timeline: 'Times changed', zones: 'Zones changed' }
 const ackShare = (row) => (row.recipients ? ((row.acked || 0) / row.recipients) * 100 : 0)
 const ackHead = (row) => (row.acked || 0) + ' of ' + row.recipients + ' got it'
@@ -611,7 +531,7 @@ watch(
 
       <p v-if="errorMsg" class="pv-ops-error" data-testid="ops-error">
         {{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template>
-        <button type="button" class="pv-ops-error-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError">×</button>
+        <button type="button" class="pv-ops-error-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
       </p>
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the ops board…" data-testid="ops-loading" />
@@ -637,36 +557,16 @@ watch(
             <span class="pv-ops-travel" data-testid="ops-travel">{{ travelText(group) }}</span>
             <span class="pv-ops-place" data-testid="ops-place">{{ placeText(group) }}</span>
           </div>
-          <div v-if="markText(group) || canMark(group)" class="pv-ops-line is-mark">
+          <div v-if="markText(group)" class="pv-ops-line is-mark">
             <span
               v-if="markText(group)"
               class="pv-ops-mark"
               :class="group.current.marked_state === 'missed' ? 'is-miss' : 'is-arrived'"
               data-testid="ops-mark"
             >{{ markText(group) }}</span>
-            <template v-else>
-              <button
-                type="button"
-                class="pv-ops-act"
-                data-testid="ops-mark-arrived"
-                :disabled="busy === 'mark:' + group.id + ':arrived'"
-                @click="mark(group, 'arrived')"
-              >Arrived</button>
-              <button
-                type="button"
-                class="pv-ops-act is-miss"
-                data-testid="ops-mark-missed"
-                :disabled="busy === 'mark:' + group.id + ':missed'"
-                @click="mark(group, 'missed')"
-              >Missed</button>
-            </template>
           </div>
         </li>
       </ul>
-
-      <div v-if="groups.length" class="pv-ops-hand">
-        <span class="pv-ops-with" data-testid="ops-handback">{{ handText }}</span>
-      </div>
 
       <!-- The plan's own log (step 22). Messages a planner sends, and the changes the plan itself made, with the one
            tally that matters during a show: who has it and who to radio. -->
@@ -758,23 +658,8 @@ watch(
 
       <p v-if="errorMsg" class="k2-ops-error" role="alert" data-testid="ops-error">
         <span>{{ errorMsg }}<template v-if="readAt"> Showing the read from {{ formatTime(readAt) }}.</template></span>
-        <button type="button" class="k2-ops-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError">×</button>
+        <button type="button" class="k2-ops-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
       </p>
-
-      <div v-if="loaded && groups.length" class="k2-board">
-        <span class="k2-board-av" aria-hidden="true">{{ boardName ? initials(boardName) : '–' }}</span>
-        <div class="k2-board-txt">
-          <b>{{ boardName ? (iHaveBoard ? 'You have the board' : boardName + ' has the board') : 'Nobody has the board yet' }}</b>
-          <span data-testid="ops-handback">{{ handText }}</span>
-        </div>
-        <button
-          type="button"
-          class="k2-opsbtn"
-          data-testid="ops-take"
-          :disabled="busy === 'take' || iHaveBoard"
-          @click="takeBoard"
-        >{{ iHaveBoard ? 'You have it' : busy === 'take' ? 'Taking…' : 'Take board' }}</button>
-      </div>
 
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the ops board…" data-testid="ops-loading" />
       <EmptyState v-else-if="!groups.length" compact icon="plan" title="Nothing planned" text="This plan has no moments yet." data-testid="ops-empty" />
@@ -823,24 +708,6 @@ watch(
                 <span class="k2-sr" data-testid="ops-place">{{ placeText(group) }}</span>
               </span>
               <span v-if="markText(group)" class="k2-gc-marked" :class="group.current.marked_state === 'missed' ? 'is-miss' : 'is-arrived'" data-testid="ops-mark">{{ markText(group) }}</span>
-              <span v-else-if="canMark(group)" class="k2-gc-acts">
-                <button
-                  type="button"
-                  class="k2-gc-act"
-                  aria-pressed="false"
-                  data-testid="ops-mark-arrived"
-                  :disabled="busy === 'mark:' + group.id + ':arrived'"
-                  @click="mark(group, 'arrived')"
-                ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>Arrived</button>
-                <button
-                  type="button"
-                  class="k2-gc-act is-miss"
-                  aria-pressed="false"
-                  data-testid="ops-mark-missed"
-                  :disabled="busy === 'mark:' + group.id + ':missed'"
-                  @click="mark(group, 'missed')"
-                >Missed</button>
-              </span>
             </div>
           </li>
         </ul>
@@ -851,28 +718,9 @@ watch(
     <section v-else-if="view === 'log'" class="k2-logview" data-testid="plan-ops">
       <p v-if="errorMsg" class="k2-ops-error" role="alert" data-testid="ops-error">
         <span>{{ errorMsg }}</span>
-        <button type="button" class="k2-ops-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError">×</button>
+        <button type="button" class="k2-ops-x" data-testid="ops-error-dismiss" aria-label="Dismiss" @click="dismissError"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
       </p>
       <div v-if="planId" class="k2-logwrap" data-testid="plan-log">
-        <form class="k2-logform" @submit.prevent="send">
-          <select v-model="toWhom" class="pv-log-select" data-testid="log-audience" aria-label="Who gets this message">
-            <option value="all">Every group</option>
-            <option value="ops">The ops team</option>
-            <option v-for="group in groups" :key="group.id" :value="'group:' + group.id">{{ group.name }}</option>
-          </select>
-          <div class="k2-logrow">
-            <input
-              v-model="draft"
-              class="kin"
-              data-testid="log-draft"
-              maxlength="300"
-              placeholder="Message to the groups"
-              aria-label="Message to the groups"
-            />
-            <button type="submit" class="k2-opsbtn is-ink" data-testid="log-send" :disabled="!canSend">{{ sending ? 'Sending…' : 'Send' }}</button>
-          </div>
-        </form>
-
         <SkeletonLoader v-if="!loaded" variant="board" :rows="3" label="Reading the plan log…" />
         <p v-else-if="!log.length" class="k2-ops-none" data-testid="log-empty">Nothing sent yet.</p>
         <ul v-else class="k2-logs">

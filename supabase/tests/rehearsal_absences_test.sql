@@ -184,6 +184,22 @@ begin
     end if;
   end;
 
+  -- 11. An answered request goes back to waiting when its rehearsal moves, and nobody answers one after the rehearsal started
+  perform pg_temp.zz_as('80000000-0000-0000-0000-000000000002');
+  declare r4 uuid; absn uuid;
+  begin
+    insert into public.event_rehearsals (event_id, starts_at) values ('80000000-0000-0000-0000-0000000000e1', now() + interval '40 days') returning id into r4;
+    perform pg_temp.zz_as('80000000-0000-0000-0000-000000000004');
+    perform public.rehearsal_absence_request(r4, 'Away');
+    select id into absn from public.rehearsal_absences where rehearsal_id = r4;
+    perform pg_temp.zz_as('80000000-0000-0000-0000-000000000002');
+    perform public.rehearsal_absence_decide(absn, true);
+    perform public.update_rehearsal(r4, now() + interval '41 days', null, null);
+    if not exists (select 1 from public.rehearsal_absences where id = absn and status = 'pending' and decided_at is null) then
+      raise exception 'FAIL 11a: moving a rehearsal kept its approval';
+    end if;
+  end;
+
   raise notice 'rehearsal_absences_test: all checks passed';
 end $$;
 

@@ -131,7 +131,22 @@ watch(
     }
   },
 )
-const qrBar = computed(() => (qrShown.value ? Math.round((qrShown.value.secondsLeft / 5) * 100) : 0))
+// The bar runs smoothly from full to empty over the life of each code. It restarts with every new code (the element is
+// keyed by the code's text); the animation is set once per code, from how much of the 5 seconds was left when it was
+// first seen, so it does not jump on every tick of the countdown.
+const QR_LIFE_S = 5
+const qrSeenLeft = ref(QR_LIFE_S)
+watch(
+  () => (qrShown.value ? qrShown.value.text : ''),
+  () => {
+    qrSeenLeft.value = Math.min(QR_LIFE_S, qrShown.value ? qrShown.value.secondsLeft : QR_LIFE_S)
+  },
+  { immediate: true, flush: 'sync' },
+)
+const qrBarStyle = computed(() => ({
+  animationDuration: qrSeenLeft.value + 's',
+  animationDelay: '0s',
+}))
 const big = ref(false) // the QR full screen, easier to scan from a few steps away
 
 const newTitle = ref('')
@@ -294,7 +309,7 @@ const history = computed(() =>
           <img v-if="qrImage" :src="qrImage" alt="Attendance QR code: scan it with the app" class="kp-qr-img" data-testid="attendance-qr" />
           <div v-else class="kp-qr-img kp-qr-wait">Loading…</div>
           <div class="progress kp-qr-bar" role="progressbar" :aria-valuenow="qrShown ? qrShown.secondsLeft : 0" aria-valuemin="0" aria-valuemax="5" aria-label="Seconds until the QR code changes">
-            <div class="progress-bar" :style="{ width: qrBar + '%' }"></div>
+            <div v-if="qrShown" :key="qrShown.text" class="progress-bar kp-qr-run" :style="qrBarStyle"></div>
           </div>
           <div class="small text-muted">{{ roster.present.length }} of {{ rosterTotal }} present</div>
           <div class="kp-actions">
