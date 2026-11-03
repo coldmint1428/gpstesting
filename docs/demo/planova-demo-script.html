@@ -164,9 +164,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Home page, then the Events list</li><li>Over "Under the hood": one slide, website and app → Supabase database → OneMap</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Hi, today we're demonstrating Planova, an app for running big outdoor events, like an NDP rehearsal with dozens of contingents moving around one venue. You plan where every group needs to be and when, and on the day you see where they actually are.</p>
-            <p>What you see depends on your role. The root created the event and can do everything. Planners draw the map, build the timeline and manage people. Everyone else is in a group, led by a group admin and at least one IC, whose phone shares location. Members only see their own group.</p>
-            <p>Everything lives in a Supabase database, which also enforces those roles, and maps come from OneMap's public API. We're signed in as root.</p></div>
+            <p>Hi, this is Planova. Picture an NDP rehearsal: dozens of contingents moving around one venue at the same time. Planova lets you plan where every group should be and when, and then, on the day, see where they actually are. What you can do depends on your role. The root sets up the event and can do everything. Planners draw the map, build the timeline and manage people. Everyone else is in a group, led by an admin and at least one IC, whose phone shares its location. Members only see their own group. Behind it all is a Supabase database, which also enforces those roles, and the maps come from OneMap. We're signed in as root, so let's make an event.</p></div>
         </div>
         <div class="shows"><span class="tag">Problem</span><span class="tag">Roles</span><span class="tag">Data store</span><span class="tag">External API</span></div>
       </div>
@@ -179,8 +177,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Events → Create event. Type as you talk: NDP Rehearsal 4, the Padang, Saturday 6 pm</li><li>Add people: type an email, Add</li><li>Groups: Navy and Air Force; tick an IC and an Admin</li><li>Review → Create event → Overview: code, QR, WhatsApp and Telegram invite</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Creating an event takes four steps. The details: NDP Rehearsal 4, at the Padang, Saturday at six. People are added by their exact email, though most will join later with a code. Then the groups, Navy and Air Force. Each needs at least one IC, the person who shares location. This one's the IC, and this one's the admin.</p>
-            <p>Review, Create event, and we land on the Overview, with the event code, a QR code, and an invite link that goes straight to WhatsApp or Telegram.</p></div>
+            <p>Making an event takes four steps. First, the details: NDP Rehearsal 4, at the Padang, Saturday at six. People can be added by exact email, but most just join later with a code. Next, the groups, say Navy and Air Force. Each needs at least one IC, the person who shares location, so this one's the IC, and this one's the admin. Review, hit Create, and we're on the Overview, with the event code, a QR code, and an invite link you can drop straight into WhatsApp or Telegram.</p></div>
         </div>
         <div class="shows"><span class="tag">Wizard</span><span class="tag">Invite</span></div>
       </div>
@@ -193,7 +190,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Cut to the NE4 Rehearsal event, Map page: the Padang and casing location already drawn</li><li>Draw areas: tap the corners of a stage, name it, Save area</li><li>A No-Go area over the water</li><li>Padlock the Padang</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Planning starts with the venue. On the Map page we draw the areas groups move between: press Draw areas, tap the corners, then name it and pick a type, such as zone, stage, entrance, obstacle or No-Go. This one over the water is a No-Go area, so anyone who walks into it lights up on the live map. The address under each area comes from OneMap. Big areas like the Padang can be locked, so nobody moves them by accident.</p></div>
+            <p>Every plan starts with the venue. On the Map page, we draw the areas groups move between. Press Draw areas, tap the corners, then give it a name and a type, like a zone, a stage, an entrance or a No-Go area. This one over the water is No-Go, so if anyone wanders in, it lights up on the live map. OneMap fills in the address for us. And big areas like the Padang can be locked, so nobody drags them by accident.</p></div>
         </div>
         <div class="shows"><span class="tag">External API</span><span class="tag">Map</span></div>
       </div>
@@ -206,9 +203,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Timeline: new plan "Run of show"; Place on map for two groups, tap the map</li><li>Add frame, +5:00; drag both badges; the right panel's Shift time and Hold for</li><li>Import CSV: <code>ndp-ne4-demo-broken.csv</code> is refused at row 31; then <code>ndp-ne4-demo.csv</code></li><li>Play at 60× for 10 s: contingents marching</li><li>Second browser (planner): drag a badge; on root's screen it moves too</li><li>Publish</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Now the plan itself. A plan is made of frames, each one a moment counted from T+0, when the event clock starts. In the first frame, press Place on map beside each group and tap where they stand. Add a frame five minutes in and drag the badges to the formation area. The app works out the walk in between. The panel on the right shifts a frame or holds a group a few minutes longer.</p>
-            <p>A real rehearsal is hundreds of moments, so run sheets come in as a CSV. This one is the NE4 show matrix: thirteen groups, four hundred and eighteen moments. A copy with one impossible jump is refused, with the row number. Press Play, and every contingent walks its route on the plan's clock.</p>
-            <p>Two planners can edit at once. When my colleague drags a badge, it moves on my screen too, held for them until they let go. When it's ready we publish, and that's the version every phone follows.</p></div>
+            <p>Now for the plan itself. A plan is a series of frames, and each frame is a moment counted from T+0, when the event clock starts. In the first frame, we press Place on map next to each group and tap where they're standing. Then we add a frame five minutes in and drag the badges over to the formation area. The app works out the walk in between, and the panel on the right lets us shift a frame or hold a group back a few minutes. A real rehearsal has hundreds of moments, so we import the run sheet as a CSV. This is the actual NE4 show matrix: thirteen groups, four hundred and eighteen moments. A file with an impossible jump, like this copy, is refused, and it tells you which row. Press Play, and every contingent walks its route on the plan's clock. Two planners can work on it together, too. When my teammate drags a badge, I see it move, held for them until they let go. Then we publish, and that's the version every phone follows.</p></div>
         </div>
         <div class="shows"><span class="tag">Plan</span><span class="tag">CSV import</span><span class="tag">Concurrent editing</span></div>
       </div>
@@ -221,7 +216,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Groups: add a group, open it, add a person, tick IC</li><li>People: change someone's role</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Groups and people can be edited any time. On Groups, we add a group with its colour, sector and radio channel, open it, add people and tick the IC. The People page lists everyone, and the root and planners change roles or remove people there.</p></div>
+            <p>Groups and people can change anytime. On the Groups page, we add a group with its colour, sector and radio channel, then open it, add people and tick who's the IC. The People page lists everyone, and that's where the root and planners change roles or remove someone.</p></div>
         </div>
         <div class="shows"><span class="tag">CRUD</span></div>
       </div>
@@ -234,7 +229,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Rehearsals page: add one with a time, end and note</li><li>As a member: Not available, with a reason; as root: approve</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Rehearsals have their own calendar. Planners schedule each one with a note, and anyone who can't make it sends a not-available request for a planner to approve.</p></div>
+            <p>Rehearsals get their own calendar. Planners add each one with a note, and if someone can't make it, they send a request for a planner to approve.</p></div>
         </div>
         <div class="shows"><span class="tag">New 3 Nov</span></div>
       </div>
@@ -247,7 +242,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>As root: New roll call → By hand; as the IC: mark present or excused; Close; Who was absent</li><li>As root: New roll call → QR code; IC: Start → Show big</li><li>Second phone: Scan QR code; cut to the list ticking itself</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Before anyone moves, the IC takes attendance, and planners choose how. By hand, the IC marks each person present, or excused. Closing the roll call shows who's absent straight away. For a contingent of thirty, QR is quicker. A code comes up on the IC's phone and changes every five seconds, so a screenshot in a chat group won't work. Everyone scans it and is marked present as they go.</p></div>
+            <p>Before anyone moves, the IC takes attendance, and planners pick how. By hand, the IC just marks each person present or excused, and closing the roll call shows who's missing straight away. For a contingent of thirty, QR is faster. A code pops up on the IC's phone and changes every five seconds, so a screenshot in the group chat won't work. Everyone scans it, and they're marked present as they go.</p></div>
         </div>
         <div class="shows"><span class="tag">Attendance</span><span class="tag">QR</span></div>
       </div>
@@ -260,8 +255,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Start now → the NE4 plan → T+0: Now → Start event</li><li>Remind ICs</li><li>Ops page: contingents under way; mark one arrived</li><li>Edit a frame, Publish again; the IC's phone: "Your times changed"</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Now we start the event. Press Start now, pick the published plan, and set T+0 to now or later today. It's 17:55 on the NE4 night, and Contingents 1 and 2 are already marching onto the Padang. ICs who aren't sharing get a reminder, and Remind ICs sends another with one tap.</p>
-            <p>The Ops page shows every group against the plan: who's arrived, who's late, and a planner can mark a group arrived or missed. If the show slips, as it did by up to six minutes between the NE2 and NE4 rehearsals, we edit and publish again, and every affected phone is told its times changed.</p></div>
+            <p>Right, let's go live. Press Start now, pick the published plan, and set T+0 to now or later today. It's 17:55 on the NE4 night, and Contingents 1 and 2 are already marching onto the Padang. Any IC who isn't sharing gets a reminder, and Remind ICs nudges them again with one tap. The Ops page shows every group against the plan: who's arrived, who's running late, and planners can mark a group arrived or missed. And shows slip. Between NE2 and NE4, it was by up to six minutes. So we edit, publish again, and every phone affected is told its times have changed.</p></div>
         </div>
         <div class="shows"><span class="tag">Realtime</span><span class="tag">Ops</span></div>
       </div>
@@ -274,9 +268,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>The Contingent 3 IC's account: the side menu</li><li>Schedule: the map and stop times, a countdown, LATE; tap We're here</li><li>Map, then My group</li><li>IC's phone: Share my location, the set-up screens; lock the phone; pull down the notification</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Here's what an IC sees; members see the same pages, minus location sharing. The side menu has Overview, Live, Schedule, Rehearsals, Map, My group and Attendance.</p>
-            <p>The Schedule is a map and list of where their group should be, with stop times and a countdown to the next one. Once a moment passes and nobody's marked the group, it shows late. When they arrive, the IC taps We're here, which records how late they were. Map shows their route, and My group shows their people, IC and admin.</p>
-            <p>Once the event's live, the IC taps Share my location. The first time, the app walks them through the phone settings one screen at a time. Then it keeps sharing with the screen off, with a notification and its own Stop button. And when the IC's phone gets close enough, the group is marked arrived on its own.</p></div>
+            <p>So what does an IC see? Members get the same pages, just without location sharing. In the menu there's Overview, Live, Schedule, Rehearsals, Map, My group and Attendance. The Schedule shows where their group should be, on a map and as a list, with a countdown to the next stop. If a moment passes and nobody's marked the group, it shows as late. When they get there, the IC taps We're here, which also records how late they were. Map shows their route, and My group shows their people, IC and admin. Once the event's live, the IC taps Share my location. The first time, the app walks them through their phone settings, one screen at a time. After that, it keeps sharing even with the screen off, with a notification and its own Stop button. And when the IC gets close enough, the group's marked as arrived automatically.</p></div>
         </div>
         <div class="shows"><span class="tag">Member view</span><span class="tag">Phone app</span></div>
       </div>
@@ -289,7 +281,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>The Live page, with the phone inset: the IC's badge moves from the casing location to the Padang. Click their badge</li><li>The dashed plan line beside the badge</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Our Contingent 3 IC is heading from the casing location to the Padang, and on the Live map their badge moves with them. For this video the phone's location is simulated along that route; on the day it comes from the phone's GPS. Clicking the badge shows the group, the area they're in and when the phone last updated. The dashed line is where the plan says they should be heading, so drifting off is easy to spot, and walking into a No-Go area lights it up at once. Only ICs share, only while the event is live, and once they stop, it stays stopped.</p></div>
+            <p>Here's our Contingent 3 IC, heading from the casing location to the Padang, and their badge moves with them. For this video the location is simulated; on the day, it's real GPS. Click the badge to see the group, the area they're in, and when the phone last checked in. The dashed line is where the plan says they should be going, so drifting off is easy to spot, and walking into a No-Go area lights it up right away. Only ICs share, and only while the event's live.</p></div>
         </div>
         <p class="warn">No walk to record: the demo script moves the IC's location from the casing location to the Padang every 5 s, starting when they share in segment 8.</p>
         <div class="shows"><span class="tag">GPS</span><span class="tag">Realtime</span></div>
@@ -303,7 +295,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Live page, Message everyone: Running late, To: Everyone, Send; phone: Got it</li><li>Hold in place (Urgent ticks itself), Send</li><li>Second phone: SOS → Send; laptop: the red banner, Show on map; I'm on my way; I'm safe</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Messages go out from the Live page, with quick ones for running late, wet weather or lightning, to everyone, the ICs and admins, the planners or one sector. Each arrives as a banner that stays until Got it, and planners see who's read it. Urgent ones, like hold in place, come in red. In an emergency, anyone can press SOS. Everyone gets a red banner with who and where; responders tap I'm on my way, until the sender taps I'm safe.</p></div>
+            <p>Messages go out from the Live page. There are quick ones for running late, wet weather or lightning, and you can send to everyone, the ICs and admins, the planners, or one sector. Each shows up as a banner that stays until they tap Got it, and planners can see who's read it. Urgent ones, like hold in place, come in red. And in an emergency, anyone can press SOS. Everyone gets a red banner with who and where. Responders tap I'm on my way, until the person taps I'm safe.</p></div>
         </div>
         <div class="shows"><span class="tag">Messages</span><span class="tag">SOS</span></div>
       </div>
@@ -316,8 +308,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>End event: type END</li><li>Playback: a recording with real movement; drag the scrubber, Play at 10×, skip</li><li>Trails on, filter to one group, click a person, Follow</li><li>The Download to keep chip, CSV, then Replay a CSV</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>When it's over, End event needs END typed, and every phone stops sharing. Each run is saved on the Playback page. Opening our last rehearsal zooms onto the venue with every IC's track. We can drag to any moment, play it faster, or skip back and forward. Trails show each group's path; we can filter to one group, or click someone and follow them.</p>
-            <p>Recordings are kept for seven days, and this chip warns when one is about to go. We download it as a CSV, which can be loaded back and replayed any time for the debrief.</p></div>
+            <p>When it's all over, End event asks you to type END, and every phone stops sharing. Each run is saved on the Playback page. Let's open our last rehearsal. It zooms onto the venue with every IC's track. We can drag to any moment, speed it up, or skip back and forward. Trails show each group's path, and we can filter to one group, or click someone and follow them. Recordings are kept for seven days, and this chip warns you when one's about to go. We can also download it as a CSV and load it back anytime for the debrief.</p></div>
         </div>
         <div class="shows"><span class="tag">Playback</span><span class="tag">CSV</span></div>
       </div>
@@ -330,7 +321,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>The phone app as a planner: Ops, Map, Timeline, People tabs</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Planners don't need a laptop on the day. They can run the whole event from the phone app, with Ops, Map, Timeline and People.</p></div>
+            <p>And planners don't need a laptop on the day. The phone app runs the whole event, with Ops, Map, Timeline and People.</p></div>
         </div>
         <div class="shows"><span class="tag">Phone app</span></div>
       </div>
@@ -341,9 +332,9 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="body">
         <h3>How we tested it</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Slide: 99 unit tests, 70 end-to-end tests, 932 database checks</li><li>Terminal clip of the E2E run going green, sped up 4×</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Slide: 126 unit tests, 71 end-to-end tests, 951 database checks</li><li>Terminal clip of the E2E run going green, sped up 4×</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Every feature you've seen is tested automatically. Seventy end-to-end tests play each role in its own browser, from building the plan to the replay, and check the database as well as the screen. Alongside them run ninety-nine unit tests and over nine hundred database checks. We also ran the whole NE4 night with a thousand virtual phones, which showed us one slow query that we fixed.</p></div>
+            <p>Everything you've just seen is tested automatically. Seventy-one end-to-end tests play each role in its own browser, from building the plan to the replay, and check the database, not just the screen. On top of that, there are a hundred and twenty-six unit tests and over nine hundred database checks. We even ran the whole NE4 night with a thousand virtual phones. That found one slow query, which we fixed.</p></div>
         </div>
         <div class="shows"><span class="tag">Testing</span></div>
       </div>
@@ -355,7 +346,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <h3>Close</h3>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Back to the Overview; end slide with the site, the repo and team names</li></ul></div>
-          <div class="say"><div class="label">Say</div><p>So that's Planova: draw the venue, plan where every group goes, run the event live with location, attendance and messages, and play it all back afterwards. It's live at gpstesting.vercel.app. Thanks for watching.</p></div>
+          <div class="say"><div class="label">Say</div><p>So that's Planova. Draw the venue, plan where every group goes, run the event live with location, attendance and messages, and play it all back afterwards. It's live at gpstesting.vercel.app. Thanks for watching!</p></div>
         </div>
       </div>
     </article>
@@ -480,7 +471,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
           <tr><td>CSS and Bootstrap, responsive, clean</td><td class="t">—</td><td>Left out on purpose; laptop and phone shown throughout</td></tr>
           <tr><td>Type of data store</td><td class="t">0:00</td><td>Supabase database, which also enforces the roles</td></tr>
           <tr><td>External API and how it's integrated</td><td class="t">0:00 · 1:35</td><td>OneMap maps and addresses</td></tr>
-          <tr><td>How the features are tested</td><td class="t">10:15</td><td>70 end-to-end tests by role, unit tests, database checks, the 1,000-phone run</td></tr>
+          <tr><td>How the features are tested</td><td class="t">10:15</td><td>71 end-to-end tests by role, unit tests, database checks, the 1,000-phone run</td></tr>
           <tr><td>720p minimum, 12 minutes maximum</td><td class="t">—</td><td>1080p export; planned 11:20</td></tr>
         </tbody>
       </table>
