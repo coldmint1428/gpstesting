@@ -1,0 +1,109 @@
+{
+  "test": "ST2",
+  "session": "9b292cdb-21e5-4584-bbdc-bd125c699a4b",
+  "viewers": [
+    {
+      "viewer": 1,
+      "messages": 3284,
+      "perMinute": {
+        "n": 9,
+        "min": 284,
+        "median": 335,
+        "p95": 391,
+        "max": 391
+      },
+      "lagS": {
+        "n": 3284,
+        "min": 0.4545,
+        "median": 1.3085,
+        "p95": 1.8025,
+        "max": 44.3045
+      },
+      "drops": 0
+    },
+    {
+      "viewer": 2,
+      "messages": 3284,
+      "perMinute": {
+        "n": 9,
+        "min": 330,
+        "median": 335,
+        "p95": 339,
+        "max": 339
+      },
+      "lagS": {
+        "n": 3284,
+        "min": 0.4515,
+        "median": 1.3005,
+        "p95": 1.8235,
+        "max": 44.3045
+      },
+      "drops": 0
+    },
+    {
+      "viewer": 3,
+      "messages": 3283,
+      "perMinute": {
+        "n": 9,
+        "min": 330,
+        "median": 335,
+        "p95": 339,
+        "max": 339
+      },
+      "lagS": {
+        "n": 3283,
+        "min": 0.4275,
+        "median": 1.2585,
+        "p95": 1.7125,
+        "max": 44.3055
+      },
+      "drops": 0
+    },
+    {
+      "viewer": 4,
+      "messages": 3283,
+      "perMinute": {
+        "n": 9,
+        "min": 330,
+        "median": 336,
+        "p95": 338,
+        "max": 338
+      },
+      "lagS": {
+        "n": 3283,
+        "min": 0.4505,
+        "median": 1.2995,
+        "p95": 1.7855,
+        "max": 44.3065
+      },
+      "drops": 0
+    },
+    {
+      "viewer": 5,
+      "messages": 3283,
+      "perMinute": {
+        "n": 9,
+        "min": 330,
+        "median": 336,
+        "p95": 339,
+        "max": 339
+      },
+      "lagS": {
+        "n": 3283,
+        "min": 0.4505,
+        "median": 1.3055,
+        "p95": 1.8225,
+        "max": 44.3065
+      },
+      "drops": 0
+    }
+  ],
+  "lagS": {
+    "n": 16417,
+    "min": 0.4275,
+    "median": 1.2865,
+    "p95": 1.7925,
+    "max": 44.3065
+  },
+  "drops": 0
+}

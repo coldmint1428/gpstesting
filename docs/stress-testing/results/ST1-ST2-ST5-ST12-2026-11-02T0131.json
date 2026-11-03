@@ -1,0 +1,776 @@
+{
+ "at": "2026-11-01T17:42:55.747Z",
+ "startedAt": "2026-11-01T17:31:17.212Z",
+ "eventId": "0a04f682-6e97-4711-a88f-b106306e0b0c",
+ "config": {
+  "DURATION_S": 600,
+  "RAMP_S": 120,
+  "MAP_SHARE": 0.08,
+  "people": 60,
+  "ICs": 35
+ },
+ "session": "421d400a-5074-4761-8d51-ababefff9251",
+ "totals": {
+  "calls": 2795,
+  "errors": 144,
+  "readingsStored": 833
+ },
+ "ops": {
+  "start_event": {
+   "n": 1,
+   "errors": 0,
+   "p50": 709,
+   "p95": 709,
+   "p99": 709,
+   "max": 709,
+   "errorKinds": {}
+  },
+  "event_sessions.select": {
+   "n": 63,
+   "errors": 0,
+   "p50": 222,
+   "p95": 13768,
+   "p99": 20275,
+   "max": 20275,
+   "errorKinds": {}
+  },
+  "events.select": {
+   "n": 63,
+   "errors": 0,
+   "p50": 207,
+   "p95": 14157,
+   "p99": 19134,
+   "max": 19134,
+   "errorKinds": {}
+  },
+  "event_roles.select": {
+   "n": 63,
+   "errors": 0,
+   "p50": 232,
+   "p95": 13482,
+   "p99": 19457,
+   "max": 19457,
+   "errorKinds": {}
+  },
+  "groups.select": {
+   "n": 63,
+   "errors": 0,
+   "p50": 204,
+   "p95": 14145,
+   "p99": 15861,
+   "max": 15861,
+   "errorKinds": {}
+  },
+  "group_members.select": {
+   "n": 63,
+   "errors": 0,
+   "p50": 215,
+   "p95": 14165,
+   "p99": 19148,
+   "max": 19148,
+   "errorKinds": {}
+  },
+  "my_event_membership": {
+   "n": 63,
+   "errors": 0,
+   "p50": 220,
+   "p95": 12560,
+   "p99": 20276,
+   "max": 20276,
+   "errorKinds": {}
+  },
+  "latest_locations": {
+   "n": 5,
+   "errors": 0,
+   "p50": 193,
+   "p95": 389,
+   "p99": 389,
+   "max": 389,
+   "errorKinds": {}
+  },
+  "plan_log_list": {
+   "n": 566,
+   "errors": 21,
+   "p50": 6369,
+   "p95": 150212,
+   "p99": 216099,
+   "max": 223965,
+   "errorKinds": {
+    "upstream request timeout": 17,
+    "canceling statement due to statement timeout": 4
+   }
+  },
+  "session_timetable": {
+   "n": 536,
+   "errors": 51,
+   "p50": 7292,
+   "p95": 123539,
+   "p99": 168544,
+   "max": 215902,
+   "errorKinds": {
+    "canceling statement due to statement timeout": 26,
+    "upstream request timeout": 25
+   }
+  },
+  "plan_log_list (ops)": {
+   "n": 92,
+   "errors": 2,
+   "p50": 224,
+   "p95": 90673,
+   "p99": 183586,
+   "max": 183586,
+   "errorKinds": {
+    "upstream request timeout": 2
+   }
+  },
+  "plan_ops": {
+   "n": 88,
+   "errors": 6,
+   "p50": 675,
+   "p95": 47399,
+   "p99": 170597,
+   "max": 170597,
+   "errorKinds": {
+    "canceling statement due to statement timeout": 5,
+    "upstream request timeout": 1
+   }
+  },
+  "start_tracking_pass": {
+   "n": 35,
+   "errors": 0,
+   "p50": 195,
+   "p95": 18927,
+   "p99": 21388,
+   "max": 21388,
+   "errorKinds": {}
+  },
+  "report_location": {
+   "n": 833,
+   "errors": 59,
+   "p50": 597,
+   "p95": 89789,
+   "p99": 169063,
+   "max": 188929,
+   "errorKinds": {
+    "500 {\"code\":\"57014\",\"details\":null,\"hint\":null,\"message\":\"canceling statement due to statement timeout\"}": 40,
+    "504 upstream request timeout": 19
+   }
+  },
+  "frame_shift (republish)": {
+   "n": 4,
+   "errors": 0,
+   "p50": 28610,
+   "p95": 33592,
+   "p99": 33592,
+   "max": 33592,
+   "errorKinds": {}
+  },
+  "plan_publish (republish)": {
+   "n": 2,
+   "errors": 1,
+   "p50": 10616,
+   "p95": 10616,
+   "p99": 10616,
+   "max": 10616,
+   "errorKinds": {
+    "canceling statement due to statement timeout": 1
+   }
+  },
+  "plan_log_ack": {
+   "n": 111,
+   "errors": 3,
+   "p50": 14846,
+   "p95": 163264,
+   "p99": 168016,
+   "max": 179481,
+   "errorKinds": {
+    "canceling statement due to statement timeout": 1,
+    "upstream request timeout": 2
+   }
+  },
+  "frame_shift (under load)": {
+   "n": 0,
+   "errors": 1,
+   "p50": null,
+   "p95": null,
+   "p99": null,
+   "max": null,
+   "errorKinds": {
+    "upstream request timeout": 1
+   }
+  }
+ },
+ "realtime": {
+  "joined": 257,
+  "failed": 0,
+  "failures": {},
+  "messages": {
+   "locations": 2597,
+   "plans": 311,
+   "event_sessions": 114
+  },
+  "delays": {
+   "realtime channel join": {
+    "n": 257,
+    "p50": 88,
+    "p95": 482,
+    "p99": 645,
+    "max": 649
+   },
+   "location reached a map": {
+    "n": 2597,
+    "p50": 962,
+    "p95": 56334,
+    "p99": 113668,
+    "max": 165009
+   },
+   "plans UPDATE reached a phone": {
+    "n": 311,
+    "p50": 3775,
+    "p95": 285600,
+    "p99": 285602,
+    "max": 285602
+   },
+   "timetable re-read after a publish": {
+    "n": 148,
+    "p50": 11949,
+    "p95": 109143,
+    "p99": 174286,
+    "max": 177095
+   }
+  }
+ },
+ "acks": [
+  {
+   "kind": "timeline",
+   "body": "The timetable changed for 20 groups (version 5).",
+   "recipients": 61,
+   "acked": 53
+  },
+  {
+   "kind": "timeline",
+   "body": "The timetable changed for 20 groups (version 4).",
+   "recipients": 61,
+   "acked": 60
+  }
+ ],
+ "timeline": [
+  {
+   "s": 13,
+   "active": 6,
+   "calls": 59,
+   "errors": 0,
+   "rtJoined": 23,
+   "rtFailed": 0
+  },
+  {
+   "s": 23,
+   "active": 11,
+   "calls": 112,
+   "errors": 0,
+   "rtJoined": 39,
+   "rtFailed": 0
+  },
+  {
+   "s": 33,
+   "active": 16,
+   "calls": 193,
+   "errors": 0,
+   "rtJoined": 67,
+   "rtFailed": 0
+  },
+  {
+   "s": 43,
+   "active": 22,
+   "calls": 292,
+   "errors": 0,
+   "rtJoined": 91,
+   "rtFailed": 0
+  },
+  {
+   "s": 53,
+   "active": 27,
+   "calls": 375,
+   "errors": 0,
+   "rtJoined": 104,
+   "rtFailed": 0
+  },
+  {
+   "s": 63,
+   "active": 36,
+   "calls": 521,
+   "errors": 0,
+   "rtJoined": 149,
+   "rtFailed": 0
+  },
+  {
+   "s": 73,
+   "active": 41,
+   "calls": 645,
+   "errors": 0,
+   "rtJoined": 169,
+   "rtFailed": 0
+  },
+  {
+   "s": 83,
+   "active": 42,
+   "calls": 725,
+   "errors": 0,
+   "rtJoined": 173,
+   "rtFailed": 0
+  },
+  {
+   "s": 93,
+   "active": 49,
+   "calls": 875,
+   "errors": 0,
+   "rtJoined": 197,
+   "rtFailed": 0
+  },
+  {
+   "s": 103,
+   "active": 52,
+   "calls": 974,
+   "errors": 0,
+   "rtJoined": 209,
+   "rtFailed": 0
+  },
+  {
+   "s": 113,
+   "active": 53,
+   "calls": 1136,
+   "errors": 0,
+   "rtJoined": 213,
+   "rtFailed": 0
+  },
+  {
+   "s": 123,
+   "active": 57,
+   "calls": 1192,
+   "errors": 2,
+   "rtJoined": 217,
+   "rtFailed": 0
+  },
+  {
+   "s": 133,
+   "active": 60,
+   "calls": 1207,
+   "errors": 3,
+   "rtJoined": 221,
+   "rtFailed": 0
+  },
+  {
+   "s": 143,
+   "active": 61,
+   "calls": 1407,
+   "errors": 4,
+   "rtJoined": 249,
+   "rtFailed": 0
+  },
+  {
+   "s": 153,
+   "active": 63,
+   "calls": 1512,
+   "errors": 5,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 163,
+   "active": 63,
+   "calls": 1559,
+   "errors": 5,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 173,
+   "active": 63,
+   "calls": 1698,
+   "errors": 5,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 183,
+   "active": 63,
+   "calls": 1772,
+   "errors": 5,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 193,
+   "active": 63,
+   "calls": 1871,
+   "errors": 5,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 203,
+   "active": 63,
+   "calls": 1990,
+   "errors": 5,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 213,
+   "active": 63,
+   "calls": 2106,
+   "errors": 5,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 223,
+   "active": 63,
+   "calls": 2198,
+   "errors": 8,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 233,
+   "active": 63,
+   "calls": 2199,
+   "errors": 8,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 243,
+   "active": 63,
+   "calls": 2199,
+   "errors": 8,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 253,
+   "active": 63,
+   "calls": 2200,
+   "errors": 8,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 263,
+   "active": 63,
+   "calls": 2207,
+   "errors": 12,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 273,
+   "active": 63,
+   "calls": 2208,
+   "errors": 13,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 283,
+   "active": 63,
+   "calls": 2212,
+   "errors": 15,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 293,
+   "active": 63,
+   "calls": 2218,
+   "errors": 16,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 303,
+   "active": 63,
+   "calls": 2218,
+   "errors": 16,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 313,
+   "active": 63,
+   "calls": 2251,
+   "errors": 19,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 323,
+   "active": 63,
+   "calls": 2333,
+   "errors": 24,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 333,
+   "active": 63,
+   "calls": 2340,
+   "errors": 24,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 343,
+   "active": 63,
+   "calls": 2344,
+   "errors": 24,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 353,
+   "active": 63,
+   "calls": 2347,
+   "errors": 25,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 363,
+   "active": 63,
+   "calls": 2367,
+   "errors": 25,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 373,
+   "active": 63,
+   "calls": 2379,
+   "errors": 25,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 383,
+   "active": 63,
+   "calls": 2406,
+   "errors": 25,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 393,
+   "active": 63,
+   "calls": 2408,
+   "errors": 25,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 403,
+   "active": 63,
+   "calls": 2498,
+   "errors": 30,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 413,
+   "active": 63,
+   "calls": 2512,
+   "errors": 30,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 423,
+   "active": 63,
+   "calls": 2513,
+   "errors": 30,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 433,
+   "active": 63,
+   "calls": 2515,
+   "errors": 30,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 443,
+   "active": 63,
+   "calls": 2515,
+   "errors": 30,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 453,
+   "active": 63,
+   "calls": 2518,
+   "errors": 30,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 463,
+   "active": 63,
+   "calls": 2535,
+   "errors": 40,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 473,
+   "active": 63,
+   "calls": 2535,
+   "errors": 40,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 483,
+   "active": 63,
+   "calls": 2535,
+   "errors": 40,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 493,
+   "active": 63,
+   "calls": 2536,
+   "errors": 40,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 503,
+   "active": 63,
+   "calls": 2559,
+   "errors": 44,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 513,
+   "active": 63,
+   "calls": 2599,
+   "errors": 63,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 523,
+   "active": 63,
+   "calls": 2600,
+   "errors": 63,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 533,
+   "active": 63,
+   "calls": 2601,
+   "errors": 63,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 543,
+   "active": 63,
+   "calls": 2603,
+   "errors": 64,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 553,
+   "active": 63,
+   "calls": 2632,
+   "errors": 90,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 563,
+   "active": 63,
+   "calls": 2633,
+   "errors": 90,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 573,
+   "active": 63,
+   "calls": 2637,
+   "errors": 92,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 583,
+   "active": 63,
+   "calls": 2642,
+   "errors": 95,
+   "rtJoined": 257,
+   "rtFailed": 0
+  },
+  {
+   "s": 593,
+   "active": 63,
+   "calls": 2642,
+   "errors": 95,
+   "rtJoined": 257,
+   "rtFailed": 0
+  }
+ ],
+ "stress": {
+  "endAtFinish": true,
+  "republishes": [
+   {
+    "n": 1,
+    "at": "2026-11-01T17:32:57.876Z",
+    "error": null,
+    "activeThen": 51,
+    "reached": 63,
+    "within30s": 51,
+    "p95": 100733,
+    "max": 100784
+   },
+   {
+    "n": 2,
+    "at": "2026-11-01T17:34:38.014Z",
+    "error": null,
+    "activeThen": 63,
+    "reached": 63,
+    "within30s": 63,
+    "p95": 645,
+    "max": 648
+   },
+   {
+    "n": 3,
+    "at": "2026-11-01T17:37:51.384Z",
+    "error": "canceling statement due to statement timeout",
+    "activeThen": 63,
+    "reached": 0,
+    "within30s": 0,
+    "p95": null,
+    "max": null
+   },
+   {
+    "n": 4,
+    "at": "2026-11-01T17:42:46.374Z",
+    "error": null,
+    "activeThen": 4,
+    "reached": 0,
+    "within30s": 0,
+    "p95": null,
+    "max": null
+   }
+  ]
+ }
+}

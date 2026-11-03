@@ -21,6 +21,14 @@
 //   +450 s  plan_broadcast to everyone; 70% of people tap Got it within a minute   -> an ack storm
 //   +560 s  one contingent held 3 min (frame_hold), publish                        -> only that group changes
 // Everything is timed and written to .tmp/loadtest/result-<time>.json.
+//
+// Settings for the stress tests (docs/stress-testing/STRESS-TEST-PLAN.md), each off unless set, so a plain run is
+// exactly the run above. `npm run stress` (tools/qa/stress.mjs) sets them:
+//   END_AT_FINISH=1        end the event when the run stops: at the end, on Ctrl+C (results are still written), on a
+//                          crash, or when the window is closed. Without it the session stays live after the run.
+//   REPUBLISH_EVERY_S=240  ST12: every N s push the rest of the night +30 s and publish, and count how many phones
+//                          heard each publish within 30 s.
+//   REFRESH_TOKENS=1       renew every sign-in before it expires (they last an hour): for runs longer than that.
 import fs from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
 import { SUPABASE_URL, ANON_KEY } from '../../e2e/support/session.js'
@@ -29,6 +37,9 @@ const DURATION_S = Number(process.env.DURATION_S || 720)
 const RAMP_S = Number(process.env.RAMP_S || 180)
 const MAP_SHARE = Number(process.env.MAP_SHARE || 0.08)
 const LIMIT = Number(process.env.USERS || 1000)
+const END_AT_FINISH = process.env.END_AT_FINISH === '1'
+const REPUBLISH_EVERY_S = Number(process.env.REPUBLISH_EVERY_S || 0)
+const REFRESH_TOKENS = process.env.REFRESH_TOKENS === '1'
 const seed = JSON.parse(fs.readFileSync('.tmp/loadtest/seed.json', 'utf8'))
 if (process.env.PLAN_ID) seed.planId = process.env.PLAN_ID // the same event on another of its plans (the root-cause run)
 const sessions = JSON.parse(fs.readFileSync('.tmp/loadtest/sessions.json', 'utf8'))
@@ -101,8 +112,9 @@ function noisy(p, sigma) {
 // ---------- staff: root starts the event with T+0 = now ----------
 // The QA staff sessions cached by the E2E suite, as tokens (no auth module: nothing on this laptop refreshes mid-run)
 const staffCache = JSON.parse(fs.readFileSync('.tmp/e2e-sessions.json', 'utf8'))
-const tokenClient = (token) => createClient(SUPABASE_URL, ANON_KEY, { accessToken: async () => token })
-const root = tokenClient(staffCache.root.access_token)
+// The token is read at each call, so REFRESH_TOKENS can renew it under a running client
+const tokenClient = (sess) => createClient(SUPABASE_URL, ANON_KEY, { accessToken: async () => sess.access_token })
+const root = tokenClient(staffCache.root)
 const sgNow = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(new Date())
 const part = (t) => sgNow.find((x) => x.type === t).value
 const planRow = (await root.from('plans').select('id, name, rev').eq('id', seed.planId).single()).data
@@ -118,6 +130,37 @@ console.log(`session ${session.id}; T+0 ${session.t0_at}; ${people.length} peopl
 
 // Shared clock for "the planner published at": phones measure how long the news took to reach them
 const announced = { plans: null }
+
+// ---------- END_AT_FINISH: never leave the session live ----------
+// A session left live keeps the 5 s and 30 s plan jobs working on it, and a crash used to leave it that way.
+let ended = false
+async function endEvent(why) {
+  if (!END_AT_FINISH || ended) return
+  ended = true
+  const r = await root.rpc('end_event', { p_event_id: ev })
+  console.log(r.error ? `COULD NOT END THE EVENT (${why}): ${r.error.message}. End it on the website now.` : `event ended (${why})`)
+}
+let finishEarly = () => {}
+if (END_AT_FINISH) {
+  let presses = 0
+  const stop = async (why) => {
+    // First Ctrl+C: stop early but still write the results. A second one, or the window closing: end and leave.
+    if (why === 'SIGINT' && ++presses === 1) {
+      console.log('\nStopping early: the results are still written, and the event is ended. Ctrl+C again to leave at once.')
+      return finishEarly()
+    }
+    stopping = true
+    await endEvent(why)
+    process.exit(1)
+  }
+  for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => stop(sig))
+  for (const kind of ['uncaughtException', 'unhandledRejection']) {
+    process.on(kind, (e) => {
+      console.error(e)
+      stop('crash')
+    })
+  }
+}
 
 // ---------- one virtual person ----------
 async function person(p, index) {
@@ -163,6 +206,7 @@ async function person(p, index) {
   const tag = Math.random().toString(36).slice(2)
   const seen = (table) => (payload) => {
     rt.messages[table] = (rt.messages[table] || 0) + 1
+    if (table === 'plans') for (const e of publishes) if (!e.reached.has(p.id) && Date.now() - e.at < 120000) e.reached.set(p.id, Date.now() - e.at)
     if (table === 'plans' && announced.plans) {
       delay('plans UPDATE reached a phone', Date.now() - announced.plans)
       refresh('push')
@@ -256,7 +300,7 @@ async function planners() {
     while (elapsed() < s && !stopping) await sleep(500)
     if (stopping) return
     const t = Date.now()
-    const out = await fn()
+    const out = await onePlanChange(fn)
     console.log(`[${elapsed().toFixed(0)} s] ${label}: ${out && out.error ? 'ERROR ' + out.error.message : 'ok'} (${Date.now() - t} ms)`)
   }
   const publish = async () => {
@@ -285,13 +329,68 @@ async function planners() {
   })
 }
 
+// One plan change at a time: a publish names the revision it read, so two at once would refuse each other
+let planQueue = Promise.resolve()
+function onePlanChange(fn) {
+  const next = planQueue.then(fn, fn)
+  planQueue = next.catch(() => {})
+  return next
+}
+
+// ---------- REPUBLISH_EVERY_S (ST12): many publishes during the night ----------
+const publishes = [] // { n, at, active, error, reached: Map(person id -> ms) }
+async function republishes() {
+  if (!REPUBLISH_EVERY_S) return
+  for (let n = 1; ; n++) {
+    while (elapsed() < n * REPUBLISH_EVERY_S && !stopping) await sleep(500)
+    if (stopping) return
+    const out = await onePlanChange(async () => {
+      const from = Math.ceil(planT() / 5) * 5 + 60
+      const shift = await timed('frame_shift (republish)', () => root.rpc('frame_shift', { p_plan: seed.planId, p_from_s: from, p_delta_s: 30, p_to_s: null }))
+      if (shift.error) return shift
+      const rev = (await root.from('plans').select('rev').eq('id', seed.planId).single()).data.rev
+      const entry = { n, at: Date.now(), active, error: null, reached: new Map() }
+      publishes.push(entry)
+      announced.plans = entry.at
+      const pub = await timed('plan_publish (republish)', () => root.rpc('plan_publish', { p_plan: seed.planId, p_plan_rev: rev }))
+      if (pub.error) entry.error = pub.error.message
+      return pub
+    }).catch((error) => ({ error }))
+    console.log(`[${elapsed().toFixed(0)} s] republish ${n} (+30 s): ${out && out.error ? 'ERROR ' + (out.error.message || out.error) : 'ok'}`)
+  }
+}
+
+// ---------- REFRESH_TOKENS: sign-ins last an hour ----------
+async function refresher() {
+  if (!REFRESH_TOKENS) return
+  while (!stopping) {
+    for (const s of new Set(Object.values(sessions))) {
+      if (stopping) return
+      if (!s.refresh_token || (s.expires_at && s.expires_at * 1000 - Date.now() > 15 * 60000)) continue
+      await timed('token refresh', async () => {
+        const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+          method: 'POST',
+          headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: s.refresh_token }),
+        })
+        if (!res.ok) return { error: new Error(res.status + ' ' + (await res.text()).slice(0, 100)) }
+        const j = await res.json()
+        Object.assign(s, { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at })
+        return {}
+      })
+      await sleep(300)
+    }
+    for (let i = 0; i < 60 && !stopping; i++) await sleep(1000)
+  }
+}
+
 // ---------- run ----------
 let active = 0
 const staffIds = {}
 for (const who of ['root', 'planner']) {
   const sess = staffCache[who]
   staffIds[who] = sess.user.id
-  sessions[sess.user.id] = { access_token: sess.access_token, refresh_token: sess.refresh_token }
+  sessions[sess.user.id] = sess // the same object root's client reads its token from
 }
 const crowd = [
   ...Object.entries(staffIds).map(([who, id]) => ({ id, email: who, group: null, isIC: false, staff: true })),
@@ -307,8 +406,11 @@ const ticker = setInterval(() => {
   }
 }, 10000)
 const all = Promise.all(crowd.map((p, i) => person(p, p.staff ? 0 : i).catch((e) => record('person crashed', 0, e))))
-const scripted = planners()
-await sleep(DURATION_S * 1000)
+const scripted = Promise.all([planners(), republishes(), refresher()]).catch((e) => record('planner script crashed', 0, e))
+await new Promise((resolve) => {
+  finishEarly = resolve
+  setTimeout(resolve, DURATION_S * 1000)
+})
 stopping = true
 clearInterval(ticker)
 await Promise.race([Promise.all([all, scripted]), sleep(20000)])
@@ -318,6 +420,8 @@ const { count: readings } = await root.from('locations').select('user_id', { cou
 const acks = (await root.rpc('plan_log_list', { p_plan: seed.planId, p_limit: 20 })).data || []
 const result = {
   at: new Date().toISOString(),
+  startedAt: new Date(t0).toISOString(),
+  eventId: ev,
   config: { DURATION_S, RAMP_S, MAP_SHARE, people: people.length, ICs: people.filter((p) => p.isIC).length },
   session: session.id,
   totals: { calls, errors: errorsTotal, readingsStored: readings },
@@ -333,9 +437,22 @@ const result = {
   },
   acks: acks.map((r) => ({ kind: r.kind, body: (r.body || '').slice(0, 60), recipients: r.recipients, acked: r.acked })),
   timeline,
+  stress: {
+    endAtFinish: END_AT_FINISH,
+    republishes: publishes.map((e) => {
+      const ms = [...e.reached.values()]
+      return { n: e.n, at: new Date(e.at).toISOString(), error: e.error, activeThen: e.active, reached: ms.length, within30s: ms.filter((x) => x <= 30000).length, p95: pct(ms, 95), max: ms.length ? Math.max(...ms) : null }
+    }),
+  },
+}
+// Renewed sign-ins replace the stored ones (the old refresh tokens are spent)
+if (REFRESH_TOKENS) {
+  fs.writeFileSync('.tmp/loadtest/sessions.json', JSON.stringify(sessions))
+  fs.writeFileSync('.tmp/e2e-sessions.json', JSON.stringify(staffCache))
 }
 const file = `.tmp/loadtest/result-${Date.now()}.json`
 fs.writeFileSync(file, JSON.stringify(result, null, 1))
 console.log(JSON.stringify({ totals: result.totals, realtime: { joined: rt.joined, failed: rt.failed, failures: rt.failures }, ops: Object.fromEntries(Object.entries(result.ops).map(([k, o]) => [k, `${o.n} ok, ${o.errors} err, p50 ${o.p50} p95 ${o.p95} p99 ${o.p99}`])), delays: result.realtime.delays }, null, 1))
 console.log('wrote', file)
+await endEvent('finished')
 process.exit(0)
