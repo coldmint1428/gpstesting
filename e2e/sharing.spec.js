@@ -90,6 +90,7 @@ test('after Stop nothing more is uploaded, and the map shows one Stop', async ()
   // The planner's map: the IC is "Stopped sharing"
   const planner = await (await contextAs(ic.context().browser(), 'root', base)).newPage()
   await planner.goto(`/events/${ev.eventId}/live`)
+  await planner.getByTestId('live-tab-people').click() // a planner's Live page opens on Operations (3 Nov)
   await expect(planner.getByTestId('person-qa_ic1').first()).toContainText(/stopped/i, { timeout: 30_000 })
   await shot(planner, 'share-04-planner-sees-stopped', { fullPage: true })
   await planner.context().close()

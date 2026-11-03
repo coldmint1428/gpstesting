@@ -128,6 +128,8 @@ test('an IC shares a (faked) GPS position and the planner sees them on the live 
 
   const planner = await as(browser, 'root')
   await planner.goto(`/events/${ev.eventId}/live`)
+  // A planner's Live page opens on Operations (3 Nov); the people sharing are on the On the map tab
+  await planner.getByTestId('live-tab-people').click()
   await expect(planner.getByTestId('person-qa_ic1').first()).toBeVisible({ timeout: 30_000 })
   await shot(planner, 'flow-05-planner-sees-ic', { fullPage: true })
 })
@@ -144,17 +146,19 @@ test('a member cannot share, and sees their own group only', async ({ browser })
   await shot(page, 'flow-07-member-schedule', { fullPage: true })
 })
 
-test('the planner marks Alpha as arrived on the ops board', async ({ browser }) => {
-  const page = await as(browser, 'planner')
-  await page.goto(`/events/${ev.eventId}/live`) // the ops board sits on the Live page
-  const mark = page.getByTestId('ops-mark-arrived').first()
+// The ops board only shows marks since 3 Nov (rui's UI update took the planner's Arrived / Missed off it): the IC
+// marks their own group with We're here on the Schedule, and the board and plan_progress have it.
+test("the IC marks Alpha as arrived with We're here", async ({ browser }) => {
+  const page = await as(browser, 'ic1')
+  await page.goto(`/events/${ev.eventId}/timeline`)
+  const mark = page.getByTestId('sched-here').first()
   await expect(mark).toBeVisible({ timeout: 30_000 })
   await mark.click()
   const { sb } = await clientFor('root')
   await expect
     .poll(async () => (await sb.from('plan_progress').select('plan_id', { count: 'exact', head: true }).eq('plan_id', ev.planId)).count ?? 0, { timeout: 20_000 })
     .toBeGreaterThan(0)
-  await shot(page, 'flow-08-planner-marked', { fullPage: true })
+  await shot(page, 'flow-08-ic-marked', { fullPage: true })
 })
 
 test('the planner pushes the rest of the plan by a minute, and the member is told the timeline changed', async ({ browser }) => {

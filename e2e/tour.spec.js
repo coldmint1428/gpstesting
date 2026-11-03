@@ -141,7 +141,10 @@ test('the root: every page of a live event, on a laptop', async ({ browser }) =>
   await visit(page, `${e}/map`, { heading: 'Map', name: 'root-map' })
   await visit(page, `${e}/people`, { heading: 'People', shows: ['QA Member'], name: 'root-people' })
   await visit(page, `${e}/groups`, { heading: 'Groups', shows: ['Alpha', 'Bravo'], name: 'root-groups' })
-  await visit(page, `${e}/live`, { heading: 'Live', shows: ['QA Ic1'], name: 'root-live' })
+  await visit(page, `${e}/live`, { heading: 'Live', name: 'root-live' })
+  // A planner's Live page opens on Operations (3 Nov); the IC sharing is on the On the map tab
+  await page.getByTestId('live-tab-people').click()
+  await expect(page.getByText('QA Ic1').filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 })
   await visit(page, `${e}/playback`, { heading: 'Playback', name: 'root-playback' })
   await visit(page, '/events/new', { name: 'root-wizard', shows: [/name/i] })
   await visit(page, '/profile', { heading: 'Profile', name: 'root-profile' })
