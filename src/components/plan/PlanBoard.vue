@@ -42,9 +42,14 @@ import { createOneMapLayer } from '../../utils/onemap'
 import { isLockRefusal, planErrorMessage, usePlan } from '../../composables/usePlan'
 import { usePlanUndo } from '../../composables/usePlanUndo'
 import PlanLive from './PlanLive.vue'
+import PlanProblems from './PlanProblems.vue'
+import { calmCase, editAllowed, extraSeconds, problemWords, problemsOf, suggestedSpot, walkFixPlan, walkFixWords } from '../../utils/planProblems'
+import { placeName } from '../../composables/useReverseGeocode'
 import EmptyState from '../EmptyState.vue'
 import { askConfirm, askNotice, toast } from '../../composables/useNotify'
 import { saveFile } from '../../lib/saveFile'
+import { escapeHtml } from '../../utils/people'
+import { formatDuration } from '../../utils/time'
 import {
   SNAP_S,
   annotate,
@@ -180,9 +185,365 @@ const blocking = computed(() => {
   // from a carried frame and the database from the stated one -- finding 24 -- so this matched on the end alone.)
   const told = new Set(analysis.value.gaps.map((g) => `${g.groupId}|${g.from.frameId}|${g.to.frameId}`))
   return (serverProblems.value || []).filter(
-    (row) => row.severity === 'error' && !told.has(`${row.group_id}|${row.from_frame}|${row.to_frame}`),
+    (row) =>
+      row.severity === 'error' &&
+      !String(row.message || '').includes('faster than running') &&
+      !told.has(`${row.group_id}|${row.from_frame}|${row.to_frame}`),
   )
 })
+
+// ---------- the Problems panel, and the lock it explains ----------
+// Errors lock the plan: only the frames and groups they name can change, until they are fixed. Warnings do not; they
+// can be dismissed, on this browser, and come back if the walk changes (planProblems).
+const problems = computed(() => problemsOf(analysis.value.gaps, serverProblems.value || []))
+const errors = computed(() => problems.value.filter((p) => p.level === 'error'))
+const dismissedIds = ref(new Set())
+const shownProblemId = ref('')
+const problemsPanel = ref(null)
+const placeNames = ref({}) // "lat,lng" -> a place's name, as OneMap answers it
+const walkFix = ref(null) // the fix on show, worked out and not yet written
+const walkFixResult = ref(null) // what the last fix really did
+let applyingFix = false
+
+const dismissKey = () => 'planova.dismissed.' + (plan.value ? plan.value.id : '')
+function readDismissed() {
+  try {
+    dismissedIds.value = new Set(JSON.parse(localStorage.getItem(dismissKey()) || '[]'))
+  } catch {
+    dismissedIds.value = new Set()
+  }
+}
+function setDismissed(problem, on) {
+  const next = new Set(dismissedIds.value)
+  if (on) next.add(problem.id)
+  else next.delete(problem.id)
+  if (on && shownProblemId.value === problem.id) shownProblemId.value = ''
+  dismissedIds.value = next
+  try {
+    localStorage.setItem(dismissKey(), JSON.stringify([...next]))
+  } catch {
+    // A browser that will not store it still dismisses it until the page is reloaded
+  }
+  drawLines()
+}
+const openWarnings = computed(() => problems.value.filter((p) => p.level === 'warning' && !dismissedIds.value.has(p.id)))
+
+function problemPoint(groupId, frameId) {
+  const track = tracks.value.get(groupId)
+  return (track && track.find((p) => p.frameId === frameId)) || null
+}
+function pointText(point) {
+  if (!point) return ''
+  const name = point.place || placeNames.value[point.lat + ',' + point.lng]
+  return name ? calmCase(name) : point.lat.toFixed(5) + ', ' + point.lng.toFixed(5)
+}
+// The names, for the problems on screen: placeName caches them, and the coordinates stand in until one answers
+watch(problems, (list) => {
+  for (const problem of list.slice(0, 40)) {
+    for (const frameId of [problem.fromFrame, problem.toFrame]) {
+      const point = problemPoint(problem.groupId, frameId)
+      if (!point || point.place) continue
+      const key = point.lat + ',' + point.lng
+      if (key in placeNames.value) continue
+      placeNames.value = { ...placeNames.value, [key]: '' }
+      placeName(point.lat, point.lng).then((name) => {
+        if (name) placeNames.value = { ...placeNames.value, [key]: name }
+      })
+    }
+  }
+})
+
+function problemActions(problem) {
+  const seconds = problem.toS - problem.fromS
+  // Two rules, two fixes: frames for the 25 m limit, time for speed (planProblems)
+  if (problem.kind === 'far') return [{ key: 'walk', label: 'Fill', testid: 'gap-fill' }]
+  if (problem.kind === 'pace') return [{ key: 'walk', label: 'Add time', testid: 'problem-time' }]
+  if (problem.kind === 'zone' && seconds >= 2) return [{ key: 'between', label: 'Add frame between', testid: 'problem-between' }]
+  if (problem.kind === 'zone') return [{ key: 'time', seconds: 10, label: 'Add 10 s', testid: 'problem-time' }]
+  return []
+}
+const frameNumber = (frameId) => frameOrder.value.findIndex((f) => f.id === frameId) + 1
+const problemCards = computed(() =>
+  problems.value.map((problem) => {
+    const from = pointText(problemPoint(problem.groupId, problem.fromFrame))
+    const to = pointText(problemPoint(problem.groupId, problem.toFrame))
+    return {
+      ...problem,
+      ...problemWords(problem, groupName(problem.groupId)),
+      dismissed: dismissedIds.value.has(problem.id),
+      actions: problemActions(problem),
+      when: `${formatOffset(problem.fromS)} → ${formatOffset(problem.toS)}`,
+      // Which dots, when, and where: one place when both ends read the same
+      meta: [
+        `Frames ${frameNumber(problem.fromFrame)} → ${frameNumber(problem.toFrame)}`,
+        `${formatOffset(problem.fromS)} → ${formatOffset(problem.toS)}`,
+        from === to ? from : `${from} → ${to}`,
+      ].filter(Boolean).join('  ·  '),
+    }
+  }),
+)
+const problemBadge = computed(() => {
+  const parts = []
+  const n = errors.value.length
+  if (n) parts.push(n + (n === 1 ? ' error' : ' errors'))
+  const w = openWarnings.value.length
+  if (w) parts.push(w + (w === 1 ? ' warning' : ' warnings'))
+  return parts.join(' · ')
+})
+
+/** Bring the panel into view, wherever the inspector has scrolled to. */
+function revealProblems() {
+  nextTick(() => {
+    const panel = problemsPanel.value && problemsPanel.value.$el
+    if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
+}
+
+/** True when the errors forbid this edit, having said so. No moment named: an edit that adds to the plan. */
+function blockedByErrors(moments = null, groupIds = []) {
+  if (!props.canEdit || !errors.value.length) return false
+  if (moments && moments.every((t_s) => editAllowed(errors.value, t_s, groupIds))) return false
+  const n = errors.value.length
+  toast(`Fix the ${n === 1 ? 'error' : n + ' errors'} first. You can only change what ${n === 1 ? 'it names' : 'they name'} until then.`, 'warning', 5000)
+  revealProblems()
+  return true
+}
+function canEditCell(frame, groupId) {
+  return !errors.value.length || editAllowed(errors.value, frame.t_s, [groupId])
+}
+const frameLocked = computed(() => !!selected.value && !editAllowed(errors.value, selected.value.t_s))
+
+/** The problem somebody last asked to see, and where the suggestion says to send its group. */
+const shownProblem = computed(() => problems.value.find((p) => p.id === shownProblemId.value) || null)
+function spotOf(problem) {
+  return suggestedSpot(problem, problemPoint(problem.groupId, problem.fromFrame), problemPoint(problem.groupId, problem.toFrame), zones.value)
+}
+/** Which end of the shown problem a dot on the bar is, in words: "From · Frame 116". */
+function problemNodeTag(frame) {
+  const problem = shownProblem.value
+  if (!problem) return ''
+  if (frame.id === problem.fromFrame) return 'From · Frame ' + frameNumber(frame.id)
+  if (frame.id === problem.toFrame) return 'To · Frame ' + frameNumber(frame.id)
+  return ''
+}
+
+/** Mark the problem, and open the frame it ends on: the one whose badge moves. */
+function openProblem(problem) {
+  const frame = frames.value.find((f) => f.id === problem.toFrame) || frames.value.find((f) => f.id === problem.fromFrame)
+  if (!frame) return false
+  selectOnly(frame.id)
+  selectedId.value = frame.id
+  shownProblemId.value = problem.id
+  return true
+}
+
+/** "Show on map": frame the walk with the walk and the suggestion marked. */
+function showProblemOnMap(problem) {
+  if (!openProblem(problem)) return
+  drawLines()
+  const a = problemPoint(problem.groupId, problem.fromFrame)
+  const b = problemPoint(problem.groupId, problem.toFrame)
+  if (!map || !a || !b) return
+  const bounds = L.latLngBounds([a.lat, a.lng], [b.lat, b.lng])
+  const spot = spotOf(problem)
+  if (spot) bounds.extend([spot.lat, spot.lng])
+  map.fitBounds(bounds.pad(0.6), { maxZoom: 19 })
+  // The panel sits under the bar, so the map may have scrolled away by the time a card is pressed
+  if (mapEl.value) mapEl.value.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+// Close enough apart to tell the two ends of a walk from each other: a dot is 16 px across
+const NODE_SPACING_PX = 34
+
+/** "Show on timeline": zoom in until the walk's two dots stand apart, and bring them to the middle of the bar. */
+async function showProblemOnTimeline(problem) {
+  if (!openProblem(problem)) return
+  drawLines()
+  const seconds = Math.max(problem.toS - problem.fromS, 1)
+  pxPerSecond.value = Math.min(MAX_PX_PER_SECOND, Math.max(pxPerSecond.value, NODE_SPACING_PX / seconds))
+  await nextTick()
+  const track = trackEl.value
+  if (!track) return
+  track.scrollLeft = xOf((problem.fromS + problem.toS) / 2) - track.clientWidth / 2
+  track.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+/** Open a frame between the two ends, or make one, so the group can be dragged around what is in the way. */
+async function addFrameBetween(problem) {
+  const between = frameOrder.value.filter((f) => f.t_s > problem.fromS && f.t_s < problem.toS)
+  const name = groupName(problem.groupId)
+  if (between.length) {
+    revealFrame(between[Math.floor(between.length / 2)].id)
+    toast(`Drag ${name} around the area at this frame.`, 'success', 5000)
+    return
+  }
+  const t = problem.fromS + Math.floor((problem.toS - problem.fromS) / 2)
+  try {
+    await api.saveFrame({ t_s: t, positions: effectiveAt(t) })
+    await nextTick()
+    const created = frames.value.find((f) => f.t_s === t)
+    if (created) {
+      revealFrame(created.id)
+      edits.created(frameCopy(created), `added a frame at ${formatOffset(t)}`)
+      toast(`Frame added. Drag ${name} around the area.`, 'success', 5000)
+    }
+  } catch (error) {
+    toast(planErrorMessage(error), 'danger', 5000)
+  }
+}
+
+/** Give a walk more time: its end and everything after it move later together. */
+function addTimeTo(problem, seconds) {
+  const last = Math.max(...frames.value.map((f) => f.t_s))
+  return shiftStretch(problem.toS, seconds, last)
+}
+
+/**
+ * Fill or Add time, step one: work out what it would do, say so, and draw it. Nothing is written until Apply.
+ */
+function startWalkFix(problem) {
+  if (problem.level === 'warning' && blockedByErrors()) return
+  const open = problems.value.filter((p) => !dismissedIds.value.has(p.id) || p.id === problem.id)
+  const fix = walkFixPlan(problem, open, tracks.value.get(problem.groupId) || [], zones.value)
+  walkFixResult.value = null
+  walkFix.value = {
+    ...fix,
+    words: fix.blocked ? null : walkFixWords(fix, groupName(problem.groupId), frameNumber),
+  }
+  openProblem(problem)
+  drawLines()
+  if (map && fix.route.length > 1) map.fitBounds(L.latLngBounds(fix.route.map((p) => [p.lat, p.lng])).pad(0.4), { maxZoom: 19 })
+}
+
+function cancelWalkFix() {
+  walkFix.value = null
+  drawLines()
+}
+
+/**
+ * Step two: write it, as one edit. Any time first, latest first, so a walk's times still mean what they said when its
+ * turn comes, and so each fill has the seconds it needs. Afterwards the plan is read again, and the result says what is really
+ * fixed and what is not, rather than what was meant.
+ */
+async function applyWalkFix() {
+  const fix = walkFix.value
+  if (!fix || fix.blocked) return
+  const name = groupName(fix.groupId)
+  const commands = []
+  const span = new Set(fix.frameIds)
+  let added = 0
+  let timeAdded = 0
+  let failure = ''
+  applyingFix = true
+  try {
+    for (const time of [...fix.times].sort((a, b) => b.from_s - a.from_s)) {
+      const to_s = Math.max(...frames.value.map((f) => f.t_s))
+      const at = frames.value.filter((f) => f.t_s >= time.from_s).map((f) => ({ id: f.id, t_s: f.t_s }))
+      await api.shiftFrom(time.from_s, time.seconds, to_s)
+      commands.push({ kind: 'shift', from_s: time.from_s, to_s, delta: time.seconds, frames: at })
+      timeAdded += time.seconds
+    }
+    for (const fill of fix.fills) {
+      const from = frames.value.find((f) => f.id === fill.fromFrame)
+      const to = frames.value.find((f) => f.id === fill.toFrame)
+      // A frame already standing at a wanted time is reused, and gains a position: undo has to take that off it too
+      const inside = frames.value.filter((f) => f.t_s > from.t_s && f.t_s < to.t_s)
+      const known = new Set(frames.value.map((f) => f.id))
+      const before = new Map(inside.map((f) => [f.id, restatedPositions(f)]))
+      const result = await api.fillGap(fill.fromFrame, fill.toFrame, [fix.groupId])
+      added += result?.frames_added ?? 0
+      const written = frames.value.filter((f) => !known.has(f.id))
+      for (const frame of written) span.add(frame.id)
+      if (written.length) commands.push({ kind: 'fill', added: written.map(frameCopy) })
+      for (const frame of inside) {
+        const now = frames.value.find((f) => f.id === frame.id)
+        if (!now) continue
+        const after = restatedPositions(now)
+        if (JSON.stringify(after) !== JSON.stringify(before.get(frame.id))) {
+          span.add(frame.id)
+          commands.push({ kind: 'positions', frameId: frame.id, before: before.get(frame.id), after })
+        }
+      }
+    }
+  } catch (error) {
+    failure = planErrorMessage(error)
+  }
+  if (commands.length) edits.batch(commands, fix.kind === 'far' ? `filled ${name}'s walk` : `added time to ${name}'s walk`)
+  walkFix.value = null
+  await refreshProblems()
+  applyingFix = false
+
+  // Only what this fix was for counts against it: a filled walk that is still fast is the other fix's problem
+  const here = problemCards.value.filter((p) => p.groupId === fix.groupId && span.has(p.fromFrame) && span.has(p.toFrame))
+  const left = here.filter((p) => p.kind === fix.kind)
+  const others = here.filter((p) => p.kind !== fix.kind)
+  const lines = []
+  if (added) lines.push(`Added ${added === 1 ? '1 new frame' : added + ' new frames'} for ${name}. Later frames are renumbered.`)
+  if (timeAdded) lines.push(`Added ${formatDuration(timeAdded * 1000)}${fix.kind === 'far' ? ' to make room for them' : ''}. The plan runs that much longer.`)
+  if (failure) lines.push(failure, commands.length ? 'The changes above are still in place.' : 'Nothing was changed.')
+  for (const p of left) lines.push(`Still open: ${p.title}. ${p.detail}`.trim())
+  const fast = others.filter((p) => p.kind === 'pace').length
+  if (fast) lines.push(`${fast === 1 ? '1 too-fast warning' : fast + ' too-fast warnings'} on this walk ${fast === 1 ? 'is' : 'are'} separate: use Add time or Fix all timing.`)
+  for (const p of others.filter((o) => o.kind !== 'pace')) lines.push(`Now showing: ${p.title}.`)
+  walkFixResult.value = {
+    title: failure ? 'The fix stopped partway' : left.length ? 'Partly fixed' : fix.kind === 'far' ? 'Filled: this walk is inside the 25 m limit' : 'Time added: this walk can be walked',
+    tone: failure || left.length ? 'warn' : 'ok',
+    lines,
+    canUndo: commands.length > 0,
+    frames: frames.value,
+  }
+  shownProblemId.value = ''
+  drawLines()
+  revealProblems()
+}
+
+async function undoWalkFix() {
+  walkFixResult.value = null
+  await runUndo()
+}
+
+/**
+ * Fix all timing: give every open too-fast walk the time it needs, as one edit. Later walks go first, so a walk's times
+ * still mean what they said when its turn comes: pushing an end only moves what comes after it.
+ */
+async function fixAllTiming() {
+  if (blockedByErrors()) return
+  const list = openWarnings.value.filter((p) => p.kind === 'pace').sort((a, b) => b.toS - a.toS)
+  if (!list.length) return
+  const needs = list.map((problem) => ({ problem, seconds: extraSeconds(problem.metres, problem.toS - problem.fromS) }))
+  const total = needs.reduce((sum, row) => sum + row.seconds, 0)
+  const ok = await askConfirm({
+    title: `Add ${formatDuration(total * 1000)} to this plan?`,
+    message: `${list.length === 1 ? 'This walk gets' : list.length + ' walks get'} enough time to be walked, and everything after each one moves later. The plan runs ${formatDuration(total * 1000)} longer. Undo puts it all back.`,
+    confirmText: 'Add time',
+  })
+  if (!ok) return
+  const done = []
+  try {
+    for (const { problem, seconds } of needs) {
+      const to_s = Math.max(...frames.value.map((f) => f.t_s))
+      const at = frames.value.filter((f) => f.t_s >= problem.toS).map((f) => ({ id: f.id, t_s: f.t_s }))
+      await api.shiftFrom(problem.toS, seconds, to_s)
+      done.push({ from_s: problem.toS, to_s, delta: seconds, frames: at })
+    }
+    toast(`Added ${formatDuration(total * 1000)}.`, 'success', 3000)
+  } catch (error) {
+    // A walk somebody is retiming refuses its push. The ones already moved stay, and Undo still reaches them.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
+  }
+  if (done.length) edits.batch(done.map((one) => ({ kind: 'shift', ...one })), `added ${formatDuration(total * 1000)} to ${list.length === 1 ? 'a walk' : list.length + ' walks'}`)
+}
+
+function dismissAllWarnings() {
+  for (const problem of openWarnings.value) setDismissed(problem, true)
+}
+
+function actOnProblem(problem, key) {
+  if (key === 'walk') return startWalkFix(problem)
+  if (key === 'between') return addFrameBetween(problem)
+  const action = problem.actions.find((a) => a.key === key)
+  return addTimeTo(problem, action.seconds)
+}
 
 /** The group-frames the database names, merged into the lanes' and the map's red. The strip is left to the 25 m
  *  rule: a frame dot means "this moment is broken for somebody's walk", and a crossing is already named by the row,
@@ -225,14 +586,6 @@ async function refreshProblems() {
   }
   drawLines()
   drawMarkers()
-}
-
-/** Open the frame a database row names, so "Show" puts the planner on the stretch the sentence is about. */
-function showProblem(row) {
-  const frame = frames.value.find((f) => f.id === row.to_frame) || frames.value.find((f) => f.id === row.from_frame)
-  if (!frame) return
-  selectOnly(frame.id)
-  selectedId.value = frame.id
 }
 
 /** The selected frames in time order, and the one pair of times that names them. */
@@ -626,6 +979,39 @@ function drawLines() {
       { color: '#c2410c', weight: 3, opacity: 0.9, dashArray: '2 4', interactive: false },
     ).addTo(lineLayer)
   }
+  // A fix on show: the walk it covers, and the new frames it would add along it.
+  if (walkFix.value && walkFix.value.route.length > 1) {
+    L.polyline(walkFix.value.route.map((p) => [p.lat, p.lng]), { color: '#15803d', weight: 4, opacity: 0.9, interactive: false }).addTo(lineLayer)
+    for (const spot of walkFix.value.fills.flatMap((fill) => fill.spots)) {
+      L.circleMarker([spot.lat, spot.lng], { radius: 6, color: '#15803d', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(lineLayer)
+    }
+  }
+  // Warnings the planner has not dismissed, amber where an error is red; and the walk "Show on map" asked for, wide.
+  for (const problem of problems.value) {
+    const shown = problem.id === shownProblemId.value
+    if (!shown && !openWarnings.value.includes(problem)) continue
+    const from = problemPoint(problem.groupId, problem.fromFrame)
+    const to = problemPoint(problem.groupId, problem.toFrame)
+    if (!from || !to) continue
+    const line = [[from.lat, from.lng], [to.lat, to.lng]]
+    if (shown) L.polyline(line, { color: problem.level === 'error' ? '#c2410c' : '#d97706', weight: 9, opacity: 0.35, interactive: false }).addTo(lineLayer)
+    if (problem.level === 'warning') L.polyline(line, { color: '#d97706', weight: 3, opacity: 0.95, dashArray: '2 4', interactive: false }).addTo(lineLayer)
+    const spot = shown && !walkFix.value ? spotOf(problem) : null
+    if (spot) {
+      L.polyline([[from.lat, from.lng], [spot.lat, spot.lng]], { color: '#15803d', weight: 3, dashArray: '6 6', interactive: false }).addTo(lineLayer)
+      L.marker([spot.lat, spot.lng], {
+        interactive: false,
+        keyboard: false,
+        zIndexOffset: 500,
+        icon: L.divIcon({
+          className: 'pv-suggest-wrap',
+          html: `<div class="pv-suggest" data-testid="problem-spot"><span class="pv-suggest-dot"></span><span class="pv-suggest-label">Suggested spot for ${escapeHtml(groupName(problem.groupId))}</span></div>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        }),
+      }).addTo(lineLayer)
+    }
+  }
 }
 
 function drawMarkers() {
@@ -669,12 +1055,12 @@ function drawMarkers() {
       icon,
       // Nobody drags a badge while the clock is running: the position on screen is a place between two moments, and
       // there is no row to write it to.
-      draggable: canMove.value && !run,
+      draggable: canMove.value && !run && !!frame && canEditCell(frame, group.id),
       keyboard: false,
       autoPan: true,
       title: group.name,
     })
-    if (canMove.value && !run) {
+    if (canMove.value && !run && frame && canEditCell(frame, group.id)) {
       // Only the badge under the pointer raises dragstart/dragend; the companions are moved with setLatLng(), which
       // raises no drag event. So one gesture is one dragend, and one write is all that can happen.
       marker.on('dragstart', () => beginGroupDrag(group.id))
@@ -990,7 +1376,8 @@ function beginGroupDrag(leaderId) {
   groupDrag = null
   if (!frame) return
   const ticked = dragTargets.value
-  const ids = ticked.some((g) => g.id === leaderId) ? ticked.map((g) => g.id) : [leaderId]
+  // While there are errors, a ticked group they do not name stays where it is (blockedByErrors)
+  const ids = (ticked.some((g) => g.id === leaderId) ? ticked.map((g) => g.id) : [leaderId]).filter((id) => canEditCell(frame, id))
   const roster = []
   for (const id of ids) {
     const at = framePosition(frame, id)
@@ -1274,6 +1661,7 @@ const unplacedGroups = computed(() =>
 /** Arm the map: the next tap on it is where this group stands at the open frame. Pressing again disarms it. */
 function startPlacing(groupId) {
   if (!props.canEdit || !selected.value) return
+  if (blockedByErrors([selected.value.t_s], [groupId])) return
   placing.value = placing.value === groupId ? null : groupId
 }
 
@@ -1286,6 +1674,10 @@ async function onMapClick(event) {
   const groupId = placing.value
   const frame = selected.value
   if (!groupId || !frame || !props.canEdit || busy.value) return
+  if (blockedByErrors([frame.t_s], [groupId])) {
+    placing.value = null
+    return
+  }
   const changes = { [groupId]: { lat: event.latlng.lat, lng: event.latlng.lng, state: 'on_site', verify: 'auto' } }
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
@@ -1461,6 +1853,8 @@ function startDrag(frame, event) {
   selectedId.value = frame.id
   const span = selectionSpan.value
   if (!span) return
+  // Selecting a locked frame is fine, and is all this press does: it cannot be dragged until the errors are fixed.
+  if (!selectedFrames.value.every((f) => editAllowed(errors.value, f.t_s))) return
   const startX = event.clientX
   dragState.value = { delta: 0, from_s: span.from_s, to_s: span.to_s }
   const move = (e) => {
@@ -1622,8 +2016,11 @@ function countLabel(n) {
   return `${n} frame${n === 1 ? '' : 's'}`
 }
 
+// Frames can be a second apart, and a dot is 16 px across: this is the zoom that tells them apart
+const MAX_PX_PER_SECOND = 34
+
 function zoom(factor) {
-  pxPerSecond.value = Math.min(4, Math.max(0.08, pxPerSecond.value * factor))
+  pxPerSecond.value = Math.min(MAX_PX_PER_SECOND, Math.max(0.08, pxPerSecond.value * factor))
 }
 
 // ---------- writing frames ----------
@@ -1694,7 +2091,7 @@ function verifyPairs(list, targets) {
 }
 
 async function addFrame() {
-  if (!plan.value) return
+  if (!plan.value || blockedByErrors()) return
   const last = frames.value.length ? Math.max(...frames.value.map((f) => f.t_s)) : 0
   const t = frames.value.length ? snap(last + 60, SNAP_S) : 0
   try {
@@ -1741,7 +2138,7 @@ function pasteFrame() {
 }
 
 async function saveFrameCopy(from, word) {
-  if (!plan.value) return
+  if (!plan.value || blockedByErrors()) return
   const last = frames.value.length ? Math.max(...frames.value.map((f) => f.t_s)) : 0
   const t = snap(last + 60, SNAP_S)
   try {
@@ -1760,53 +2157,6 @@ async function saveFrameCopy(from, word) {
 }
 
 /**
- * Every gap that runs between the same two frames. A broken stretch is usually broken for more than one group --
- * they walk together -- and filling it for all of them at once is one call and one reload instead of one each.
- */
-function gapGroups(gap) {
-  const ids = analysis.value.gaps
-    .filter((g) => g.from.frameId === gap.from.frameId && g.to.frameId === gap.to.frameId)
-    .map((g) => g.groupId)
-  return [...new Set(ids)]
-}
-
-/**
- * "These two moments are too far apart -- put the moments in between that it takes." The database works out the
- * steps and writes the whole stretch in one call (042); this only names the two ends and the groups, and says what
- * came back. Every position it writes lies on the straight line between the ends, so a fill cannot leave a step
- * worse than the one it was asked to fix.
- */
-async function fillGap(gap) {
-  if (!plan.value) return
-  const groupIds = gapGroups(gap)
-  // The frames the plan already had, so the ones the fill invents can be named afterwards -- the call answers with a
-  // count, and undo needs the rows themselves (step 13).
-  const known = new Set(frames.value.map((f) => f.id))
-  try {
-    const result = await api.fillGap(gap.from.frameId, gap.to.frameId, groupIds)
-    const added = result?.frames_added ?? 0
-    const longest = result?.max_step_m
-    const written = frames.value.filter((f) => !known.has(f.id)).map(frameCopy)
-    if (written.length) {
-      edits.filled(
-        written,
-        `added ${countLabel(written.length)} between ${formatOffset(gap.from.t_s)} and ${formatOffset(gap.to.t_s)}`,
-      )
-    }
-    toast(
-      added
-        ? `Added ${added} frame${added === 1 ? '' : 's'}${longest ? ` — the longest step is now ${longest} m` : ''}.`
-        : 'That stretch was already spaced out.',
-      'success',
-      4000,
-    )
-  } catch (error) {
-    // A fill refused by a moment somebody is retiming in the stretch (083).
-    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 7000)
-  }
-}
-
-/**
  * "Hold one group": state the target groups again, where they already stand, at a later moment — one call (045), and
  * nothing else on that later frame changes, so a frame that already says somebody else keeps saying them. That is
  * the spec's "hold one group; rewrite that group's future spans so its next move happens later", in the only
@@ -1821,6 +2171,7 @@ async function hold(seconds) {
     toast('Tick a group to hold it, or place one at this frame first.', 'warning', 3600)
     return
   }
+  if (blockedByErrors([frame.t_s], targets.map((g) => g.id))) return
   const label = standingLabel.value
   const plural = targets.length > 1
   // The later frame as it stands now, if it stands at all: a hold either writes rows into it or invents it, and
@@ -1867,6 +2218,7 @@ async function hold(seconds) {
 async function setGroupState(groupId, next) {
   const frame = selected.value
   if (!frame || !props.canEdit) return
+  if (blockedByErrors([frame.t_s], [groupId])) return
   const at = framePosition(frame, groupId)
   if (!at) {
     toast('Place the group at this frame first — there is nothing to take off the map.', 'warning', 3600)
@@ -1907,6 +2259,7 @@ async function setGroupState(groupId, next) {
 async function setGroupVerify(groupId, next) {
   const frame = selected.value
   if (!frame || !props.canEdit) return
+  if (blockedByErrors([frame.t_s], [groupId])) return
   const at = framePosition(frame, groupId)
   if (!at) return
   if (at.verify === next) return
@@ -1954,6 +2307,7 @@ async function bulkState(next) {
     toast('Tick a group that stands here, or place one.', 'warning', 3600)
     return
   }
+  if (blockedByErrors([frame.t_s], targets.map((g) => g.id))) return
   const changes = {}
   for (const group of targets) {
     const at = framePosition(frame, group.id)
@@ -1993,6 +2347,7 @@ async function bulkVerify(next) {
   const frames = flagFrames.value
   const groups = standingTargets.value
   if (!frames.length || !groups.length) return
+  if (blockedByErrors(frames.map((f) => f.t_s), groups.map((g) => g.id))) return
   const where = frames.length === 1 ? `at ${formatOffset(frames[0].t_s)}` : `across ${countLabel(frames.length)}`
   const word = next === 'manual' ? 'confirmed by hand' : 'trusted automatically'
   // What each of those positions was before the call: a stretch can hold both confidences, and an undo has to give
@@ -2139,6 +2494,7 @@ function revealFrame(frameId) {
 async function removeFrame() {
   const frame = selected.value
   if (!frame) return
+  if (blockedByErrors([frame.t_s])) return
   if (!(await askConfirm({ title: `Delete the frame at ${formatOffset(frame.t_s)}?`, confirmText: 'Delete', danger: true }))) return
   // What is about to be deleted, kept before the write: the row is gone afterwards, so this copy is the only place
   // the frame's note and its positions still exist (step 13, and 041 is why the id can be reused).
@@ -2167,6 +2523,7 @@ async function removeFrame() {
 function commitNote(frameId, value) {
   const frame = frames.value.find((f) => f.id === frameId)
   if (!frame || !props.canEdit) return
+  if (blockedByErrors([frame.t_s])) return
   const before = frame.note || ''
   if (before === (value || '')) return
   api
@@ -2184,6 +2541,10 @@ async function setFrameTime(frameId, text, input = null) {
     return
   }
   if (t === frame.t_s) return
+  if (blockedByErrors([frame.t_s])) {
+    if (input) input.value = formatOffset(frame.t_s)
+    return
+  }
   const before_s = frame.t_s
   try {
     await api.moveFrame(frame.id, t, frame.rev)
@@ -2207,6 +2568,7 @@ async function setFrameTime(frameId, text, input = null) {
 async function push(deltaSeconds) {
   const span = selectionSpan.value
   if (!span) return
+  if (blockedByErrors(selectedFrames.value.map((f) => f.t_s))) return
   await shiftStretch(span.from_s, deltaSeconds, span.to_s)
 }
 
@@ -2338,11 +2700,17 @@ async function publish() {
   // Publishing a plan that is already live is legitimate — it is how a change made ahead of the clock is announced
   // to everyone following it — so the button stays, and the question says which of the two things this is.
   const again = plan.value.status === 'live'
+  if (blockedByErrors()) return
+  // Warnings do not stop a publish, dismissed ones included, but the person publishing should see them once more
+  const warned = problemCards.value.filter((p) => p.level === 'warning')
   const ok = await askConfirm({
     title: again ? `Publish "${plan.value.name}" again?` : `Publish "${plan.value.name}"?`,
-    message: again
-      ? 'Everyone following it is told the timetable changed. Any other live plan stops.'
-      : 'This becomes the timetable everyone follows. Any other live plan stops.',
+    message:
+      (again
+        ? 'Everyone following it is told the timetable changed. Any other live plan stops.'
+        : 'This becomes the timetable everyone follows. Any other live plan stops.') +
+      (warned.length ? ` This plan has ${warned.length === 1 ? 'a warning' : warned.length + ' warnings'}:` : ''),
+    lines: warned.map((p) => `${p.when}: ${p.title}. ${p.detail}`),
     confirmText: again ? 'Publish again' : 'Publish',
   })
   if (!ok) return
@@ -2479,7 +2847,7 @@ async function exportSheet() {
 
 /** Open the file picker. Clearing the value first lets the same file be chosen twice in a row. */
 function pickSheet() {
-  if (!plan.value || !sheetFile.value) return
+  if (!plan.value || !sheetFile.value || blockedByErrors()) return
   sheetFile.value.value = ''
   sheetFile.value.click()
 }
@@ -2732,6 +3100,14 @@ watch(
 // Every frame read is followed by the database's verdict on the whole plan, so an edit can never leave the board
 // saying less than the gate would. `immediate` covers the preview harness, which starts with frames in hand.
 watch(frames, refreshProblems, { immediate: true })
+// A fix on show was worked out from the plan as it stood: if the plan moves under it, it is out of date
+watch(frames, () => {
+  if (walkFix.value && !applyingFix) cancelWalkFix()
+})
+watch(() => (plan.value ? plan.value.id : null), () => {
+  shownProblemId.value = ''
+  readDismissed()
+}, { immediate: true })
 // A tick in the inspector is a change to the picture, not a change to the plan: redraw, never reload.
 watch(selectedGroups, () => {
   drawLines()
@@ -2805,15 +3181,17 @@ watch(
 
         <span v-if="plan && plan.status === 'live'" class="chip chip-ink">LIVE</span>
         <span v-if="props.onlyGroupId" class="chip chip-soft" data-testid="plan-own-group">your group only</span>
-        <span v-if="analysis.gaps.length" class="chip chip-warn">{{ analysis.gaps.length }} too far apart</span>
-        <span
-          v-if="blocking.length"
-          class="chip chip-warn"
+        <button
+          v-if="problemBadge"
+          type="button"
+          class="chip pv-probs-badge"
+          :class="errors.length ? 'chip-warn' : 'chip-soft'"
           data-testid="plan-blocked"
-          :title="`This plan can't be published yet: ${blocking.length} problem${blocking.length === 1 ? '' : 's'} to fix`"
+          :title="errors.length ? 'This plan is locked until the errors are fixed. Press to see them.' : 'Press to see the warnings.'"
+          @click="revealProblems"
         >
-          {{ blocking.length }} problem{{ blocking.length === 1 ? '' : 's' }}
-        </span>
+          {{ problemBadge }}
+        </button>
         <span class="sp"></span>
 
         <template v-if="props.canEdit">
@@ -3047,6 +3425,8 @@ watch(
                   'is-bad': analysis.frameIds.has(frame.id),
                   'is-cut': isCutFrame(frame),
                   'is-behind': playhead != null && frame.t_s <= playhead,
+                  'is-problem-node': !!problemNodeTag(frame),
+                  'is-problem-from': shownProblem && frame.id === shownProblem.fromFrame,
                 }"
                 :style="{ left: frameLeft(frame) + 'px' }"
                 :title="'Frame ' + formatOffset(frame.t_s) + (frame.note ? ' — ' + frame.note : '')"
@@ -3056,11 +3436,36 @@ watch(
               >
                 <span class="pv-frame-dot"></span>
                 <span class="pv-frame-pole"></span>
+                <span v-if="problemNodeTag(frame)" class="pv-frame-tag" data-testid="problem-node">{{ problemNodeTag(frame) }}</span>
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Under the time bar: a problem names its dots, and the two are read together. -->
+      <PlanProblems
+        ref="problemsPanel"
+        class="k"
+        :problems="problemCards"
+        :shown-id="shownProblemId"
+        :can-edit="props.canEdit"
+        :busy="busy"
+        @show="showProblemOnMap"
+        @timeline="showProblemOnTimeline"
+        @act="actOnProblem"
+        @fix-all="fixAllTiming"
+        :preview="walkFix"
+        :result="walkFixResult"
+        :result-can-undo="!!walkFixResult && walkFixResult.canUndo && walkFixResult.frames === frames"
+        @apply-fix="applyWalkFix"
+        @cancel-fix="cancelWalkFix"
+        @undo-fix="undoWalkFix"
+        @clear-result="walkFixResult = null"
+        @dismiss-all="dismissAllWarnings"
+        @dismiss="(p) => setDismissed(p, true)"
+        @restore="(p) => setDismissed(p, false)"
+      />
 
       <div class="pv-inspector k k2-insp">
         <div v-if="errorMsg" class="pv-warnings">{{ errorMsg }}</div>
@@ -3105,7 +3510,7 @@ watch(
                   class="kin"
                   style="height: 40px; width: 100%"
                   :value="selected.note || ''"
-                  :disabled="!props.canEdit"
+                  :disabled="!props.canEdit || frameLocked"
                   placeholder="e.g. doors"
                   @blur="commitNote(selected.id, $event.target.value)"
                   @keyup.enter="$event.target.blur()"
@@ -3251,44 +3656,6 @@ watch(
             Pick a dot on the time bar to open that moment.<template v-if="props.canEdit"> Add a frame to move everyone somewhere new.</template>
           </p>
         </template>
-
-        <!-- What is wrong with the plan, not with the selection: this stays on screen when no frame is open, and
-             each row carries the one control that fixes the stretch it names. -->
-        <div v-if="analysis.gaps.length || blocking.length" class="pv-warnings">
-          <div v-for="(gap, i) in analysis.gaps" :key="'g' + i" class="pv-gap">
-            <span class="pv-gap-text">
-              <strong>{{ groupName(gap.groupId) }}</strong>: {{ gapDetail(gap) }}
-            </span>
-            <button
-              v-if="props.canEdit"
-              class="pv-btn is-quiet pv-gap-fill"
-              data-testid="gap-fill"
-              :disabled="busy || !plan"
-              :title="`Add frames to give ${gapGroups(gap).length > 1 ? 'these groups' : groupName(gap.groupId)} enough time`"
-              @click="fillGap(gap)"
-            >
-              Fill
-            </button>
-          </div>
-          <!-- The database's own sentences: the zone a walk crosses, the pace a pair asks for. No Fill here --
-               time or a waypoint is the fix, and the planner chooses which; the row names the frames, and Show
-               opens the moment it ends on. -->
-          <div v-for="(row, i) in blocking" :key="'p' + i" class="pv-block" data-testid="plan-problem">
-            <span class="pv-block-text">
-              <strong>{{ groupName(row.group_id) }}</strong>: {{ row.message }}
-            </span>
-            <button
-              v-if="props.canEdit"
-              class="pv-btn is-quiet"
-              data-testid="problem-show"
-              :disabled="busy"
-              :title="`Open ${formatOffset(row.to_s)}`"
-              @click="showProblem(row)"
-            >
-              Show
-            </button>
-          </div>
-        </div>
 
       </div>
       </div>

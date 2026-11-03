@@ -70,10 +70,11 @@
   .pv-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 330px;
-    grid-template-rows: minmax(360px, 1fr) auto;
+    grid-template-rows: minmax(360px, 1fr) auto auto;
     grid-template-areas:
       'stage inspector'
-      'bar inspector';
+      'bar inspector'
+      'problems inspector';
     /* A steady height (QA 1 Nov). The inspector spans both rows, so its content used to set the map's height: opening
        a frame, a warning row, or letting the selection go (a scrub) grew or shrank the map, cut off its view and moved
        the time bar out from under the pointer. Now the inspector scrolls and the map stays the size it was framed at. */
@@ -85,6 +86,9 @@
   }
   .pv-bar {
     grid-area: bar;
+  }
+  .pv-probs {
+    grid-area: problems;
   }
   .pv-inspector {
     grid-area: inspector;
@@ -898,6 +902,447 @@
 .pv-block-text {
   flex: 1;
   min-width: 0;
+}
+
+/* The Problems panel, under the time bar: a quiet list, where only the dots and the pills carry colour. */
+.pv-probs {
+  display: flex;
+  flex-direction: column;
+  max-height: 62vh;
+  border: 1px solid var(--pv-line);
+  border-radius: 16px;
+  background: var(--pv-surface);
+  overflow: hidden;
+  outline: 0;
+}
+
+.pv-probs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--pv-line);
+}
+
+html body .ev .pv-probs-title,
+.pv-probs-title {
+  margin: 0 4px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--pv-ink);
+}
+
+.pv-probs-pill {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-probs-pill.is-error {
+  background: var(--pv-danger-soft);
+  color: var(--pv-danger);
+}
+
+.pv-probs-pill.is-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.pv-probs-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.pv-probs-lock {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--pv-line);
+  background: var(--pv-danger-soft);
+  color: var(--danger-strong);
+  font-size: 13px;
+}
+
+.pv-probs-lock strong {
+  font-weight: 700;
+}
+
+.pv-probs-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+html body .ev .pv-probs-section,
+.pv-probs-section {
+  margin: 0;
+  padding: 10px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pv-ink-soft);
+}
+
+.pv-probs-clear {
+  margin: 0;
+  padding: 16px;
+  font-size: 13px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-probs-toggle {
+  flex: none;
+  padding: 8px 16px;
+  border: 0;
+  border-top: 1px solid var(--pv-line);
+  background: none;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pv-ink-soft);
+  cursor: pointer;
+}
+
+.pv-probs-toggle:hover {
+  color: var(--pv-ink);
+}
+
+/* One problem: a dot, the words, and the buttons on the right, moving under the words when the row is narrow. */
+.pv-prob {
+  display: grid;
+  grid-template-columns: 8px minmax(240px, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--pv-line);
+  transition: background-color 0.12s;
+}
+
+.pv-probs-section + .pv-prob {
+  border-top: 0;
+}
+
+.pv-prob:hover {
+  background: var(--canvas);
+}
+
+.pv-prob.is-shown {
+  background: var(--canvas);
+  box-shadow: inset 3px 0 0 var(--pv-ink);
+}
+
+.pv-prob.is-dismissed {
+  opacity: 0.6;
+}
+
+.pv-prob-dot {
+  align-self: start;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--pv-danger);
+}
+
+.pv-prob.is-warning .pv-prob-dot {
+  background: #d97706;
+}
+
+.pv-prob-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.pv-prob-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--pv-ink);
+}
+
+.pv-prob-detail,
+.pv-prob-fix {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--pv-ink);
+}
+
+.pv-prob-fix {
+  color: var(--pv-ink-soft);
+}
+
+.pv-prob-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--pv-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.pv-prob-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+@media (max-width: 760px) {
+  .pv-prob {
+    grid-template-columns: 8px minmax(0, 1fr);
+  }
+
+  .pv-prob-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .pv-fix {
+    grid-column: 2;
+  }
+}
+
+.pv-pb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: 8px;
+  background: var(--pv-surface);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--pv-ink);
+  cursor: pointer;
+}
+
+.pv-pb:hover:not(:disabled) {
+  border-color: var(--pv-ink);
+}
+
+.pv-pb:focus-visible {
+  outline: 2px solid var(--pv-ok);
+  outline-offset: 1px;
+}
+
+.pv-pb:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pv-probs .pv-pb {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pv-probs .pv-pb.is-primary {
+  border-color: var(--pv-ink);
+  background: var(--pv-ink);
+  color: #fff;
+}
+
+/* A fix on show, under the row it belongs to: what is wrong, what will change, and the button that does it. */
+.pv-fix {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: 10px;
+  background: var(--pv-surface);
+}
+
+html body .ev .pv-fix-label,
+.pv-fix-label {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pv-ink-soft);
+}
+
+.pv-fix-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pv-ink);
+}
+
+.pv-fix-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.pv-fix-blocked {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pv-ink);
+}
+
+.pv-fix-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-fix-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* What a fix really did: stays until it is closed, or the next fix replaces it. */
+.pv-fix-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--pv-line);
+  background: #ecfdf5;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pv-ink);
+}
+
+.pv-fix-result.is-warn {
+  background: #fef3c7;
+}
+
+.pv-fix-result-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.pv-pb.is-text {
+  border-color: transparent;
+  background: transparent;
+  color: var(--pv-ink-soft);
+}
+
+.pv-pb.is-text:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--pv-line);
+  color: var(--pv-ink);
+}
+
+.pv-pb.is-icon {
+  width: 28px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--pv-ink-soft);
+}
+
+.pv-pb.is-icon:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--pv-line);
+  color: var(--pv-ink);
+}
+
+.pv-pb svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+/* Show on timeline: the walk's two dots, marked and named. Over the dots around them, whatever the theme draws. */
+html body .ev .pv-frame.is-problem-node,
+.pv-frame.is-problem-node {
+  z-index: 6;
+}
+
+html body .ev .pv-frame.is-problem-node .pv-frame-dot,
+html:not(.native-app) body .ev .pv-frame.is-problem-node .pv-frame-dot,
+.pv-frame.is-problem-node .pv-frame-dot {
+  background: #c2410c;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px #c2410c;
+}
+
+.pv-frame-tag {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-top: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #c2410c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The two labels sit either side of the gap between their dots, so close dots do not stack their words. */
+.pv-frame.is-problem-from .pv-frame-tag {
+  left: auto;
+  right: 50%;
+}
+
+/* Show on map: where the suggestion says to send the group. It marks a place and takes no clicks. */
+.pv-suggest-wrap {
+  background: transparent;
+  border: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pv-suggest {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+
+.pv-suggest-dot {
+  position: absolute;
+  inset: 0;
+  border: 3px dashed #15803d;
+  border-radius: 50%;
+  background: rgba(21, 128, 61, 0.22);
+}
+
+.pv-suggest-label {
+  position: absolute;
+  left: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #15803d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 .pv-board-empty {
