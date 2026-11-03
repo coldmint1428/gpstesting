@@ -285,13 +285,13 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     <article class="seg" id="s10">
       <div class="clock"><span class="t">7:30</span><span class="d">40 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
-        <h3>Live location <span class="where">split screen: <b>the walk and the Live page</b></span></h3>
+        <h3>Live location <span class="where">simulated walk: <b>the IC's phone and the Live page</b></span></h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Left: a teammate walking from the casing location; right: the Live page. Click their badge</li><li>The dashed plan line; they walk into the No-Go area</li><li>On their phone: Stop sharing, then confirm</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>The Live page, with the phone inset: the IC's badge moves from the casing location to the Padang. Click their badge</li><li>The dashed plan line beside the badge</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Our Contingent 3 IC is out walking from the casing location, and on the Live map their badge moves with them. Clicking it shows the group, the area they're in and when the phone last updated. The dashed line is where the plan says they should be heading, so drifting off is easy to spot. Walking into a No-Go area lights it up at once. Only ICs share, only while the event is live, and once they stop, it stays stopped.</p></div>
+            <p>Our Contingent 3 IC is heading from the casing location to the Padang, and on the Live map their badge moves with them. For this video the phone's location is simulated along that route; on the day it comes from the phone's GPS. Clicking the badge shows the group, the area they're in and when the phone last updated. The dashed line is where the plan says they should be heading, so drifting off is easy to spot, and walking into a No-Go area lights it up at once. Only ICs share, only while the event is live, and once they stop, it stays stopped.</p></div>
         </div>
-        <p class="warn">Record this at the Padang, a ten-minute walk from SMU. Start at the casing location pin, and walk when Contingent 3 steps off at T+0:30.</p>
+        <p class="warn">No walk to record: the demo script moves the IC's location from the casing location to the Padang every 5 s, starting when they share in segment 8.</p>
         <div class="shows"><span class="tag">GPS</span><span class="tag">Realtime</span></div>
       </div>
     </article>
@@ -397,7 +397,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
           <li>Root on the laptop; a planner in a second browser, for segment 4's two-planner edit.</li>
           <li>The IC of P&amp;C Contingent 3 on a phone with the new APK (rebuilt after 3 Nov), location on and notifications allowed.</li>
           <li>A second phone as a cadet in Contingent 3, for the QR scan and SOS.</li>
-          <li>A teammate to walk at the Padang with the IC phone; record their screen or film them.</li>
+          <li>No one walks: the IC's location is simulated by <code>tools/demo/director.mjs</code>, moving from the casing location to the Padang.</li>
           <li>The QA accounts show as "QA Root" and so on. Rename them on the Profile page, or say they're test accounts.</li>
         </ul>
       </div>
