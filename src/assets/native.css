@@ -252,11 +252,6 @@ html.native-app .ops-num {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pv-chip-sim {
-  background: transparent;
-  color: var(--ink);
-  box-shadow: 0 0 0 1.5px var(--ink) inset;
-}
 /* The page's title, as on the website, a size down for the phone */
 html.native-app .ev-native .ev-page-head h2 {
   font-size: 26px;
@@ -528,11 +523,6 @@ html.native-app .next-move .btn-outline-success {
 .pv-role-member {
   background: var(--soft);
   color: var(--ink);
-}
-.pv-role-sim {
-  background: transparent;
-  color: var(--ink);
-  box-shadow: 0 0 0 1.5px var(--ink) inset;
 }
 .pv-fab {
   position: fixed;

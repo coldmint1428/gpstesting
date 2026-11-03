@@ -52,7 +52,7 @@ export function canRemove(actor, target) {
 // ---------- Event pages ----------
 // Page keys are the URL: /events/:id/<page>. In the order of the side menu: what everyone uses first, planning
 // pages next, then people, then the planners' tools.
-export const PAGES = ['overview', 'live', 'timeline', 'rehearsals', 'map', 'groups', 'people', 'attendance', 'playback', 'simulator']
+export const PAGES = ['overview', 'live', 'timeline', 'rehearsals', 'map', 'groups', 'people', 'attendance', 'playback']
 export const PAGE_LABEL = {
   overview: 'Overview',
   timeline: 'Timeline',
@@ -63,7 +63,6 @@ export const PAGE_LABEL = {
   attendance: 'Attendance',
   live: 'Live',
   playback: 'Playback',
-  simulator: 'Simulator',
 }
 
 const EVERYONE = ['root', 'planner', 'admin', 'ic', 'member']
@@ -79,7 +78,6 @@ export const PAGE_ACCESS = {
   attendance: EVERYONE, // checking in; ICs, admins and planners also run roll calls (071)
   live: EVERYONE,
   playback: ['root', 'planner'],
-  simulator: ['root'], // and only in a simulation event
 }
 
 export const EDIT_ACCESS = {

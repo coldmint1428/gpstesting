@@ -485,7 +485,7 @@ html details > summary {
   cursor: pointer;
 }
 
-/* A show/hide button with an arrow ("Create a simulation event"): the arrow turns as its section opens and closes. */
+/* A show/hide button with an arrow: the arrow turns as its section opens and closes. */
 html .pl-disclosure {
   display: inline-flex;
   align-items: center;

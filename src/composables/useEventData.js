@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/auth'
 export function useEventData(eventId) {
   const auth = useAuthStore()
 
-  const event = ref(null) // { id, name, join_code, is_simulation, description, venue, starts_at, ends_at }
+  const event = ref(null) // { id, name, join_code, description, venue, starts_at, ends_at }
   const groups = ref([]) // [{ id, name, colour, code, category, sector, headcount, radio }]
   const members = ref([]) // [{ id, username, display_name, roles, groupId, isAdmin, isIC, toleranceM }]
   const loading = ref(true)
@@ -19,7 +19,7 @@ export function useEventData(eventId) {
     // Run the 4 queries at the same time
     const [ev, gr, roles, gm] = await Promise.all([
       // description, venue, starts_at, ends_at: the Create-an-event wizard's details (older events have none)
-      supabase.from('events').select('id, name, join_code, is_simulation, description, venue, starts_at, ends_at').eq('id', eventId).maybeSingle(),
+      supabase.from('events').select('id, name, join_code, description, venue, starts_at, ends_at').eq('id', eventId).maybeSingle(),
       supabase.from('groups').select('id, name, colour, code, category, sector, headcount, radio').eq('event_id', eventId).order('created_at'),
       supabase.from('event_roles').select('user_id, role, profiles (username, display_name)').eq('event_id', eventId),
       supabase.from('group_members').select('group_id, user_id, is_admin, is_ic, ic_tolerance_m').eq('event_id', eventId),

@@ -47,21 +47,12 @@ export async function createEventWithSetup({ event, members, groups }) {
   return data
 }
 
-// Name-only event (the simulation events on the events page). Returns the event id.
-export async function createQuickEvent(name, isSimulation = false) {
-  const { data, error } = await db().rpc(isSimulation ? 'create_simulation_event' : 'create_event', {
-    p_name: name,
-  })
-  if (error) throw fail(error)
-  return data
-}
-
 // The events I am in, newest first:
-// [{ id, name, created_at, isSimulation, startsAt, venue, roles: ['root', ...], isAdmin, isIC }]
+// [{ id, name, created_at, startsAt, venue, roles: ['root', ...], isAdmin, isIC }]
 export async function getMyEvents(userId) {
   // My role rows, each with its event (RLS only returns events I belong to), and my group flags (for the role badge)
   const [roles, flags] = await Promise.all([
-    db().from('event_roles').select('role, events (id, name, created_at, is_simulation, starts_at, venue)').eq('user_id', userId),
+    db().from('event_roles').select('role, events (id, name, created_at, starts_at, venue)').eq('user_id', userId),
     db().from('group_members').select('event_id, is_admin, is_ic').eq('user_id', userId),
   ])
   if (roles.error || flags.error) throw fail(roles.error || flags.error)
@@ -78,7 +69,6 @@ export async function getMyEvents(userId) {
         id: ev.id,
         name: ev.name,
         created_at: ev.created_at,
-        isSimulation: ev.is_simulation,
         startsAt: ev.starts_at,
         venue: ev.venue,
         roles: [],

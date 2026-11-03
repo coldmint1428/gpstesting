@@ -586,7 +586,6 @@
 .rl-root{background:var(--ink);color:var(--lime)}
 .rl-planner{background:var(--mint);color:var(--ink);box-shadow:0 0 0 1.5px var(--ink) inset}
 .rl-ic{background:#ffd7c9;color:var(--ink);box-shadow:0 0 0 1.5px var(--ink) inset}
-.rl-sim{background:transparent;color:var(--ink);border:1.5px dashed var(--ink)}
 @container k (max-width: 767.98px){
   .ov2-title{font-size:32px}
   .ov2-grid{grid-template-columns:1fr;gap:28px;margin-top:26px}

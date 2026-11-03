@@ -21,6 +21,7 @@ test('regression QA-09: an event opened while the server does not answer shows L
   await shot(page, 'res-01-loading')
   // After 10 s the guard lets the page open; the event's own reads are not held back, so it shows
   await expect(page.getByTestId('nav-loading')).toBeHidden({ timeout: 20_000 })
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('QA-Slow', { timeout: 20_000 })
+  // The event's name is a level-1 heading twice (the top bar and the page title): either one will do
+  await expect(page.getByRole('heading', { level: 1 }).first()).toContainText('QA-Slow', { timeout: 20_000 })
   await shot(page, 'res-02-opened')
 })

@@ -106,10 +106,6 @@
   background: var(--ev-navy-2);
   color: var(--line);
 }
-.ev-chip-sim {
-  background: var(--danger-bg);
-  color: var(--danger-strong);
-}
 .ev-chip-role {
   background: var(--forest);
   color: var(--line);
