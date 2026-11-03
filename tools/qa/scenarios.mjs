@@ -149,13 +149,10 @@ scenario("One IC's phone goes wrong: the group's position is not dragged by it",
   check('a made-up tracking pass is refused', !forged.ok, forged.status)
 }
 
-// ---------- 6. a planner takes over ----------
-scenario('A planner takes the board, then the IC is taken off and put back mid-event', 'Ops marks take priority, the hand-over is logged')
+// ---------- 6. the IC changes mid-event ----------
+// ("Take board" and its hand-over log left the Live page in 089, so there is no hand-over to check here)
+scenario('The IC is taken off and put back mid-event', 'their old tracking pass stops uploading')
 {
-  const take = await planner.rpc('handover_take', { p_session: session.id, p_note: 'QA: radio check, I have the board' })
-  check('the planner takes the board', !take.error, take.error?.message)
-  const log = await root.rpc('handover_log_list', { p_session: session.id })
-  check('the hand-over is in the log with the note', !log.error && (log.data || []).some((r) => /radio check/.test(JSON.stringify(r))), log.error?.message)
   const u = (await clientFor('ic2')).user.id
   const off = await root.rpc('set_group_ic', { p_group_id: ev.groups.Alpha, p_user_id: u, p_is_ic: false })
   check('root takes IC off qa_ic2 mid-event', !off.error, off.error?.message)
