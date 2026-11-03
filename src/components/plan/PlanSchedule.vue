@@ -42,7 +42,7 @@
 // words. A write's error is kept until the next write: the read beside it polls every half minute, and an error that a
 // poll can wipe is an error nobody reads.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { formatDay, formatDayTime, formatDuration, formatTime, formatTimeSeconds } from '../../utils/time'
+import { formatDay, formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { scheduleOf } from '../../utils/scheduleRows'
 import { formatOffset } from '../../utils/planFrames'
 import { isNativeApp } from '../../lib/platform'
@@ -407,9 +407,9 @@ function rowWhen(row) {
   if (scheduleBase.value == null) {
     return row.endS == null ? 'From ' + formatOffset(row.startS) : formatOffset(row.startS) + ' – ' + formatOffset(row.endS)
   }
-  const start = formatTimeSeconds(rowClock(row.startsAt, row.startS))
+  const start = formatTime(rowClock(row.startsAt, row.startS))
   if (row.endS == null) return 'From ' + start
-  const end = formatTimeSeconds(rowClock(row.endsAt, row.endS))
+  const end = formatTime(rowClock(row.endsAt, row.endS))
   return (start.slice(-2) === end.slice(-2) ? start.slice(0, -2).trim() : start) + ' – ' + end
 }
 const rowRowOf = (row) => rowOfStop({ rows: row.rows })

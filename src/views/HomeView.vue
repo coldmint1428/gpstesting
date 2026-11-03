@@ -296,7 +296,7 @@ const year = new Date().getFullYear()
       </header>
 
       
-      <h1 class="kl-h1 U">Right place.<br /><span class="hl">Right time.</span></h1>
+      <h1 class="kl-h1 U"><span class="hl">Planova</span></h1>
 
       <section class="kl-hero">
         <div class="kl-copy">

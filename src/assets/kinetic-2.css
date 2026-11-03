@@ -851,3 +851,25 @@ html:not(.native-app) body .ev .pv-bar{grid-column:1/-1}
 /* Playback: Play is already dark, so under the pointer it turns forest with lime type (the jumps beside it fill dark) */
 @media (hover: hover){html body .k .pb-transport .kb.kb-ink:hover:not(:disabled){background:var(--forest);color:var(--lime);transform:translate(-1px,-1px);box-shadow:5px 6px 0 var(--lime-shadow)}}
 .k .pb-transport .kb.kb-ink{transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease,color .15s ease}
+
+/* ===== Round 3: taller Timeline map + panel, medium widths stack so no map is squeezed, Schedule spacing ===== */
+html:not(.native-app) body .ev .pv-map{height:clamp(560px,calc(100vh - 200px),980px)}
+html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:clamp(560px,calc(100vh - 170px),1000px)}
+/* The green selection card keeps to a share of the panel and scrolls inside itself instead of crowding the rest */
+.k2-insp-body .k2-sel{max-height:min(230px,34vh);overflow-y:auto;overscroll-behavior:contain}
+.k2-schedlist{margin-top:24px}
+.pv-sched-listhead{margin-top:24px}
+@media (max-width: 1100px){
+  /* Beside a 340-400px panel the map is too narrow here: the panel goes underneath and the map takes the full width */
+  html:not(.native-app) body .ev .pv-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}
+  html:not(.native-app) body .ev .pv-stage,html:not(.native-app) body .ev .pv-bar,html:not(.native-app) body .ev .pv-inspector.k2-insp{grid-column:1;grid-row:auto}
+  html:not(.native-app) body .ev .pv-map{height:clamp(440px,68vh,720px)}
+  html:not(.native-app) body .ev .pv-inspector.k2-insp{contain:none;overflow:visible;padding:6px 18px 18px;min-height:360px}
+  .k2-insp-body{overflow:visible;margin:0;padding:0}
+  .k2-insp-body .k2-gtools,.k2-insp-body .k2-sel{position:static;box-shadow:none}
+  html:not(.native-app) body .ev .kp-live.k2-live{grid-template-columns:minmax(0,1fr)}
+  html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:clamp(440px,68vh,720px);min-height:0}
+  .k2-liveside{contain:none;overflow:visible;min-height:420px}
+  .k2-liveside-body{overflow:visible;padding-right:10px}
+  .k2-mapp,.k2-sched,.k2-tl{grid-template-columns:minmax(0,1fr)}
+}

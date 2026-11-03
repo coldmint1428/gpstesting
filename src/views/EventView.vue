@@ -1007,9 +1007,6 @@ async function removeEvent() {
              map and home tabs (Map, Ops, Now) go without one: the map needs the room, and the header names the event. -->
         <div v-if="native ? !['live', 'ops', 'now'].includes(tab) : !['overview', 'timeline', 'people', 'playback', 'map'].includes(tab)" class="ev-page-head k2-pagehead">
           <h2>{{ currentPage.label }}</h2>
-          <button v-if="!native && tab === 'live' && canManage && !isLive" type="button" class="k2-schedule-out" data-testid="live-schedule-btn" @click="barStatus && barStatus.openSchedule()">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"></path></svg>Schedule
-          </button>
         </div>
 
         <!-- ===== Live map: v-show keeps the map (and its live connection) alive on the other pages ===== -->
