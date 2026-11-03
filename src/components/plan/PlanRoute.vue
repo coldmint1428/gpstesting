@@ -72,6 +72,7 @@ const props = defineProps({
 
 const TICK_MS = 1000
 const SHOW_ZOOM = 18 // close enough to tell one point from the next
+const FOCUSED_ON_TOP = 1000000 // above every numbered pin (each takes 100 per number)
 
 const walk = usePlanWalk({ session: () => props.session, enabled: () => !props.embedded })
 const { loaded, errorMsg, readAt } = walk
@@ -321,7 +322,8 @@ function draw() {
       })
       // Later stops stand on top of earlier ones, as they would in the plan
       const order = (props.pinNumbers && props.pinNumbers.get(track.id + '|' + row.frame_id)) || stop.number || 0
-      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: order * 100 })
+      // The stop somebody asked to see stands on top of any pin it overlaps
+      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: order * 100 + (focused ? FOCUSED_ON_TOP : 0) })
       if (crowded.value) marker.bindTooltip(dotText(track, stop), { direction: 'top', offset: [0, -12] })
       marker.addTo(dotLayer)
     }
@@ -346,7 +348,8 @@ function stopPin(track, stop, classes) {
     iconSize: [20, 20],
     iconAnchor: [10, 10],
   })
-  return L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: (number || 0) * 100 }).addTo(dotLayer)
+  const top = classes.includes('is-focused') ? FOCUSED_ON_TOP : 0
+  return L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: (number || 0) * 100 + top }).addTo(dotLayer)
 }
 
 /**
@@ -435,12 +438,10 @@ function showMoment(t_s, groupId) {
 
 watch(() => props.pinNumbers, () => draw())
 
-/** Undo showMoment: no moment picked, and the map back on the whole route. */
+/** Undo showMoment: no moment picked. The camera stays where it is; the person moves it if they want. */
 function clearMoment() {
   shownT = null
   draw()
-  fittedWithPoints = false
-  fit()
 }
 
 defineExpose({ showMoment, clearMoment, zones })
