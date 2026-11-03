@@ -363,11 +363,16 @@ function sendReason(rehearsal) {
   gap: 4px;
   margin-bottom: 4px;
 }
+/* The weekday names start where each day's number starts (the day's 6px padding plus its 1px border); on a phone,
+   where the numbers are centred, they are centred too */
 .rh-weekdays {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
-  text-align: center;
+  text-align: left;
+}
+.rh-weekdays > span {
+  padding-left: 7px;
 }
 .rh-day {
   display: flex;
@@ -483,6 +488,12 @@ function sendReason(rehearsal) {
 }
 /* A phone's day is too narrow for a time: a coloured mark says something is on, and the card below says what */
 @media (max-width: 575.98px) {
+  .rh-weekdays {
+    text-align: center;
+  }
+  .rh-weekdays > span {
+    padding-left: 0;
+  }
   .rh-day {
     align-items: center;
     min-height: 52px;

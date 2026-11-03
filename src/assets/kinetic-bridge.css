@@ -772,11 +772,14 @@ html body .k-you > svg {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* The badges sit on their own line under "You", lined up with the menu's text (past the 20px icon and the 12px gap),
+   so one badge and two badges start in the same place for every role */
 .k-you-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-left: auto;
+  flex: 1 0 calc(100% - 32px);
+  margin-left: 32px;
 }
 /* The kinetic menu marks the open page with its dark fill alone: the old theme's side bar (motion.css) showed as a
    stray lime sliver on hover. */

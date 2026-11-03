@@ -351,8 +351,9 @@ function remind() {
   <template v-if="sessions.loaded.value">
     <template v-if="bar">
       <div v-if="canManage && !live" class="ks-split wrapm" data-menu :aria-busy="busy ? 'true' : null" data-testid="event-status">
-        <button type="button" class="kb kb-lime kb-sm" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">
-          <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"></path></svg>Start now
+        <!-- On a phone the bar shows the play icon alone, so the event's name keeps room to be read -->
+        <button type="button" class="kb kb-lime kb-sm" aria-label="Start now" title="Start now" :disabled="busy || !plansReady" data-testid="start-event-btn" @click="openStart">
+          <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"></path></svg><span class="k2-hm">Start now</span>
         </button>
         <button type="button" class="kb kb-lime kb-sm" aria-label="More start options" :aria-expanded="openMenu === 'start' ? 'true' : 'false'" data-testid="start-menu-btn" @click="toggleMenu('start')">
           <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>

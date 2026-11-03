@@ -250,6 +250,9 @@
 .kl-bar{position:absolute;top:6px;bottom:6px;border-radius:10px;font:800 11px Manrope;display:flex;align-items:center;padding:0 8px;white-space:nowrap;overflow:hidden;transition:left .7s cubic-bezier(.3,.9,.3,1),width .7s cubic-bezier(.3,.9,.3,1);box-shadow:inset 0 0 0 1.5px rgba(10,31,23,.5)}
 .kl-now{position:absolute;top:-6px;bottom:-6px;width:2px;background:var(--danger);z-index:2}
 .kl-now:before{content:"Now";position:absolute;top:-18px;left:50%;transform:translateX(-50%);font:800 10px Manrope;color:var(--danger)}
+.kl-tl-row + .kl-tl-row .kl-now:before{content:none}
+/* A phrase in a heading that never breaks in the middle ("Run it live.") */
+.kl-nw{white-space:nowrap}
 .kl-tl-bot{display:flex;align-items:center;gap:12px;margin-top:22px;flex-wrap:wrap}
 .kl-sent{font-size:13px;font-weight:700;color:var(--forest);display:flex;align-items:center;gap:6px;animation:kpop .25s}
 .kl-faq{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:40px}
@@ -306,6 +309,19 @@
   .kl-faq{grid-template-columns:1fr;gap:10px}.kl-q button{font-size:16px}
   .kl-cta2{padding:40px 22px;border-radius:26px}
   .kl-foot2{padding:24px 0;flex-direction:column;align-items:flex-start}
+  /* Landing page on a phone: headings, numbers and buttons sized for the screen, not scaled-down desktop */
+  .kl-h2{font-size:28px;line-height:1}
+  .kl-copy .kb-lg{min-height:48px;padding:0 22px;font-size:16px}
+  .kl-join{width:100%}
+  .kl-join input{flex:1 1 auto;min-width:0;width:auto;height:44px}
+  .kl-join .ib{width:44px;height:44px;flex:none}
+  .kl-deck{height:190px;margin-top:12px}
+  .kl-step{padding:22px}.kl-step .big{font-size:44px}.kl-step h3{font-size:22px;margin:10px 0 8px}.kl-step .who{padding-top:16px}
+  .kl-views h3{font-size:22px;margin:18px 0 14px}.kl-views ul{font-size:16px}
+  .kl-feat p.lead{font-size:16px;margin:14px 0 18px}
+  .kl-pts{margin-top:18px}
+  .kl-cta2 h2{font-size:30px}
+  .kl-foot2 nav{flex-wrap:wrap;gap:8px 18px}.kl-foot2 nav a{white-space:nowrap}
   .ke{grid-template-rows:64px minmax(0,1fr)}
   .ke-pop{position:fixed;left:14px;right:14px;width:auto;top:70px}
 }

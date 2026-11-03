@@ -232,7 +232,7 @@ const history = computed(() =>
         <input id="att-mode-qr" v-model="modeChoice" type="radio" value="qr" :disabled="busy" data-testid="attendance-mode-qr" @change="$emit('set-mode', 'qr')" />
         <label for="att-mode-qr">QR code</label>
       </div>
-      <span class="small text-muted">{{ modeChoice === 'qr' ? 'Everyone scans the IC’s screen. The code changes every 5 s.' : 'The IC ticks who is there.' }}</span>
+      <span class="small text-muted">{{ modeChoice === 'qr' ? 'Everyone scans the IC’s screen. The code changes every 5 seconds.' : 'The IC ticks who is there.' }}</span>
     </section>
 
     <!-- ========== My group's roll call (anyone in a group who does not run it) ========== -->

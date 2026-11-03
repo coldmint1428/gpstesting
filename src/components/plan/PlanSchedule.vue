@@ -119,8 +119,8 @@ const isLive = computed(() => {
   return phase.value === 'live' && !(end && end.getTime() <= now.value)
 })
 const phaseWord = computed(() => {
-  if (phase.value === 'live' && !isLive.value) return 'not live'
-  return { none: 'not started', live: 'live', scheduled: 'scheduled', ended: 'ended' }[phase.value]
+  if (phase.value === 'live' && !isLive.value) return 'Not live'
+  return { none: 'Not started', live: 'Live', scheduled: 'Scheduled', ended: 'Ended' }[phase.value]
 })
 
 // The instant the screen is speaking about: the end of a closed show, otherwise the clock on the wall.
@@ -244,6 +244,7 @@ const nextIndex = computed(() => moments.value.findIndex((m) => m.at.getTime() >
 /** The status beside a row: only while the event is live, and only for a moment there is something to say about. */
 function statusOf(row) {
   if (!isLive.value) return null
+  row = asMarked(row)
   if (row.state === 'arrived') {
     const late = secondsOfInterval(row.lateness)
     if (late != null && late >= 30) return { text: formatDuration(late * 1000) + ' late', tone: 'late' }
@@ -297,6 +298,7 @@ const currentFrameId = computed(() => {
  * nothing to arrive at. The database refuses each of those too; the screen simply does not offer them.
  */
 function canHere(row) {
+  row = asMarked(row)
   return props.canPress && isLive.value && row.state === 'late' && row.frame_id === currentFrameId.value
 }
 
@@ -325,6 +327,29 @@ async function here(row) {
 }
 
 // ---------- where each row is ----------
+
+/**
+ * A stop is one point and every moment spent at it (planWalk's stopsOf), but the database keeps a row per moment, and
+ * "We're here" marks only the moment the clock is on. So once the clock reached the stop's next moment (a frame a
+ * planner added for another group, say), that row was unmarked and "late" again and the button came back, as if the
+ * press had undone itself. An arrival now covers the rest of its stop: a later, unmarked moment at the same stop reads
+ * as that arrival. A moment somebody marked themselves keeps its own mark.
+ */
+const coveredBy = computed(() => {
+  const map = new Map()
+  for (const walk of walksOf(rows.value).values()) {
+    for (const stop of stopsOf(walk.rows)) {
+      if (stop.kind !== 'place') continue
+      let arrived = null
+      for (const row of stop.rows) {
+        if (row.state === 'arrived') arrived = row
+        else if (arrived && (row.state === 'late' || row.state === 'pending')) map.set(row, arrived)
+      }
+    }
+  }
+  return map
+})
+const asMarked = (row) => coveredBy.value.get(row) || row
 
 /** The list of stops, group by group. Ops staff read a row per moment instead while live (see the top of this file). */
 const stops = computed(() => [...walksOf(rows.value).values()].flatMap((walk) => stopsOf(walk.rows)))
@@ -453,8 +478,15 @@ function nextText(at) {
   return 'Next · in ' + formatDuration(at.getTime() - clockAt.value.getTime())
 }
 
+// A second press on the row already shown undoes it: the map goes back to the whole route.
 function showOnMap(frameId, t_s, groupId) {
   if (!routeMap.value) return
+  if (shownFrame.value === frameId && shownGroup.value === groupId) {
+    shownFrame.value = null
+    shownGroup.value = null
+    if (routeMap.value.clearMoment) routeMap.value.clearMoment()
+    return
+  }
   shownFrame.value = frameId
   shownGroup.value = groupId
   routeMap.value.showMoment(t_s, groupId)
@@ -714,22 +746,24 @@ watch(
                   data-testid="sched-state"
                 >{{ statusOf(rowOfStop(stop)).text }}</span>
               </div>
+              <button
+                v-if="canHere(rowOfStop(stop))"
+                type="button"
+                class="pv-sched-here"
+                data-testid="sched-here"
+                :disabled="busyHere === rowOfStop(stop).frame_id"
+                @click="here(rowOfStop(stop))"
+              >{{ busyHere === rowOfStop(stop).frame_id ? 'Saving…' : 'We’re here' }}</button>
               <div class="pv-sched-actions">
-                <button
-                  v-if="canHere(rowOfStop(stop))"
-                  type="button"
-                  class="pv-sched-here"
-                  data-testid="sched-here"
-                  :disabled="busyHere === rowOfStop(stop).frame_id"
-                  @click="here(rowOfStop(stop))"
-                >{{ busyHere === rowOfStop(stop).frame_id ? 'Saving…' : 'We’re here' }}</button>
                 <button
                   v-if="stop.point"
                   type="button"
                   class="pv-sched-show"
+                  :aria-pressed="stop.point.frame_id === shownFrame && stop.point.group_id === shownGroup ? 'true' : 'false'"
+                  :title="stop.point.frame_id === shownFrame && stop.point.group_id === shownGroup ? 'Back to the whole route' : 'Show on map'"
                   data-testid="sched-place-link"
                   @click="showOnMap(stop.point.frame_id, stop.point.t_s, stop.point.group_id)"
-                >Show on map</button>
+                ><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path></svg><span class="visually-hidden">Show on map</span></button>
               </div>
             </div>
           </div>
@@ -775,22 +809,24 @@ watch(
                   data-testid="sched-state"
                 >{{ statusOf(row).text }}</span>
               </div>
+              <button
+                v-if="canHere(row)"
+                type="button"
+                class="pv-sched-here"
+                data-testid="sched-here"
+                :disabled="busyHere === moment.frameId"
+                @click="here(row)"
+              >{{ busyHere === moment.frameId ? 'Saving…' : 'We’re here' }}</button>
               <div class="pv-sched-actions">
-                <button
-                  v-if="canHere(row)"
-                  type="button"
-                  class="pv-sched-here"
-                  data-testid="sched-here"
-                  :disabled="busyHere === moment.frameId"
-                  @click="here(row)"
-                >{{ busyHere === moment.frameId ? 'Saving…' : 'We’re here' }}</button>
                 <button
                   v-if="placeOfRow.get(row).point"
                   type="button"
                   class="pv-sched-show"
+                  :aria-pressed="moment.frameId === shownFrame && row.group_id === shownGroup ? 'true' : 'false'"
+                  :title="moment.frameId === shownFrame && row.group_id === shownGroup ? 'Back to the whole route' : 'Show on map'"
                   data-testid="sched-place-link"
                   @click="showOnMap(moment.frameId, moment.t_s, row.group_id)"
-                >Show on map</button>
+                ><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"></path><path d="M9 4v14M15 6v14"></path></svg><span class="visually-hidden">Show on map</span></button>
               </div>
             </div>
           </div>

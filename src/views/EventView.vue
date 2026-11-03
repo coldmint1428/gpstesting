@@ -553,12 +553,19 @@ const navSections = computed(() => {
     { label: 'People', items: inSection(['groups', 'people']) },
   ].filter((section) => section.items.length)
 })
-const webBar = computed(() =>
-  (modeOf('timeline') === 'edit' ? ['overview', 'live', 'timeline', 'people'] : ['live', 'timeline', 'attendance', 'people'])
-    .map((k) => pages.value.find((p) => p.key === k))
-    .filter(Boolean),
-)
-const webMore = computed(() => pages.value.filter((p) => !webBar.value.includes(p)))
+// The website's bottom bar on a phone: the four pages each role uses while the event runs, in the order they are used.
+// Planners (and root): Live · Attendance · Timeline · Map. Everyone else: Live · Schedule · Attendance · My group.
+// The More sheet lists the rest in a fixed, sensible order: the event's details first, then planning, then people,
+// then what comes after the event.
+const BAR_PLANNER = ['live', 'attendance', 'timeline', 'map']
+const BAR_FOLLOWER = ['live', 'timeline', 'attendance', 'groups']
+const MORE_ORDER = ['overview', 'live', 'timeline', 'attendance', 'rehearsals', 'map', 'groups', 'people', 'playback']
+const pageList = (keys) => keys.map((k) => pages.value.find((p) => p.key === k)).filter(Boolean)
+const webBar = computed(() => pageList(modeOf('timeline') === 'edit' ? BAR_PLANNER : BAR_FOLLOWER))
+const webMore = computed(() => {
+  const rest = pages.value.filter((p) => !webBar.value.includes(p))
+  return rest.sort((a, b) => (MORE_ORDER.indexOf(a.key) + 1 || 99) - (MORE_ORDER.indexOf(b.key) + 1 || 99))
+})
 const webMoreOpen = ref(false)
 const overviewPlan = computed(() => {
   const list = seesWholeEvent.value ? startPlans.plans.value : []
@@ -875,7 +882,7 @@ async function removeEvent() {
           <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg>
           <span>{{ locLabel }}</span>
         </button>
-        <div v-if="openMenu === 'loc'" class="menu r" style="width: min(280px, calc(100vw - 32px)); padding: 14px">
+        <div v-if="openMenu === 'loc'" class="menu r k2-locmenu" style="width: min(280px, calc(100vw - 32px)); padding: 14px">
           <div style="padding: 6px 8px 12px"><b style="font-size: 14px">My location</b><div class="mut" style="font-size: 12px; margin-top: 2px" data-testid="loc-hint">{{ locHint }}</div></div>
           <button v-if="sharingHere" type="button" class="kb kb-line" :disabled="shareBusy" data-testid="loc-stop" @click="closeMenu(); stopSharing()">{{ shareBusy ? 'Stopping…' : 'Stop sharing' }}</button>
           <button v-else type="button" class="kb kb-lime" :disabled="!isLive || shareBusy" data-testid="loc-share" @click="closeMenu(); startSharing()">{{ shareBusy ? 'Please wait…' : 'Share my location' }}</button>
@@ -1247,13 +1254,14 @@ async function removeEvent() {
       <RouterLink v-for="p in webBar" :key="p.key" :to="{ name: 'event', params: { id, page: p.key } }" replace :aria-current="tab === p.key ? 'page' : undefined" :data-testid="'bnav-' + p.key">
         <svg viewBox="0 0 24 24" class="k2-bnav-ico" aria-hidden="true"><path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" /></svg>{{ p.label }}
       </RouterLink>
-      <button v-if="webMore.length" type="button" :aria-current="webMore.some((p) => p.key === tab) ? 'page' : undefined" aria-label="More pages" data-testid="bnav-more" @click="webMoreOpen = true">
+      <button v-if="webMore.length" type="button" :aria-current="webMore.some((p) => p.key === tab) ? 'page' : undefined" aria-label="More pages" :aria-expanded="webMoreOpen ? 'true' : 'false'" data-testid="bnav-more" @click="webMoreOpen = true">
         <svg viewBox="0 0 24 24" class="k2-bnav-ico" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>More
       </button>
     </nav>
     <BottomSheet v-if="!native" :open="webMoreOpen" title="More" @close="webMoreOpen = false">
       <div class="d-grid gap-2" data-testid="web-more-sheet">
         <RouterLink v-for="p in webMore" :key="p.key" class="pv-more-row" :to="{ name: 'event', params: { id, page: p.key } }" replace :data-testid="'web-more-' + p.key" @click="webMoreOpen = false">
+          <svg viewBox="0 0 24 24" class="k2-more-ico" aria-hidden="true"><path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" /></svg>
           <strong class="flex-grow-1 text-start">{{ p.label }}</strong><span aria-hidden="true" class="pv-chev">›</span>
         </RouterLink>
       </div>

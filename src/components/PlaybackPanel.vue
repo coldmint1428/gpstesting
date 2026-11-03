@@ -274,7 +274,7 @@ onUnmounted(() => clearInterval(liveTimer))
     />
 
     <template v-else>
-      <div class="k k2-h" style="margin-bottom: 0">
+      <div class="k k2-h" style="margin-bottom: 8px">
         <h1>Playback</h1>
         <span v-if="items.length" class="cnt">{{ items.length }}</span>
         <span class="sp"></span>
@@ -345,7 +345,8 @@ onUnmounted(() => clearInterval(liveTimer))
             <span v-else></span>
           </div>
         </div>
-        <p class="k2-hint">Download a CSV to keep one longer.</p>
+        <!-- Only under a list: on the empty card it would sit left-aligned under a centred message, about nothing -->
+        <p v-if="items.length" class="k2-hint">Download a CSV to keep one longer.</p>
       </section>
 
       <section class="k k2-card">

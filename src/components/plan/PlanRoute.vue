@@ -101,8 +101,8 @@ const phase = computed(() => {
   return 'live'
 })
 const phaseWord = computed(() => {
-  if (phase.value === 'live' && !isLive.value) return 'not live'
-  return { none: 'not started', live: 'live', scheduled: 'scheduled', ended: 'ended' }[phase.value]
+  if (phase.value === 'live' && !isLive.value) return 'Not live'
+  return { none: 'Not started', live: 'Live', scheduled: 'Scheduled', ended: 'Ended' }[phase.value]
 })
 // What the event header calls live (useEventSessions): a session whose scheduled end has passed is no longer live.
 const isLive = computed(() => {
@@ -359,7 +359,15 @@ function showMoment(t_s, groupId) {
 
 watch(() => props.pinNumbers, () => draw())
 
-defineExpose({ showMoment, zones })
+/** Undo showMoment: no moment picked, and the map back on the whole route. */
+function clearMoment() {
+  shownT = null
+  draw()
+  fittedWithPoints = false
+  fit()
+}
+
+defineExpose({ showMoment, clearMoment, zones })
 
 /** Open on the moment the schedule's link named, once, and mark it. */
 function applyFocus() {

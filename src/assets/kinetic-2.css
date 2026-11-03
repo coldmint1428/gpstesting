@@ -116,13 +116,29 @@
   .k2{grid-template-columns:1fr;grid-template-rows:60px minmax(0,1fr)}
   .k .k2-hm {display:none}
   .k2-sos{height:36px;padding:0 12px;font-size:12px}
-  .k2-loc{width:36px;height:36px;padding:0;justify-content:center}.k2-loc span{display:none}
+  /* On a phone the location button is a round icon the size of the avatar: the pin in the middle, and the sharing
+     dot as a small badge on its top-right edge (squeezed beside the pin, it touched the button's rim) */
+  .k2-loc{position:relative;width:40px;height:40px;padding:0;justify-content:center}.k2-loc span{display:none}
+  .k2-loc .dot{position:absolute;top:1px;right:1px;width:11px;height:11px;border-radius:50%;box-shadow:0 0 0 2px #fff}
+  /* The location menu hangs from a button in the middle of the bar, so anchored to it the menu ran off the left edge.
+     On a phone it sits under the top bar instead, 12px in from both sides. */
+  html body .k .menu.k2-locmenu{position:fixed;top:68px;left:12px;right:12px;width:auto!important}
   .k2-side{display:none}
   .k2-h h1{font-size:26px}
   .k2-live,.k2-mapp {grid-template-columns:minmax(0,1fr)}
   .k2-legend{max-width:calc(100% - 24px);font-size:11px;gap:8px}
-  .k2-pp{grid-template-columns:minmax(0,1fr) auto 44px}
-  .k2-pp .k2-ic{grid-column:1/3}
+  /* A phone row: the person, then a fixed-width role column (so every dropdown and badge starts at one x), then the ⋯.
+     The IC radius goes under the name, lined up with its text; a person who is not an IC has no second line. */
+  .k2-pp{grid-template-columns:minmax(0,1fr) 112px 40px;gap:10px}
+  .k2-pp > .row{flex-wrap:nowrap}
+  .k2-pp > .row > div{flex:1 1 auto;min-width:0}
+  .k2-pp .k2-ic{grid-column:1/-1;grid-row:2;padding-left:50px}
+  .k2-pp .k2-ic:has(> .k2-ic-none){display:none}
+  /* Filter tabs stay one pill on a phone: tighter tabs, and a row that still does not fit scrolls sideways
+     instead of breaking onto a second line inside the pill */
+  html body .k2-wrapseg{flex-wrap:nowrap;max-width:100%;overflow-x:auto;scrollbar-width:none;border-radius:999px}
+  html body .k2-wrapseg::-webkit-scrollbar{display:none}
+  html body .k2-wrapseg > button{flex:none;padding:0 12px}
   .k2-pp.hd{display:none}
   .k2-rec{grid-template-columns:44px minmax(0,1fr) 40px}
   .k2-rec .k2-hm{display:none}
@@ -182,8 +198,16 @@
 .k2-arealist button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--k-ink)}
 .k .gp[data-mine="true"]{box-shadow:0 0 0 2px var(--k-ink),5px 6px 0 var(--k-ink)}
 @media (max-width: 767.98px){
-  .k2-banner{flex-wrap:wrap;padding:12px}
+  /* On a phone the location banner is a compact strip: a smaller icon and title, the action full width under it. Before
+     the event starts there is nothing to press, so the greyed-out button is left out (the line under the title says
+     when sharing opens). */
+  .k2-banner{flex-wrap:wrap;gap:10px 12px;padding:12px 14px;margin-bottom:12px;border-radius:18px}
+  .k2-banner b{font-size:14px;line-height:1.3}
+  .k2-banner .k2-bsub{font-size:12px}
+  .k2-banner .k2-bico{width:32px;height:32px}
+  .k2-banner .k2-bico .ki{width:16px;height:16px}
   .k2-banner .kb{width:100%}
+  .k2-banner.idle .kb:disabled{display:none}
   .k2-cal{width:min(304px,calc(100vw - 48px))}
   .k2-time{right:0}
   .k2-upd{flex-wrap:wrap}
@@ -224,7 +248,7 @@ html body .ev:not(.ev-native) .k2-pagehead h2{font:800 36px/1 Unbounded;letter-s
 .k2-bnav{display:none}
 /* Keyboard focus, everywhere in the new parts */
 .k2-side :focus-visible,.k-topbar :focus-visible,.k2-scrim :focus-visible,.ev-main .k :focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-.k2-bnav :focus-visible,.k2-banner.urgent :focus-visible{outline:3px solid var(--lime);outline-offset:2px}
+.k2-banner.urgent :focus-visible{outline:3px solid var(--lime);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){
   .k2-banner.urgent .k2-bico,.k .pulse{animation:none}
 }
@@ -238,10 +262,17 @@ html body .ev:not(.ev-native) .k2-pagehead h2{font:800 36px/1 Unbounded;letter-s
   html body .ev:not(.ev-native) .ev-main{padding:14px 12px 110px}
   html body .ev:not(.ev-native) .k2-pagehead h2{font-size:26px}
   .k.k2-nav{display:none}
-  .k2-bnav{display:flex;position:fixed;left:10px;right:10px;bottom:10px;z-index:1000;background:var(--ink);border-radius:24px;padding:6px}
-  .k2-bnav a,.k2-bnav button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:56px;border:0;border-radius:18px;background:transparent;color:rgba(255,255,255,.7);font:700 11px Manrope;text-decoration:none}
-  .k2-bnav [aria-current="page"]{background:var(--lime);color:var(--ink)}
-  .k2-bnav-ico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  /* The phone's bottom bar: a floating dark bar, clear of the home indicator. The open page (and More while its sheet
+     is open) is marked the way phone apps do it: a lime pill behind its icon and a brighter label. */
+  .k2-bnav{display:flex;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:1000;max-width:520px;margin:0 auto;background:var(--ink);border-radius:26px;padding:6px 4px;box-shadow:0 10px 28px rgba(10,31,23,.28),0 0 0 1px rgba(255,255,255,.06) inset}
+  .k2-bnav a,.k2-bnav button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:58px;padding:0 2px;border:0;border-radius:18px;background:transparent;color:rgba(255,255,255,.62);font:700 11px/1 Manrope;letter-spacing:0;text-decoration:none;white-space:nowrap;outline:0;-webkit-tap-highlight-color:transparent}
+  .k2-bnav-ico{flex:none;width:52px;height:30px;padding:5px 16px;border-radius:999px;box-sizing:border-box;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:background-color .18s,color .18s,transform .12s}
+  .k2-bnav :is([aria-current="page"],[aria-expanded="true"]){color:#fff}
+  .k2-bnav :is([aria-current="page"],[aria-expanded="true"]) .k2-bnav-ico{background:var(--lime);color:var(--ink)}
+  .k2-bnav a:active .k2-bnav-ico,.k2-bnav button:active .k2-bnav-ico{transform:scale(.92)}
+  /* No box or ring around an item: focus fills the icon's pill with the same solid lime as the open page */
+  html body .k2-bnav :is(a,button):focus-visible{outline:0;box-shadow:none;color:#fff}
+  html body .k2-bnav :is(a,button):focus-visible .k2-bnav-ico{background:var(--lime);color:var(--ink);box-shadow:none}
   .k2-scrim{padding:16px 10px}
 }
 
@@ -273,6 +304,8 @@ html body .leaflet-tooltip.k2-ztip::before{display:none}
 
 /* Timeline (the website; the phone app keeps its own arrangement of these parts) */
 html:not(.native-app) body .ev .pv-board{display:block;background:transparent;padding:0;border:0;box-shadow:none}
+/* No plan yet: the "Planning" bar and the empty message are one white card, not a bar over the bare page */
+html:not(.native-app) body .ev .pv-board.is-empty{background:#fff;border-radius:24px;overflow:hidden;padding-bottom:8px}
 html:not(.native-app) body .ev .pv-board-head{display:block;background:transparent;padding:0;border:0;margin:0}
 .k2-planbar{margin-bottom:14px}
 .k2-planbtn{max-width:min(420px,100%)}
@@ -310,7 +343,6 @@ html:not(.native-app) body .ev .pv-frame.is-bad .pv-frame-dot{background:#c2410c
 /* Pages that draw their own header: the phone app already titles them */
 .ev-native .k2-h h1{display:none}
 /* Schedule */
-.k2-schedhead{align-items:flex-start}
 html body .ev .pv-route.is-embedded .pv-route-stage{aspect-ratio:2/1;height:auto;max-height:48vh;min-height:0;border-radius:24px;overflow:hidden;margin-bottom:16px}
 html body .ev .pv-route.is-embedded .pv-map{height:100%;min-height:0}
 html:not(.native-app) body .ev .pv-route-dot-mark{width:26px;height:26px;background:var(--pv-dot);color:var(--pv-dot-ink,#fff);font:800 11px Manrope;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
@@ -361,6 +393,8 @@ html:not(.native-app) body .ev .bench-map{height:min(66vh,620px);border-radius:2
 /* The bridge's reset for a .row's children (width:auto, padding:0) must not reach the design's fixed-size parts */
 .k .row > .tog{width:44px!important}
 .k .row > .av{width:40px!important;height:40px}
+/* The account button in the top bar: the same bold initials as every other avatar (a button reset was setting it in regular body text) */
+html body .ks-av{font:700 13px Unbounded;letter-spacing:0;color:var(--ink)}
 .k .row > .k2-pillbtn{padding:0 12px!important}
 .k .row > .k2-mini{padding:3px!important}
 .k .row > .k2-sw{width:14px!important}
@@ -378,7 +412,7 @@ html:not(.native-app) body .ev .k2-transport-top{background:transparent}
 html:not(.native-app) body .ev .pv-sched{background:transparent;padding:0;border:0;box-shadow:none;gap:16px;overflow:visible}
 html:not(.native-app) body .ev .pv-sched-card{background:#fff;border-radius:24px;overflow:hidden;display:flex;flex-direction:column}
 html:not(.native-app) body .ev .pv-sched-list{max-height:min(60vh,520px);overflow-y:auto;overscroll-behavior:contain}
-html:not(.native-app) body .ev .k2-schedhead{margin-bottom:0}
+html:not(.native-app) body .ev .k2-schedhead{margin-bottom:8px}
 /* Hover tags (Leaflet's tooltip layer, 650) stay in front of every pin (the marker layer, 600): zone names on these maps
    only show on hover now, so nothing permanent sits in that layer to cover a pin */
 /* The pin under the pointer, with its own label, comes in front of every other pin */
@@ -416,6 +450,8 @@ html:not(.native-app) .pv-sheet h2{font:800 22px Unbounded;letter-spacing:-.05em
 html:not(.native-app) .pv-grabber{width:44px;height:5px;border-radius:3px;background:#d6dcd8;margin:0 auto 10px}
 html:not(.native-app) .pv-more-row{display:flex;align-items:center;gap:12px;min-height:52px;padding:0 10px;border-radius:14px;font:700 15px Manrope;color:var(--ink);text-decoration:none}
 html:not(.native-app) .pv-more-row:hover{background:var(--canvas)}
+/* Each page in the More sheet has the same icon it has in the menu and the bottom bar */
+.k2-more-ico{flex:none;width:36px;height:36px;padding:8px;border-radius:12px;background:var(--canvas,#eef0e8);box-sizing:border-box;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html:not(.native-app) .pv-more-row strong{font-weight:700}
 html:not(.native-app) .pv-chev{font-size:24px;line-height:1;color:var(--muted)}
 /* A chip that also carries .k keeps its own fill (.k paints the canvas) */
@@ -482,7 +518,8 @@ html body .k .ksel:after{display:none}
   .k2-planbtn:hover {box-shadow:inset 0 0 0 2px var(--ink);background:rgba(10,31,23,.03)}
   .tog:hover:not(:disabled){box-shadow:0 0 0 2px rgba(10,31,23,.2)}
   .k .seg button:hover:not(:disabled):not([aria-pressed="true"]):not([aria-selected="true"]){color:var(--ink);background:rgba(10,31,23,.07)}
-  .k2-bnav a:hover:not([aria-current="page"]),.k2-bnav button:hover:not([aria-current="page"]){color:#fff;background:rgba(255,255,255,.1)}
+  .k2-bnav :is(a,button):hover:not([aria-current="page"]):not([aria-expanded="true"]){color:#fff}
+  .k2-bnav :is(a,button):hover:not([aria-current="page"]):not([aria-expanded="true"]) .k2-bnav-ico{background:rgba(255,255,255,.1)}
   .kp-group:hover{transform:translate(-1px,-1px);box-shadow:3px 4px 0 var(--ink)}
   .kp-group[data-mine="true"]:hover{box-shadow:0 0 0 2px var(--ink),7px 8px 0 var(--ink)}
   .k2-personrow:hover{background:var(--canvas)}
@@ -501,7 +538,7 @@ html body .k .ksel:after{display:none}
   html body select:not([multiple]):not([size]){display:inline-flex;align-items:center;line-height:1.2}
 }
 /* Date and time side by side: room for the time and its arrow */
-.k2-dt{grid-template-columns:minmax(0,1fr) 150px}
+.k2-dt{grid-template-columns:minmax(0,1fr) 172px}
 @media (max-width: 767.98px){
   .k2-dt{grid-template-columns:minmax(0,1fr) 124px}
   .k2-dt .k2-fbtn{padding:0 10px;gap:6px;font-size:14px}
@@ -780,6 +817,18 @@ html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded{padding:12px 16px
 html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded .pv-route-stage{margin-bottom:0}
 html:not(.native-app) body .ev .pv-sched-listhead{padding:14px 20px 10px;background:#fff}
 html:not(.native-app) body .ev .pv-sched-moment{padding-left:20px;padding-right:20px}
+/* A schedule row: the stop, then its status, then "We're here" (only on the stop the group is at), then a round map
+   button at the right edge, the same place on every row. Rows with no map point keep the empty column, so every
+   status still lines up. */
+html:not(.native-app) body .ev .pv-sched-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto 36px;align-items:center;gap:6px 12px}
+html:not(.native-app) body .ev .pv-sched-row > .pv-sched-where{grid-column:1}
+html:not(.native-app) body .ev .pv-sched-marks{grid-column:2;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}
+html:not(.native-app) body .ev .pv-sched-row > .pv-sched-here{grid-column:3}
+html:not(.native-app) body .ev .pv-sched-actions{grid-column:4;justify-content:flex-end}
+html:not(.native-app) body .ev .pv-sched-what,html:not(.native-app) body .ev .pv-sched-where{align-items:flex-start}
+html:not(.native-app) body .ev .pv-sched-show{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%}
+html:not(.native-app) body .ev .pv-sched-show .ki{width:17px;height:17px}
+html:not(.native-app) body .ev .pv-sched-moment.is-shown .pv-sched-show{background:var(--ink);color:var(--lime);box-shadow:none}
 html body .ev .pv-sched-skel{padding:8px 20px}
 html:not(.native-app) body .ev .pv-sched-line{margin:0;padding:8px 20px;background:#fff}
 
@@ -803,8 +852,9 @@ html:not(.native-app) body .ev .pv-probs-toggle{background:#fff}
 .kp-seg[data-slide] > input{z-index:0}
 @media (prefers-reduced-motion: reduce){.seg[data-slide="on"]::before,.kp-seg[data-slide="on"]::before{transition:none}}
 
-/* A page's title keeps clear of what is under it (a control row, a card) and of a banner above it */
-html body .ev:not(.ev-native) .k2-pagehead{margin-bottom:24px}
+/* A page's title keeps clear of what is under it (a control row, a card) and of a banner above it. Every page title,
+   the shell's (.k2-pagehead) and a page's own (.k2-h), ends 28px above the first thing under it. */
+html body .ev:not(.ev-native) .k2-pagehead{margin-bottom:8px}
 html body .ev:not(.ev-native) .ev-main > .kp-banner + .k2-pagehead,html body .ev:not(.ev-native) .ev-main > .kp-stack + .k2-pagehead{margin-top:8px}
 
 /* An alert with a close button: the text, then a round X that sits centred at the right (not Bootstrap's corner X) */
@@ -849,6 +899,15 @@ html:not(.native-app) body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here
 html:not(.native-app) body :is(.kb,.btn,.ib,.k2-lock):focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 /* Icons in buttons: one stroke, and a size that goes with the button */
 html body :is(.kb,.btn) .ki{width:18px;height:18px}
+/* Headings and short titles share their words across lines evenly, so a narrow screen never leaves one word alone on
+   the last line ("Where Banana Gang should / be") */
+html body :is(h1,h2,h3,.pv-sched-title,.k2-banner b,.k2-card b.U){text-wrap-style:balance}
+/* A plan status badge (Schedule, Route, Ops) looks like the event's own status badge in the top bar ("Not live"):
+   sentence case, the same size and weight */
+html:not(.native-app) body .ev .pv-badge{height:28px;padding:0 11px;font:800 12px Manrope;letter-spacing:0;text-transform:none;background:rgba(10,31,23,.07);color:var(--ink)}
+html:not(.native-app) body .ev .pv-badge.is-live{background:var(--mint);color:var(--ink)}
+/* A big button on the same line as a text field or dropdown takes the field's 46px, so the two line up (Groups "Add", Attendance "Start") */
+html:not(.native-app) body :is(.kp-inline > .btn, .row.align-items-end > [class*=col] > .btn):not(.btn-sm){min-height:46px}
 html body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here,.pv-ops-act) .ki{width:16px;height:16px}
 html body .ki{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 /* Round icon-only buttons: the lock beside a name is the same height as the mini buttons */
@@ -874,7 +933,14 @@ html body .k2-fold .n{font:800 11px Manrope;letter-spacing:0}
      line, the name shortening instead. */
   .k .row:has(> :is(.k2-pillbtn,.kb,.btn,.k2-mini,.k2-link) ~ :is(.k2-pillbtn,.kb,.btn,.k2-mini,.k2-link)){flex-wrap:wrap}
   .rh-item-head{flex-wrap:wrap}
-  html:not(.native-app) body .pv-sched-actions{flex-wrap:wrap}
+  /* Phone: the status goes under the stop's name, and the map button stays at the right, centred on the row */
+  /* Phone: the status under the stop's name, the map button at the right, and "We're here" a full-width button under
+     both, easy to hit with a thumb */
+  html:not(.native-app) body .ev .pv-sched-row{grid-template-columns:minmax(0,1fr) 40px;gap:6px 10px}
+  html:not(.native-app) body .ev .pv-sched-marks{grid-column:1;grid-row:2;justify-content:flex-start}
+  html:not(.native-app) body .ev .pv-sched-marks:empty{display:none}
+  html:not(.native-app) body .ev .pv-sched-actions{grid-column:2;grid-row:1 / span 2}
+  html:not(.native-app) body .ev .pv-sched-row > .pv-sched-here{grid-column:1 / -1;grid-row:3;width:100%;margin-top:4px}
   html:not(.native-app) body .pv-sched-head{padding:14px 16px}
   html:not(.native-app) body .pv-sched-title{font-size:17px}
   html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded{padding:8px 10px 0}
@@ -883,6 +949,7 @@ html body .k2-fold .n{font:800 11px Manrope;letter-spacing:0}
 /* A finger needs more than 32px: on a touch screen the mini buttons and lock grow to a comfortable size */
 @media (pointer: coarse){
   html:not(.native-app) body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here,.pv-sched-ack,.pv-ops-act,.pv-strip-action){height:40px;min-height:40px}
+  html:not(.native-app) body .ev .pv-sched-show{width:40px;height:40px}
   .k2-lock,.k .k2-lockbtn{width:40px;height:40px}
   html body :is(.btn-close,.k2-alert-x,.k2-ops-x,.pv-ops-error-x,.pv-strip-close){width:40px;height:40px}
   html body .k2-mini button{height:36px}

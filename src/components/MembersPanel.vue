@@ -510,7 +510,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           <input v-model="newGroupName" class="form-control" placeholder="New group name" maxlength="50" required aria-label="Group name" data-testid="new-group-name" />
           <button class="btn btn-primary" type="submit" :disabled="busy" data-testid="create-group-btn">Add</button>
         </form>
-        <button type="button" v-if="groups.length" class="btn btn-sm btn-ghost" data-testid="group-details-btn" @click="openDetails">
+        <button type="button" v-if="groups.length" class="btn btn-sm btn-ghost" style="margin-left: auto" data-testid="group-details-btn" @click="openDetails">
           {{ showDetails ? 'Hide details' : 'Edit all details' }}
         </button>
       </div>

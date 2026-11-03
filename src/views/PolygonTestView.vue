@@ -820,7 +820,7 @@ onUnmounted(() => {
 
 <template>
   <component :is="embedded ? 'div' : 'main'" :class="embedded ? 'bench-embedded' : 'container py-3'">
-    <div class="k k2-h" style="align-items: flex-start">
+    <div class="k k2-h" style="align-items: flex-start; padding-top: 4px">
       <div style="flex: 1 1 auto; min-width: 0">
         <h1 v-if="embedded">Map</h1>
         <h1 v-else>Polygon bench</h1>

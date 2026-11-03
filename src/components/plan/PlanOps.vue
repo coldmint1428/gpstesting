@@ -514,7 +514,7 @@ watch(
         <div class="pv-ops-id">
           <h2 class="pv-ops-title">Operations</h2>
           <p class="pv-ops-sub">
-            <span class="pv-badge is-live" data-testid="ops-live">live</span>
+            <span class="pv-badge is-live" data-testid="ops-live">Live</span>
             <span v-if="rev != null">plan version <strong data-testid="ops-rev">{{ rev }}</strong></span>
             <span data-testid="ops-counts">
               {{ groups.length }} {{ groups.length === 1 ? 'group' : 'groups' }} ·
