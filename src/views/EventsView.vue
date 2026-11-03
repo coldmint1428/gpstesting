@@ -254,8 +254,8 @@ function roleTone(label) {
             <template v-if="!ev.venue && !ev.startsAt">No date yet</template>
           </span>
         </span>
-        <span class="pv-chip" :class="ev.isSimulation ? 'pv-role-sim' : roleTone(roleLabel(ev))">
-          {{ ev.isSimulation ? 'Sim' : roleLabel(ev) }}
+        <span class="pv-chip" :class="roleTone(roleLabel(ev))">
+          {{ roleLabel(ev) }}
         </span>
       </RouterLink>
     </template>
@@ -404,7 +404,6 @@ function roleTone(label) {
                     </span>
                   </span>
                   <span class="ke2-tags">
-                    <span v-if="ev.isSimulation" class="chip rl-sim">Sim</span>
                     <span class="chip" :class="roleChip(ev)" data-testid="event-list-role">{{ roleLabel(ev) }}</span>
                   </span>
                   <span><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>

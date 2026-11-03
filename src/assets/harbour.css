@@ -229,12 +229,6 @@ html .btn-live {
   --bs-btn-active-bg: #d98a33;
   --bs-btn-active-color: #14201b;
 }
-/* Simulation is information, not a warning */
-html .ev-chip-sim {
-  background: var(--status-info-bg);
-  color: var(--status-info-fg);
-  border-color: var(--status-info-border);
-}
 
 /* Bootstrap hard-codes its blue (#0d6efd) in a few controls: sliders, checkboxes, switches, focus rings */
 html .form-range::-webkit-slider-thumb {
@@ -260,7 +254,7 @@ html .form-switch .form-check-input:focus:not(:checked) {
   --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%232e8a7a'/%3e%3c/svg%3e");
 }
 
-/* My events (website): "Live now" is the live pill; Simulation is information, not a warning */
+/* My events (website): "Live now" is the live pill */
 html .pl-badge--live {
   background: #14201b;
   color: #ffffff;

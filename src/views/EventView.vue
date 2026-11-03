@@ -1,6 +1,6 @@
 <script setup>
 // One event: status (live or not) and its pages (/events/:id/<page>): overview, live, timeline, map, groups, people,
-// attendance, playback, simulator. Which pages and controls you get depends on your role (src/utils/permissions.js).
+// attendance, playback. Which pages and controls you get depends on your role (src/utils/permissions.js).
 // The run-sheet half of this page -- the classic editor, the live show's bar and panel, the ops queue, the member's
 // next-move card and the group message -- was deleted in step 25 with the engine that fed it.
 import { ref, computed, watch, nextTick } from 'vue'
@@ -34,7 +34,6 @@ import MembersPanel from '../components/MembersPanel.vue'
 import BenchAlert from '../components/BenchAlert.vue'
 import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
-import SimulatorPanel from '../components/SimulatorPanel.vue'
 import PlanBoard from '../components/plan/PlanBoard.vue'
 import PlanSchedule from '../components/plan/PlanSchedule.vue'
 import PlanRoute from '../components/plan/PlanRoute.vue'
@@ -359,9 +358,7 @@ const role = computed(() => viewRole(membership.value)) // root | planner | admi
 const modeOf = (name) => pageMode(name, role.value)
 // ICs and members see only their own group: the Groups page opens it directly, with no list of groups
 const ownGroupOnly = computed(() => role.value === 'ic' || role.value === 'member')
-const visiblePages = computed(() =>
-  PAGES.filter((p) => canView(p, role.value) && (p !== 'simulator' || (event.value && event.value.is_simulation))),
-)
+const visiblePages = computed(() => PAGES.filter((p) => canView(p, role.value)))
 // The Timeline tab is the planner's board; for everyone else it is their own timetable, and the tab says so
 // (step 16). The address stays /timeline, so one page keeps one name in the URL.
 function pageLabel(name) {
@@ -381,7 +378,7 @@ watch(membership, async (now) => {
     return
   }
   const known = await fetchMembership(props.id).catch(() => null)
-  rememberMembership(props.id, { ...(known || {}), ...now, is_simulation: !!event.value.is_simulation })
+  rememberMembership(props.id, { ...(known || {}), ...now })
   if (!visiblePages.value.includes(page.value)) {
     toast('Your role in this event changed.', 'info')
     goToPage('overview')
@@ -503,7 +500,7 @@ const navSections = computed(() => {
   const inSection = (keys) => keys.map((k) => pages.value.find((p) => p.key === k)).filter(Boolean)
   return [
     { label: '', items: inSection(['overview']) },
-    { label: 'Run', items: inSection(planEdits ? ['live', 'attendance', 'playback', 'simulator'] : ['live', 'timeline', 'attendance', 'playback', 'simulator']) },
+    { label: 'Run', items: inSection(planEdits ? ['live', 'attendance', 'playback'] : ['live', 'timeline', 'attendance', 'playback']) },
     { label: 'Plan', items: inSection(planEdits ? ['timeline', 'rehearsals', 'map'] : ['rehearsals', 'map']) },
     { label: 'People', items: inSection(['groups', 'people']) },
   ].filter((section) => section.items.length)
@@ -554,7 +551,6 @@ const ICONS = {
   groups: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
   live: ['M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z', 'M12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z'],
   playback: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M10 8l6 4-6 4z'],
-  simulator: ['M9 3h6', 'M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3'],
   attendance: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'],
 }
 const PAGE_INFO = computed(() => ({
@@ -598,7 +594,6 @@ const PAGE_INFO = computed(() => ({
     about: viewText.value,
   },
   playback: { hint: 'Replay a session', about: 'Replay a past session of this event, or export it.' },
-  simulator: { hint: 'Virtual groups', about: 'Virtual groups that move on their own, for testing zones, alerts and plans.' },
   attendance: {
     hint: 'Roll calls',
     badge: showAttendanceBanner.value ? 'OPEN' : '',
@@ -638,7 +633,6 @@ const MORE_HINT = computed(() => ({
   groups: 'Groups and their ICs',
   attendance: 'Roll calls',
   playback: 'Replay a past session',
-  simulator: 'Virtual groups',
 }))
 const morePages = computed(() => {
   const inBar = seesWholeEvent.value ? ['live', 'timeline', 'people'] : ['live', 'groups', 'overview']
@@ -788,7 +782,6 @@ async function removeEvent() {
         </p>
       </div>
       <span v-if="isLive" class="pv-chip pv-chip-live" data-testid="head-live">Live</span>
-      <span v-else-if="event.is_simulation" class="pv-chip pv-chip-sim" data-testid="sim-badge">Sim</span>
       <button type="button" class="btn btn-sm k-sos sos-btn flex-shrink-0" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </header>
 
@@ -800,7 +793,6 @@ async function removeEvent() {
         <span v-if="isLive" class="chip chip-ink" data-testid="head-live"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
         <span v-else-if="scheduledStart" class="chip chip-mint k2-hm" data-testid="status-scheduled">Starts {{ formatDayTime(scheduledStart) }}</span>
         <span v-else class="chip chip-soft k2-hm" data-testid="status-not-started">Not live</span>
-        <span v-if="event.is_simulation" class="chip rl-sim k2-hm" data-testid="sim-badge">Sim</span>
       </div>
     </Teleport>
     <Teleport v-if="!native" to="#k-nav-actions">
@@ -921,10 +913,6 @@ async function removeEvent() {
             </div>
           </template>
         </EventStatus>
-
-        <div v-if="event.is_simulation && (native ? tab === 'ops' : tab === 'overview' || tab === 'live')" class="kp-banner" data-testid="sim-banner">
-          <span class="kp-banner-text"><strong>Simulation.</strong> SIM- groups are not real people.</span>
-        </div>
 
         <div v-if="isIC && scheduledStart && tracker.isNative && !exactAllowed" class="kp-banner">
           <span class="kp-banner-text">Allow alarms to get your reminder on time.</span>
@@ -1176,7 +1164,6 @@ async function removeEvent() {
           />
         </template>
 
-        <SimulatorPanel v-if="event.is_simulation && isRoot && tab === 'simulator'" :event-id="id" @changed="load" />
       </section>
     </div>
 

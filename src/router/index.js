@@ -143,7 +143,7 @@ async function eventPageGuard(to, from) {
     const landing = to.query.share || to.query.next ? 'live' : defaultPage(role, membership.live)
     return { name: 'event', params: { id, page: landing }, query: to.query, replace: true }
   }
-  if (!canView(page, role) || (page === 'simulator' && !membership.is_simulation)) {
+  if (!canView(page, role)) {
     toast('The ' + PAGE_LABEL[page] + " page isn't available for your role in this event.", 'warning')
     return { name: 'event', params: { id, page: 'overview' }, replace: true }
   }

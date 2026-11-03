@@ -55,7 +55,7 @@ export const updateEventDetails = (eventId, d) =>
 export const deleteEvent = (eventId) => call('delete_event', { p_event_id: eventId })
 
 // ---------- My membership of an event (the router guard and the event page) ----------
-// { role, group_id, is_admin, is_ic, is_simulation, live } or null when I am not in the event.
+// { role, group_id, is_admin, is_ic, live } or null when I am not in the event.
 // Kept per event so moving between the event's pages needs no round trip; the event page refreshes it
 // whenever its member list reloads (rememberMembership).
 const memberships = new Map()

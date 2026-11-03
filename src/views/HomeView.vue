@@ -256,7 +256,7 @@ const year = new Date().getFullYear()
                 <span class="nm text-truncate">{{ ev.name }}</span>
                 <span class="mt">{{ [ev.venue, timeOf(ev.startsAt), roleLabel(ev)].filter(Boolean).join(' · ') }}</span>
               </span>
-              <span class="hm-trail"><span v-if="ev.isSimulation" class="chip rl-sim">Sim</span><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>
+              <span class="hm-trail"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></span>
             </RouterLink>
           </template>
         </section>

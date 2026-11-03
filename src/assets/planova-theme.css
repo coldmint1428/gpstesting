@@ -341,8 +341,7 @@ html .ev-chip-live {
   color: var(--status-success-fg);
   border-color: var(--status-success-border);
 }
-html .ev-chip-sched,
-html .ev-chip-sim {
+html .ev-chip-sched {
   background: var(--status-warning-bg);
   color: var(--status-warning-fg);
   border-color: var(--status-warning-border);
