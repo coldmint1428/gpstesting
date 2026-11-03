@@ -28,6 +28,8 @@
 //   details  supabase/tests/event_details_test.sql: the root edits the event's details (035)
 //   planners supabase/tests/planners_test.sql: planners are never in a group (036)
 //   groups   supabase/tests/edit_group_test.sql: rename a group, change its colour (069)
+//   rehearsals also: supabase/tests/edit_rehearsal_and_recording_test.sql (085 edit a rehearsal, 086 rename a recording)
+//   delete-group supabase/tests/delete_group_test.sql: the root or a planner deletes a group (084)
 //   headcount supabase/tests/auto_headcount_test.sql: a group's headcount is the number of people in it (070)
 //   attendance supabase/tests/attendance_test.sql: roll calls, by hand or by scanning a QR (071)
 //   sos      supabase/tests/sos_test.sql: anyone in an event can call for help (072)
@@ -579,6 +581,34 @@ await phase('groups', {
   },
 })
 
+// ---------- phase 11b: the root or a planner deletes a group (084) ----------
+await phase('delete-group', {
+  migrations: [
+    named('001_locations.sql'),
+    named('002_users_events_groups.sql'),
+    {
+      name: '022 (columns only)',
+      sql: `alter table public.events add column if not exists is_simulation boolean not null default false;
+            alter table public.profiles add column if not exists is_simulated boolean not null default false;`,
+    },
+    { name: '030_event_wizard.sql', sql: read('supabase/migrations/030_event_wizard.sql') },
+    { name: '033_people_and_roles.sql', sql: read('supabase/migrations/033_people_and_roles.sql') },
+    { name: '036_planners_not_in_groups.sql', sql: read('supabase/migrations/036_planners_not_in_groups.sql') },
+    {
+      // 007 needs pg_cron, which PGlite has not got: only the columns delete_group reads
+      name: 'event_sessions (stub of 007)',
+      sql: `create table if not exists public.event_sessions (id uuid primary key default gen_random_uuid(), event_id uuid not null references public.events (id) on delete cascade, starts_at timestamptz not null default now(), ended_at timestamptz, started_by uuid);
+            grant select, insert, update on public.event_sessions to authenticated;`,
+    },
+    { name: '084_delete_group.sql', sql: read('supabase/migrations/084_delete_group.sql') },
+  ],
+  body: async (db) => {
+    await runSql(db, read('supabase/tests/delete_group_test.sql'), 'delete_group_test.sql')
+    await runSql(db, read('supabase/migrations/084_delete_group.sql'), '084 a second time')
+    return ['supabase/tests/delete_group_test.sql passed, and 084 re-applies cleanly']
+  },
+})
+
 // ---------- phase 12: a group's headcount is the number of people in it (036) ----------
 await phase('headcount', {
   migrations: [
@@ -838,8 +868,13 @@ await phase('rehearsals', {
     { name: '077_no_marshals.sql', sql: read('supabase/migrations/077_no_marshals.sql') },
     { name: '079_rehearsals.sql', sql: read('supabase/migrations/079_rehearsals.sql') },
     { name: '080_rehearsal_details_absences.sql', sql: read('supabase/migrations/080_rehearsal_details_absences.sql') },
+    { name: '085_edit_rehearsal.sql', sql: read('supabase/migrations/085_edit_rehearsal.sql') },
+    { name: '086_recording_names.sql', sql: read('supabase/migrations/086_recording_names.sql') },
   ],
   body: async (db) => {
+    await runSql(db, read('supabase/tests/edit_rehearsal_and_recording_test.sql'), 'edit_rehearsal_and_recording_test.sql')
+    await runSql(db, read('supabase/migrations/085_edit_rehearsal.sql'), '085 a second time')
+    await runSql(db, read('supabase/migrations/086_recording_names.sql'), '086 a second time')
     await runSql(db, read('supabase/tests/rehearsals_test.sql'), 'rehearsals_test.sql')
     await runSql(db, read('supabase/tests/rehearsal_absences_test.sql'), 'rehearsal_absences_test.sql')
     await runSql(db, read('supabase/migrations/079_rehearsals.sql'), '079 a second time')

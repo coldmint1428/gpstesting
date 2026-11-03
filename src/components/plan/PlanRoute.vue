@@ -38,7 +38,7 @@ import L from 'leaflet'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
-import { areaStyle, zoneCaption } from '../../utils/areaKinds'
+import { areaStyle, zoneHoverShape } from '../../utils/areaKinds'
 import { escapeHtml } from '../../utils/people'
 import { stopsOf, walksOf, whereAt } from '../../utils/planWalk'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
@@ -236,10 +236,8 @@ function drawZones() {
   zoneLayer.clearLayers()
   for (const zone of zones.value) {
     if (!zone.geojson) continue
-    const shape = L.geoJSON(zone.geojson, { style: areaStyle(zone.kind), interactive: false })
+    const shape = zoneHoverShape(L, zone.geojson, zone.kind, zone.name)
     shape.addTo(zoneLayer)
-    const caption = zoneCaption(L, shape, zone.kind, zone.name)
-    if (caption) caption.addTo(zoneLayer)
   }
 }
 

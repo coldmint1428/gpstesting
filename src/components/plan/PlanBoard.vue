@@ -34,7 +34,7 @@
 // the one this tab's inverses were built against.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
-import { zoneCaption } from '../../utils/areaKinds'
+import { zoneHoverShape } from '../../utils/areaKinds'
 import { useOpenMenu } from '../../composables/useOpenMenu'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
@@ -366,10 +366,33 @@ function toggleGroup(id) {
   selectedGroups.value = next
 }
 
-const allGroupsTicked = computed(() => shownGroups.value.length > 0 && shownGroups.value.every((g) => selectedGroups.value.has(g.id)))
+// The Groups tab on a big event: a search and a placed / not placed filter narrow the list, and the list scrolls inside
+// its own box (so the buttons below it stay in reach). Select all means the groups that are showing.
+const groupQuery = ref('')
+const groupFilter = ref('all') // all | placed | unplaced
+const GROUP_LIST_TOOLS_FROM = 8 // fewer groups than this need no search
+const visibleGroups = computed(() => {
+  const q = groupQuery.value.trim().toLowerCase()
+  const f = selected.value ? groupFilter.value : 'all'
+  return shownGroups.value.filter((g) => {
+    if (q && !g.name.toLowerCase().includes(q)) return false
+    if (f === 'placed') return !!framePosition(selected.value, g.id)
+    if (f === 'unplaced') return !framePosition(selected.value, g.id)
+    return true
+  })
+})
+const groupFilterCounts = computed(() => {
+  const placed = selected.value ? shownGroups.value.filter((g) => framePosition(selected.value, g.id)).length : 0
+  return { all: shownGroups.value.length, placed, unplaced: shownGroups.value.length - placed }
+})
+
+const allGroupsTicked = computed(() => visibleGroups.value.length > 0 && visibleGroups.value.every((g) => selectedGroups.value.has(g.id)))
 
 function toggleAllGroups() {
-  selectedGroups.value = allGroupsTicked.value ? new Set() : new Set(shownGroups.value.map((g) => g.id))
+  const next = new Set(selectedGroups.value)
+  if (allGroupsTicked.value) for (const g of visibleGroups.value) next.delete(g.id)
+  else for (const g of visibleGroups.value) next.add(g.id)
+  selectedGroups.value = next
 }
 
 // ---------- the map ----------
@@ -380,6 +403,8 @@ let lineLayer = null
 let markerLayer = null
 // The badges drawn right now, by group, so a drag can carry its companions along. Rebuilt on every redraw.
 const markers = new Map()
+let markersAreRun = false // the badges on the map were drawn for the running clock
+let lastRunSig = ''
 // The drag in flight: { leaderId, roster: [{ id, lat, lng }] } — where every badge it will move started.
 let groupDrag = null
 // Where a drop put the badges while its write is on the way: { frameId, at: Map(groupId -> { lat, lng }) }. Any
@@ -407,13 +432,10 @@ function drawZones() {
   const bounds = L.latLngBounds([])
   for (const zone of zones.value) {
     if (!zone.geojson) continue
-    const layer = L.geoJSON(zone.geojson, {
-      style: ZONE_STYLE[zone.kind] || ZONE_STYLE.zone,
-      interactive: false, // locked: the planner reads the areas, and never edits them here
-    })
+    // The planner reads the areas and never edits them here; a name shows only while the pointer is over a zone
+    const layer = zoneHoverShape(L, zone.geojson, zone.kind, zone.name)
+    layer.setStyle(ZONE_STYLE[zone.kind] || ZONE_STYLE.zone)
     layer.addTo(zoneLayer)
-    const caption = zoneCaption(L, layer, zone.kind, zone.name)
-    if (caption) caption.addTo(zoneLayer)
     try {
       bounds.extend(layer.getBounds())
     } catch {
@@ -635,11 +657,20 @@ function drawMarkers() {
   // soon as the gesture is over, because the drag's own write re-reads the plan.
   // A scrub is the one gesture that wants the badges redrawn under the hand: it is how the map follows the cursor.
   if (groupDrag || dragState.value || (pointerDown.value && !scrubbing.value)) return
-  markerLayer.clearLayers()
-  markers.clear()
   const frame = selected.value
   const run = playhead.value != null ? pointAt(playhead.value) : null
+  // While the clock runs the badges are MOVED, not rebuilt: rebuilding them every tick closed and reopened the tooltip
+  // under the pointer, which read as a flicker. A new set of groups or ticked groups starts them afresh.
+  const runSig = run ? [...selectedGroups.value].sort().join(',') + '|' + shownGroups.value.map((g) => g.id).join(',') : ''
+  const reuse = !!run && markersAreRun && runSig === lastRunSig && markers.size > 0
+  if (!reuse) {
+    markerLayer.clearLayers()
+    markers.clear()
+  }
+  markersAreRun = !!run
+  lastRunSig = runSig
   if (!frame && !run) return
+  const seen = new Set()
 
   const dropped = !run && pendingMoves && frame && pendingMoves.frameId === frame.id ? pendingMoves.at : null
   for (const group of shownGroups.value) {
@@ -649,6 +680,12 @@ function drawMarkers() {
     // the inspector lists it and calls it "off site" — but nobody is standing there, so a marker would be a person
     // the map is drawing who is not there. Step 10's Done-when is the words: "one fewer marker, still listed".
     if (!point || point.state === 'off_site') continue
+    seen.add(group.id)
+    if (reuse && markers.has(group.id)) {
+      const there = markers.get(group.id)
+      there.setLatLng([point.lat, point.lng])
+      continue
+    }
     const color = colorOf.value.get(group.id) || '#0b3d2e'
     const dim = selectedGroups.value.size > 0 && !selectedGroups.value.has(group.id)
     // This badge is an end of a stretch the database refuses: same red ring the bar and the lane use.
@@ -672,7 +709,6 @@ function drawMarkers() {
       draggable: canMove.value && !run,
       keyboard: false,
       autoPan: true,
-      title: group.name,
     })
     if (canMove.value && !run) {
       // Only the badge under the pointer raises dragstart/dragend; the companions are moved with setLatLng(), which
@@ -681,24 +717,30 @@ function drawMarkers() {
       marker.on('drag', () => onGroupDrag(group.id))
       marker.on('dragend', () => endGroupDrag(group.id))
     }
-    marker.bindTooltip(
-      (run
-        ? `${group.name} · ${point.moving ? 'walking to ' + formatOffset(point.next.t_s) : 'held at ' + formatOffset(point.t_s)}`
-        : `${group.name} · ${point.defined ? 'set at ' : 'unchanged since '}${formatOffset(point.t_s)}`) +
-        (other ? ` · ${other.display_name || 'Somebody'} is editing` : ''),
-      { direction: 'top', offset: [0, -14] },
-    )
+    // No hover text of its own: the group's name and its time are in the Groups list beside the map. The one thing that
+    // is not there is that somebody else has their hand on the badge.
+    if (other) marker.bindTooltip(`${group.name} · ${other.display_name || 'Somebody'} is editing`, { direction: 'top', offset: [0, -14] })
     markers.set(group.id, marker)
     marker.addTo(markerLayer)
     // The ids a browser check holds on to. A badge is drawn by Leaflet, so it has no Vue template to put them in; the
     // element Leaflet made for it is the one the hand grabs, which is exactly the one a check should grab too.
     const element = marker.getElement()
     if (element) {
+      element.setAttribute('aria-label', group.name) // the badge's name for assistive technology, not a hover box
       element.dataset.testid = 'plan-badge'
       element.dataset.group = group.id
       element.dataset.cell = cell
       element.dataset.hold = other ? 'other' : own ? 'mine' : ''
       element.dataset.heldBy = other ? other.display_name || 'Somebody' : ''
+    }
+  }
+  // A group that left the map (went off site) while the clock runs: its badge goes
+  if (reuse) {
+    for (const [id, marker] of markers) {
+      if (!seen.has(id)) {
+        markerLayer.removeLayer(marker)
+        markers.delete(id)
+      }
     }
   }
 }
@@ -1804,6 +1846,73 @@ async function fillGap(gap) {
     // A fill refused by a moment somebody is retiming in the stretch (083).
     if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 7000)
   }
+}
+
+/**
+ * "Fill them all": every stretch that is too far apart, for every group in it, in one go. The stretches are the distinct
+ * pairs of neighbouring frames in the plan's gaps; each is filled by the same call as one Fill button (042), one after
+ * the other, and the frames they add are one undo step, so a single Undo takes the lot back.
+ */
+const gapSpans = computed(() => {
+  const seen = new Set()
+  const spans = []
+  for (const gap of analysis.value.gaps) {
+    const key = gap.from.frameId + '>' + gap.to.frameId
+    if (seen.has(key)) continue
+    seen.add(key)
+    spans.push({ gap, groupIds: gapGroups(gap) })
+  }
+  return spans
+})
+const gapGroupTotal = computed(() => new Set(analysis.value.gaps.map((g) => g.groupId)).size)
+
+// The warnings card at the top of the inspector: a one-line summary, with the rows behind Details
+const warnOpen = ref(false)
+const warnRowCount = computed(() => analysis.value.gaps.length + blocking.value.length)
+const warnRowsShown = computed(() => warnOpen.value || warnRowCount.value <= 1)
+const warnTitle = computed(() => {
+  const g = gapGroupTotal.value
+  const gapText = g ? `${g} ${g === 1 ? 'group' : 'groups'} too far apart` : ''
+  const n = blocking.value.length
+  const blockText = n ? `${n} ${n === 1 ? 'problem' : 'problems'} to fix` : ''
+  return [gapText, blockText].filter(Boolean).join(' · ')
+})
+
+async function fillAllGaps() {
+  if (!plan.value || !gapSpans.value.length) return
+  const spans = gapSpans.value
+  const ok = await askConfirm({
+    title: `Fill ${spans.length} ${spans.length === 1 ? 'stretch' : 'stretches'}?`,
+    message: `Adds the frames it takes between every pair of moments that are too far apart, for the ${gapGroupTotal.value} ${gapGroupTotal.value === 1 ? 'group' : 'groups'} involved. One Undo takes them all back.`,
+    confirmText: 'Fill all',
+  })
+  if (!ok) return
+  const known = new Set(frames.value.map((f) => f.id))
+  let added = 0
+  let longest = 0
+  let held = 0
+  let failed = null
+  for (const { gap, groupIds } of spans) {
+    try {
+      const result = await api.fillGap(gap.from.frameId, gap.to.frameId, groupIds)
+      added += result?.frames_added ?? 0
+      longest = Math.max(longest, result?.max_step_m ?? 0)
+    } catch (error) {
+      // A stretch somebody is retiming (083) is skipped; the rest still fill
+      if (refusedBecauseHeld(error)) held++
+      else failed = failed || error
+    }
+  }
+  const written = frames.value.filter((f) => !known.has(f.id)).map(frameCopy)
+  if (written.length) edits.filled(written, `added ${countLabel(written.length)} across ${spans.length} ${spans.length === 1 ? 'stretch' : 'stretches'}`)
+  if (failed) toast(planErrorMessage(failed), 'danger', 7000)
+  else
+    toast(
+      (added ? `Added ${added} frame${added === 1 ? '' : 's'}${longest ? ` — the longest step is now ${longest} m` : ''}.` : 'Those stretches were already spaced out.') +
+        (held ? ` ${held} ${held === 1 ? 'stretch was' : 'stretches were'} skipped: someone is retiming ${held === 1 ? 'it' : 'them'}.` : ''),
+      'success',
+      5000,
+    )
 }
 
 /**
@@ -2991,7 +3100,8 @@ watch(
               :aria-label="moveLock ? 'Unlock frames and groups' : 'Lock frames and groups'"
               :title="moveLock ? 'Unlock to drag frames and groups again' : 'Lock so frames and groups cannot be dragged by accident'"
               @click="toggleLock"
-            ><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg></button>
+            ><svg v-if="moveLock" class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z" style="fill: currentColor"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>
+            <svg v-else class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 6.9-.8"></path></svg></button>
           </template>
           <span class="k2-mini" role="group" aria-label="Zoom the time bar">
             <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)">−</button>
@@ -3065,12 +3175,61 @@ watch(
       <div class="pv-inspector k k2-insp">
         <div v-if="errorMsg" class="pv-warnings">{{ errorMsg }}</div>
 
+        <!-- What is wrong with the plan, not with the selection: it stays on screen when no frame is open, at the top where
+             it is seen first. One line says how bad it is and carries Fill all; the rows (each with the one control that
+             fixes the stretch it names) open from Details. -->
+        <div v-if="analysis.gaps.length || blocking.length" class="pv-warnings" data-testid="plan-warnings">
+          <div class="pv-warn-top">
+            <span class="pv-gap-text" data-testid="plan-warn-title">{{ warnTitle }}</span>
+            <button v-if="props.canEdit && analysis.gaps.length > 1" type="button" class="k2-pillbtn k2-pill-ink" data-testid="gap-fill-all" :disabled="busy || !plan" title="Add frames to every stretch that is too far apart" @click="fillAllGaps">Fill all</button>
+            <button v-if="warnRowCount > 1" type="button" class="k2-link" :aria-expanded="warnRowsShown ? 'true' : 'false'" data-testid="plan-warn-toggle" @click="warnOpen = !warnOpen">{{ warnRowsShown ? 'Hide' : 'Details' }}</button>
+          </div>
+          <div v-show="warnRowsShown" class="pv-warn-rows">
+          <div v-for="(gap, i) in analysis.gaps" :key="'g' + i" class="pv-gap">
+            <span class="pv-gap-text">
+              <strong>{{ groupName(gap.groupId) }}</strong>: {{ gapDetail(gap) }}
+            </span>
+            <button
+              v-if="props.canEdit"
+              type="button"
+              class="k2-pillbtn"
+              data-testid="gap-fill"
+              :disabled="busy || !plan"
+              :title="`Add frames to give ${gapGroups(gap).length > 1 ? 'these groups' : groupName(gap.groupId)} enough time`"
+              @click="fillGap(gap)"
+            >
+              Fill
+            </button>
+          </div>
+          <!-- The database's own sentences: the zone a walk crosses, the pace a pair asks for. No Fill here --
+               time or a waypoint is the fix, and the planner chooses which; the row names the frames, and Show
+               opens the moment it ends on. -->
+          <div v-for="(row, i) in blocking" :key="'p' + i" class="pv-block" data-testid="plan-problem">
+            <span class="pv-block-text">
+              <strong>{{ groupName(row.group_id) }}</strong>: {{ row.message }}
+            </span>
+            <button
+              v-if="props.canEdit"
+              type="button"
+              class="k2-pillbtn"
+              data-testid="problem-show"
+              :disabled="busy"
+              :title="`Open ${formatOffset(row.to_s)}`"
+              @click="showProblem(row)"
+            >
+              Show
+            </button>
+          </div>
+          </div>
+        </div>
+
         <template v-if="selectionSpan">
           <div class="k2-tabs" role="tablist" aria-label="Inspector">
             <button type="button" role="tab" :aria-selected="inspectorTab === 'frame' ? 'true' : 'false'" data-testid="insp-tab-frame" @click="inspectorTab = 'frame'">{{ selectionSpan.count > 1 ? 'Stretch' : 'Frame' }}</button>
             <button type="button" role="tab" :aria-selected="inspectorTab === 'groups' ? 'true' : 'false'" data-testid="insp-tab-groups" @click="inspectorTab = 'groups'">{{ props.onlyGroupId ? 'Your group' : 'Groups' }}<span class="n">{{ shownGroups.length }}</span></button>
           </div>
 
+          <div class="k2-insp-body">
           <!-- ===== Frame ===== -->
           <section v-show="inspectorTab === 'frame'" role="tabpanel">
             <!-- Why the open dot is red: the walk it belongs to, and the span that walk covers. -->
@@ -3143,7 +3302,17 @@ watch(
           <!-- ===== Groups ===== -->
           <section v-show="inspectorTab === 'groups'" role="tabpanel">
             <template v-if="selected">
-              <div v-if="props.canEdit && shownGroups.length > 1" class="k2-row k2-selectall">
+              <!-- A big event: find a group by name, or see who is not placed yet -->
+              <div v-if="shownGroups.length >= GROUP_LIST_TOOLS_FROM" class="k2-gtools" data-testid="group-tools">
+                <label for="k2-group-search" class="visually-hidden">Search groups</label>
+                <input id="k2-group-search" v-model="groupQuery" type="search" class="kin" style="width: 100%" placeholder="Search groups" data-testid="group-search" />
+                <span class="k2-mini" role="group" aria-label="Show groups">
+                  <button type="button" :aria-pressed="groupFilter === 'all' ? 'true' : 'false'" data-testid="group-filter-all" @click="groupFilter = 'all'">All {{ groupFilterCounts.all }}</button>
+                  <button type="button" :aria-pressed="groupFilter === 'placed' ? 'true' : 'false'" data-testid="group-filter-placed" @click="groupFilter = 'placed'">Placed {{ groupFilterCounts.placed }}</button>
+                  <button type="button" :aria-pressed="groupFilter === 'unplaced' ? 'true' : 'false'" data-testid="group-filter-unplaced" @click="groupFilter = 'unplaced'">Not placed {{ groupFilterCounts.unplaced }}</button>
+                </span>
+              </div>
+              <div v-if="props.canEdit && visibleGroups.length > 1" class="k2-row k2-selectall">
                 <button
                   type="button"
                   class="k2-chk"
@@ -3156,9 +3325,11 @@ watch(
                   <svg v-if="allGroupsTicked" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>
                   <svg v-else-if="selectedGroups.size" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg>
                 </button>
-                <b id="k2-selectall-label" style="font-size: 14px; cursor: pointer" @click="toggleAllGroups">Select all</b>
+                <b id="k2-selectall-label" style="font-size: 14px; cursor: pointer" @click="toggleAllGroups">{{ visibleGroups.length < shownGroups.length ? 'Select the ' + visibleGroups.length + ' showing' : 'Select all' }}</b>
               </div>
-              <div v-for="group in shownGroups" :key="group.id" class="k2-row k2-grouprow" :class="{ 'is-bad': framePosition(selected, group.id) && flaggedCells.has(group.id + '|' + selected.id) }">
+              <p v-if="!visibleGroups.length" class="k2-hint" data-testid="group-none-match">No group matches.</p>
+              <div class="k2-gscroll" data-testid="group-scroll">
+              <div v-for="group in visibleGroups" :key="group.id" class="k2-row k2-grouprow" :class="{ 'is-bad': framePosition(selected, group.id) && flaggedCells.has(group.id + '|' + selected.id) }">
                 <div class="row" style="gap: 10px; width: 100%">
                   <button
                     type="button"
@@ -3199,6 +3370,7 @@ watch(
                   </div>
                 </template>
               </div>
+              </div>
             </template>
 
             <template v-if="props.canEdit && selected">
@@ -3232,6 +3404,7 @@ watch(
               <p v-else class="k2-hint">Tick groups to hold them or set flags together.</p>
             </template>
           </section>
+          </div>
         </template>
 
         <template v-else-if="!frames.length">
@@ -3251,44 +3424,6 @@ watch(
             Pick a dot on the time bar to open that moment.<template v-if="props.canEdit"> Add a frame to move everyone somewhere new.</template>
           </p>
         </template>
-
-        <!-- What is wrong with the plan, not with the selection: this stays on screen when no frame is open, and
-             each row carries the one control that fixes the stretch it names. -->
-        <div v-if="analysis.gaps.length || blocking.length" class="pv-warnings">
-          <div v-for="(gap, i) in analysis.gaps" :key="'g' + i" class="pv-gap">
-            <span class="pv-gap-text">
-              <strong>{{ groupName(gap.groupId) }}</strong>: {{ gapDetail(gap) }}
-            </span>
-            <button
-              v-if="props.canEdit"
-              class="pv-btn is-quiet pv-gap-fill"
-              data-testid="gap-fill"
-              :disabled="busy || !plan"
-              :title="`Add frames to give ${gapGroups(gap).length > 1 ? 'these groups' : groupName(gap.groupId)} enough time`"
-              @click="fillGap(gap)"
-            >
-              Fill
-            </button>
-          </div>
-          <!-- The database's own sentences: the zone a walk crosses, the pace a pair asks for. No Fill here --
-               time or a waypoint is the fix, and the planner chooses which; the row names the frames, and Show
-               opens the moment it ends on. -->
-          <div v-for="(row, i) in blocking" :key="'p' + i" class="pv-block" data-testid="plan-problem">
-            <span class="pv-block-text">
-              <strong>{{ groupName(row.group_id) }}</strong>: {{ row.message }}
-            </span>
-            <button
-              v-if="props.canEdit"
-              class="pv-btn is-quiet"
-              data-testid="problem-show"
-              :disabled="busy"
-              :title="`Open ${formatOffset(row.to_s)}`"
-              @click="showProblem(row)"
-            >
-              Show
-            </button>
-          </div>
-        </div>
 
       </div>
       </div>

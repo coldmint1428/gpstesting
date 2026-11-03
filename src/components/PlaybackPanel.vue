@@ -6,7 +6,7 @@
 //   - days with readings from before Start/End existed
 // Each can be played or downloaded as CSV. After the 7 days, a downloaded CSV can be replayed
 // here: the file is read in the browser and never uploaded.
-import { ref, computed, watch, markRaw, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, markRaw, nextTick, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 import { loadRecording, loadNewRows } from '../composables/usePlaybackHistory'
 import { addRows, recordingToCsv, csvToRecording, csvFileName, downloadText } from '../utils/playback'
@@ -42,8 +42,12 @@ const player = ref(null) // { recording, version, title, live, fileName, item }
 // ---------- List ----------
 async function loadList() {
   loadingList.value = true
-  const { data, error } = await supabase.rpc('playback_list', { p_event_id: props.eventId })
+  const [{ data, error }, named] = await Promise.all([
+    supabase.rpc('playback_list', { p_event_id: props.eventId }),
+    supabase.from('recording_names').select('key, name').eq('event_id', props.eventId),
+  ])
   loadingList.value = false
+  const names = Object.fromEntries(((named && named.data) || []).map((n) => [n.key, n.name]))
   if (error) {
     errorMsg.value = error.message
     return
@@ -66,7 +70,10 @@ async function loadList() {
       availableUntil,
       expired: availableUntil !== null && now >= availableUntil.getTime(),
       expiresSoon: availableUntil !== null && availableUntil.getTime() - now <= 2 * DAY_MS,
-      title: itemTitle(row.kind, startsAt, endedAt),
+      nameKey: row.session_id || 'day-' + sgtParts(startsAt).date, // what a name is kept under (086)
+      name: names[row.session_id || 'day-' + sgtParts(startsAt).date] || '',
+      timesTitle: itemTitle(row.kind, startsAt, endedAt),
+      title: names[row.session_id || 'day-' + sgtParts(startsAt).date] || itemTitle(row.kind, startsAt, endedAt),
     }
   })
 }
@@ -109,6 +116,28 @@ async function play(item) {
   infoMsg.value = ''
   player.value = { recording, version: 0, title: item.title, live: item.live, fileName: '', item }
   if (item.live) startLiveRefresh()
+}
+
+// Rename a recording (root / planners, rename_recording 086). An empty name puts the times back.
+const renamingKey = ref(null)
+const renameText = ref('')
+function startRename(item) {
+  renamingKey.value = item.key
+  renameText.value = item.name
+  nextTick(() => {
+    const el = document.querySelector('[data-testid="rename-recording-input"]')
+    if (el) el.focus()
+  })
+}
+async function saveRename(item) {
+  if (renamingKey.value !== item.key) return
+  const name = renameText.value.trim()
+  renamingKey.value = null
+  if (name === item.name) return
+  const { error } = await supabase.rpc('rename_recording', { p_event_id: props.eventId, p_key: item.nameKey, p_name: name })
+  if (error) return toast(error.message, 'danger', 8000)
+  toast(name ? 'Recording renamed.' : 'Recording name cleared.', 'success', 3000)
+  loadList()
 }
 
 // Delete a finished recording for everyone (root / planners; the database checks it)
@@ -273,7 +302,14 @@ onUnmounted(() => clearInterval(liveTimer))
             <div style="min-width: 0">
               <div class="row" style="gap: 8px; flex-wrap: wrap">
                 <span v-if="item.live" class="chip chip-ink" style="height: 22px"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
-                <b>{{ item.title }}</b>
+                <form v-if="renamingKey === item.key" class="row" style="gap: 6px; flex-wrap: nowrap" @submit.prevent="saveRename(item)">
+                  <label class="visually-hidden" :for="'rec-name-' + item.key">Recording name</label>
+                  <input :id="'rec-name-' + item.key" v-model="renameText" class="kin" style="min-width: 0; width: 260px; max-width: 100%" maxlength="80" :placeholder="item.timesTitle" data-testid="rename-recording-input" @keydown.esc.prevent="renamingKey = null" />
+                  <button type="submit" class="kb kb-ink kb-sm" data-testid="rename-recording-save">Save</button>
+                  <button type="button" class="kb kb-line kb-sm" @click="renamingKey = null">Cancel</button>
+                </form>
+                <b v-else>{{ item.title }}</b>
+                <span v-if="renamingKey !== item.key && item.name" class="mut" style="font-size: 12px">{{ item.timesTitle }}</span>
                 <span v-if="!item.expired && item.expiresSoon" class="chip chip-warn" style="height: 22px">Download to keep</span>
               </div>
               <div class="mut" style="font-size: 13px">
@@ -300,6 +336,7 @@ onUnmounted(() => clearInterval(liveTimer))
             <div v-if="!item.live" class="wrapm" data-menu>
               <button type="button" class="ib" aria-label="Recording options" :aria-expanded="openMenu === item.key ? 'true' : 'false'" data-testid="recording-menu" @click="toggleMenu(item.key)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
               <div v-if="openMenu === item.key" class="menu r" role="menu">
+                <button type="button" role="menuitem" :disabled="busyKey !== null" data-testid="rename-recording-btn" @click="closeMenu(); startRename(item)">Rename</button>
                 <button type="button" role="menuitem" class="danger" :disabled="busyKey !== null" data-testid="delete-recording-btn" @click="closeMenu(); remove(item)">Delete recording</button>
               </div>
             </div>

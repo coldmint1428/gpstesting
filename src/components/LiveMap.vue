@@ -46,7 +46,7 @@ import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
-import { areaStyle, zoneLabelClass } from '../utils/areaKinds'
+import { areaStyle, zoneHoverShape } from '../utils/areaKinds'
 import { textOn } from '../utils/groupColours'
 
 const props = defineProps({
@@ -656,12 +656,12 @@ function focusSos(id) {
 defineExpose({ focusSos, peopleCount: computed(() => people.value.length) })
 // ---------- Zones layer (merger Stage 1) ----------
 // The event's zones, drawn under the people: outlines in their kind's colour (the same colours as the
-// Zones tab), No-Go dashed red, with "Name · CODE" labels once zoomed in. Not clickable, so tapping a
-// person or a trail inside a zone works as before. Redrawn when a planner changes a zone.
+// Zones tab), No-Go dashed red. A zone's name (and who is in it) shows only while the pointer is over it, so
+// the map stays clear; the code is not shown here. The shapes sit at the back, so tapping a person or a trail
+// inside a zone works as before. Redrawn when a planner changes a zone.
 const showZones = ref(true)
 const zoneCount = ref(0)
 let zoneLayer = null
-let zoneLabels = []
 let zoneShapes = {} // zone id -> { shape, kind }
 let zoneChannel = null
 let zoneTimer = null
@@ -671,17 +671,11 @@ async function loadZones() {
   const { data, error } = await supabase.rpc('event_zones', { p_event: props.eventId })
   if (error || !map) return
   zoneLayer.clearLayers()
-  for (const label of zoneLabels) label.remove() // labels sit on the map itself, not in zoneLayer
-  zoneLabels = []
   zoneShapes = {}
   for (const z of data || []) {
-    const shape = L.geoJSON(z.geojson, { style: areaStyle(z.kind), interactive: false })
+    const shape = zoneHoverShape(L, z.geojson, z.kind, z.name)
     shape.addTo(zoneLayer)
-    const label = L.tooltip({ permanent: true, direction: 'center', className: 'zone-label ' + zoneLabelClass(z.kind), interactive: false })
-      .setLatLng(shape.getBounds().getCenter())
-    label.zone = z
-    zoneLabels.push(label)
-    zoneShapes[z.id] = { shape, kind: z.kind }
+    zoneShapes[z.id] = { shape, kind: z.kind, zone: z }
   }
   zoneCount.value = (data || []).length
   zoneBounds = null
@@ -691,18 +685,16 @@ async function loadZones() {
     zoneBounds = zoneBounds ? zoneBounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast())
   }
   refreshZoneState()
-  placeZoneLabels()
   frameOnce() // the zones are often the first thing there is to frame
 }
 
-// "Formation 1 · FORM_A · 2 ICs (1 group)", and a No-Go zone with somebody inside drawn bold red.
+// "Formation 1 · 2 ICs (1 group)" on hover, and a No-Go zone with somebody inside drawn bold red.
 function refreshZoneState() {
-  for (const label of zoneLabels) {
-    const z = label.zone
+  for (const entry of Object.values(zoneShapes)) {
+    const z = entry.zone
     const c = props.zoneCounts[z.id]
-    label.setContent(
-      escapeHtml(z.name) + ' · <b>' + escapeHtml(z.code) + '</b>' +
-        (c ? ' · ' + c.ics + (c.ics === 1 ? ' IC' : ' ICs') + ' (' + c.groups + (c.groups === 1 ? ' group' : ' groups') + ')' : ''),
+    entry.shape.setTooltipContent(
+      escapeHtml(z.name) + (c ? ' · ' + c.ics + (c.ics === 1 ? ' IC' : ' ICs') + ' (' + c.groups + (c.groups === 1 ? ' group' : ' groups') + ')' : ''),
     )
   }
   const occupied = new Set(props.noGoOccupied)
@@ -714,20 +706,10 @@ function refreshZoneState() {
 
 watch(() => [props.zoneCounts, props.noGoOccupied], refreshZoneState, { deep: true })
 
-function placeZoneLabels() {
-  if (!map) return
-  const show = showZones.value
-  for (const label of zoneLabels) {
-    if (show && !map.hasLayer(label)) label.addTo(map)
-    else if (!show && map.hasLayer(label)) label.remove()
-  }
-}
-
 watch(showZones, (on) => {
   if (!map || !zoneLayer) return
   if (on) zoneLayer.addTo(map)
   else zoneLayer.remove()
-  placeZoneLabels()
 })
 
 function watchZones() {
@@ -861,7 +843,6 @@ onMounted(() => {
   planLayer = L.layerGroup().addTo(map) // the plan's walk: over the zones, under the people and their trails
   trailLayer = L.layerGroup().addTo(map)
   sosLayer = L.layerGroup().addTo(map) // last: on top
-  map.on('zoomend', placeZoneLabels)
   watchZones()
   // Dragging the map yourself means "let me look around": stop following, and keep the camera where it is put.
   map.on('dragstart', () => {

@@ -75,6 +75,16 @@ export function useRehearsals(eventId) {
         note: note || null,
       }),
     )
+  // Change one (085): the time, the end and the note. Its absence requests stay attached.
+  const update = (id, { startsAt, endsAt, note }) =>
+    write(
+      supabase.rpc('update_rehearsal', {
+        p_id: id,
+        p_starts_at: new Date(startsAt).toISOString(),
+        p_ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+        p_note: note || null,
+      }),
+    )
   const remove = (id) => write(supabase.from('event_rehearsals').delete().eq('id', id))
   const requestAbsence = (rehearsalId, reason) => write(supabase.rpc('rehearsal_absence_request', { p_rehearsal: rehearsalId, p_reason: reason }))
   const withdrawAbsence = (rehearsalId) => write(supabase.rpc('rehearsal_absence_withdraw', { p_rehearsal: rehearsalId }))
@@ -110,5 +120,5 @@ export function useRehearsals(eventId) {
     if (channel) supabase.removeChannel(channel)
   })
 
-  return { rehearsals, absences, next, errorMsg, busy, now, add, remove, requestAbsence, withdrawAbsence, decideAbsence, start }
+  return { rehearsals, absences, next, errorMsg, busy, now, add, update, remove, requestAbsence, withdrawAbsence, decideAbsence, start }
 }

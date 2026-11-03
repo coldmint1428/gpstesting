@@ -9,7 +9,7 @@
 // Adding people, roles, IC and removing people from the event are on the People page (PeoplePanel.vue).
 // The database checks every action again (see 002_users_events_groups.sql).
 import { ref, computed, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { initials } from '../utils/people'
 import { ROLE_LABEL, topRole, canSetIC } from '../utils/permissions'
@@ -37,6 +37,7 @@ const emit = defineEmits(['changed'])
 // The group open in full (?group=), or null for the list of cards. Only groups this page lists can open;
 // 'none' (people without a group) is for the root and planners. ICs and members always have their own group open.
 const route = useRoute()
+const router = useRouter()
 const openGroup = computed(() => {
   if (props.onlyGroupId) return shownGroups.value[0] || null
   const id = route.query.group
@@ -65,6 +66,7 @@ const cards = computed(() =>
     const sharing = ics.filter((m) => props.sharingStatus[m.id] === true).length
     return {
       g,
+      size: people.length,
       countText: peopleText(people.length),
       line: detailLine(g),
       icNames: ics.length ? names(ics) : 'None yet',
@@ -83,9 +85,31 @@ const myCardRole = computed(() => {
   const roles = [me && me.isAdmin && 'Admin', me && me.isIC && 'IC'].filter(Boolean)
   return 'Your group' + (roles.length ? ' · ' + roles.join(', ') : '')
 })
+// Size buttons above the cards; the sort is A-Z unless another is picked
+const SIZE_BANDS = [
+  { key: 'all', label: 'All', test: () => true },
+  { key: 'small', label: 'Small (1-5)', test: (n) => n >= 1 && n <= 5 },
+  { key: 'medium', label: 'Medium (6-15)', test: (n) => n >= 6 && n <= 15 },
+  { key: 'large', label: 'Large (16+)', test: (n) => n >= 16 },
+  { key: 'empty', label: 'Empty', test: (n) => n === 0 },
+]
+const sizeFilter = ref('all')
+const groupSort = ref('az') // az | za | big | small
+const sizeCounts = computed(() => Object.fromEntries(SIZE_BANDS.map((b) => [b.key, cards.value.filter((c) => b.test(c.size)).length])))
+const visibleCards = computed(() => {
+  const band = SIZE_BANDS.find((b) => b.key === sizeFilter.value) || SIZE_BANDS[0]
+  const byName = (a, b) => a.g.name.localeCompare(b.g.name, undefined, { numeric: true, sensitivity: 'base' })
+  const order = {
+    az: byName,
+    za: (a, b) => byName(b, a),
+    big: (a, b) => b.size - a.size || byName(a, b),
+    small: (a, b) => a.size - b.size || byName(a, b),
+  }[groupSort.value]
+  return cards.value.filter((c) => band.test(c.size)).sort(order)
+})
 const cardSections = computed(() => {
-  const mine = cards.value.filter((c) => props.me && c.g.id === props.me.groupId)
-  const others = cards.value.filter((c) => !mine.includes(c))
+  const mine = visibleCards.value.filter((c) => props.me && c.g.id === props.me.groupId)
+  const others = visibleCards.value.filter((c) => !mine.includes(c))
   if (!mine.length) return [{ label: '', cards: others }]
   return [{ label: 'Your groups', cards: mine }, { label: 'Other groups', cards: others }].filter((section) => section.cards.length)
 })
@@ -269,6 +293,25 @@ async function saveDetails(g) {
   }
 }
 
+// Delete the open group (root / planners, delete_group 084). Its people stay in the event with no group.
+async function deleteOpenGroup() {
+  const g = openGroup.value
+  const n = openMembers.value.length
+  const ok = await askConfirm({
+    title: 'Delete "' + g.name + '"?',
+    message:
+      (n ? n + (n === 1 ? ' person leaves' : ' people leave') + ' the group and stay in the event with no group. ' : '') +
+      'Its timeline items, attendance and recorded locations are deleted too. This cannot be undone.',
+    confirmText: 'Delete group',
+    danger: true,
+  })
+  if (!ok) return
+  if (await run('delete_group', { p_group: g.id })) {
+    toast('Deleted ' + g.name + '.', 'success', 3000)
+    router.push({ query: {} }) // back to the list
+  }
+}
+
 async function createGroup() {
   const ok = await run('create_group', {
     p_event_id: props.eventId,
@@ -279,6 +322,34 @@ async function createGroup() {
     newGroupName.value = ''
     newGroupColour.value = nextGroupColour([...props.groups, {}]) // the next hue for the next group
   }
+}
+
+// Taking someone out of a group, or moving them to another, is asked first: they stop being its IC or admin
+async function changeGroup(m, select) {
+  const to = select.value || null
+  if (to === (m.groupId || null)) return
+  if (m.groupId) {
+    const ok = await askConfirm({
+      title: to ? 'Move ' + m.display_name + ' to ' + groupNameOf(to) + '?' : 'Take ' + m.display_name + ' out of ' + groupNameOf(m.groupId) + '?',
+      message: 'They leave ' + groupNameOf(m.groupId) + (to ? '' : ' and stay in the event with no group') + '.' + (m.isIC || m.isAdmin ? ' They are no longer its IC or admin.' : ''),
+      confirmText: to ? 'Move' : 'Take out',
+      danger: !to,
+    })
+    if (!ok) {
+      select.value = m.groupId // cancelled: put the menu back by hand
+      return
+    }
+  }
+  if (!(await assignGroup(m, to))) select.value = m.groupId || ''
+}
+async function removeFromMyGroup(m) {
+  const ok = await askConfirm({
+    title: 'Take ' + m.display_name + ' out of ' + groupNameOf(m.groupId) + '?',
+    message: 'They stay in the event with no group.' + (m.isIC ? ' They are no longer an IC.' : ''),
+    confirmText: 'Take out',
+    danger: true,
+  })
+  if (ok) await assignGroup(m, null)
 }
 
 function assignGroup(member, groupId) {
@@ -344,6 +415,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           <span v-if="me && openGroup.id === me.groupId" class="chip chip-ink k k2-minechip" style="margin: 0" data-testid="group-mine-chip"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>{{ myCardRole }}</span>
           <span class="kp-spacer"></span>
           <button v-if="canManage && openGroup.id !== 'none'" type="button" class="btn btn-sm btn-outline-secondary" data-testid="group-edit-btn" @click="startEditGroup">Edit</button>
+          <button v-if="canManage && openGroup.id !== 'none'" type="button" class="btn btn-sm btn-ghost-danger" :disabled="busy" data-testid="group-delete-btn" @click="deleteOpenGroup">Delete</button>
         </div>
         <p v-if="!editingGroup && openLine && !(canManage && details[openGroup.id])" class="kp-sub">{{ openLine }}</p>
       </div>
@@ -414,13 +486,13 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
 
               <!-- Group (root / planner); planners are never in a group -->
               <span v-if="canManage && isPlanner(m)" class="small text-muted">No group</span>
-              <select v-else-if="canManage" class="form-select form-select-sm kp-stepped" :value="m.groupId || ''" :disabled="busy" aria-label="Group" :data-testid="'group-select-' + m.username" @change="assignGroup(m, $event.target.value)">
+              <select v-else-if="canManage" class="form-select form-select-sm kp-stepped" :value="m.groupId || ''" :disabled="busy" aria-label="Group" :data-testid="'group-select-' + m.username" @change="changeGroup(m, $event.target)">
                 <option value="">No group</option>
                 <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
               </select>
               <!-- Group admin: add to / remove from own group -->
               <button v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="assignGroup(m, myAdminGroupId)">Add</button>
-              <button v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-ghost" :disabled="busy" @click="assignGroup(m, null)">Remove</button>
+              <button v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-ghost" :disabled="busy" @click="removeFromMyGroup(m)">Remove</button>
 
               <button v-if="canStopSharing(m)" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'stop-sharing-' + m.username" @click="stopSharing(m)">Stop sharing</button>
             </div>
@@ -479,6 +551,32 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           </table>
         </div>
       </div>
+
+      <!-- Size buttons and sort (only when there is more than one group to choose between) -->
+      <div v-if="!onlyGroupId && shownGroups.length > 1" class="k2-filterrow k" data-testid="group-controls">
+        <div class="seg k2-wrapseg" role="group" aria-label="Filter by group size">
+          <button
+            v-for="b in SIZE_BANDS"
+            :key="b.key"
+            type="button"
+            :aria-pressed="sizeFilter === b.key ? 'true' : 'false'"
+            :disabled="b.key !== 'all' && !sizeCounts[b.key]"
+            :data-testid="'group-size-' + b.key"
+            @click="sizeFilter = b.key"
+          >{{ b.label }} <span style="opacity: 0.6">{{ sizeCounts[b.key] }}</span></button>
+        </div>
+        <span class="sp"></span>
+        <div class="ksel">
+          <label for="group-sort" class="visually-hidden">Sort groups</label>
+          <select id="group-sort" v-model="groupSort" data-testid="group-sort">
+            <option value="az">Name A-Z</option>
+            <option value="za">Name Z-A</option>
+            <option value="big">Largest first</option>
+            <option value="small">Smallest first</option>
+          </select>
+        </div>
+      </div>
+      <p v-if="shownGroups.length && !visibleCards.length" class="mut" data-testid="group-none-match">No groups match this size.</p>
 
       <div class="k k2-grouplist" data-testid="group-list">
       <template v-for="section in cardSections" :key="section.label">

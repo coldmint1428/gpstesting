@@ -68,7 +68,12 @@ onMounted(loadEvents)
 const native = isNativeApp
 const tracker = useLocationTracker()
 const liveIds = ref(cached ? cached.liveIds : [])
-const liveEvents = computed(() => events.value.filter((e) => liveIds.value.includes(e.id)))
+// Live events soonest date first (undated last), so the big card is the one happening the soonest
+const liveEvents = computed(() =>
+  events.value
+    .filter((e) => liveIds.value.includes(e.id))
+    .sort((a, b) => new Date(a.startsAt || 8.64e15).getTime() - new Date(b.startsAt || 8.64e15).getTime()),
+)
 // Soonest upcoming first, then past events (latest first), then the ones without a date
 const otherEvents = computed(() => {
   const now = Date.now()
@@ -107,7 +112,7 @@ function monthOf(iso) {
 function timeOf(iso) {
   return iso ? new Date(iso).toLocaleTimeString('en-SG', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' }) : ''
 }
-// ---------- Website: Ongoing / Upcoming / Past, with a search ----------
+// ---------- Website: Ongoing / Upcoming / Archive (past events), with a search ----------
 const tab = ref('')
 const search = ref('')
 const isPast = (e) => !!e.startsAt && new Date(e.startsAt).getTime() < Date.now() - 12 * 3600 * 1000
@@ -116,7 +121,7 @@ const tabLists = computed(() => {
   const rest = events.value.filter((e) => !liveIds.value.includes(e.id))
   const byStart = (a, b) => new Date(a.startsAt || 8.64e15).getTime() - new Date(b.startsAt || 8.64e15).getTime()
   return {
-    ongoing: live,
+    ongoing: [...live].sort(byStart),
     upcoming: rest.filter((e) => !isPast(e)).sort(byStart),
     past: rest.filter(isPast).sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()),
   }
@@ -130,7 +135,7 @@ const shownEvents = computed(() => {
 const WEB_TABS = [
   { key: 'ongoing', label: 'Ongoing' },
   { key: 'upcoming', label: 'Upcoming' },
-  { key: 'past', label: 'Past' },
+  { key: 'past', label: 'Archive' },
 ]
 // Switching tabs: the list slides out the way the tabs moved (Past is to the right of Upcoming, so its list comes in
 // from the right).

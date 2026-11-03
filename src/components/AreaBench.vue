@@ -274,8 +274,10 @@ let hoverFollowOn = false
 // stays under the cursor; the corner handles and the knob are re-placed on zoomend, and the draft
 // ring is geographic, so it lands exactly right too.
 //
-// A wheel over the map must never scroll the page and never zoom the browser -- see onMapWheel,
-// which is what actually guarantees that.
+// A plain wheel over the map scrolls the PAGE, and Ctrl (or Cmd) + wheel zooms the MAP -- see onMapWheel. The wheel
+// used to always zoom the map and never reach the page, so with the map filling the window (as it does while an area
+// is being drawn, usually zoomed all the way in) there was no spot left to scroll from: the page only moved by
+// dragging its own scroll bar. A trackpad pinch arrives as Ctrl + wheel, so it still zooms.
 const ZOOM_HANDLERS = ['scrollWheelZoom', 'touchZoom']
 
 // ---------- The view is moved here ----------
@@ -875,6 +877,10 @@ function applyMapHandlers() {
   // to be off in EVERY mode, not only while drawing: left on, it would take the same press a shape
   // takes and drag the view at the same time as the shape.
   set('dragging', false)
+  // While an area is being drawn a press on the map is a point, never a pan of the view, so a finger dragged up or down
+  // may scroll the page (the map can fill a narrow screen, with no other spot to scroll from). Everywhere else the
+  // map keeps every touch for itself. Inline, because Leaflet only ever changes classes.
+  map.getContainer().style.touchAction = drawing ? 'pan-y' : 'none'
   // Box zoom is a left-drag on the map that draws a rectangle. That is the same gesture as moving
   // the view, so the two cannot both be bound; the view is the one the planner expects, and the
   // wheel already zooms.
@@ -889,20 +895,29 @@ function applyMapHandlers() {
   setHoverFollow(drawing && props.canEdit)
 }
 
-// The page must never scroll or zoom because of a wheel over the map. Leaflet's own wheel
-// handler already does this while it is enabled -- it calls preventDefault and stopPropagation
-// on every wheel event it sees -- but a handler that is disabled lets the event through, and
-// that is how reaching for the map scrolled the page. This listener is attached ONCE and never
-// toggled, so the map is a wall against page scrolling whatever state it is in. It deliberately
-// does not stop propagation of its own: Leaflet still sees the event and zooms.
+// The wheel over the map. With Ctrl (or Cmd) held it is the map's: the browser's own page zoom is cancelled and Leaflet
+// goes on to zoom around the cursor. Without it the wheel is the PAGE's: Leaflet is not allowed to see the event, so
+// it neither zooms nor swallows it, and the page scrolls as it does anywhere else. A short hint says how to zoom.
+// This listener runs in the capture phase, ahead of Leaflet's own on the container, and is attached ONCE and never
+// toggled, so the rule is the same in every mode.
+const zoomHint = ref(false)
+let zoomHintTimer = null
+const ZOOM_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '') ? 'Cmd' : 'Ctrl'
 function onMapWheel(event) {
-  if (event.cancelable) event.preventDefault()
+  if (event.ctrlKey || event.metaKey) {
+    if (event.cancelable) event.preventDefault() // no browser zoom; Leaflet zooms the map
+    return
+  }
+  event.stopImmediatePropagation() // not for the map: leave it to the page
+  zoomHint.value = true
+  clearTimeout(zoomHintTimer)
+  zoomHintTimer = setTimeout(() => (zoomHint.value = false), 1400)
 }
 
-// A wheel event is only cancelable if the browser is told not to treat the listener as passive,
-// which is the third argument of addEventListener -- hence the explicit option rather than the
-// default.
-const WHEEL_OPTIONS = { passive: false }
+// A wheel event is only cancelable if the browser is told not to treat the listener as passive, which is the third
+// argument of addEventListener -- hence the explicit option rather than the default. `capture` puts this ahead of
+// Leaflet's own wheel handler on the same container.
+const WHEEL_OPTIONS = { passive: false, capture: true }
 
 // The view is remembered whenever the map settles, not only while a shape is open: looking around
 // works in every mode, and coming back to the bench at the view you left it at is the whole point of
@@ -2625,6 +2640,7 @@ onUnmounted(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   if (map) {
     map.getContainer().removeEventListener('wheel', onMapWheel, WHEEL_OPTIONS)
+    clearTimeout(zoomHintTimer)
     map.getContainer().removeEventListener('pointerdown', onMapPointerDown)
     map.getContainer().removeEventListener('pointermove', onEdgeHover)
   }
@@ -2830,6 +2846,7 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
         <!-- While a dot is being dragged the outline itself is the message: it is red exactly
              where it would cross. Nothing is written for that, and nothing is written when "Add
              point" finds nowhere legal to put the dot -- the shape plainly did not change. -->
+        <div v-if="zoomHint" class="bench-zoomhint" role="status" data-testid="zoom-hint">Hold {{ ZOOM_KEY }} and scroll to zoom the map</div>
         <div
           v-if="showHint"
           class="bench-hint shadow-sm"
@@ -3172,6 +3189,22 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
   width: 34px;
   height: 34px;
   flex: 0 0 auto;
+}
+
+/* "Hold Ctrl and scroll to zoom": the ink pill, along the bottom of the map, for a moment after a plain wheel over it */
+.bench-zoomhint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--ink, #0a1f17);
+  color: #fff;
+  font: 700 12px Manrope, system-ui, sans-serif;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 /* The strip along the top of the map -- the ONE place a refusal is said, while drawing and while

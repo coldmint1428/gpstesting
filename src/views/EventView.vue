@@ -229,6 +229,10 @@ async function onRehearsalAdd(details) {
   rehearsalError.value = await rehearsals.add(details)
   if (!rehearsalError.value) toast('Rehearsal scheduled for ' + formatDayTime(details.startsAt) + '.', 'success', 4000)
 }
+async function onRehearsalUpdate({ id, details }) {
+  rehearsalError.value = await rehearsals.update(id, details)
+  if (!rehearsalError.value) toast('Rehearsal changed to ' + formatDayTime(details.startsAt) + '.', 'success', 4000)
+}
 async function onAbsenceRequest({ rehearsalId, reason }) {
   rehearsalError.value = await rehearsals.requestAbsence(rehearsalId, reason)
   if (!rehearsalError.value) toast('Sent. The root or a planner needs to approve it.', 'success', 4000)
@@ -237,6 +241,15 @@ async function onAbsenceWithdraw(rehearsalId) {
   rehearsalError.value = await rehearsals.withdrawAbsence(rehearsalId)
 }
 async function onAbsenceDecide({ id, approve }) {
+  // Turning someone down, or taking back an approval, is asked first; approving is the easy direction
+  if (!approve) {
+    const ok = await askConfirm({
+      title: 'Turn down this request?',
+      message: 'They are marked as expected at the rehearsal.',
+      confirmText: 'Turn down',
+    })
+    if (!ok) return
+  }
   rehearsalError.value = await rehearsals.decideAbsence(id, approve)
 }
 async function onRehearsalRemove(id) {
@@ -495,6 +508,29 @@ const sharingCount = computed(() => Object.values(sharingStatus.value).filter(Bo
 const showStatusCard = computed(() => native && (tab.value === 'ops' || (tab.value === 'now' && isIC.value)))
 
 // ---------- Website: the side navigation in sections; on a phone's browser a bottom bar with the rest under More ----------
+// The side menu folds to a narrow rail of icons (the hamburger in the top bar), to give the page more room. The choice is
+// remembered; with none, a narrow window starts folded.
+const NAV_KEY = 'planova.navCollapsed'
+function readNavCollapsed() {
+  try {
+    const v = localStorage.getItem(NAV_KEY)
+    if (v === '1') return true
+    if (v === '0') return false
+  } catch {
+    /* storage blocked: fall through to the window's width */
+  }
+  return typeof window !== 'undefined' && window.innerWidth < 1100
+}
+const navCollapsed = ref(readNavCollapsed())
+function toggleNav() {
+  navCollapsed.value = !navCollapsed.value
+  try {
+    localStorage.setItem(NAV_KEY, navCollapsed.value ? '1' : '0')
+  } catch {
+    /* storage blocked: the choice lasts until the page is left */
+  }
+}
+
 const navSections = computed(() => {
   const planEdits = modeOf('timeline') === 'edit'
   const inSection = (keys) => keys.map((k) => pages.value.find((p) => p.key === k)).filter(Boolean)
@@ -826,15 +862,29 @@ async function removeEvent() {
       <button type="button" class="k2-sos sos-btn" aria-label="SOS: send an emergency alert" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </Teleport>
 
-    <div class="ev-body">
+    <div class="ev-body" :class="{ 'ev-nav-collapsed': navCollapsed }">
       <!-- Every page of the event, always in view -->
       <nav v-if="!native" class="k k2-side k2-nav" aria-label="Event pages">
+        <!-- Folds the menu to a rail of icons, and back -->
+        <button
+          type="button"
+          class="ks-ni k2-navtoggle"
+          :aria-expanded="navCollapsed ? 'false' : 'true'"
+          :aria-label="navCollapsed ? 'Open the side menu' : 'Fold the side menu to icons'"
+          :title="navCollapsed ? 'Open the menu' : 'Fold the menu to icons'"
+          data-testid="nav-toggle"
+          @click="toggleNav"
+        >
+          <svg viewBox="0 0 24 24" class="ki" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          <span class="ev-nav-text">Menu</span>
+        </button>
         <template v-for="section in navSections" :key="section.label">
           <div v-if="section.label" class="k2-sec">{{ section.label }}</div>
           <RouterLink
             v-for="p in section.items"
             :key="p.key"
             class="ks-ni"
+            :title="navCollapsed ? p.label : null"
             :aria-current="tab === p.key ? 'page' : undefined"
             :to="{ name: 'event', params: { id, page: p.key } }"
             replace
@@ -1070,6 +1120,7 @@ async function removeEvent() {
           :busy="rehearsals.busy.value"
           :error-msg="rehearsalError || rehearsals.errorMsg.value"
           @add="onRehearsalAdd"
+          @update="onRehearsalUpdate"
           @remove="onRehearsalRemove"
           @request-absence="onAbsenceRequest"
           @withdraw-absence="onAbsenceWithdraw"

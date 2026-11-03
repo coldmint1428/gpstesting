@@ -3,10 +3,12 @@
 // (and a push) until they press Got it or a planner clears it; root and planners see who has and has not seen it.
 //
 //   mine      messages to me that are still up: [{ id, body, urgent, from, at: Date, seen, acked }], newest first
-//   sent      this event's messages of the last 24 h (staff only): [{ id, body, urgent, from, at, audience, value, cleared }]
+//   sent      this event's messages, newest first (staff only): [{ id, body, urgent, from, at, audience, value, cleared, clearedAt, clearedBy }]
+//   active    the sent ones still on people's screens (not taken down, under 12 h old)
+//   history   the rest: taken down by a planner, or old enough to have dropped off the screens
 //   send({ audience, value, body, urgent, dry })  -> { recipients, id } or { error }
 //   ack(id), markSeen(id), clear(id), status(id) -> { total, seen, acked, waiting: [{ name, group, radio, ic, seen }] }
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { supabase } from '../lib/supabase'
 
 export const AUDIENCES = [
@@ -26,7 +28,6 @@ export function audienceText(audience, value) {
   return a ? a.label.toLowerCase() : audience
 }
 
-const DAY = 24 * 60 * 60 * 1000
 const STILL_UP = 12 * 60 * 60 * 1000 // a message older than this no longer shows as a banner
 
 export function useBroadcasts(eventIdRef, { myUserIdRef, staffRef, onNew } = {}) {
@@ -68,11 +69,10 @@ export function useBroadcasts(eventIdRef, { myUserIdRef, staffRef, onNew } = {})
     }
     const { data, error } = await supabase
       .from('broadcasts')
-      .select('id, body, urgent, from_name, at, audience, audience_value, cleared_at')
+      .select('id, body, urgent, from_name, at, audience, audience_value, cleared_at, cleared_by')
       .eq('event_id', eid)
-      .gte('at', new Date(Date.now() - DAY).toISOString())
       .order('at', { ascending: false })
-      .limit(10)
+      .limit(100)
     if (error || eid !== eventIdRef.value) return
     sent.value = (data || []).map((b) => ({
       id: b.id,
@@ -83,8 +83,15 @@ export function useBroadcasts(eventIdRef, { myUserIdRef, staffRef, onNew } = {})
       audience: b.audience,
       value: b.audience_value,
       cleared: !!b.cleared_at,
+      clearedAt: b.cleared_at ? new Date(b.cleared_at) : null,
+      clearedBy: b.cleared_by || null,
     }))
   }
+
+  // Still on screens, or in the history (taken down, or old enough that no banner shows it any more)
+  const isActive = (b) => !b.cleared && Date.now() - b.at.getTime() < STILL_UP
+  const active = computed(() => sent.value.filter(isActive))
+  const history = computed(() => sent.value.filter((b) => !isActive(b)))
 
   const load = () => Promise.all([loadMine(), loadSent()])
 
@@ -162,5 +169,5 @@ export function useBroadcasts(eventIdRef, { myUserIdRef, staffRef, onNew } = {})
     if (channel) supabase.removeChannel(channel)
   })
 
-  return { mine, sent, busy, load, send, ack, markSeen, clear, status }
+  return { mine, sent, active, history, busy, load, send, ack, markSeen, clear, status }
 }
