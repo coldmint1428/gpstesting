@@ -39,7 +39,7 @@ import { useOpenMenu } from '../../composables/useOpenMenu'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createOneMapLayer } from '../../utils/onemap'
-import { planErrorMessage, usePlan } from '../../composables/usePlan'
+import { isLockRefusal, planErrorMessage, usePlan } from '../../composables/usePlan'
 import { usePlanUndo } from '../../composables/usePlanUndo'
 import PlanLive from './PlanLive.vue'
 import EmptyState from '../EmptyState.vue'
@@ -86,7 +86,14 @@ const { plans, plan, frames, groups, zones, loading, busy, errorMsg, livePlan } 
 // (the groups, zones and plans read at mount, then the first plan opened: `boardReady` below)
 const boardReady = ref(false)
 useLoadGate(() => !boardReady.value)
-const edits = usePlanUndo({ plan, frames, api })
+const edits = usePlanUndo({
+  plan,
+  frames,
+  api,
+  // A refused undo is the strip's business, like a refused drag: nothing moved, and the sentence says who has the
+  // badge. The stack is untouched, so the key works again once the badge is free.
+  onRefused: (label, error) => sayRefusal(`${label}: ${trimStop(planErrorMessage(error))}.`),
+})
 const { canUndo, canRedo } = edits
 
 const mapEl = ref(null)
@@ -646,9 +653,15 @@ function drawMarkers() {
     const dim = selectedGroups.value.size > 0 && !selectedGroups.value.has(group.id)
     // This badge is an end of a stretch the database refuses: same red ring the bar and the lane use.
     const bad = !run && flaggedCells.value.has(`${group.id}|${frame.id}`)
+    // Who has this badge now (081). `other` is somebody else's hand on it: a ring, and a tooltip that names them, so a
+    // planner can see why it will not move before they try it. `own` is a session of my own account -- my other
+    // window, or the gesture this page is making -- which is a different fact and reads differently.
+    const cell = cellId(frame ? frame.id : '', group.id)
+    const other = run || !frame ? null : busyCells.value.get(cell) || null
+    const own = run || !frame || other ? null : ownCells.value.get(cell) || null
     const icon = L.divIcon({
       className: 'pv-marker-wrap',
-      html: `<div class="pv-marker${dim ? ' is-dim' : ''}${bad ? ' is-bad' : ''}${run ? ' is-walking' : ''}" style="background:${color}">${initials(group.name)}</div>`,
+      html: `<div class="pv-marker${dim ? ' is-dim' : ''}${bad ? ' is-bad' : ''}${run ? ' is-walking' : ''}${other ? ' is-busy' : ''}${own ? ' is-held' : ''}" style="background:${color}">${initials(group.name)}</div>`,
       iconSize: [26, 26],
       iconAnchor: [13, 13],
     })
@@ -665,27 +678,312 @@ function drawMarkers() {
       // Only the badge under the pointer raises dragstart/dragend; the companions are moved with setLatLng(), which
       // raises no drag event. So one gesture is one dragend, and one write is all that can happen.
       marker.on('dragstart', () => beginGroupDrag(group.id))
-      marker.on('drag', () => dragCompanions(group.id))
+      marker.on('drag', () => onGroupDrag(group.id))
       marker.on('dragend', () => endGroupDrag(group.id))
     }
     marker.bindTooltip(
-      run
+      (run
         ? `${group.name} · ${point.moving ? 'walking to ' + formatOffset(point.next.t_s) : 'held at ' + formatOffset(point.t_s)}`
-        : `${group.name} · ${point.defined ? 'set at ' : 'unchanged since '}${formatOffset(point.t_s)}`,
+        : `${group.name} · ${point.defined ? 'set at ' : 'unchanged since '}${formatOffset(point.t_s)}`) +
+        (other ? ` · ${other.display_name || 'Somebody'} is editing` : ''),
       { direction: 'top', offset: [0, -14] },
     )
     markers.set(group.id, marker)
     marker.addTo(markerLayer)
+    // The ids a browser check holds on to. A badge is drawn by Leaflet, so it has no Vue template to put them in; the
+    // element Leaflet made for it is the one the hand grabs, which is exactly the one a check should grab too.
+    const element = marker.getElement()
+    if (element) {
+      element.dataset.testid = 'plan-badge'
+      element.dataset.group = group.id
+      element.dataset.cell = cell
+      element.dataset.hold = other ? 'other' : own ? 'mine' : ''
+      element.dataset.heldBy = other ? other.display_name || 'Somebody' : ''
+    }
   }
 }
+
+// ---------- holding a badge while the hand is on it (081, 082) ----------
+
+/**
+ * The product's rule: a badge nobody has moved for five seconds is let go, so a planner who walks away mid-drag does
+ * not keep a colleague out of it. The next movement takes it back silently -- nothing failed, so nothing is said --
+ * and if somebody else took it in the gap, the write is refused and the badge goes back with the sentence. That
+ * snap-back is the price of the rule rather than a bug in it: a hold nobody is using is worse than a gesture that
+ * has to be repeated.
+ */
+const HOLD_IDLE_MS = 5000
+/** How often the board asks who is editing what. The read is cheap; a ring that names the wrong person is not. */
+const HOLDERS_MS = 2500
+
+/**
+ * `?concurrent=0` turns the ownership picture off: the rings, the stack of who else is editing, and the hold across a
+ * gesture. It deliberately cannot bring back the old write path -- 082 refuses a badge map for a frame that already
+ * stands, because that map was the bug (a drag wrote every other badge back as this page had last read it). So the
+ * flag is a way to look at the board without the new UI, never a way to edit the old way.
+ */
+const OWNERSHIP_UI = (() => {
+  try {
+    return new URLSearchParams(window.location.search).get('concurrent') !== '0'
+  } catch {
+    return true
+  }
+})()
+
+/** "This badge is open in another of your windows ... Take it over to edit here." -- the one refusal with a way out. */
+const TAKE_OVER = /another of your windows/i
+
+// The board's one strip for refusals: a badge somebody else has, a move that never reached the database, a hold that
+// was lost. It is not a toast because it has to outlive the pointer (a drag ends in the same instant a refusal may
+// arrive) and because a snap-back is not a success notice. One line, the server's own words, at most one way out.
+const refusal = ref(null)
+let refusalTimer = null
+
+function sayRefusal(text, action = null) {
+  clearTimeout(refusalTimer)
+  const clean = String(text || '').trim()
+  if (!clean) return
+  refusal.value = { text: clean, action }
+  refusalTimer = setTimeout(() => {
+    refusal.value = null
+  }, action ? 15000 : 8000)
+}
+
+function clearRefusal() {
+  clearTimeout(refusalTimer)
+  refusal.value = null
+}
+
+function runRefusalAction() {
+  const action = refusal.value ? refusal.value.action : null
+  clearRefusal()
+  if (action) action.run()
+}
+
+function trimStop(text) {
+  const s = String(text || '').trim()
+  return s.endsWith('.') ? s.slice(0, -1) : s
+}
+
+/** "Error updating location: Priya has this badge" -- the product's sentence for a move that did not land. */
+function locationRefusal(error) {
+  const reason = trimStop(planErrorMessage(error))
+  return reason ? `Error updating location: ${reason}.` : 'Error updating location.'
+}
+
+/**
+ * A write refused because a badge (or a moment) is somebody else's. The strip is where that is said, and the caller
+ * keeps its toast for everything else: a validation rule, a plan that moved under it, a network failure with no
+ * sentence of its own.
+ */
+function refusedBecauseHeld(error) {
+  if (!isLockRefusal(error)) return false
+  sayRefusal(planErrorMessage(error))
+  return true
+}
+
+// Who is editing what, right now (081's plan_lock_holders): a ring on a badge somebody else has, and a small stack of
+// who they are. Both are drawn from this one read and neither decides anything -- the database still decides.
+const holders = ref([])
+let holdersTimer = null
+
+async function refreshHolders() {
+  if (!OWNERSHIP_UI || !props.canEdit || !plan.value || !api.lockHolders) {
+    holders.value = []
+    return
+  }
+  holders.value = (await api.lockHolders()) || []
+}
+
+function cellId(frameId, groupId) {
+  return `${frameId}|${groupId}`
+}
+
+/** Rows for badges somebody else holds, keyed the way the map draws a cell. */
+const busyCells = computed(() => {
+  const map = new Map()
+  for (const row of holders.value) {
+    if (row.kind !== 'badge' || row.mine) continue
+    map.set(cellId(row.frame_id, row.group_id), row)
+  }
+  return map
+})
+
+/** The same, for a hold of my own account in another window: not "somebody else", but still worth a ring. */
+const ownCells = computed(() => {
+  const map = new Map()
+  for (const row of holders.value) {
+    if (row.kind !== 'badge' || !row.mine) continue
+    map.set(cellId(row.frame_id, row.group_id), row)
+  }
+  return map
+})
+
+/** Is this row a badge the gesture in flight is carrying? A hold of my own hand is not news about myself. */
+function inMyGesture(row) {
+  return !!groupDrag && groupDrag.cells.some((c) => c.frame === row.frame_id && c.group === row.group_id)
+}
+
+/** Who else is editing, one chip each: the presence stack beside the clock. */
+const editors = computed(() => {
+  const byPerson = new Map()
+  for (const row of holders.value) {
+    if (row.kind !== 'badge') continue
+    if (row.mine && inMyGesture(row)) continue
+    const key = row.mine ? 'me-elsewhere' : row.user_id || row.display_name || 'somebody'
+    const entry = byPerson.get(key) || {
+      key,
+      name: row.mine ? 'You, another window' : row.display_name || 'Somebody',
+      // "You, another window" has no initials worth guessing, so the chip says "you" instead of inventing letters.
+      initials: row.mine ? 'you' : initials(row.display_name || 'Somebody'),
+      cells: [],
+    }
+    entry.cells.push(row)
+    byPerson.set(key, entry)
+  }
+  return [...byPerson.values()]
+})
+
+function editorTitle(editor) {
+  const named = editor.cells
+    .slice(0, 4)
+    .map((row) => `${row.group_name || groupName(row.group_id)} at ${formatOffset(row.t_s)}`)
+  const more = editor.cells.length - named.length
+  return `${editor.name} is editing ${named.join(', ')}${more > 0 ? ` and ${more} more` : ''}.`
+}
+
+// A badge this page holds and no longer has (the heartbeat found out: taken over, or it expired). Nothing is written
+// at the end of this gesture -- the badge is somebody else's -- so the drag finishes as a refusal and goes back.
+if (api.onHoldLost) {
+  api.onHoldLost((gone) => {
+    const state = groupDrag
+    if (!state || state.phase === 'refused') return
+    const hit = state.cells.some((cell) => gone.some((row) => row.frame === cell.frame && row.group === cell.group))
+    if (!hit) return
+    state.phase = 'refused'
+    state.refusal = 'This badge stopped being yours to edit. Try again.'
+    sayRefusal(state.refusal)
+    refreshHolders()
+  })
+}
+
+// ---------- where somebody else's drag is going (phase 4) ----------
+
+/**
+ * A colleague's badge does NOT move on this screen while they drag it: it is drawn from the plan, and the plan has not
+ * changed yet. So their drag is drawn as a GHOST, on a layer of its own, at the place they are taking the badge --
+ * beside the ring that already says it is theirs. That pair is the honest picture: this is where the plan has the
+ * badge, and that is where somebody else is taking it.
+ *
+ * The ghost comes from a broadcast (usePlanStream) and is never a position: it cannot be written, and a forged one is
+ * a lie about a preview rather than about the plan (utils/planDraft.js). It goes when the sender says they let go,
+ * when they have not refreshed it for two and a half seconds, or when this page leaves the plan.
+ */
+const drafts = ref([]) // rows from the stream: { cell, frame, group, lat, lng, from }
+let draftLayer = null
+const ghosts = new Map() // cell -> the Leaflet marker drawing it
+
+function draftIcon(groupId) {
+  const group = groups.value.find((g) => g.id === groupId)
+  const color = colorOf.value.get(groupId) || '#0b3d2e'
+  return L.divIcon({
+    className: 'pv-ghost-wrap',
+    html: `<div class="pv-ghost" style="--pv-ghost-colour:${color}">${initials(group ? group.name : '?')}</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
+}
+
+/**
+ * Draw the ghosts of other planners' drags: only the open moment has a map, only a group this page can see has a
+ * badge, and only a badge that is being dragged has a ghost. Everything else about the plan is still drawn from the
+ * plan, which is why a ghost can never be confused with a position.
+ */
+function drawGhosts() {
+  if (!map || !draftLayer) return
+  const frame = selected.value
+  const keep = new Set()
+  if (OWNERSHIP_UI && frame && playhead.value == null) {
+    for (const row of drafts.value) {
+      if (row.frame !== frame.id) continue
+      if (!shownGroups.value.some((group) => group.id === row.group)) continue
+      keep.add(row.cell)
+      let ghost = ghosts.get(row.cell)
+      if (!ghost) {
+        // Under the badges: the plan's own position is the real one, and a ghost must never cover it.
+        ghost = L.marker([row.lat, row.lng], {
+          icon: draftIcon(row.group),
+          interactive: false,
+          keyboard: false,
+          zIndexOffset: -100,
+        }).addTo(draftLayer)
+        ghosts.set(row.cell, ghost)
+      } else {
+        ghost.setLatLng([row.lat, row.lng])
+      }
+      // The ids a browser check holds on to, and who the ghost is: the NAME comes from the holders read, not from the
+      // broadcast, because a name in a broadcast is a name anybody can type.
+      const element = ghost.getElement()
+      if (element) {
+        const named = busyCells.value.get(row.cell) || null
+        element.dataset.testid = 'plan-ghost'
+        element.dataset.group = row.group
+        element.dataset.cell = row.cell
+        element.dataset.by = named ? named.display_name || 'Somebody' : ''
+      }
+    }
+  }
+  for (const [cell, ghost] of ghosts) {
+    if (keep.has(cell)) continue
+    draftLayer.removeLayer(ghost)
+    ghosts.delete(cell)
+  }
+}
+
+/** Forget every ghost: the plan they were about is not on screen any more. */
+function clearGhosts() {
+  drafts.value = []
+  for (const ghost of ghosts.values()) if (draftLayer) draftLayer.removeLayer(ghost)
+  ghosts.clear()
+}
+
+/**
+ * Publish where this gesture's badges are going, per badge, for everybody else's screen. The throttle (one per badge
+ * per 50 ms, with the last place always sent) lives in usePlanStream, so this can be called on every drag step.
+ * Nothing is published for a gesture that has already been refused: it will never move anything, and a ghost heading
+ * somewhere no badge will ever stand is a lie about a preview.
+ */
+function publishDrafts(state) {
+  if (!OWNERSHIP_UI || !api.planDraft || !state) return
+  for (const row of state.roster) {
+    const marker = markers.get(row.id)
+    if (!marker) continue
+    const at = marker.getLatLng()
+    api.planDraft({ frame: state.frameId, group: row.id }, { lat: at.lat, lng: at.lng })
+    state.published = true
+  }
+}
+
+/**
+ * The gesture is over: the ghosts for its badges go now, whatever happened to the write. A gesture that never moved
+ * published nothing, so it has nothing to take back -- a click on a badge must not send a message about it.
+ */
+function releaseDrafts(state) {
+  if (!OWNERSHIP_UI || !api.clearDrafts || !state || !state.cells || !state.published) return
+  api.clearDrafts(state.cells)
+}
+
+if (OWNERSHIP_UI && api.onDraft) api.onDraft((rows) => (drafts.value = rows))
 
 /**
  * Drag a group on the map: that moment states a new position for it. When the group is ticked, every ticked group
  * standing at this frame comes with it — the gesture a planner makes for "the whole crew steps ten metres back".
  *
- * The write at the end is ONE frame_save carrying every moved position, not one call per badge. A call per badge
- * would bump the frame's revision, so the second and third would be refused as stale (PT409) and the reload that
- * follows would quietly keep only the first: three badges dragged, one move stored.
+ * The hold is taken as the drag begins and kept for as long as the hand is on it, so the badge is locked to other
+ * planners for the whole gesture rather than for the instant of the write. The write at the end is ONE call carrying
+ * every badge that moved (082): a gesture is one statement, so three badges dragged are three written or none. It
+ * carries only the badges that moved, and one cell's write touches one row — that is what lets a colleague drag a
+ * different badge at the same moment without either of them losing the other's work.
  */
 function beginGroupDrag(leaderId) {
   const frame = selected.value
@@ -698,7 +996,110 @@ function beginGroupDrag(leaderId) {
     const at = framePosition(frame, id)
     if (at) roster.push({ id, lat: at.lat, lng: at.lng })
   }
-  if (roster.length) groupDrag = { leaderId, roster }
+  if (!roster.length) return
+  const state = {
+    leaderId,
+    // The moment the gesture is about: the hold and the write both name it, and so does the draft a colleague draws.
+    frameId: frame.id,
+    roster,
+    // One gesture, one hold: every badge the drag will carry, all or none, so a colleague cannot grab a companion of
+    // a group that is being moved (081's all-or-nothing).
+    cells: roster.map((row) => ({ frame: frame.id, group: row.id })),
+    // asking -> held -> (releasing -> idle -> held) while the hand is down. `refused` is final for this gesture, and
+    // `plain` is ?concurrent=0: the write still takes its own hold, but the gesture does not.
+    phase: OWNERSHIP_UI ? 'asking' : 'plain',
+    grab: null,
+    movedWhileReleasing: false,
+    published: false, // has this gesture told anybody else where the badges are going?
+    refusal: '',
+  }
+  groupDrag = state
+  if (state.phase === 'asking') state.grab = grabGesture(state)
+  // The rings and the stack should be about now rather than about the last poll -- a colleague may have taken this
+  // badge a second ago, and the refusal is cheaper to bear when the ring already said so.
+  refreshHolders()
+}
+
+/**
+ * Take the badges for the gesture. The badge is being dragged locally while this is on its way (the product's answer:
+ * move it first, find out second), so a refusal is said now and the badge goes back when the hand comes up.
+ */
+async function grabGesture(state) {
+  try {
+    await api.holdCells(state.cells)
+    state.phase = 'held'
+    if (groupDrag === state) armHoldIdle()
+  } catch (error) {
+    if (groupDrag !== state) return
+    state.phase = 'refused'
+    state.refusal = planErrorMessage(error)
+    sayRefusal(state.refusal)
+    refreshHolders()
+  }
+}
+
+let holdIdle = null
+
+function armHoldIdle() {
+  clearTimeout(holdIdle)
+  const state = groupDrag
+  if (!state || state.phase !== 'held') return
+  holdIdle = setTimeout(() => releaseIdle(state), HOLD_IDLE_MS)
+}
+
+/** Five seconds without a movement: put the badge down, and keep dragging locally. */
+async function releaseIdle(state) {
+  if (groupDrag !== state || state.phase !== 'held') return
+  state.phase = 'releasing' // a hold being given up is not a hold: the next movement takes it back
+  state.release = api.releaseCells(state.cells)
+  await state.release
+  if (groupDrag !== state) return
+  state.phase = 'idle'
+  refreshHolders()
+  if (state.movedWhileReleasing) {
+    state.movedWhileReleasing = false
+    reacquire(state)
+  }
+}
+
+/** Take the badge back after an idle release. Silent on success: nothing failed, so there is nothing to say. */
+async function reacquire(state) {
+  if (groupDrag !== state || state.phase !== 'idle') return
+  state.phase = 'asking'
+  try {
+    await api.holdCells(state.cells)
+    if (groupDrag !== state) {
+      // The hand came up while the grab was on its way: let go at once rather than hold a badge nobody is moving.
+      await api.releaseCells(state.cells)
+      return
+    }
+    state.phase = 'held'
+    armHoldIdle()
+  } catch (error) {
+    if (groupDrag !== state) return
+    state.phase = 'refused'
+    state.refusal = planErrorMessage(error)
+    sayRefusal(locationRefusal(error))
+    refreshHolders()
+  }
+}
+
+/** A drag step: companions follow, and the hold's clock is reset -- or the badge is taken back after an idle release. */
+function onGroupDrag(leaderId) {
+  dragCompanions(leaderId)
+  const state = groupDrag
+  if (!state || state.leaderId !== leaderId) return
+  // Everybody else sees the badge moving, not just the position it lands on (phase 4).
+  if (state.phase !== 'refused') publishDrafts(state)
+  if (state.phase === 'releasing') {
+    state.movedWhileReleasing = true
+    return
+  }
+  if (state.phase === 'idle') {
+    reacquire(state)
+    return
+  }
+  if (state.phase === 'held') armHoldIdle()
 }
 
 /** Carry the other ticked badges by the same amount the one under the finger has travelled so far. */
@@ -724,27 +1125,91 @@ function metresOf(dLat, dLng, lat) {
   return Math.round(Math.hypot(dx, dy))
 }
 
+/** The gesture is over: the hand's reference goes, and the last reference takes the row with it (081). */
+async function releaseHold(state) {
+  clearTimeout(holdIdle)
+  if (!state || !state.cells) return
+  try {
+    await api.releaseCells(state.cells)
+  } catch {
+    // A release that fails costs twelve seconds of a hold nobody is using, and nothing else.
+  }
+}
+
+/** The strip's one way out of a refusal, offered only for a hold that is my own other window (081's p_take_over). */
+function takeoverAction(frameId, changes, before, after, reason) {
+  if (!TAKE_OVER.test(reason || '')) return null
+  return { label: 'Edit it here anyway', run: () => takeOver(frameId, changes, before, after) }
+}
+
+/**
+ * "Edit it here anyway": replay the move as the write it was going to be, with the take-over flag that reaches my own
+ * other window and nothing else. That window learns about it the only way it can -- its next write is refused.
+ */
+async function takeOver(frameId, changes, before, after) {
+  if (!frameId || !plan.value) return
+  try {
+    await api.placeCells(frameId, changes, { takeOver: true })
+  } catch (error) {
+    drawMarkers()
+    sayRefusal(locationRefusal(error))
+    refreshHolders()
+    return
+  }
+  drawMarkers()
+  refreshHolders()
+  const frame = frames.value.find((f) => f.id === frameId)
+  const where = frame ? ` at ${formatOffset(frame.t_s)}` : ''
+  const movers = nameList(Object.keys(changes).map((id) => groupName(id)))
+  edits.positions(frameId, before, after, `moved ${movers}${where}`)
+  toast(`Moved ${movers}${where}. The other window will find out when it next writes.`, 'success', 5000)
+}
+
 async function endGroupDrag(leaderId) {
   const state = groupDrag
-  groupDrag = null
+  try {
+    await finishGroupDrag(leaderId, state)
+  } finally {
+    // Every way out of a gesture ends the ghost: a write that landed, a refusal, a click, a failure. The reload inside
+    // the write has already put the real badge where the plan has it, so the ghost goes as the badge arrives.
+    releaseDrafts(state)
+  }
+}
+
+async function finishGroupDrag(leaderId, state) {
   const frame = selected.value
   const leader = markers.get(leaderId)
   const origin = state ? state.roster.find((row) => row.id === leaderId) : null
+  clearTimeout(holdIdle)
+  groupDrag = null
   if (!frame || !state || state.leaderId !== leaderId || !leader || !origin) {
     drawMarkers()
     return
+  }
+  // The grab may still be on its way when the hand comes up (a quick flick). Wait for the answer, because what
+  // happens next depends on it: a badge somebody else holds is not written at all.
+  if (state.grab) await state.grab
+  // The idle release may still be on its way too, and its DELETE must not land after the write's INSERT: that would
+  // take the hold away from a write in flight, which reads as "somebody else took it" for no reason at all.
+  if (state.release) {
+    try {
+      await state.release
+    } catch {
+      // releaseCells() does not throw; a release that failed is the database's twelve seconds either way.
+    }
   }
   const here = leader.getLatLng()
   const dLat = here.lat - origin.lat
   const dLng = here.lng - origin.lng
   // A badge that came back to where it started is a click, not an edit.
   if (Math.abs(dLat) < 1e-9 && Math.abs(dLng) < 1e-9) {
+    await releaseHold(state)
     drawMarkers()
     return
   }
-  // positions replaces this frame's set wholesale, so the payload is the frame's own statements PLUS the groups that
-  // moved. Sending only the moved ones would delete everyone else's position on this frame (that is the trap step 10
-  // names); restatedPositions() is the one place that full map is built, for this write and the flag writes.
+  // The payload is the badges that moved, and only those: 082 writes one cell per row, so a badge nobody touched
+  // is not in the write and cannot be put back to how this page last read it. restatedPositions() still builds the
+  // pair below, because the undo stack remembers a whole map and the inverse has to be able to restore one.
   const changes = {}
   for (const row of state.roster) {
     // The flags come with the coordinates (046). Dragging a badge says where the group now stands; it does not put an
@@ -754,22 +1219,38 @@ async function endGroupDrag(leaderId) {
     changes[row.id] = { lat: row.lat + dLat, lng: row.lng + dLng, state: at?.state, verify: at?.verify }
   }
   // Where the frame's statements stood before the drag, and where they stand after it: both whole maps, because that
-  // is what frame_save takes, and because the pair is what makes the gesture reversible (step 13).
+  // is what the undo stack stores, and because the pair is what makes the gesture reversible (step 13).
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
+  // Refused while the hand was still down: the badge belongs to somebody else, so nothing is written. It goes back
+  // where the plan has it, and the strip -- already saying who -- is the other half of the answer.
+  if (state.phase === 'refused') {
+    await releaseHold(state)
+    drawMarkers()
+    sayRefusal(state.refusal, takeoverAction(frame.id, changes, before, after, state.refusal))
+    return
+  }
   pendingMoves = {
     frameId: frame.id,
     at: new Map(state.roster.map((row) => [row.id, { lat: changes[row.id].lat, lng: changes[row.id].lng }])),
   }
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
-  } catch {
+    await api.placeCells(frame.id, changes)
+  } catch (error) {
     pendingMoves = null
+    await releaseHold(state)
     drawMarkers() // the database was not changed; put every badge back where it has it
+    // The product decision: a move stands locally and is only undone when the write really failed -- and a planner
+    // who has just watched a badge jump back is owed the reason, in one sentence, in the place refusals live.
+    const reason = planErrorMessage(error)
+    sayRefusal(locationRefusal(error), takeoverAction(frame.id, changes, before, after, reason))
+    refreshHolders()
     return
   }
   pendingMoves = null
+  await releaseHold(state)
   drawMarkers()
+  refreshHolders()
   const movers = nameList(state.roster.map((row) => groupName(row.id)))
   edits.positions(frame.id, before, after, `moved ${movers} at ${formatOffset(frame.t_s)}`)
   if (state.roster.length > 1) {
@@ -798,8 +1279,7 @@ function startPlacing(groupId) {
 
 /**
  * The tap that places the armed group. It is a statement at the open frame like a drag is, so it is the same one
- * write: the frame's own positions plus this group (restatedPositions), never this group alone, which would delete
- * everyone else's position on the frame. After a placement the next group still unplaced is armed, so a new plan is
+ * write: that badge, at that place (082). After a placement the next group still unplaced is armed, so a new plan is
  * a tap per group rather than a button and a tap per group.
  */
 async function onMapClick(event) {
@@ -810,9 +1290,9 @@ async function onMapClick(event) {
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
+    await api.placeCells(frame.id, changes)
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
     return
   }
   edits.positions(frame.id, before, after, `placed ${groupName(groupId)} at ${formatOffset(frame.t_s)}`)
@@ -1321,7 +1801,8 @@ async function fillGap(gap) {
       4000,
     )
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 7000)
+    // A fill refused by a moment somebody is retiming in the stretch (083).
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 7000)
   }
 }
 
@@ -1368,7 +1849,8 @@ async function hold(seconds) {
     }
     toast(`Held ${label} at ${formatOffset(frame.t_s)} until ${at}.`, 'success', 4000)
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 7000)
+    // A hold that would write over a badge in somebody's hand, or bump a moment they are retiming (083).
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 7000)
   }
 }
 
@@ -1378,10 +1860,9 @@ async function hold(seconds) {
  * Take a group off the map at the open frame, or put it back on.
  *
  * Off site is a STATEMENT about this moment, so it is written at this moment: a frame that only inherits a position
- * has to gain a row here, or the earlier on-site sentence keeps standing. The write is frame_save with the frame's
- * own map plus this group — restatedPositions() — because a payload naming only the group would delete every other
- * position the frame states. Coming back on site reuses the coordinates the row already holds: the plan does not know
- * where the group went, and inventing a place is a different edit (a drag, once there is a badge again).
+ * has to gain a row here, or the earlier on-site sentence keeps standing. The write is that one badge (082), with
+ * the place the row already holds — the plan does not know where the group went, and inventing a place is a
+ * different edit (a drag, once there is a badge again).
  */
 async function setGroupState(groupId, next) {
   const frame = selected.value
@@ -1396,7 +1877,7 @@ async function setGroupState(groupId, next) {
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
+    await api.placeCells(frame.id, changes)
     edits.positions(
       frame.id,
       before,
@@ -1413,7 +1894,7 @@ async function setGroupState(groupId, next) {
       3000,
     )
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -1456,14 +1937,14 @@ async function setGroupVerify(groupId, next) {
       3000,
     )
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A confirmation is a write on a cell somebody may be dragging, and it bumps the moment's revision (083).
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
 /**
- * The bulk state control: the same statement, for every group the flags act on, at the open frame. One save, because
- * each frame has one revision and a second save built against the pre-save copy would be refused as stale (PT409) —
- * the reason the drag is one write too.
+ * The bulk state control: the same statement, for every group the flags act on, at the open frame. One call, because
+ * a click is one statement: every badge it is about is written or none is (082).
  */
 async function bulkState(next) {
   const frame = selected.value
@@ -1481,7 +1962,7 @@ async function bulkState(next) {
   const before = restatedPositions(frame)
   const after = restatedPositions(frame, changes)
   try {
-    await api.saveFrame({ id: frame.id, t_s: frame.t_s, rev: frame.rev, positions: after })
+    await api.placeCells(frame.id, changes)
     const names = nameList(targets.map((g) => g.name))
     edits.positions(
       frame.id,
@@ -1499,7 +1980,7 @@ async function bulkState(next) {
       3600,
     )
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -1540,7 +2021,7 @@ async function bulkVerify(next) {
       toast(`Already ${word} ${where}.`, 'warning', 3000)
     }
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -1668,7 +2149,9 @@ async function removeFrame() {
     selectedId.value = null
     edits.deleted(copy, `deleted the frame at ${formatOffset(copy.t_s)}`)
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A delete refused because somebody's hand is in the moment (083): the strip, not a toast. The sentence names
+    // them and says the moment cannot be deleted yet, which is the whole story.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -1709,7 +2192,9 @@ async function setFrameTime(frameId, text, input = null) {
     // The field is bound to the frame's time, but a refused write leaves the frame where it was -- so the box would
     // otherwise keep saying the time the database just said no to. Put the truth back in it (finding 52).
     if (input) input.value = formatOffset(before_s)
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A retime refused because somebody else is retiming the same moment (083) is the strip's; the box has already
+    // been put back, so there is nothing to undo on screen.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -1740,7 +2225,8 @@ async function shiftStretch(from_s, delta, to_s) {
     toast(`${countLabel(moved)} moved by ${formatOffset(delta)}.`, 'success', 3000)
     return moved
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // A stretch refused because somebody is retiming a moment in it (083): nothing moved, and the sentence says who.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
     return 0
   }
 }
@@ -1766,10 +2252,19 @@ async function confirmCreate() {
 }
 
 async function choosePlan(id) {
+  // Holds belong to the plan they were taken on: switching plans must not leave a badge held on a board nobody is
+  // looking at (and the strip and the rings are about the plan that is now open).
+  if (api.releaseAllHolds) await api.releaseAllHolds()
   await api.openPlan(id)
+  // Where other planners' drags are going is about a plan too (phase 4): join that plan's channel, and leave whatever
+  // channel was open before. `?concurrent=0` turns the stream off with the rest of the ownership picture.
+  if (OWNERSHIP_UI && api.startDrafts) api.startDrafts(id)
+  else if (api.stopDrafts) api.stopDrafts()
+  clearGhosts()
   // The selection belongs to the plan that was open: ids from another plan mean nothing here.
   selectedGroups.value = new Set()
   await openFirstFrame()
+  refreshHolders()
 }
 
 /**
@@ -1817,6 +2312,27 @@ async function fork() {
   }
 }
 
+/**
+ * Who is mid-edit on this plan, as the sentences the publish warning is made of: one line per person and the cell
+ * they are on, so the planner can see what the version they are about to announce will not contain. The name and the
+ * badge both come from `plan_lock_holders` -- the same read the rings are drawn from -- so the warning cannot name
+ * somebody the board is not already showing as an editor.
+ */
+function midEditLines(rows) {
+  return rows.map((row) => {
+    const at = formatOffset(row.t_s)
+    if (row.mine) {
+      return row.kind === 'moment'
+        ? `You are retiming ${at} in another window.`
+        : `You have ${row.group_name || 'a badge'} at ${at} open in another window.`
+    }
+    const who = row.display_name || 'Somebody'
+    return row.kind === 'moment'
+      ? `${who} is retiming ${at}.`
+      : `${who} is editing ${row.group_name || 'a badge'} at ${at}.`
+  })
+}
+
 async function publish() {
   if (!plan.value) return
   // Publishing a plan that is already live is legitimate — it is how a change made ahead of the clock is announced
@@ -1830,6 +2346,24 @@ async function publish() {
     confirmText: again ? 'Publish again' : 'Publish',
   })
   if (!ok) return
+
+  // Decision 15: a publish is NOT blocked by somebody mid-edit -- they are drawing, not saving, and the plan as it
+  // stands is still a thing worth announcing. It is a second question instead, naming them and their cells, because
+  // the version being written is a snapshot: whatever they are still moving lands after it and needs another publish
+  // to reach anybody. Read fresh rather than from the 2.5 s presence read: this is the one moment the answer matters.
+  const editing = OWNERSHIP_UI && props.canEdit && api.lockHolders ? await api.lockHolders() : []
+  if (editing.length) {
+    const okBusy = await askConfirm({
+      title: 'Somebody is editing this plan',
+      message:
+        'Publishing announces the plan as it stands now, so this version will not contain what they are still ' +
+        'moving. Their change still lands, and needs another publish to reach everyone. Nobody is interrupted.',
+      lines: midEditLines(editing),
+      confirmText: 'Publish anyway',
+    })
+    if (!okBusy) return
+  }
+
   try {
     // The revision this screen is showing goes with the request (step 18): the database refuses the publish if the
     // plan has moved on, rather than announcing a picture nobody is looking at any more.
@@ -1895,8 +2429,10 @@ async function removePlan() {
     // showing a name nothing was reading (finding 88, hit by step 23's wipe-and-import).
     const next = readablePlan.value
     if (next) await choosePlan(next.id)
+    else if (api.stopDrafts) api.stopDrafts() // nothing is open: the channel had one plan and that plan is gone
   } catch (error) {
-    toast(planErrorMessage(error), 'danger', 5000)
+    // Deleting a plan is refused while anybody is mid-edit anywhere in it (083): the same strip, the same sentence.
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
   }
 }
 
@@ -2061,11 +2597,15 @@ function initMap() {
   zoneLayer = L.layerGroup().addTo(map)
   lineLayer = L.layerGroup().addTo(map)
   markerLayer = L.layerGroup().addTo(map)
+  // The ghosts of other planners' drags live on a layer of their own, so drawing one can never disturb a badge (and
+  // a badge being dragged is never below a marker layer that just got cleared).
+  draftLayer = L.layerGroup().addTo(map)
   map.on('click', onMapClick)
   map.invalidateSize()
   drawZones()
   drawLines()
   drawMarkers()
+  drawGhosts()
   fitMap()
 }
 
@@ -2076,6 +2616,15 @@ onMounted(async () => {
   window.addEventListener('pointerdown', liveDown, true)
   window.addEventListener('pointerup', liveUp, true)
   window.addEventListener('pointercancel', liveUp, true)
+  // Who else is editing, every few seconds while the board is open. It is the picture that makes a refusal
+  // unsurprising -- and the read is cheap (one small list of live holds).
+  if (OWNERSHIP_UI && props.canEdit) {
+    refreshHolders()
+    holdersTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      refreshHolders()
+    }, HOLDERS_MS)
+  }
   await Promise.all([api.loadGroups(), api.loadZones(), api.loadPlans()])
   // Draw the locked areas BEFORE the first fit: the fit is what frames the plan, and the polygons are part of what
   // it frames (finding 22).
@@ -2123,6 +2672,15 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', liveUp, true)
   window.removeEventListener('pointercancel', liveUp, true)
   clearTimeout(pointerTimer)
+  clearTimeout(holdIdle)
+  clearTimeout(refusalTimer)
+  clearInterval(holdersTimer)
+  // A page that is going away is not dragging anything: give up whatever this page still holds rather than leave a
+  // colleague waiting out the twelve seconds.
+  if (api.releaseAllHolds) api.releaseAllHolds()
+  // And leave the draft channel: nothing this page is dragging should go on being drawn on anybody's screen.
+  if (api.stopDrafts) api.stopDrafts()
+  clearGhosts()
   haltPlay()
   if (map) {
     map.remove()
@@ -2143,7 +2701,20 @@ watch([frames, selectedId, () => zones.value.length], async () => {
 })
 
 watch(() => zones.value.length, () => { drawZones(); fitMap() })
-watch(selectedId, () => drawMarkers())
+watch(selectedId, () => {
+  drawMarkers()
+  drawGhosts() // what a colleague is dragging belongs to the moment that is open
+})
+// Who is on what changes the rings and the tooltips, never a position. drawMarkers() already refuses to run while a
+// hand is down, so a poll cannot pull the badge out from under a drag -- it is drawn on the redraw the drop makes.
+// The ghosts are redrawn too: a holder's name is the only honest source for "who is moving that".
+watch(holders, () => {
+  drawMarkers()
+  drawGhosts()
+})
+// Other planners' drags arrive here: a broadcast, never a write (phase 4). drawGhosts() is the whole of what this page
+// does with one.
+watch(drafts, drawGhosts)
 // A tap waiting to place a group belongs to the frame it was armed on; another frame, or a run, puts it down.
 watch([selectedId, playhead], () => {
   if (placing.value && (playhead.value != null || !unplacedGroups.value.some((g) => g.id === placing.value))) {
@@ -2170,6 +2741,7 @@ watch(selectedGroups, () => {
 watch(shownGroups, () => {
   drawLines()
   drawMarkers()
+  drawGhosts()
 })
 
 // Another tab's change is already in `frames` (usePlan read it back, step 19). This only lets go of what that read
@@ -2260,6 +2832,8 @@ watch(
           <!-- The whole plan as a file (step 23): the picker is hidden and the menu item is the product's own. -->
           <input ref="sheetFile" type="file" accept=".csv,text/csv" class="pv-file" data-testid="sheet-file" @change="onSheetPicked" />
           <button
+            class="pv-btn is-primary"
+            data-testid="plan-publish"
             type="button"
             class="kb kb-ink kb-sm"
             :disabled="busy"
@@ -2309,6 +2883,58 @@ watch(
            page as soon as Place was pressed. -->
       <div class="pv-stage" :class="{ 'is-placing': !!placing }">
         <div ref="mapEl" class="pv-map"></div>
+
+        <!-- The one strip for refusals: who has the badge, or that the move did not land. It sits at the top of the
+             map, above the badges, and it is the only place a refusal is said -- a toast would be about a success, and
+             it would vanish while the hand is still on the badge it is talking about. -->
+        <div v-if="refusal" class="pv-strip" role="alert" data-testid="plan-refusal">
+          <span class="pv-strip-text">{{ refusal.text }}</span>
+          <button
+            v-if="refusal.action"
+            type="button"
+            class="pv-btn is-quiet pv-strip-action"
+            data-testid="plan-refusal-action"
+            @click="runRefusalAction"
+          >
+            {{ refusal.action.label }}
+          </button>
+          <button
+            type="button"
+            class="pv-strip-close"
+            title="Dismiss"
+            aria-label="Dismiss"
+            data-testid="plan-refusal-dismiss"
+            @click="clearRefusal"
+          >
+            ×
+          </button>
+        </div>
+
+        <!-- Who else is editing, and what: the stack answers "why will that badge not move?" before the planner has to
+             find out by trying. Nothing here decides anything -- the database does. -->
+        <div
+          v-if="editors.length"
+          class="pv-presence"
+          data-testid="plan-presence"
+          :title="editors.map(editorTitle).join(' ')"
+        >
+          <span
+            v-for="editor in editors.slice(0, 4)"
+            :key="editor.key"
+            class="pv-presence-chip"
+            data-testid="plan-presence-chip"
+            :data-editor="editor.name"
+            :title="editorTitle(editor)"
+          >
+            <span class="pv-presence-initials">{{ editor.initials }}</span>
+            <span class="pv-presence-name">{{ editor.name }}</span>
+            <span class="pv-presence-count">{{ editor.cells.length }}</span>
+          </span>
+          <span v-if="editors.length > 4" class="pv-presence-chip" data-testid="plan-presence-more">
+            +{{ editors.length - 4 }} more
+          </span>
+        </div>
+
         <div class="pv-hint" :class="{ 'is-placing': !!placing }" data-testid="board-hint">
           <template v-if="placing && selected">
             Tap the map where <strong>{{ groupName(placing) }}</strong> stands at {{ formatOffset(selected.t_s) }}.
@@ -2353,9 +2979,37 @@ watch(
             </select>
           </div>
           <span v-if="playhead != null" class="pv-play-clock" data-testid="play-clock">{{ playClock }}</span>
+          <!-- While playing, the clock takes the count's place: with Stop and the clock both shown, the bar would wrap
+               to a second row and shrink the map under the planner (QA-15) -->
+          <span v-if="playhead == null" class="pv-bar-count">{{ frames.length }} frame{{ frames.length === 1 ? '' : 's' }} · time from T+0</span>
+          <!-- Frame tools sit on the bar they act on; one group, so on a narrow screen it wraps as a whole -->
+          <div class="pv-bar-tools">
           <span class="mut k2-hm" style="font-size: 13px; font-weight: 700">{{ frames.length }} frame{{ frames.length === 1 ? '' : 's' }} · time from T+0</span>
           <span class="sp"></span>
           <template v-if="props.canEdit">
+            <button class="pv-btn is-quiet" data-testid="frame-add" :disabled="busy" title="Add a frame after the open one" @click="addFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add frame</button>
+            <button class="pv-btn is-quiet" data-testid="frame-copy" :disabled="busy || !selected" title="Copy this frame (Ctrl+C)" @click="copyFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8zM5 16V5h11" /></svg>Copy</button>
+            <button class="pv-btn is-quiet" data-testid="frame-paste" :disabled="busy || !clipboard" title="Paste it as a new frame (Ctrl+V)" @click="pasteFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM7 5H5v16h14V5h-2" /></svg>Paste</button>
+            <span class="pv-sep" aria-hidden="true"></span>
+          </template>
+          <button
+            v-if="props.canEdit"
+            class="pv-btn is-quiet pv-lock"
+            :class="{ 'is-locked': moveLock }"
+            data-testid="plan-drag-guard"
+            :aria-pressed="moveLock"
+            :title="moveLock ? 'Unlock to drag frames and groups again' : 'Lock so frames and groups cannot be dragged by accident'"
+            @click="toggleLock"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="10" rx="2" />
+              <path :d="moveLock ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2'" />
+            </svg>
+            {{ moveLock ? 'Locked' : 'Lock' }}
+          </button>
+          <span class="pv-zoom" role="group" aria-label="Zoom the time bar">
+            <button class="pv-btn is-quiet" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom out" @click="zoom(0.5)">−</button>
+            <button class="pv-btn is-quiet" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom in" @click="zoom(2)">+</button>
             <button type="button" class="kb kb-line kb-sm" data-testid="frame-add" :disabled="busy" title="Add a frame after the open one" @click="addFrame"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add frame</button>
             <button type="button" class="ib" data-testid="frame-duplicate" aria-label="Duplicate frame" :disabled="busy || !selected" title="Duplicate frame" @click="duplicateFrame"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg></button>
             <button
