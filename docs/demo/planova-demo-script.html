@@ -99,7 +99,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     <div class="facts">
       <span class="fact">Limit <b>12:00</b></span>
       <span class="fact">Planned <b>11:40</b></span>
-      <span class="fact">Narration ≈ <b>1,500</b> words at 130 wpm</span>
+      <span class="fact">Narration ≈ <b>920</b> words</span>
       <span class="fact">Export <b>1080p</b>, YouTube unlisted</span>
     </div>
   </header>
@@ -129,16 +129,16 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     <h2 id="h-strip">The twelve minutes, to scale</h2>
     <div class="strip" role="list">
       <a role="listitem" href="#s1" style="flex:50;background:var(--s1)" title="0:00 Problem">Problem</a>
-      <a role="listitem" href="#s2" style="flex:60;background:var(--s1)" title="0:50 Design and stack">Stack</a>
-      <a role="listitem" href="#s3" style="flex:40;background:var(--s3)" title="1:50 Visitor and sign-in">Visit</a>
-      <a role="listitem" href="#s4" style="flex:60;background:var(--s4)" title="2:30 Create an event">Wizard</a>
-      <a role="listitem" href="#s5" style="flex:60;background:var(--s1)" title="3:30 Draw the venue">Map</a>
-      <a role="listitem" href="#s6" style="flex:75;background:var(--s5)" title="4:30 Build the plan">Plan</a>
-      <a role="listitem" href="#s7" style="flex:120;background:var(--s1)" title="5:45 Run it live">Live</a>
-      <a role="listitem" href="#s8" style="flex:75;background:var(--s4)" title="7:45 SOS and attendance">SOS · roll call</a>
-      <a role="listitem" href="#s9" style="flex:40;background:var(--s1)" title="9:00 End and playback">Replay</a>
-      <a role="listitem" href="#s10" style="flex:40;background:var(--s3)" title="9:40 Responsive design">Resp.</a>
-      <a role="listitem" href="#s11" style="flex:60;background:var(--s2)" title="10:20 Testing">Tests</a>
+      <a role="listitem" href="#s2" style="flex:30;background:var(--s1)" title="0:50 How it works">How</a>
+      <a role="listitem" href="#s3" style="flex:30;background:var(--s3)" title="1:20 Join an event">Join</a>
+      <a role="listitem" href="#s4" style="flex:60;background:var(--s4)" title="1:50 Create an event">Wizard</a>
+      <a role="listitem" href="#s5" style="flex:60;background:var(--s1)" title="2:50 Draw the venue">Map</a>
+      <a role="listitem" href="#s6" style="flex:85;background:var(--s5)" title="3:50 Build the plan">Plan</a>
+      <a role="listitem" href="#s7" style="flex:135;background:var(--s1)" title="5:15 Run it live">Live</a>
+      <a role="listitem" href="#s8" style="flex:90;background:var(--s4)" title="7:30 SOS and attendance">SOS · roll call</a>
+      <a role="listitem" href="#s9" style="flex:45;background:var(--s1)" title="9:00 End and playback">Replay</a>
+      <a role="listitem" href="#s10" style="flex:45;background:var(--s3)" title="9:45 Each person's phone">Phones</a>
+      <a role="listitem" href="#s11" style="flex:50;background:var(--s2)" title="10:30 Testing">Tests</a>
       <a role="listitem" href="#s12" style="flex:20;background:var(--s1)" title="11:20 Close">End</a>
       <span class="strip buf" style="flex:20" title="Spare 20 s"></span>
     </div>
@@ -171,35 +171,33 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s2">
-      <div class="clock"><span class="t">0:50</span><span class="d">60 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">0:50</span><span class="d">30 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
-        <h3>Design and tech stack</h3>
+        <h3>How it works, in one slide</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Architecture slide: Vue app → Supabase (Postgres, Auth, Realtime, edge functions) → OneMap API; Capacitor app beside it; Vercel hosting</li><li>A small roles box: root, planner, group admin, member; IC as a duty</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>One slide: website and Android app → Supabase database → OneMap</li><li>The roles: root, planner, group admin, member; IC as a duty</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>The front end is a Vue 3 single-page app with Vue Router and Pinia, styled with Bootstrap 5 under our own Kinetic theme. Maps use Leaflet.</p>
-            <p>Our data store is Supabase: a PostgreSQL database with row-level security, so the database itself decides what each role can see and change. Realtime pushes new GPS readings and plan changes to every screen. Our external API is OneMap from the Singapore Land Authority: we use its map tiles, and its reverse-geocoding API, called asynchronously from an edge function, to turn coordinates into addresses.</p>
-            <p>The same Vue code ships as an Android app through Capacitor, which adds background GPS and push notifications.</p></div>
+            <p>Planova runs as a website and an Android app. Everything is stored in a Supabase database, which also decides what each role may see and do, and sends live updates to every screen. Maps and addresses come from OneMap, the Singapore Land Authority's public API.</p></div>
         </div>
-        <div class="shows"><span class="tag">Data store</span><span class="tag">External API</span><span class="tag">Vue</span><span class="tag">Bootstrap</span></div>
+        <div class="shows"><span class="tag">Data store</span><span class="tag">External API</span></div>
       </div>
     </article>
 
     <article class="seg" id="s3">
-      <div class="clock"><span class="t">1:50</span><span class="d">40 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
+      <div class="clock"><span class="t">1:20</span><span class="d">30 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
       <div class="body">
-        <h3>Visitor and sign-in</h3>
+        <h3>Join an event</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Landing page: drag the replay clock on the hero map</li><li>Paste <code>9z8-gg!xq</code> into the code box: it becomes <code>9Z8GGX</code></li><li>Log in (account already signed in on a second window, so no waiting on Auth)</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Homepage: paste the event code as it would arrive in a chat message, with a dash; it cleans itself</li><li>Log in (already signed in on a second window, so no waiting)</li><li>Land in the event as a member</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>A visitor lands here. The example map is live Vue: dragging the clock moves every group along its route. The join box cleans what you paste, so a code copied from a chat message still works. Joining needs an account, so you're sent to log in and the code is kept for afterwards.</p></div>
+            <p>Getting a few hundred cadets into an event takes one code. Paste it however it arrived in the chat group, log in, and you're in the event as a member. The planner then puts you in your group.</p></div>
         </div>
-        <div class="shows"><span class="tag">Vue reactivity</span><span class="tag">Usability</span></div>
+        <div class="shows"><span class="tag">Usability</span></div>
       </div>
     </article>
 
     <article class="seg" id="s4">
-      <div class="clock"><span class="t">2:30</span><span class="d">60 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
+      <div class="clock"><span class="t">1:50</span><span class="d">60 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
         <h3>Create an event</h3>
         <div class="cols">
@@ -213,7 +211,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s5">
-      <div class="clock"><span class="t">3:30</span><span class="d">60 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">2:50</span><span class="d">60 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>Draw the venue</h3>
         <div class="cols">
@@ -227,7 +225,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s6">
-      <div class="clock"><span class="t">4:30</span><span class="d">75 s</span><span class="who" style="background:var(--s5)">Linus</span></div>
+      <div class="clock"><span class="t">3:50</span><span class="d">85 s</span><span class="who" style="background:var(--s5)">Linus</span></div>
       <div class="body">
         <h3>Build the plan</h3>
         <div class="cols">
@@ -241,15 +239,15 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s7">
-      <div class="clock"><span class="t">5:45</span><span class="d">120 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">5:15</span><span class="d">135 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>Run it live <span class="where">laptop + <b>phone side by side</b></span></h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Laptop (planner): Start, T+0 = Now (17:54:50 show time)</li><li>Phone (IC of P&amp;C Contingent 3, S25 app): Now tab shows the step-off at T+0:30 as next; tap Share; the sticky notification</li><li>Laptop: Contingent 3's IC appears on the live map; the ops board shows Contingents 1 and 2 under way</li><li>Laptop: select the Combined Salute moment (T+2:55), Push +1 min, Publish again</li><li>Phone: "Your times changed" arrives within seconds</li><li>Laptop: Message everyone "Red Lions running 1 min late. Hold salute positions"; phone taps Got it; laptop shows "Got it: 1 of N"</li><li>Member window (a cadet in Contingent 3): own group only, no Share button</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Laptop (planner): Start, T+0 = Now (17:54:50 show time)</li><li>Phone (IC of P&amp;C Contingent 3, S25 app): Now tab shows the step-off at T+0:30 as next; tap Share; the sticky notification</li><li>Laptop: Contingent 3's IC appears on the live map; the ops board shows Contingents 1 and 2 under way</li><li>Laptop: select the Combined Salute moment (T+2:55), Push +1 min, Publish again</li><li>Phone: "Your times changed" arrives within seconds</li><li>Laptop: Message everyone "Red Lions running 1 min late. Hold salute positions"; phone taps Got it; laptop shows "Got it: 1 of N"</li><li>Phone: when Contingent 3 reaches the Padang, the IC taps We're here; the board shows ARRIVED and how many minutes late</li><li>Member window (a cadet in Contingent 3): own group only, no Share button</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>It's 17:55 on the NE4 night. The planner starts the event, and the plan's T+0 is now. On the phone, Contingent 3's IC taps Share. The app records a position every ten seconds, even with the screen locked, and uploads it with a tracking pass. The database checks the pass, that this person is still the IC, and that the event is live.</p>
-            <p>On the planner's map, Contingent 3 appears in real time through Supabase Realtime, next to where the plan says it should be. Contingents 1 and 2 have already stepped off. Now the Red Lions land a minute late, the kind of slip we saw between NE2 and NE4. The planner pushes everything from the salute on by a minute and republishes. Every phone hears it straight away: "Your times changed".</p>
-            <p>A message goes out with a single "Got it" tap, so the planner knows who has seen it. A cadet in Contingent 3 sees only their own group.</p></div>
+            <p>It's 17:55 on the NE4 night. The planner starts the event, and the plan's clock starts now. On the phone, Contingent 3's IC taps Share. From here the phone reports its position every ten seconds, even in a pocket with the screen locked, and only while the event is live.</p>
+            <p>On the planner's map, Contingent 3 appears straight away, next to where the plan says it should be. Contingents 1 and 2 have already stepped off. Now the Red Lions land a minute late, the kind of slip we saw between NE2 and NE4. The planner pushes everything from the salute on by a minute and republishes. Every phone hears it straight away: "Your times changed".</p>
+            <p>A message goes out with a single "Got it" tap, so the planner knows who has seen it. When Contingent 3 reaches the Padang, the IC taps "We're here", and the board records the arrival and how late it was.</p></div>
         </div>
         <p class="warn">Record the phone during this whole segment. For the most convincing shot, record it at the Padang itself, a ten-minute walk from SMU: stand at the casing location (its pin is on the demo map) and walk towards the Padang when Contingent 3 steps off at T+0:30, so the dot follows the planned route. Indoors, GPS is coarse; say that the app filters noisy fixes.</p>
         <div class="shows"><span class="tag">Realtime backend</span><span class="tag">Working app</span><span class="tag">Async HTTP</span></div>
@@ -257,21 +255,21 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s8">
-      <div class="clock"><span class="t">7:45</span><span class="d">75 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
+      <div class="clock"><span class="t">7:30</span><span class="d">90 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
         <h3>SOS and attendance</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Member window (the Contingent 3 cadet): SOS, note "Feeling faint, heat", Send</li><li>Phone (Contingent 3's IC): the SOS push and banner; laptop (root): banner and red pin on the map</li><li>Root taps "On my way" (as Medical Team 1 would); cadet sees "On the way: …"; then "I'm safe"</li><li>Phone (IC): Attendance, QR mode: code changes every 5 s</li><li>Cadet scans it (laptop webcam or a teammate's phone): "You are marked present"</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Member window (the Contingent 3 cadet): SOS, note "Feeling faint, heat", Send</li><li>Phone (Contingent 3's IC): the SOS push and banner; laptop (root): banner and red pin on the map</li><li>Root taps "On my way" (as Medical Team 1 would); cadet sees "On the way: …"; then "I'm safe"</li><li>Phone (IC): Attendance by hand: tick the cadet present; the cadet's screen says "You are marked present"</li><li>Switch to QR mode: the code changes every 5 s</li><li>Cadet scans it (laptop webcam or a teammate's phone): "You are marked present"</li></ul></div>
           <div class="say"><div class="label">Say</div>
             <p>Heat injuries are a real risk on a parade evening. A cadet in Contingent 3 feels faint and presses SOS. It carries their location and an optional note, and everyone in the event gets a push and a pin on the map. The medical team taps "On my way", so the cadet knows help is coming, and the SOS closes when they're safe.</p>
-            <p>Before stepping off, ICs take attendance at the casing location, by hand or by QR. The code on the IC's screen changes every five seconds, so a screenshot shared in a chat group won't check anyone in.</p></div>
+            <p>Before stepping off, ICs take attendance at the casing location. For a small group they tick names by hand. For a contingent of thirty, QR is faster: everyone scans the IC's screen. The code changes every five seconds, so a screenshot shared in a chat group won't check anyone in.</p></div>
         </div>
         <div class="shows"><span class="tag">Working app</span><span class="tag">Roles</span></div>
       </div>
     </article>
 
     <article class="seg" id="s9">
-      <div class="clock"><span class="t">9:00</span><span class="d">40 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">9:00</span><span class="d">45 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>End and playback</h3>
         <div class="cols">
@@ -284,28 +282,27 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s10">
-      <div class="clock"><span class="t">9:40</span><span class="d">40 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
+      <div class="clock"><span class="t">9:45</span><span class="d">45 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
       <div class="body">
-        <h3>Styling and responsive design</h3>
+        <h3>What each person sees on their phone</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Chrome DevTools device bar: iPhone SE → iPad → full desktop on the Live page</li><li>Phone app: Now tab (member) next to Ops tab (planner)</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Cadet's phone, Now tab: the next move and when, LATE or DUE, the group's own timetable</li><li>Cadet's Group tab: their IC and group mates only</li><li>Planner's phone, Ops tab: every group, who is late, Message everyone</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Every page uses Bootstrap's grid and our Kinetic design tokens: one colour system where lime means action and red only ever means danger. Here's the same page from an iPhone SE up to a wide desktop, with no sideways scrolling anywhere.</p>
-            <p>The phone app uses the same design, with tabs that change by role: planners get an operations view, members get "what do I do now".</p></div>
+            <p>Everyone opens the same app, but it shows each person only what they need. A cadet sees their next move, how long until it, and whether their group is late, plus their own group and nobody else's. The planner's phone becomes an operations view of every group, with messaging one tap away.</p></div>
         </div>
-        <div class="shows"><span class="tag">Styling 18%</span><span class="tag">Responsive</span></div>
+        <div class="shows"><span class="tag">Roles</span><span class="tag">Working app</span></div>
       </div>
     </article>
 
     <article class="seg" id="s11">
-      <div class="clock"><span class="t">10:20</span><span class="d">60 s</span><span class="who" style="background:var(--s2)">rui</span></div>
+      <div class="clock"><span class="t">10:30</span><span class="d">50 s</span><span class="who" style="background:var(--s2)">rui</span></div>
       <div class="body">
         <h3>How we tested it</h3>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Slide: 47 unit and component tests (Vitest), 70 end-to-end tests (Playwright), 580 database checks</li><li>Terminal clip of <code>npx playwright test</code> going green, sped up 4×</li><li>One stat from the load test: 1,000 phones → the bottleneck found and fixed</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>We test at three levels. Vitest covers the pure logic and single components, like the confirm dialog that needs END typed. Seventy Playwright tests drive real browsers through every main journey, with one browser per role and faked GPS for the IC. They use stable test IDs, and they check the database as well as the screen. Every bug we fixed has a test named after it.</p>
-            <p>We also load-tested the whole NE4 night: 46 groups and 1,135 moments from the show matrix, with a thousand virtual phones. That showed us one heavy timetable query, and we rewrote it so each phone reads the timetable once per version. The README explains how to run every suite.</p></div>
+            <p>Every feature you've just seen is tested automatically. Seventy end-to-end tests play each role in its own browser, from making the plan to the replay, and check the database as well as the screen. Every bug we fixed has a test named after it.</p>
+            <p>We also ran the whole NE4 night, 46 groups and 1,135 moments, with a thousand virtual phones. That showed us one slow query, which we fixed.</p></div>
         </div>
         <div class="shows"><span class="tag">Testing 10%</span></div>
       </div>
@@ -325,7 +322,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
 
   <section aria-labelledby="h-fit">
     <h2 id="h-fit">Will it fit in 12 minutes?</h2>
-    <p class="lede">Yes, with room to spare, if the edit is tight. The narration is about 1,050 words, which takes roughly 7:30 at a normal pace (140 words a minute), and every segment's words fit inside its slot. The other four minutes are for clicks and on-screen action. Most overruns come from waiting on screen, not from talking.</p>
+    <p class="lede">Yes, with room to spare, if the edit is tight. The narration is about 920 words, which takes roughly 6:30 at a normal pace (140 words a minute), and every segment's words fit inside its slot. The other five minutes are for showing the features on screen. Most overruns come from waiting on screen, not from talking.</p>
     <div class="grid2">
       <div class="card">
         <h3>Keep it inside the slot</h3>
@@ -340,13 +337,13 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="card">
         <h3>If the cut runs long, drop in this order</h3>
         <ol>
-          <li>Visitor and sign-in (40 s): keep only the replay clock, 10 s, inside the stack segment.</li>
+          <li>Join an event (30 s): drop it; say "people join with a code" during the wizard.</li>
           <li>Wizard (60 s → 30 s): show only the exact-email check and Confirm.</li>
           <li>Map (60 s → 35 s): skip drawing; show the drawn venue, the address and the padlock.</li>
-          <li>Playback (40 s → 20 s): END, then a few seconds of replay.</li>
-          <li>SOS and attendance (75 s → 50 s): show the QR code and one check-in; skip "On my way".</li>
+          <li>Playback (45 s → 25 s): END, then a few seconds of replay.</li>
+          <li>Phones (45 s → 25 s): the cadet's Now tab only.</li>
         </ol>
-        <p class="note">Never cut the problem, the stack (data store and API), the live segment, responsive design or testing. Those are the points the brief marks.</p>
+        <p class="note">Never cut the problem, the plan, the live segment, SOS and attendance, or the one-slide stack and the testing segment (the brief asks for the data store, the API and testing).</p>
       </div>
     </div>
   </section>
@@ -405,11 +402,11 @@ adb shell settings put system show_touches 0</pre>
         <tbody>
           <tr><td>What problem, and why it matters</td><td class="t">0:00</td><td>NDP-scale coordination, today's radios and chat groups</td></tr>
           <tr><td>Design of the solution</td><td class="t">0:50</td><td>Architecture slide, roles</td></tr>
-          <tr><td>How JavaScript and Vue make it dynamic</td><td class="t">1:50 · 4:30 · 5:45</td><td>Hero replay clock, plan scrubbing, live map over Realtime</td></tr>
-          <tr><td>CSS and Bootstrap, responsive, clean</td><td class="t">9:40</td><td>DevTools from iPhone SE to desktop; phone app in the same design</td></tr>
-          <tr><td>Type of data store</td><td class="t">0:50 · 2:30</td><td>Supabase PostgreSQL with row-level security; one-transaction create</td></tr>
-          <tr><td>External API and how it's integrated</td><td class="t">0:50 · 3:30</td><td>OneMap tiles, plus the reverse-geocode API through an edge function</td></tr>
-          <tr><td>How the features are tested</td><td class="t">10:20</td><td>Vitest, Playwright E2E, database checks, load test</td></tr>
+          <tr><td>How JavaScript and Vue make it dynamic</td><td class="t">3:50 · 5:15</td><td>Plan scrubbing, the live map (shown, not explained)</td></tr>
+          <tr><td>CSS and Bootstrap, responsive, clean</td><td class="t">—</td><td>Left out on purpose; the app on a laptop and a phone shows it in passing</td></tr>
+          <tr><td>Type of data store</td><td class="t">0:50 · 1:50</td><td>Supabase database, which also decides who may do what</td></tr>
+          <tr><td>External API and how it's integrated</td><td class="t">0:50 · 2:50</td><td>OneMap maps and addresses</td></tr>
+          <tr><td>How the features are tested</td><td class="t">10:30</td><td>70 end-to-end tests by role, plus the 1,000-phone run</td></tr>
           <tr><td>720p minimum, 12 minutes maximum</td><td class="t">—</td><td>1080p export; planned 11:40</td></tr>
         </tbody>
       </table>
