@@ -184,7 +184,8 @@ function pick(row) {
               :data-testid="'area-lock-' + row.area.name"
               @click="toggleLock(row.area)"
             >
-              <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>
+              <svg v-if="row.area.locked" class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z" style="fill: currentColor"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>
+              <svg v-else class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 6.9-.8"></path></svg>
             </button>
           </div>
 

@@ -80,7 +80,12 @@ async function load() {
 onMounted(load)
 
 const roleLabel = (ev) => ROLE_LABEL[viewRole({ role: topRole(ev), is_ic: ev.isIC })]
-const liveEvents = computed(() => events.value.filter((e) => liveIds.value.includes(e.id)))
+// Soonest date first, so the live band is the event happening the soonest
+const liveEvents = computed(() =>
+  events.value
+    .filter((e) => liveIds.value.includes(e.id))
+    .sort((a, b) => new Date(a.startsAt || 8.64e15).getTime() - new Date(b.startsAt || 8.64e15).getTime()),
+)
 const upcoming = computed(() =>
   events.value
     .filter((e) => !liveIds.value.includes(e.id) && (!e.startsAt || new Date(e.startsAt).getTime() > Date.now() - 12 * 3600 * 1000))

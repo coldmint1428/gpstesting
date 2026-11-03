@@ -21,12 +21,15 @@ import './assets/kinetic-pages.css' // Kinetic layouts for the inner pages (even
 import './assets/kinetic-2.css' // Kinetic v2: the event workspace and its pages (last, so it wins)
 import { isNativeApp } from './lib/platform'
 import { installFormErrors } from './lib/formErrors'
+import { installTooltips } from './lib/tooltips'
 
 // The phone app gets its own layout (Figma: Phone app — native prototype); the website keeps its own
 if (isNativeApp) document.documentElement.classList.add('native-app')
 
 // Form problems (a required field left empty...) in the site's own style, not the browser's grey bubble
 installFormErrors()
+// Hover hints (an element's title) as a pill in the site's style, not the browser's grey box
+installTooltips()
 // iPhone browsers only apply :active (the press-in effect in motion.css) once the page listens for touches at all
 document.addEventListener('touchstart', () => {}, { passive: true })
 

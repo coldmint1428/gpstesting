@@ -12,7 +12,7 @@ import { venueBounds } from '../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../utils/onemap'
 import { supabase } from '../lib/supabase'
-import { areaStyle, zoneCaption } from '../utils/areaKinds'
+import { areaStyle, zoneHoverShape } from '../utils/areaKinds'
 import { positionAt, trailAt, timelineMarks, TRAIL_MS } from '../utils/playback'
 import { weightedMidpoint } from '../utils/groupPosition'
 import { initials, escapeHtml } from '../utils/people'
@@ -372,9 +372,7 @@ async function loadZones() {
   const { data, error } = await supabase.rpc('event_zones', { p_event: props.eventId })
   if (error || !map || !zoneLayer) return
   for (const z of data || []) {
-    const shape = L.geoJSON(z.geojson, { style: areaStyle(z.kind), interactive: false }).addTo(zoneLayer)
-    const caption = zoneCaption(L, shape, z.kind, z.name)
-    if (caption) caption.addTo(zoneLayer)
+    const shape = zoneHoverShape(L, z.geojson, z.kind, z.name).addTo(zoneLayer)
     const b = shape.getBounds()
     if (b.isValid()) zoneBounds = zoneBounds ? zoneBounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast())
   }

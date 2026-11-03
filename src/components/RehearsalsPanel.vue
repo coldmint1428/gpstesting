@@ -2,8 +2,8 @@
 // RehearsalsPanel - the Rehearsals page: a month calendar for everyone. Members, ICs and group admins can say they are not
 // available for a rehearsal; the root and planners get scheduling and a Requests tab to decide those instead.
 // The page emits what was asked and EventView does it, as the Attendance page does. The database decides who may (079, 080).
-import { computed, ref, watch } from 'vue'
-import { formatDay, formatDayTime, formatTime } from '../utils/time'
+import { computed, nextTick, ref, watch } from 'vue'
+import { formatDay, formatDayTime, formatTime, toDateTimeLocal } from '../utils/time'
 import { dayKey, formatRehearsal, monthGrid, monthOf, monthTitle, shiftMonth } from '../utils/rehearsalCalendar'
 import RehearsalRequests from './RehearsalRequests.vue'
 import KDateTimePicker from './kinetic/KDateTimePicker.vue'
@@ -21,7 +21,7 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
   errorMsg: { type: String, default: '' },
 })
-const emit = defineEmits(['add', 'remove', 'request-absence', 'withdraw-absence', 'decide-absence'])
+const emit = defineEmits(['add', 'update', 'remove', 'request-absence', 'withdraw-absence', 'decide-absence'])
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -31,6 +31,7 @@ const selected = ref(dayKey(props.now))
 const moved = ref(false) // the person has chosen a month or a day: the list arriving must not take it away
 const form = ref({ startsAt: '', endsAt: '', note: '' }) // times as <input type="datetime-local"> values
 const formErrors = ref({})
+const editingId = ref(null) // the rehearsal being changed: the form below fills with it and saves to it
 const askingFor = ref(null) // the rehearsal whose reason box is open
 const reason = ref('')
 
@@ -70,6 +71,14 @@ watch(
   () => props.rehearsals.length,
   (count, before) => {
     if (count > before) form.value = { startsAt: '', endsAt: '', note: '' }
+  },
+)
+// A change came back saved (the rehearsal's own time or note moved): the form has done its job
+watch(
+  () => (editingId.value ? props.rehearsals.find((r) => r.id === editingId.value) : null),
+  (now, was) => {
+    if (!editingId.value || !now || !was) return
+    if (now.startsAt.getTime() !== was.startsAt.getTime() || (now.note || '') !== (was.note || '') || String(now.endsAt) !== String(was.endsAt)) cancelEdit()
   },
 )
 // The request came back saved: the reason box has done its job. A refusal leaves it open with what was typed.
@@ -130,7 +139,25 @@ function submit() {
   moved.value = true
   shown.value = monthOf(startsAt)
   selected.value = dayKey(startsAt)
-  emit('add', { startsAt, endsAt, note: form.value.note.trim() })
+  const details = { startsAt, endsAt, note: form.value.note.trim() }
+  if (editingId.value) emit('update', { id: editingId.value, details })
+  else emit('add', details)
+}
+
+// Change a rehearsal that has not started: the form above takes its values
+function startEdit(rehearsal) {
+  editingId.value = rehearsal.id
+  form.value = { startsAt: toDateTimeLocal(rehearsal.startsAt), endsAt: rehearsal.endsAt ? toDateTimeLocal(rehearsal.endsAt) : '', note: rehearsal.note || '' }
+  formErrors.value = {}
+  nextTick(() => {
+    const el = document.querySelector('[data-testid="rehearsal-form"]')
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+function cancelEdit() {
+  editingId.value = null
+  form.value = { startsAt: '', endsAt: '', note: '' }
+  formErrors.value = {}
 }
 
 function openReason(rehearsal) {
@@ -178,7 +205,7 @@ function sendReason(rehearsal) {
       </section>
 
       <section v-if="canEdit" class="kp-card" data-testid="rehearsal-form">
-        <h2 class="kp-title mb-2">Schedule a rehearsal</h2>
+        <h2 class="kp-title mb-2">{{ editingId ? 'Change this rehearsal' : 'Schedule a rehearsal' }}</h2>
         <form novalidate @submit.prevent="submit">
           <div class="kp-fields-2">
             <div>
@@ -197,7 +224,8 @@ function sendReason(rehearsal) {
             <textarea id="rh-note" v-model="form.note" class="form-control" rows="2" maxlength="500" placeholder="e.g. Meet at the main gate, bring water" data-testid="rehearsal-note"></textarea>
           </div>
           <div class="kp-actions">
-            <button class="btn btn-primary" type="submit" :disabled="busy" data-testid="rehearsal-add">Schedule</button>
+            <button class="btn btn-primary" type="submit" :disabled="busy" data-testid="rehearsal-add">{{ editingId ? 'Save changes' : 'Schedule' }}</button>
+            <button v-if="editingId" type="button" class="btn btn-ghost" :disabled="busy" data-testid="rehearsal-edit-cancel" @click="cancelEdit">Cancel</button>
           </div>
         </form>
       </section>
@@ -248,6 +276,15 @@ function sendReason(rehearsal) {
           <li v-for="rehearsal in selectedRehearsals" :key="rehearsal.id" data-testid="rehearsal-item">
             <div class="rh-item-head">
               <strong data-testid="rehearsal-time">{{ formatRehearsal(rehearsal) }}</strong>
+              <button
+                v-if="canEdit && !hasStarted(rehearsal)"
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                :disabled="busy"
+                :aria-label="'Edit the rehearsal on ' + formatDayTime(rehearsal.startsAt)"
+                data-testid="rehearsal-edit"
+                @click="startEdit(rehearsal)"
+              >Edit</button>
               <button
                 v-if="canEdit"
                 type="button"

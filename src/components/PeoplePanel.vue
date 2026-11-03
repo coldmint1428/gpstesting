@@ -31,6 +31,10 @@ const busy = ref(false)
 const search = ref('')
 const groupFilter = ref('') // '' all | 'none' no group | group id
 const adding = ref(false) // the Add person row is open
+const sortBy = ref('group') // group (default) | name
+const roleFilter = ref('all') // all | root | planner | admin | member | ic
+const PAGE = 50 // rows shown at first, and added by each "Show more"
+const shownCount = ref(PAGE)
 const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
 
 const myRole = computed(() => topRole(props.me))
@@ -40,12 +44,34 @@ const groupById = computed(() => Object.fromEntries(props.groups.map((g) => [g.i
 const groupName = (id) => (groupById.value[id] ? groupById.value[id].name : 'No group')
 const groupColour = (id) => (groupById.value[id] ? groupById.value[id].colour : '#6c757d')
 
-// Highest role first, then by name
-const rows = computed(() => {
+// The sort picked above: by group (A-Z, people without a group last), by name, or highest role first.
+// Ties always fall back to role, then name.
+const byName = (a, b) => a.m.display_name.localeCompare(b.m.display_name, undefined, { sensitivity: 'base' })
+const byRole = (a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role]
+const sorters = {
+  group: (a, b) => {
+    if (!!a.m.groupId !== !!b.m.groupId) return a.m.groupId ? -1 : 1
+    const g = groupName(a.m.groupId).localeCompare(groupName(b.m.groupId), undefined, { numeric: true, sensitivity: 'base' })
+    return g || byRole(a, b) || byName(a, b)
+  },
+  name: byName,
+}
+
+// Role buttons: the top role, or IC (a duty on top of a role). Only roles someone has are offered.
+const roleMatches = (m, key) => key === 'all' || (key === 'ic' ? !!m.isIC : topRole(m) === key)
+const roleButtons = computed(() =>
+  ['all', 'root', 'planner', 'admin', 'member', 'ic']
+    .map((key) => ({ key, label: key === 'all' ? 'All' : ROLE_LABEL[key], n: props.members.filter((m) => roleMatches(m, key)).length }))
+    .filter((b) => b.key === 'all' || b.n > 0),
+)
+
+// Every person who matches the search, group and role filters, in the chosen order
+const allRows = computed(() => {
   const q = search.value.trim().toLowerCase()
   return props.members
     .filter((m) => !groupFilter.value || (groupFilter.value === 'none' ? !m.groupId : m.groupId === groupFilter.value))
     .filter((m) => !q || m.display_name.toLowerCase().includes(q))
+    .filter((m) => roleMatches(m, roleFilter.value))
     .map((m) => {
       const role = topRole(m)
       const isMe = !!props.me && m.id === props.me.id
@@ -58,8 +84,12 @@ const rows = computed(() => {
       }
       return { m, role, isMe, actions, any: Object.values(actions).some(Boolean) }
     })
-    .sort((a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role] || a.m.display_name.localeCompare(b.m.display_name))
+    .sort(sorters[sortBy.value] || sorters.group)
 })
+// Only the first PAGE (then more on request) are drawn, so a big event's page stays quick
+const rows = computed(() => allRows.value.slice(0, shownCount.value))
+const hiddenCount = computed(() => allRows.value.length - rows.value.length)
+watch([search, groupFilter, roleFilter, sortBy], () => (shownCount.value = PAGE))
 
 // What I can do here, in one line
 const myScope = computed(() => {
@@ -219,6 +249,21 @@ async function changeTolerance(m, input) {
           <option value="none">No group</option>
         </select>
       </div>
+      <div class="ksel">
+        <label for="people-sort" class="visually-hidden">Sort by</label>
+        <select id="people-sort" v-model="sortBy" data-testid="people-sort">
+          <option value="group">Sort: Group</option>
+          <option value="name">Sort: Name A-Z</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="k2-filterrow k" data-testid="people-role-filter">
+      <div class="seg k2-wrapseg" role="group" aria-label="Filter by role">
+        <button v-for="b in roleButtons" :key="b.key" type="button" :aria-pressed="roleFilter === b.key ? 'true' : 'false'" :data-testid="'people-role-' + b.key" @click="roleFilter = b.key">
+          {{ b.label }} <span style="opacity: 0.6">{{ b.n }}</span>
+        </button>
+      </div>
     </div>
 
     <div class="k2-card">
@@ -269,6 +314,14 @@ async function changeTolerance(m, input) {
           </div>
         </div>
       </template>
+      <div v-if="hiddenCount > 0" class="text-center my-2" data-testid="people-more-wrap">
+        <button type="button" class="kb kb-sm" data-testid="people-more" @click="shownCount += PAGE">
+          Show {{ Math.min(PAGE, hiddenCount) }} more · {{ hiddenCount }} not shown
+        </button>
+      </div>
+      <p v-else-if="allRows.length > PAGE" class="k2-hint text-center">
+        Showing all {{ allRows.length }}. <button type="button" class="k2-link" style="background: none; border: 0; padding: 0" data-testid="people-less" @click="shownCount = PAGE">Show fewer</button>
+      </p>
       <p v-if="rows.length" class="k2-hint" data-testid="people-scope">
         <template v-if="mode === 'edit'">ICs are set on the <RouterLink class="k2-link" :to="{ name: 'event', params: { id: eventId, page: 'groups' } }">Groups</RouterLink> page.</template>
         <template v-else>{{ myScope }}</template>

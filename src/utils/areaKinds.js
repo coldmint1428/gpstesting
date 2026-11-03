@@ -73,6 +73,24 @@ export function zoneCaption(L, shape, kind, name) {
     .setContent(text)
 }
 
+// A zone on a read-only map: the outline, with its NAME shown only while the pointer is over it (a pill that follows the
+// pointer). Names written permanently on every zone buried the map once there were many groups on it. Sent to the back,
+// so the zone never takes a hover or a click from the walks and badges drawn over it.
+export function zoneHoverShape(L, geojson, kind, name) {
+  const shape = L.geoJSON(geojson, { style: areaStyle(kind), interactive: true, className: 'k2-zone-hover' })
+  const text = document.createElement('span') // an element, so a typed name is never read as HTML
+  text.textContent = name == null ? '' : String(name)
+  shape.bindTooltip(text, {
+    sticky: true,
+    direction: 'top',
+    offset: [0, -6],
+    opacity: 1,
+    className: zoneLabelClass(kind),
+  })
+  shape.on('add', () => shape.bringToBack())
+  return shape
+}
+
 export function isValidAreaName(name) {
   const trimmed = String(name == null ? '' : name).trim()
   return trimmed.length >= 1 && trimmed.length <= AREA_NAME_MAX

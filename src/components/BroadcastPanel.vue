@@ -91,7 +91,12 @@ async function send() {
 // ---------- Who has read it ----------
 const statuses = ref({}) // id -> { total, seen, acked, waiting }
 const expanded = ref(null)
-const recent = computed(() => props.broadcasts.sent.value.slice(0, 5))
+const recent = computed(() => props.broadcasts.active.value.slice(0, 10))
+const history = computed(() => props.broadcasts.history.value)
+// The two lists fold away: what is up now opens by default, the record of what came down stays shut until wanted
+const activeOpen = ref(true)
+const historyOpen = ref(false)
+const stamp = (d) => d.toLocaleString('en-SG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Singapore' })
 async function refreshStatus() {
   for (const b of recent.value) {
     if (b.cleared && statuses.value[b.id]) continue
@@ -112,7 +117,7 @@ onUnmounted(() => clearInterval(timer))
 async function clearOne(b) {
   const ok = await askConfirm({
     title: 'Take this message down?',
-    message: '"' + b.body + '" disappears from everyone\'s screen. It stays in this list as a record.',
+    message: '"' + b.body + '" disappears from everyone\'s screen, including messages another planner sent. It moves to History as a record.',
     confirmText: 'Take down',
   })
   if (!ok) return
@@ -175,39 +180,65 @@ async function clearOne(b) {
       </button>
     </form>
 
-    <template v-if="recent.length">
-      <div class="k2-sub" style="margin-top: 22px">Sent</div>
-      <div data-testid="broadcast-sent">
-        <div v-for="b in recent" :key="b.id" class="k2-msg">
-          <div class="row" style="gap: 8px; flex-wrap: wrap">
-            <b style="font-size: 13px">{{ formatTimeSeconds(b.at) }}</b>
-            <span class="mut" style="font-size: 12px">to {{ audienceText(b.audience, b.value) }}</span>
-            <span v-if="b.urgent" class="chip chip-warn" style="height: 22px">Urgent</span>
-            <span class="sp"></span>
-            <span class="chip" :class="b.cleared ? 'chip-soft' : 'chip-mint'" style="height: 22px">{{ b.cleared ? 'Taken down' : 'Active' }}</span>
-            <div v-if="!b.cleared" class="wrapm" data-menu>
-              <button type="button" class="ib" style="width: 30px; height: 30px" aria-label="Message options" :aria-expanded="openMenu === b.id ? 'true' : 'false'" @click="toggleMenu(b.id)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
-              <div v-if="openMenu === b.id" class="menu r" role="menu">
-                <button type="button" role="menuitem" :data-testid="'broadcast-clear-' + b.id" @click="closeMenu(); clearOne(b)">Take down</button>
+    <!-- Active: what is on people's screens now. Fold it away to get the room back. -->
+    <button type="button" class="k2-fold" :aria-expanded="activeOpen ? 'true' : 'false'" data-testid="broadcast-active-toggle" @click="activeOpen = !activeOpen">
+      <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>Active<span class="n">{{ recent.length }}</span>
+    </button>
+    <ExpandTransition>
+      <div v-if="activeOpen">
+        <p v-if="!recent.length" class="mut" style="font-size: 13px; margin: 0" data-testid="broadcast-none">Nothing is up. Taken-down messages are in History.</p>
+        <div v-else data-testid="broadcast-sent">
+          <div v-for="b in recent" :key="b.id" class="k2-msg">
+            <div class="row" style="gap: 8px; flex-wrap: wrap">
+              <b style="font-size: 13px">{{ formatTimeSeconds(b.at) }}</b>
+              <span class="mut" style="font-size: 12px">{{ b.from }} · to {{ audienceText(b.audience, b.value) }}</span>
+              <span v-if="b.urgent" class="chip chip-warn" style="height: 22px">Urgent</span>
+              <span class="sp"></span>
+              <div class="wrapm" data-menu>
+                <button type="button" class="ib" style="width: 30px; height: 30px" aria-label="Message options" :aria-expanded="openMenu === b.id ? 'true' : 'false'" @click="toggleMenu(b.id)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+                <div v-if="openMenu === b.id" class="menu r" role="menu">
+                  <button type="button" role="menuitem" class="danger" :data-testid="'broadcast-clear-' + b.id" @click="closeMenu(); clearOne(b)">Take down</button>
+                </div>
               </div>
             </div>
+            <p class="bc-text">{{ b.body }}</p>
+            <div v-if="statuses[b.id]" class="k2-got" data-testid="broadcast-count">
+              <b>Got it {{ statuses[b.id].acked }} of {{ statuses[b.id].total }}</b>
+              <span class="k2-bar"><i :style="{ width: (statuses[b.id].total ? (100 * statuses[b.id].acked) / statuses[b.id].total : 0) + '%' }"></i></span>
+              <span class="mut">Seen by {{ statuses[b.id].seen }}</span>
+              <button v-if="statuses[b.id].waiting.length" type="button" class="k2-link" :data-testid="'broadcast-who-' + b.id" @click="expanded = expanded === b.id ? null : b.id">
+                {{ expanded === b.id ? 'Hide' : 'Who hasn’t (' + statuses[b.id].waiting.length + ')' }}
+              </button>
+            </div>
+            <ul v-if="expanded === b.id && statuses[b.id]" class="mut" style="font-size: 13px; margin: 8px 0 0; padding-left: 18px" data-testid="broadcast-waiting">
+              <li v-for="(w, i) in statuses[b.id].waiting" :key="i">
+                {{ w.name }}<template v-if="w.group"> · {{ w.group }}{{ w.ic ? ' (IC)' : '' }}</template><template v-if="w.radio"> · radio {{ w.radio }}</template> · {{ w.seen ? 'seen, not confirmed' : 'not seen' }}
+              </li>
+            </ul>
           </div>
-          <p class="bc-text">{{ b.body }}</p>
-          <div v-if="statuses[b.id]" class="k2-got" data-testid="broadcast-count">
-            <b>Got it {{ statuses[b.id].acked }} of {{ statuses[b.id].total }}</b>
-            <span class="k2-bar"><i :style="{ width: (statuses[b.id].total ? (100 * statuses[b.id].acked) / statuses[b.id].total : 0) + '%' }"></i></span>
-            <span class="mut">Seen by {{ statuses[b.id].seen }}</span>
-            <button v-if="statuses[b.id].waiting.length" type="button" class="k2-link" :data-testid="'broadcast-who-' + b.id" @click="expanded = expanded === b.id ? null : b.id">
-              {{ expanded === b.id ? 'Hide' : 'Who hasn’t (' + statuses[b.id].waiting.length + ')' }}
-            </button>
-          </div>
-          <ul v-if="expanded === b.id && statuses[b.id]" class="mut" style="font-size: 13px; margin: 8px 0 0; padding-left: 18px" data-testid="broadcast-waiting">
-            <li v-for="(w, i) in statuses[b.id].waiting" :key="i">
-              {{ w.name }}<template v-if="w.group"> · {{ w.group }}{{ w.ic ? ' (IC)' : '' }}</template><template v-if="w.radio"> · radio {{ w.radio }}</template> · {{ w.seen ? 'seen, not confirmed' : 'not seen' }}
-            </li>
-          </ul>
         </div>
       </div>
+    </ExpandTransition>
+
+    <!-- History: everything taken down (or old enough to have dropped off screens), kept as the record -->
+    <template v-if="history.length">
+      <button type="button" class="k2-fold" :aria-expanded="historyOpen ? 'true' : 'false'" data-testid="broadcast-history-toggle" @click="historyOpen = !historyOpen">
+        <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>History<span class="n">{{ history.length }}</span>
+      </button>
+      <ExpandTransition>
+        <div v-if="historyOpen" data-testid="broadcast-history">
+          <div v-for="b in history" :key="b.id" class="k2-msg">
+            <div class="row" style="gap: 8px; flex-wrap: wrap">
+              <b style="font-size: 13px">{{ stamp(b.at) }}</b>
+              <span class="mut" style="font-size: 12px">{{ b.from }} · to {{ audienceText(b.audience, b.value) }}</span>
+              <span v-if="b.urgent" class="chip chip-warn" style="height: 22px">Urgent</span>
+              <span class="sp"></span>
+              <span class="chip chip-soft" style="height: 22px">{{ b.cleared ? 'Taken down ' + stamp(b.clearedAt) : 'Expired' }}</span>
+            </div>
+            <p class="bc-text">{{ b.body }}</p>
+          </div>
+        </div>
+      </ExpandTransition>
     </template>
   </div>
 
