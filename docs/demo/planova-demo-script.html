@@ -95,51 +95,33 @@ td.t { font-family: var(--mono); white-space: nowrap; }
   <header>
     <div class="eyebrow">IS216 G11 · Final presentation video</div>
     <h1>Planova demo run sheet</h1>
-    <p class="lede">Twelve minutes, hard limit. The run below lasts 11:40, leaving 20 seconds spare. Each segment says what is on screen, what to say, and which rubric line it covers. Record the segments one at a time and cut them together, so a fumble costs one retake rather than the whole video.</p>
+    <p class="lede">The team's narrated walkthrough, fitted to the 12-minute limit. The story and most lines come from the team's video script (2 Nov). This sheet trims each part to its slot, runs it on the real NDP 2025 NE4 data, and adds what the brief marks: the data store, the external API and testing. It also adds the two features merged on 3 Nov: Rehearsals and two planners editing at once. Record each segment as its own clip and cut them together.</p>
     <div class="facts">
       <span class="fact">Limit <b>12:00</b></span>
       <span class="fact">Planned <b>11:40</b></span>
-      <span class="fact">Narration ≈ <b>920</b> words</span>
+      <span class="fact">15 segments</span>
       <span class="fact">Export <b>1080p</b>, YouTube unlisted</span>
     </div>
   </header>
 
-  <section aria-labelledby="h-scen">
-    <h2 id="h-scen">The night we demo: NDP 2025, NE4 rehearsal</h2>
-    <p class="lede">The demo uses real data instead of made-up groups. The times come from the NE4 Adjusted Show Matrix (17 Jul), and the routes come from the NDP 25 map, the same sources as our 1,000-phone stress test. The demo plan is a 95-minute slice of that night, from Parade &amp; Ceremony to the contingents marching off, with 13 groups. T+0 is 17:54:50 show time. When the planner starts the event with T+0 = Now, Contingents 1 and 2 are already marching, Contingent 3 steps off 30 seconds later, and the Red Lions salute at T+2:55. All of that happens inside the 2-minute live segment.</p>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th>Plan time</th><th>Show time</th><th>Show matrix cue</th><th>What moves on the map</th></tr></thead>
-        <tbody>
-          <tr><td class="t">T+0:00</td><td class="t">17:54:50</td><td>Parade &amp; Ceremony</td><td>Contingents 1 and 2 marching from the casing location to the Padang; 3 and 4 waiting; spectators, hosts, medics in place</td></tr>
-          <tr><td class="t">T+0:30</td><td class="t">17:55:20</td><td>Parade &amp; Ceremony</td><td>Contingent 3 (the phone's group) steps off; 4 follows a minute later</td></tr>
-          <tr><td class="t">T+2:55</td><td class="t">17:57:45</td><td>Combined Salute</td><td>Red Lions move from the landing point to the salute line</td></tr>
-          <tr><td class="t">T+7:40</td><td class="t">18:02:30</td><td>Combined School Marching Bands</td><td>Bands into Formation 1, out again at T+17:40</td></tr>
-          <tr><td class="t">T+12:25</td><td class="t">18:07:15</td><td>Placard + Choir Feature</td><td>Choir in, out at T+22:25</td></tr>
-          <tr><td class="t">T+58:30</td><td class="t">18:53:20</td><td>Mobile Column</td><td>Mobile Column drives its route at vehicle pace</td></tr>
-          <tr><td class="t">T+79:30</td><td class="t">19:14:20</td><td>Contingents march off</td><td>Contingents back to the casing location</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="note">Why Push matters, from the two matrices: between NE2 (3 Jul) and NE4 (17 Jul), Doors Open moved from 15:30 to 16:00, the pre-parade cues slipped by one to two minutes (Parade &amp; Ceremony 18:11:00 → 18:12:20), and End of Broadcast moved from 20:29 to 20:35. A slip like that is what segment 7 shows: one push, one republish, and every phone knows.</p>
-    <p class="note">Files in the repo: <code>docs/demo/ndp-ne4-demo.csv</code> (the plan), <code>docs/demo/ndp-ne4-demo-broken.csv</code> (the same plan with Contingent 3 jumping 164 m at row 31), and <code>docs/demo/ndp-ne4-demo-groups.json</code> (the 13 groups). Rebuild them with <code>tools/demo/ndp-demo-plan.mjs</code>.</p>
-  </section>
-
   <section aria-labelledby="h-strip">
     <h2 id="h-strip">The twelve minutes, to scale</h2>
     <div class="strip" role="list">
-      <a role="listitem" href="#s1" style="flex:50;background:var(--s1)" title="0:00 Problem">Problem</a>
-      <a role="listitem" href="#s2" style="flex:30;background:var(--s1)" title="0:50 How it works">How</a>
-      <a role="listitem" href="#s3" style="flex:30;background:var(--s3)" title="1:20 Join an event">Join</a>
-      <a role="listitem" href="#s4" style="flex:60;background:var(--s4)" title="1:50 Create an event">Wizard</a>
-      <a role="listitem" href="#s5" style="flex:60;background:var(--s1)" title="2:50 Draw the venue">Map</a>
-      <a role="listitem" href="#s6" style="flex:85;background:var(--s5)" title="3:50 Build the plan">Plan</a>
-      <a role="listitem" href="#s7" style="flex:135;background:var(--s1)" title="5:15 Run it live">Live</a>
-      <a role="listitem" href="#s8" style="flex:90;background:var(--s4)" title="7:30 SOS and attendance">SOS · roll call</a>
-      <a role="listitem" href="#s9" style="flex:45;background:var(--s1)" title="9:00 End and playback">Replay</a>
-      <a role="listitem" href="#s10" style="flex:45;background:var(--s3)" title="9:45 Each person's phone">Phones</a>
-      <a role="listitem" href="#s11" style="flex:50;background:var(--s2)" title="10:30 Testing">Tests</a>
-      <a role="listitem" href="#s12" style="flex:20;background:var(--s1)" title="11:20 Close">End</a>
+      <a role="listitem" href="#s1" style="flex:55;background:var(--s1)" title="0:00 Intro, roles and how it works">Intro</a>
+      <a role="listitem" href="#s2" style="flex:40;background:var(--s4)" title="0:55 Create an event">Create</a>
+      <a role="listitem" href="#s3" style="flex:40;background:var(--s1)" title="1:35 Draw the venue">Map</a>
+      <a role="listitem" href="#s4" style="flex:95;background:var(--s5)" title="2:15 Build the timeline">Timeline</a>
+      <a role="listitem" href="#s5" style="flex:25;background:var(--s4)" title="3:50 Groups and people">Grp</a>
+      <a role="listitem" href="#s6" style="flex:20;background:var(--s4)" title="4:15 Rehearsals">Reh</a>
+      <a role="listitem" href="#s7" style="flex:40;background:var(--s4)" title="4:35 Attendance">Roll call</a>
+      <a role="listitem" href="#s8" style="flex:55;background:var(--s1)" title="5:15 Run it live">Live</a>
+      <a role="listitem" href="#s9" style="flex:80;background:var(--s3)" title="6:10 What members and ICs see">Members · ICs</a>
+      <a role="listitem" href="#s10" style="flex:40;background:var(--s1)" title="7:30 Live location">Tracking</a>
+      <a role="listitem" href="#s11" style="flex:45;background:var(--s4)" title="8:10 Messages and SOS">SOS</a>
+      <a role="listitem" href="#s12" style="flex:60;background:var(--s1)" title="8:55 End and playback">Playback</a>
+      <a role="listitem" href="#s13" style="flex:40;background:var(--s2)" title="9:55 Simulator and phone app">Sim</a>
+      <a role="listitem" href="#s14" style="flex:45;background:var(--s2)" title="10:35 Testing">Tests</a>
+      <a role="listitem" href="#s15" style="flex:20;background:var(--s1)" title="11:20 Close">End</a>
       <span class="strip buf" style="flex:20" title="Spare 20 s"></span>
     </div>
     <div class="ticks"><span>0:00</span><span>3:00</span><span>6:00</span><span>9:00</span><span>12:00</span></div>
@@ -149,172 +131,231 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <span><i class="dot" style="background:var(--s3)"></i>Hazel</span>
       <span><i class="dot" style="background:var(--s5)"></i>Linus</span>
       <span><i class="dot" style="background:var(--s2)"></i>rui</span>
-      <span>Suggested speakers, matched to who built what. Swap freely, but check with your instructor whether everyone has to appear.</span>
+      <span>The script is written for one narrator. These are suggested speakers, matched to who built each part, in case everyone has to appear.</span>
     </div>
+  </section>
+
+  <section aria-labelledby="h-scen">
+    <h2 id="h-scen">The night we demo</h2>
+    <p class="lede">Segment 2 creates a small event live: NDP Rehearsal 4, with groups Navy and Air Force. From segment 3 on, we cut to the prepared event "NDP 2025 NE4 Rehearsal" (code 96DMR6). Its plan is a 95-minute slice of the real NE4 show matrix (17 Jul) on the NDP 25 map, with 13 groups. Start it with T+0 = Now, and the contingents are already marching.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Plan time</th><th>Show time</th><th>Show matrix cue</th><th>What moves on the map</th></tr></thead>
+        <tbody>
+          <tr><td class="t">T+0:00</td><td class="t">17:54:50</td><td>Parade &amp; Ceremony</td><td>Contingents 1 and 2 marching from the casing location to the Padang</td></tr>
+          <tr><td class="t">T+0:30</td><td class="t">17:55:20</td><td>Parade &amp; Ceremony</td><td>Contingent 3 (the IC's phone) steps off; 4 follows a minute later</td></tr>
+          <tr><td class="t">T+2:55</td><td class="t">17:57:45</td><td>Combined Salute</td><td>Red Lions to the salute line</td></tr>
+          <tr><td class="t">T+7:40</td><td class="t">18:02:30</td><td>Combined School Marching Bands</td><td>Bands in, out at T+17:40</td></tr>
+          <tr><td class="t">T+58:30</td><td class="t">18:53:20</td><td>Mobile Column</td><td>Mobile Column drives its route</td></tr>
+          <tr><td class="t">T+79:30</td><td class="t">19:14:20</td><td>Contingents march off</td><td>Back to the casing location</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Between the NE2 (3 Jul) and NE4 (17 Jul) rehearsals the show slipped by up to six minutes (End of Broadcast 20:29 → 20:35). That's the slip segment 8 uses to show Publish again. Files: <code>docs/demo/ndp-ne4-demo.csv</code>, and <code>docs/demo/ndp-ne4-demo-broken.csv</code> (a 164 m jump at row 31).</p>
   </section>
 
   <section aria-labelledby="h-run">
     <h2 id="h-run">Run of show</h2>
 
     <article class="seg" id="s1">
-      <div class="clock"><span class="t">0:00</span><span class="d">50 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">0:00</span><span class="d">55 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
-        <h3>The problem</h3>
+        <h3>Intro, roles and how it works</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Title slide with the video link and the live site link</li><li>A cropped screenshot of the real NE4 show matrix: rows of cues timed to the second</li><li>The NDP 25 map with the spectator flows and the P&amp;C route</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Home page, then the Events list</li><li>Over "Under the hood": one slide, website and app → Supabase database → OneMap</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>This is a real NDP 2025 show matrix from the NE4 rehearsal: every cue from Doors Open to End of Broadcast, timed to the second. Contingents, Red Lions, the Mobile Column and performers all move to it, coordinated by radio, chat groups and spreadsheets. Nobody can see where a group is against where it should be. And when the show slips, as it did by up to six minutes between rehearsals, telling everyone is slow.</p>
-            <p>Planova fixes that. Plan the venue and timeline, run the night live with GPS from each group's IC, and replay it afterwards.</p></div>
+            <p>Hi, today we're demonstrating Planova, an app for running big outdoor events, like an NDP rehearsal with dozens of contingents moving around one venue. You plan where every group needs to be and when, and on the day you see where they actually are.</p>
+            <p>What you see depends on your role. The root created the event and can do everything. Planners draw the map, build the timeline and manage people. Everyone else is in a group, led by a group admin and at least one IC, whose phone shares location. Members only see their own group.</p>
+            <p>Everything lives in a Supabase database, which also enforces those roles, and maps come from OneMap's public API. We're signed in as root.</p></div>
         </div>
-        <div class="shows"><span class="tag">Problem solving</span><span class="tag">Presentation</span></div>
+        <div class="shows"><span class="tag">Problem</span><span class="tag">Roles</span><span class="tag">Data store</span><span class="tag">External API</span></div>
       </div>
     </article>
 
     <article class="seg" id="s2">
-      <div class="clock"><span class="t">0:50</span><span class="d">30 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">0:55</span><span class="d">40 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
-        <h3>How it works, in one slide</h3>
+        <h3>Create an event</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>One slide: website and Android app → Supabase database → OneMap</li><li>The roles: root, planner, group admin, member; IC as a duty</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Events → Create event. Type as you talk: NDP Rehearsal 4, the Padang, Saturday 6 pm</li><li>Add people: type an email, Add</li><li>Groups: Navy and Air Force; tick an IC and an Admin</li><li>Review → Create event → Overview: code, QR, WhatsApp and Telegram invite</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Planova runs as a website and an Android app. Everything is stored in a Supabase database, which also decides what each role may see and do, and sends live updates to every screen. Maps and addresses come from OneMap, the Singapore Land Authority's public API.</p></div>
+            <p>Creating an event takes four steps. The details: NDP Rehearsal 4, at the Padang, Saturday at six. People are added by their exact email, though most will join later with a code. Then the groups, Navy and Air Force. Each needs at least one IC, the person who shares location. This one's the IC, and this one's the admin.</p>
+            <p>Review, Create event, and we land on the Overview, with the event code, a QR code, and an invite link that goes straight to WhatsApp or Telegram.</p></div>
         </div>
-        <div class="shows"><span class="tag">Data store</span><span class="tag">External API</span></div>
+        <div class="shows"><span class="tag">Wizard</span><span class="tag">Invite</span></div>
       </div>
     </article>
 
     <article class="seg" id="s3">
-      <div class="clock"><span class="t">1:20</span><span class="d">30 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
+      <div class="clock"><span class="t">1:35</span><span class="d">40 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
-        <h3>Join an event</h3>
+        <h3>Draw the venue</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Homepage: paste the event code as it would arrive in a chat message, with a dash; it cleans itself</li><li>Log in (already signed in on a second window, so no waiting)</li><li>Land in the event as a member</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Cut to the NE4 Rehearsal event, Map page: the Padang and casing location already drawn</li><li>Draw areas: tap the corners of a stage, name it, Save area</li><li>A No-Go area over the water</li><li>Padlock the Padang</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Getting a few hundred cadets into an event takes one code. Paste it however it arrived in the chat group, log in, and you're in the event as a member. The planner then puts you in your group.</p></div>
+            <p>Planning starts with the venue. On the Map page we draw the areas groups move between: press Draw areas, tap the corners, then name it and pick a type, such as zone, stage, entrance, obstacle or No-Go. This one over the water is a No-Go area, so anyone who walks into it lights up on the live map. The address under each area comes from OneMap. Big areas like the Padang can be locked, so nobody moves them by accident.</p></div>
         </div>
-        <div class="shows"><span class="tag">Usability</span></div>
+        <div class="shows"><span class="tag">External API</span><span class="tag">Map</span></div>
       </div>
     </article>
 
     <article class="seg" id="s4">
-      <div class="clock"><span class="t">1:50</span><span class="d">60 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
+      <div class="clock"><span class="t">2:15</span><span class="d">95 s</span><span class="who" style="background:var(--s5)">Linus</span></div>
       <div class="body">
-        <h3>Create an event</h3>
+        <h3>Build the timeline</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Wizard step 1: try an end time before the start, show it refused</li><li>Add a person by exact email; show an unknown email getting "No account uses that email"</li><li>Make two groups; show "needs at least one IC" until one is ticked</li><li>Preview, then Confirm</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Timeline: new plan "Run of show"; Place on map for two groups, tap the map</li><li>Add frame, +5:00; drag both badges; the right panel's Shift time and Hold for</li><li>Import CSV: <code>ndp-ne4-demo-broken.csv</code> is refused at row 31; then <code>ndp-ne4-demo.csv</code></li><li>Play at 60× for 10 s: contingents marching</li><li>Second browser (planner): drag a badge; on root's screen it moves too</li><li>Publish</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>A planner sets up an event in four steps. Every step validates as you type. For privacy, people are added only by their exact email: there's no search that shows other users' addresses.</p>
-            <p>Every group needs an IC, the person whose phone shares the group's location. Confirm creates the event, its people and its groups in one database transaction, so a half-made event can't exist.</p></div>
+            <p>Now the plan itself. A plan is made of frames, each one a moment counted from T+0, when the event clock starts. In the first frame, press Place on map beside each group and tap where they stand. Add a frame five minutes in and drag the badges to the formation area. The app works out the walk in between. The panel on the right shifts a frame or holds a group a few minutes longer.</p>
+            <p>A real rehearsal is hundreds of moments, so run sheets come in as a CSV. This one is the NE4 show matrix: thirteen groups, four hundred and eighteen moments. A copy with one impossible jump is refused, with the row number. Press Play, and every contingent walks its route on the plan's clock.</p>
+            <p>Two planners can edit at once. When my colleague drags a badge, it moves on my screen too, held for them until they let go. When it's ready we publish, and that's the version every phone follows.</p></div>
         </div>
-        <div class="shows"><span class="tag">CRUD</span><span class="tag">Validation</span><span class="tag">Privacy</span></div>
+        <div class="shows"><span class="tag">Plan</span><span class="tag">CSV import</span><span class="tag">Concurrent editing</span></div>
       </div>
     </article>
 
     <article class="seg" id="s5">
-      <div class="clock"><span class="t">2:50</span><span class="d">60 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">3:50</span><span class="d">25 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
-        <h3>Draw the venue</h3>
+        <h3>Groups and people</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>The NDP demo event's Map page, on OneMap tiles around the Padang</li><li>Already drawn: the Padang, the casing location. Draw one more live: a No-Go area on St Andrew's Road (the salute line)</li><li>Point out the address label (reverse geocode)</li><li>Lock the Padang with the padlock, then drag the casing location freely</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Groups: add a group, open it, add a person, tick IC</li><li>People: change someone's role</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>The planner draws the venue on OneMap: the Padang, the casing location where contingents wait, and a No-Go area on St Andrew's Road for the salute line. Each area is a polygon stored in the database. The address under it comes from OneMap's reverse-geocoding API.</p>
-            <p>A venue this big is easy to knock out of place by accident, so any area can be locked. A locked area lets clicks pass through to the map, so smaller areas on top can still be edited.</p></div>
+            <p>Groups and people can be edited any time. On Groups, we add a group with its colour, sector and radio channel, open it, add people and tick the IC. The People page lists everyone, and the root and planners change roles or remove people there.</p></div>
         </div>
-        <div class="shows"><span class="tag">External API</span><span class="tag">Data store</span></div>
+        <div class="shows"><span class="tag">CRUD</span></div>
       </div>
     </article>
 
     <article class="seg" id="s6">
-      <div class="clock"><span class="t">3:50</span><span class="d">85 s</span><span class="who" style="background:var(--s5)">Linus</span></div>
+      <div class="clock"><span class="t">4:15</span><span class="d">20 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
-        <h3>Build the plan</h3>
+        <h3>Rehearsals</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Timeline, empty plan. Import <code>ndp-ne4-demo-broken.csv</code>: refused, naming P&amp;C Contingent 3 and the row</li><li>Import <code>ndp-ne4-demo.csv</code>: 13 groups, 418 moments, the matrix cues as moment notes</li><li>Drag the ruler to T+1:30: contingents walking onto the Padang; on to T+2:55, the Red Lions to the salute line</li><li>Jump to T+58:30: the Mobile Column on its route. Press Play for a few seconds</li><li>Drag one badge to show hand edits, then Publish</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Rehearsals page: add one with a time, end and note</li><li>As a member: Not available, with a reason; as root: approve</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Plans this size come from a spreadsheet. We turned the NE4 show matrix and the NDP map into one: each row is a moment from the matrix, and each group walks its real route at a real pace. Contingents march at 1.3 metres a second, vehicles go faster.</p>
-            <p>The import checks every row. This copy has Contingent 3 jumping 164 metres in ten seconds, which nobody can march, so it's refused with the row number. The correct sheet loads 13 groups and 418 moments. Scrubbing the ruler shows exactly where every group should be at any second: the contingents stepping off, the Red Lions at the salute, the Mobile Column on its route. Publishing makes it version one, the version every phone follows.</p></div>
+            <p>Rehearsals have their own calendar. Planners schedule each one with a note, and anyone who can't make it sends a not-available request for a planner to approve.</p></div>
         </div>
-        <div class="shows"><span class="tag">Interactive JS</span><span class="tag">Problem solving</span></div>
+        <div class="shows"><span class="tag">New 3 Nov</span></div>
       </div>
     </article>
 
     <article class="seg" id="s7">
-      <div class="clock"><span class="t">5:15</span><span class="d">135 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">4:35</span><span class="d">40 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
-        <h3>Run it live <span class="where">laptop + <b>phone side by side</b></span></h3>
+        <h3>Taking attendance</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Laptop (planner): Start, T+0 = Now (17:54:50 show time)</li><li>Phone (IC of P&amp;C Contingent 3, S25 app): Now tab shows the step-off at T+0:30 as next; tap Share; the sticky notification</li><li>Laptop: Contingent 3's IC appears on the live map; the ops board shows Contingents 1 and 2 under way</li><li>Laptop: select the Combined Salute moment (T+2:55), Push +1 min, Publish again</li><li>Phone: "Your times changed" arrives within seconds</li><li>Laptop: Message everyone "Red Lions running 1 min late. Hold salute positions"; phone taps Got it; laptop shows "Got it: 1 of N"</li><li>Phone: when Contingent 3 reaches the Padang, the IC taps We're here; the board shows ARRIVED and how many minutes late</li><li>Member window (a cadet in Contingent 3): own group only, no Share button</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>As root: New roll call → By hand; as the IC: mark present or excused; Close; Who was absent</li><li>As root: New roll call → QR code; IC: Start → Show big</li><li>Second phone: Scan QR code; cut to the list ticking itself</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>It's 17:55 on the NE4 night. The planner starts the event, and the plan's clock starts now. On the phone, Contingent 3's IC taps Share. From here the phone reports its position every ten seconds, even in a pocket with the screen locked, and only while the event is live.</p>
-            <p>On the planner's map, Contingent 3 appears straight away, next to where the plan says it should be. Contingents 1 and 2 have already stepped off. Now the Red Lions land a minute late, the kind of slip we saw between NE2 and NE4. The planner pushes everything from the salute on by a minute and republishes. Every phone hears it straight away: "Your times changed".</p>
-            <p>A message goes out with a single "Got it" tap, so the planner knows who has seen it. When Contingent 3 reaches the Padang, the IC taps "We're here", and the board records the arrival and how late it was.</p></div>
+            <p>Before anyone moves, the IC takes attendance, and planners choose how. By hand, the IC marks each person present, or excused. Closing the roll call shows who's absent straight away. For a contingent of thirty, QR is quicker. A code comes up on the IC's phone and changes every five seconds, so a screenshot in a chat group won't work. Everyone scans it and is marked present as they go.</p></div>
         </div>
-        <p class="warn">Record the phone during this whole segment. For the most convincing shot, record it at the Padang itself, a ten-minute walk from SMU: stand at the casing location (its pin is on the demo map) and walk towards the Padang when Contingent 3 steps off at T+0:30, so the dot follows the planned route. Indoors, GPS is coarse; say that the app filters noisy fixes.</p>
-        <div class="shows"><span class="tag">Realtime backend</span><span class="tag">Working app</span><span class="tag">Async HTTP</span></div>
+        <div class="shows"><span class="tag">Attendance</span><span class="tag">QR</span></div>
       </div>
     </article>
 
     <article class="seg" id="s8">
-      <div class="clock"><span class="t">7:30</span><span class="d">90 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
+      <div class="clock"><span class="t">5:15</span><span class="d">55 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
-        <h3>SOS and attendance</h3>
+        <h3>Run it live</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Member window (the Contingent 3 cadet): SOS, note "Feeling faint, heat", Send</li><li>Phone (Contingent 3's IC): the SOS push and banner; laptop (root): banner and red pin on the map</li><li>Root taps "On my way" (as Medical Team 1 would); cadet sees "On the way: …"; then "I'm safe"</li><li>Phone (IC): Attendance by hand: tick the cadet present; the cadet's screen says "You are marked present"</li><li>Switch to QR mode: the code changes every 5 s</li><li>Cadet scans it (laptop webcam or a teammate's phone): "You are marked present"</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Start now → the NE4 plan → T+0: Now → Start event</li><li>Remind ICs</li><li>Ops page: contingents under way; mark one arrived</li><li>Edit a frame, Publish again; the IC's phone: "Your times changed"</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Heat injuries are a real risk on a parade evening. A cadet in Contingent 3 feels faint and presses SOS. It carries their location and an optional note, and everyone in the event gets a push and a pin on the map. The medical team taps "On my way", so the cadet knows help is coming, and the SOS closes when they're safe.</p>
-            <p>Before stepping off, ICs take attendance at the casing location. For a small group they tick names by hand. For a contingent of thirty, QR is faster: everyone scans the IC's screen. The code changes every five seconds, so a screenshot shared in a chat group won't check anyone in.</p></div>
+            <p>Now we start the event. Press Start now, pick the published plan, and set T+0 to now or later today. It's 17:55 on the NE4 night, and Contingents 1 and 2 are already marching onto the Padang. ICs who aren't sharing get a reminder, and Remind ICs sends another with one tap.</p>
+            <p>The Ops page shows every group against the plan: who's arrived, who's late, and a planner can mark a group arrived or missed. If the show slips, as it did by up to six minutes between the NE2 and NE4 rehearsals, we edit and publish again, and every affected phone is told its times changed.</p></div>
         </div>
-        <div class="shows"><span class="tag">Working app</span><span class="tag">Roles</span></div>
+        <div class="shows"><span class="tag">Realtime</span><span class="tag">Ops</span></div>
       </div>
     </article>
 
     <article class="seg" id="s9">
-      <div class="clock"><span class="t">9:00</span><span class="d">45 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">6:10</span><span class="d">80 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
       <div class="body">
-        <h3>End and playback</h3>
+        <h3>What members and ICs see</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>End event now: button stays disabled until END is typed</li><li>Phone flips to Not live; sharing stops</li><li>Playback: replay the session at speed; download CSV</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>The Contingent 3 IC's account: the side menu</li><li>Schedule: the map and stop times, a countdown, LATE; tap We're here</li><li>Map, then My group</li><li>IC's phone: Share my location, the set-up screens; lock the phone; pull down the notification</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Ending the event needs END typed, so it can't happen by accident. Every phone stops sharing at once. The night is saved: after the rehearsal, the planner replays Contingent 3's actual route against the plan and downloads the readings as a CSV for the debrief before the next rehearsal.</p></div>
+            <p>Here's what an IC sees; members see the same pages, minus location sharing. The side menu has Overview, Live, Schedule, Rehearsals, Map, My group and Attendance.</p>
+            <p>The Schedule is a map and list of where their group should be, with stop times and a countdown to the next one. Once a moment passes and nobody's marked the group, it shows late. When they arrive, the IC taps We're here, which records how late they were. Map shows their route, and My group shows their people, IC and admin.</p>
+            <p>Once the event's live, the IC taps Share my location. The first time, the app walks them through the phone settings one screen at a time. Then it keeps sharing with the screen off, with a notification and its own Stop button. And when the IC's phone gets close enough, the group is marked arrived on its own.</p></div>
         </div>
-        <div class="shows"><span class="tag">Usability</span><span class="tag">Data store</span></div>
+        <div class="shows"><span class="tag">Member view</span><span class="tag">Phone app</span></div>
       </div>
     </article>
 
     <article class="seg" id="s10">
-      <div class="clock"><span class="t">9:45</span><span class="d">45 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
+      <div class="clock"><span class="t">7:30</span><span class="d">40 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
-        <h3>What each person sees on their phone</h3>
+        <h3>Live location <span class="where">split screen: <b>the walk and the Live page</b></span></h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Cadet's phone, Now tab: the next move and when, LATE or DUE, the group's own timetable</li><li>Cadet's Group tab: their IC and group mates only</li><li>Planner's phone, Ops tab: every group, who is late, Message everyone</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Left: a teammate walking from the casing location; right: the Live page. Click their badge</li><li>The dashed plan line; they walk into the No-Go area</li><li>On their phone: Stop sharing, then confirm</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Everyone opens the same app, but it shows each person only what they need. A cadet sees their next move, how long until it, and whether their group is late, plus their own group and nobody else's. The planner's phone becomes an operations view of every group, with messaging one tap away.</p></div>
+            <p>Our Contingent 3 IC is out walking from the casing location, and on the Live map their badge moves with them. Clicking it shows the group, the area they're in and when the phone last updated. The dashed line is where the plan says they should be heading, so drifting off is easy to spot. Walking into a No-Go area lights it up at once. Only ICs share, only while the event is live, and once they stop, it stays stopped.</p></div>
         </div>
-        <div class="shows"><span class="tag">Roles</span><span class="tag">Working app</span></div>
+        <p class="warn">Record this at the Padang, a ten-minute walk from SMU. Start at the casing location pin, and walk when Contingent 3 steps off at T+0:30.</p>
+        <div class="shows"><span class="tag">GPS</span><span class="tag">Realtime</span></div>
       </div>
     </article>
 
     <article class="seg" id="s11">
-      <div class="clock"><span class="t">10:30</span><span class="d">50 s</span><span class="who" style="background:var(--s2)">rui</span></div>
+      <div class="clock"><span class="t">8:10</span><span class="d">45 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
-        <h3>How we tested it</h3>
+        <h3>Messages and SOS</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Slide: 47 unit and component tests (Vitest), 70 end-to-end tests (Playwright), 580 database checks</li><li>Terminal clip of <code>npx playwright test</code> going green, sped up 4×</li><li>One stat from the load test: 1,000 phones → the bottleneck found and fixed</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Live page, Message everyone: Running late, To: Everyone, Send; phone: Got it</li><li>Hold in place (Urgent ticks itself), Send</li><li>Second phone: SOS → Send; laptop: the red banner, Show on map; I'm on my way; I'm safe</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Every feature you've just seen is tested automatically. Seventy end-to-end tests play each role in its own browser, from making the plan to the replay, and check the database as well as the screen. Every bug we fixed has a test named after it.</p>
-            <p>We also ran the whole NE4 night, 46 groups and 1,135 moments, with a thousand virtual phones. That showed us one slow query, which we fixed.</p></div>
+            <p>Messages go out from the Live page, with quick ones for running late, wet weather or lightning, to everyone, the ICs and admins, the planners or one sector. Each arrives as a banner that stays until Got it, and planners see who's read it. Urgent ones, like hold in place, come in red. In an emergency, anyone can press SOS. Everyone gets a red banner with who and where; responders tap I'm on my way, until the sender taps I'm safe.</p></div>
         </div>
-        <div class="shows"><span class="tag">Testing 10%</span></div>
+        <div class="shows"><span class="tag">Messages</span><span class="tag">SOS</span></div>
       </div>
     </article>
 
     <article class="seg" id="s12">
+      <div class="clock"><span class="t">8:55</span><span class="d">60 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="body">
+        <h3>End and playback</h3>
+        <div class="cols">
+          <div><div class="label">On screen</div><ul class="do"><li>End event: type END</li><li>Playback: a recording with real movement; drag the scrubber, Play at 10×, skip</li><li>Trails on, filter to one group, click a person, Follow</li><li>The Download to keep chip, CSV, then Replay a CSV</li></ul></div>
+          <div class="say"><div class="label">Say</div>
+            <p>When it's over, End event needs END typed, and every phone stops sharing. Each run is saved on the Playback page. Opening our last rehearsal zooms onto the venue with every IC's track. We can drag to any moment, play it faster, or skip back and forward. Trails show each group's path; we can filter to one group, or click someone and follow them.</p>
+            <p>Recordings are kept for seven days, and this chip warns when one is about to go. We download it as a CSV, which can be loaded back and replayed any time for the debrief.</p></div>
+        </div>
+        <div class="shows"><span class="tag">Playback</span><span class="tag">CSV</span></div>
+      </div>
+    </article>
+
+    <article class="seg" id="s13">
+      <div class="clock"><span class="t">9:55</span><span class="d">40 s</span><span class="who" style="background:var(--s2)">rui</span></div>
+      <div class="body">
+        <h3>Simulator and the planner's phone</h3>
+        <div class="cols">
+          <div><div class="label">On screen</div><ul class="do"><li>A simulation event (marked Sim): Simulator → Add groups → Start; cut to dots moving on Live</li><li>The phone app as a planner: Ops, Map, Timeline, People tabs</li></ul></div>
+          <div class="say"><div class="label">Say</div>
+            <p>We can't get two hundred people out for every test, so the root can make a simulation event. Its virtual groups walk the published plan and show up on the live map like real ones, so zones, alerts and timing are tested before the day. Planners can also run the whole event from the phone app, with Ops, Map, Timeline and People.</p></div>
+        </div>
+        <div class="shows"><span class="tag">Simulator</span><span class="tag">Phone app</span></div>
+      </div>
+    </article>
+
+    <article class="seg" id="s14">
+      <div class="clock"><span class="t">10:35</span><span class="d">45 s</span><span class="who" style="background:var(--s2)">rui</span></div>
+      <div class="body">
+        <h3>How we tested it</h3>
+        <div class="cols">
+          <div><div class="label">On screen</div><ul class="do"><li>Slide: 99 unit tests, 70 end-to-end tests, 932 database checks</li><li>Terminal clip of the E2E run going green, sped up 4×</li></ul></div>
+          <div class="say"><div class="label">Say</div>
+            <p>Every feature you've seen is tested automatically. Seventy end-to-end tests play each role in its own browser, from building the plan to the replay, and check the database as well as the screen. Alongside them run ninety-nine unit tests and over nine hundred database checks. We also ran the whole NE4 night with a thousand virtual phones, which showed us one slow query that we fixed.</p></div>
+        </div>
+        <div class="shows"><span class="tag">Testing</span></div>
+      </div>
+    </article>
+
+    <article class="seg" id="s15">
       <div class="clock"><span class="t">11:20</span><span class="d">20 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>Close</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>End slide: gpstesting.vercel.app, the GitHub repo, team names</li></ul></div>
-          <div class="say"><div class="label">Say</div><p>That's Planova: plan the venue, run the night live, replay it after. It's live at gpstesting.vercel.app, and the code is on GitHub. Thanks for watching.</p></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Back to the Overview; end slide with the site, the repo and team names</li></ul></div>
+          <div class="say"><div class="label">Say</div><p>So that's Planova: draw the venue, plan where every group goes, run the event live with location, attendance and messages, and play it all back afterwards. It's live at gpstesting.vercel.app. Thanks for watching.</p></div>
         </div>
       </div>
     </article>
@@ -322,74 +363,60 @@ td.t { font-family: var(--mono); white-space: nowrap; }
 
   <section aria-labelledby="h-fit">
     <h2 id="h-fit">Will it fit in 12 minutes?</h2>
-    <p class="lede">Yes, with room to spare, if the edit is tight. The narration is about 920 words, which takes roughly 6:30 at a normal pace (140 words a minute), and every segment's words fit inside its slot. The other five minutes are for showing the features on screen. Most overruns come from waiting on screen, not from talking.</p>
+    <p class="lede">Yes, but only with a tight edit. The narration is about 1,250 words, roughly 9:00 at 140 words a minute. The other 2:40 is for clicks, so the clicking has to happen while you talk, as the script's "type as you talk" asks. Every segment's lines fit inside its slot.</p>
     <div class="grid2">
       <div class="card">
         <h3>Keep it inside the slot</h3>
         <ul>
-          <li>Record each segment as its own clip, then time it. Anything over its slot gets cut in the edit, not re-explained.</li>
-          <li>Cut every spinner, page load and pause. Speed up typing and the test run by 2 to 4 times.</li>
-          <li>Sign every account in before you record. Supabase sign-in can take several seconds.</li>
-          <li>In the live segment, keep the phone recording the whole time, and use only the moments that matter: Share, the dot appearing, "Your times changed", Got it.</li>
-          <li>Speak over the action. Don't stop the demo to talk.</li>
+          <li>Record each segment as its own clip and time it. Cut, don't re-explain.</li>
+          <li>Cut every spinner and page load. Speed up typing and the test run 2 to 4 times.</li>
+          <li>Sign every account in before you record.</li>
+          <li>Live segments: keep the phone recording throughout, and use only the moments that matter.</li>
         </ul>
       </div>
       <div class="card">
-        <h3>If the cut runs long, drop in this order</h3>
+        <h3>If the cut runs long, trim in this order</h3>
         <ol>
-          <li>Join an event (30 s): drop it; say "people join with a code" during the wizard.</li>
-          <li>Wizard (60 s → 30 s): show only the exact-email check and Confirm.</li>
-          <li>Map (60 s → 35 s): skip drawing; show the drawn venue, the address and the padlock.</li>
-          <li>Playback (45 s → 25 s): END, then a few seconds of replay.</li>
-          <li>Phones (45 s → 25 s): the cadet's Now tab only.</li>
+          <li>Groups and people (25 s): drop it; say "groups can be edited any time" in segment 2.</li>
+          <li>Simulator (40 s → 20 s): the moving dots only; mention the planner phone in one line.</li>
+          <li>Playback (60 s → 40 s): skip the trails and Follow.</li>
+          <li>Members and ICs (80 s → 60 s): skip Map and My group.</li>
+          <li>Rehearsals (20 s → 10 s): the calendar only.</li>
         </ol>
-        <p class="note">Never cut the problem, the plan, the live segment, SOS and attendance, or the one-slide stack and the testing segment (the brief asks for the data store, the API and testing).</p>
+        <p class="note">Never cut the intro, the timeline, the live segments, SOS or testing. The intro and testing segments carry what the brief marks.</p>
       </div>
     </div>
   </section>
 
   <section aria-labelledby="h-rec">
-    <h2 id="h-rec">How to record it</h2>
+    <h2 id="h-rec">Before you hit record</h2>
     <div class="grid2">
       <div class="card">
-        <h3>The phone (USB debugging)</h3>
-        <p class="note">Android's screen recorder runs over adb. Each clip can be at most 3 minutes, so start a new one for each segment. Turn on "Show taps" so viewers can see your finger.</p>
-<pre>adb shell settings put system show_touches 1
-adb shell screenrecord --size 1080x2340 --bit-rate 8000000 --time-limit 180 /sdcard/s7-live.mp4
-adb pull /sdcard/s7-live.mp4 .
-adb shell settings put system show_touches 0</pre>
-        <p class="note">Ctrl+C stops a recording early. adb lives in <code>%LOCALAPPDATA%\Android\Sdk\platform-tools</code>. Claude can start, stop and pull these clips for you while you present.</p>
+        <h3>Accounts and devices</h3>
+        <ul>
+          <li>Root on the laptop; a planner in a second browser, for segment 4's two-planner edit.</li>
+          <li>The IC of P&amp;C Contingent 3 on a phone with the new APK (rebuilt after 3 Nov), location on and notifications allowed.</li>
+          <li>A second phone as a cadet in Contingent 3, for the QR scan and SOS.</li>
+          <li>A teammate to walk at the Padang with the IC phone; record their screen or film them.</li>
+          <li>The QA accounts show as "QA Root" and so on. Rename them on the Profile page, or say they're test accounts.</li>
+        </ul>
       </div>
       <div class="card">
-        <h3>The laptop</h3>
-        <ol>
-          <li>Set the display to 1920 × 1080 at 100 % scaling, and Chrome zoom to 100 %.</li>
-          <li>Use two Chrome profiles: planner (root) and member, both signed in before you record.</li>
-          <li>Record with Snipping Tool (Win + Shift + R, full screen) or Game Bar (Win + Alt + R, Chrome only).</li>
-          <li>Hide the bookmarks bar and close other tabs. Turn on Do Not Disturb.</li>
-        </ol>
+        <h3>Data</h3>
+        <ul>
+          <li>The prepared event: NDP 2025 NE4 Rehearsal, code 96DMR6, 13 groups, the Padang and casing location drawn. For a retake, run <code>node tools/demo/seed-ndp-demo.mjs</code>.</li>
+          <li>Both CSVs from <code>docs/demo/</code> on the desktop.</li>
+          <li>A past recording with real movement for Playback. Do a short practice run the day before, as the demo event has none yet.</li>
+          <li>A simulation event (marked Sim) with the plan published, for segment 13.</li>
+        </ul>
       </div>
       <div class="card">
-        <h3>Voice and edit</h3>
-        <ol>
-          <li>Record the narration per segment in Clipchamp, which comes with Windows. Read from this page.</li>
-          <li>In the Live, SOS and attendance segments, place the phone clip beside the laptop clip.</li>
-          <li>Speed up waits and the test run. Cut every loading spinner.</li>
-          <li>Export at 1080p and check the length is under 12:00. Upload to YouTube as unlisted, and put the link on slide 1.</li>
-        </ol>
-      </div>
-      <div class="card">
-        <h3>Set up before recording</h3>
-        <ol>
-          <li><strong>Done:</strong> "NDP 2025 NE4 Rehearsal" is on the live site, join code <code>96DMR6</code>. It has 13 groups, the Padang and casing location drawn, and an empty plan "NE4 Rehearsal: Parade &amp; Ceremony" for segment 6 to import into. Root is qa_root and the planner qa_planner. Contingent 3's IC is qa_ic1 and its cadet qa_member.</li>
-          <li>Phone: either sign the app in as qa_ic1, or join with <code>96DMR6</code> on your own account and have root make you Contingent 3's IC on the Groups page. Check Share works once beforehand.</li>
-          <li>For a retake, run <code>node tools/demo/seed-ndp-demo.mjs</code> for a fresh copy, and delete used ones from their Overview page.</li>
-          <li>The QA accounts show on screen as "QA Root", "QA Member" and so on. Mention that they're test accounts, or rename them on the Profile page before recording.</li>
-          <li>Both CSV files from <code>docs/demo/</code> on the desktop for segment 6.</li>
-          <li>A cropped screenshot of the NE4 show matrix and the NDP 25 map for the problem slide.</li>
-          <li>The terminal clip of the E2E run, recorded ahead of time.</li>
-          <li>Don't run the load test that day. It slows the live database for everyone.</li>
-        </ol>
+        <h3>Recording</h3>
+        <ul>
+          <li>Laptop: 1920 × 1080 at 100 %; Snipping Tool (Win + Shift + R) or Game Bar (Win + Alt + R).</li>
+          <li>Phone over USB: <code>adb shell screenrecord --size 1080x2340 --time-limit 180 /sdcard/clip.mp4</code>, then <code>adb pull</code>. Turn on Show taps first.</li>
+          <li>Edit in Clipchamp: put the phone clip beside the laptop clip in segments 8 to 11. Export 1080p and check it's under 12:00.</li>
+        </ul>
       </div>
     </div>
   </section>
@@ -400,13 +427,13 @@ adb shell settings put system show_touches 0</pre>
       <table>
         <thead><tr><th>Brief asks for</th><th>Where</th><th>Covered by</th></tr></thead>
         <tbody>
-          <tr><td>What problem, and why it matters</td><td class="t">0:00</td><td>NDP-scale coordination, today's radios and chat groups</td></tr>
-          <tr><td>Design of the solution</td><td class="t">0:50</td><td>Architecture slide, roles</td></tr>
-          <tr><td>How JavaScript and Vue make it dynamic</td><td class="t">3:50 · 5:15</td><td>Plan scrubbing, the live map (shown, not explained)</td></tr>
-          <tr><td>CSS and Bootstrap, responsive, clean</td><td class="t">—</td><td>Left out on purpose; the app on a laptop and a phone shows it in passing</td></tr>
-          <tr><td>Type of data store</td><td class="t">0:50 · 1:50</td><td>Supabase database, which also decides who may do what</td></tr>
-          <tr><td>External API and how it's integrated</td><td class="t">0:50 · 2:50</td><td>OneMap maps and addresses</td></tr>
-          <tr><td>How the features are tested</td><td class="t">10:30</td><td>70 end-to-end tests by role, plus the 1,000-phone run</td></tr>
+          <tr><td>What problem, and why it matters</td><td class="t">0:00</td><td>Big outdoor events like an NDP rehearsal</td></tr>
+          <tr><td>Design of the solution</td><td class="t">0:00</td><td>Roles, and one line on how it's built</td></tr>
+          <tr><td>How JavaScript and Vue make it dynamic</td><td class="t">2:15 · 7:30</td><td>Two planners editing live, the moving badge (shown, not explained)</td></tr>
+          <tr><td>CSS and Bootstrap, responsive, clean</td><td class="t">—</td><td>Left out on purpose; laptop and phone shown throughout</td></tr>
+          <tr><td>Type of data store</td><td class="t">0:00</td><td>Supabase database, which also enforces the roles</td></tr>
+          <tr><td>External API and how it's integrated</td><td class="t">0:00 · 1:35</td><td>OneMap maps and addresses</td></tr>
+          <tr><td>How the features are tested</td><td class="t">10:35</td><td>70 end-to-end tests by role, unit tests, database checks, the 1,000-phone run</td></tr>
           <tr><td>720p minimum, 12 minutes maximum</td><td class="t">—</td><td>1080p export; planned 11:40</td></tr>
         </tbody>
       </table>
