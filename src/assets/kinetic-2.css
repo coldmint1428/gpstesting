@@ -311,7 +311,7 @@ html:not(.native-app) body .ev .pv-frame.is-bad .pv-frame-dot{background:#c2410c
 .ev-native .k2-h h1{display:none}
 /* Schedule */
 .k2-schedhead{align-items:flex-start}
-html body .ev .pv-route.is-embedded .pv-route-stage{aspect-ratio:16/9;height:auto;min-height:0;border-radius:24px;overflow:hidden;margin-bottom:16px}
+html body .ev .pv-route.is-embedded .pv-route-stage{aspect-ratio:2/1;height:auto;max-height:48vh;min-height:0;border-radius:24px;overflow:hidden;margin-bottom:16px}
 html body .ev .pv-route.is-embedded .pv-map{height:100%;min-height:0}
 html:not(.native-app) body .ev .pv-route-dot-mark{width:26px;height:26px;background:var(--pv-dot);color:var(--pv-dot-ink,#fff);font:800 11px Manrope;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
 html:not(.native-app) body .ev .pv-route-dot.is-focused .pv-route-dot-mark{width:32px;height:32px;background:var(--lime);color:var(--ink);box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink),3px 4px 0 var(--ink)}
@@ -780,6 +780,7 @@ html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded{padding:12px 16px
 html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded .pv-route-stage{margin-bottom:0}
 html:not(.native-app) body .ev .pv-sched-listhead{padding:14px 20px 10px;background:#fff}
 html:not(.native-app) body .ev .pv-sched-moment{padding-left:20px;padding-right:20px}
+html body .ev .pv-sched-skel{padding:8px 20px}
 html:not(.native-app) body .ev .pv-sched-line{margin:0;padding:8px 20px;background:#fff}
 
 /* The Problems panel is a solid white card: header, list and rows each paint their own white, so nothing behind it (the

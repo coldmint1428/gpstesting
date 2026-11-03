@@ -652,7 +652,7 @@ watch(
         <span v-if="!whole" class="pv-sched-listcount" data-testid="sched-list-count">{{ stopCount }}</span>
       </h3>
 
-      <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the schedule…" data-testid="sched-loading" />
+      <SkeletonLoader v-if="!loaded" :rows="4" class="pv-sched-skel" label="Reading the schedule…" data-testid="sched-loading" />
 
       <EmptyState
         v-else-if="!rows.length"

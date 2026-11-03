@@ -819,7 +819,7 @@ async function removeEvent() {
 </script>
 
 <template>
-  <SkeletonLoader v-if="loading || (event && !pageReady)" variant="event" :page="native && tab === 'map' ? 'live' : tab" :status="showStatusCard" label="Loading the event…" />
+  <SkeletonLoader v-if="loading || (event && !pageReady)" variant="event" :page="native && tab === 'map' ? 'live' : tab === 'timeline' && role && modeOf('timeline') !== 'edit' ? 'schedule' : tab" :status="showStatusCard" label="Loading the event…" />
   <div v-if="!loading && !event" class="ev-missing">
     <EmptyState tone="danger" icon="alert" title="Can't open this event" :text="errorMsg || 'Event not found.'" data-testid="event-error">
       <template #actions>

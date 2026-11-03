@@ -52,6 +52,17 @@ const widths = ['92%', '78%', '85%', '64%', '88%', '70%']
             <span class="skeleton sk-map is-bench"></span>
           </template>
           <span v-else-if="page === 'timeline'" class="skeleton sk-board-block"></span>
+          <!-- The Schedule (the Timeline tab for people who follow the plan): its card, the map at the map's own shape, then the list -->
+          <div v-else-if="page === 'schedule'" class="sk-list-card sk-sched">
+            <span class="skeleton sk-sched-map"></span>
+            <div v-for="n in rows" :key="n" class="sk-row">
+              <span class="skeleton sk-tile"></span>
+              <span class="sk-row-text">
+                <span class="skeleton skeleton-line" :style="{ width: widths[(n + 1) % widths.length] }"></span>
+                <span class="skeleton skeleton-line" style="width: 45%"></span>
+              </span>
+            </div>
+          </div>
           <div v-else-if="page === 'groups'" class="sk-grid">
             <span v-for="n in 6" :key="n" class="skeleton sk-card is-group"></span>
           </div>
@@ -262,6 +273,17 @@ const widths = ['92%', '78%', '85%', '64%', '88%', '70%']
   padding: 8px 20px;
   background: var(--surface, #fff);
 }
+/* The same shape as the Schedule's map (kinetic-2.css, .pv-route.is-embedded .pv-route-stage) */
+.sk-sched {
+  padding: 12px 16px 8px;
+}
+.sk-sched-map {
+  display: block;
+  aspect-ratio: 2 / 1;
+  max-height: 48vh;
+  border-radius: 24px;
+  margin-bottom: 8px;
+}
 .sk-mapwrap {
   display: flex;
   flex-direction: column;
@@ -291,6 +313,9 @@ const widths = ['92%', '78%', '85%', '64%', '88%', '70%']
   }
   .sk-side {
     height: 160px;
+  }
+  .sk-sched-map {
+    aspect-ratio: 16 / 9;
   }
   .sk-board-block {
     height: 480px;
