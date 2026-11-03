@@ -285,6 +285,12 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
         return back ? removeFrames(command.added) : restoreFrames(command.added)
       case 'planName':
         return renamePlan(back ? command.before : command.after)
+      case 'batch': {
+        // Several edits made as one (Fix all timing, Fix this walk): undone last first, so each finds the plan as it left it
+        const list = back ? [...command.commands].reverse() : command.commands
+        for (const one of list) await apply(one, direction)
+        return undefined
+      }
       default:
         throw new Error(`There is no way to write "${command.kind}" back.`)
     }
@@ -368,6 +374,11 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
     record({ kind: 'shift', from_s, to_s, delta, frames: moved, label })
   }
 
+  /** Several edits that were one decision, as one step of the stack: [{ kind: 'positions' | 'shift', ... }]. */
+  function batch(commands, label) {
+    record({ kind: 'batch', commands, label })
+  }
+
   function created(copy, label) {
     record({ kind: 'create', frame: copy, label })
   }
@@ -400,6 +411,7 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
     time,
     verify,
     shift,
+    batch,
     created,
     deleted,
     held,
