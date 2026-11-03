@@ -44,6 +44,7 @@ test('the People page adds a person by their email and shows no one else', async
   const context = await contextAs(browser, 'root', baseURL, { viewport: { width: 1280, height: 900 } })
   const page = await context.newPage()
   await page.goto(`/events/${ev.eventId}/people`)
+  await page.getByTestId('add-person-btn').click()
   const email = page.getByTestId('add-email')
   const add = page.getByTestId('add-email-btn')
   await expect(email).toBeVisible()

@@ -4,6 +4,7 @@
 import { ref, computed, watch } from 'vue'
 import QRCode from 'qrcode'
 import { Capacitor } from '@capacitor/core'
+import { toast } from '../composables/useNotify'
 
 const props = defineProps({
   eventName: { type: String, required: true },
@@ -49,6 +50,15 @@ watch(
   { immediate: true },
 )
 
+async function copyCode() {
+  try {
+    await navigator.clipboard.writeText(props.joinCode)
+    toast('Event code copied.', 'success', 2500)
+  } catch {
+    toast('Could not copy the code.', 'danger', 4000)
+  }
+}
+
 async function copyLink() {
   try {
     await navigator.clipboard.writeText(inviteLink.value)
@@ -61,24 +71,29 @@ async function copyLink() {
 </script>
 
 <template>
-  <section class="kp-invite" aria-label="Invite people">
-    <div class="kp-minw0">
-      <h2 class="kp-label">Event code</h2>
-      <p class="kp-invite-code" data-testid="join-code-display">{{ joinCode }}</p>
-
-      <h2 class="kp-label mt-3">Invite link</h2>
-      <div class="kp-invite-link">
-        <input :value="inviteLink" readonly aria-label="Invite link" data-testid="invite-link" />
-        <button class="btn btn-sm btn-lime" type="button" @click="copyLink">{{ copied ? 'Copied!' : 'Copy' }}</button>
+  <section class="k ov2-inv" aria-label="Invite people">
+    <div style="min-width: 0">
+      <span class="ey" style="color: var(--lime)">Invite people</span>
+      <div class="mut2">Event code</div>
+      <div class="row" style="gap: 6px">
+        <span class="ov2-code U" data-testid="join-code-display">{{ joinCode }}</span>
+        <button type="button" class="ib" aria-label="Copy event code" data-testid="copy-code" @click="copyCode"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg></button>
       </div>
-      <div class="kp-actions mt-3">
-        <a :href="whatsappUrl" target="_blank" rel="noopener" class="btn btn-sm btn-paper" data-testid="share-whatsapp">WhatsApp</a>
-        <a :href="telegramUrl" target="_blank" rel="noopener" class="btn btn-sm btn-paper" data-testid="share-telegram">Telegram</a>
+      <div class="mut2" style="margin-top: 20px">Invite link</div>
+      <div class="ov2-link">
+        <span data-testid="invite-link">{{ inviteLink }}</span>
+        <button type="button" class="kb kb-lime kb-sm" @click="copyLink">{{ copied ? 'Copied!' : 'Copy' }}</button>
+      </div>
+      <div class="row" style="margin-top: 14px; gap: 8px; flex-wrap: wrap">
+        <a :href="whatsappUrl" target="_blank" rel="noopener" class="kb kb-sm ov2-share" data-testid="share-whatsapp">WhatsApp</a>
+        <a :href="telegramUrl" target="_blank" rel="noopener" class="kb kb-sm ov2-share" data-testid="share-telegram">Telegram</a>
       </div>
       <p v-if="isLocalhost" class="kp-invite-warn mt-2">This link only works on this computer. Set VITE_PUBLIC_APP_URL to share it.</p>
     </div>
-    <div class="kp-invite-qr">
+    <div class="ov2-qr">
       <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR code for the invite link" width="132" height="132" data-testid="invite-qr" />
+      <a v-if="qrDataUrl" class="link" :href="qrDataUrl" :download="'planova-' + joinCode + '.png'" data-testid="save-qr">Save QR</a>
     </div>
+    <p class="ov2-foot">People enter the code on their Events page, or scan the QR to join.</p>
   </section>
 </template>

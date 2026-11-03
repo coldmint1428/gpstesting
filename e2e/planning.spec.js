@@ -172,6 +172,7 @@ test('a locked area lets presses through, and the lock is stored on the shape', 
 
   await lock.click()
   await expect(lock).toHaveAttribute('aria-pressed', 'true')
+  if (!(await page.getByTestId('area-name-Lock test').isVisible())) await page.getByTestId('area-open-Lock test').click()
   await expect(page.getByTestId('area-name-Lock test')).toBeDisabled()
   await expect.poll(outlineTakesPress).toBe(false) // a press on it now reaches the map underneath
   await shot(page, 'plan-05-area-locked')

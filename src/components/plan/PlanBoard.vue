@@ -34,6 +34,8 @@
 // the one this tab's inverses were built against.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
+import { zoneCaption } from '../../utils/areaKinds'
+import { useOpenMenu } from '../../composables/useOpenMenu'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createOneMapLayer } from '../../utils/onemap'
@@ -357,6 +359,12 @@ function toggleGroup(id) {
   selectedGroups.value = next
 }
 
+const allGroupsTicked = computed(() => shownGroups.value.length > 0 && shownGroups.value.every((g) => selectedGroups.value.has(g.id)))
+
+function toggleAllGroups() {
+  selectedGroups.value = allGroupsTicked.value ? new Set() : new Set(shownGroups.value.map((g) => g.id))
+}
+
 // ---------- the map ----------
 
 let map = null
@@ -396,8 +404,9 @@ function drawZones() {
       style: ZONE_STYLE[zone.kind] || ZONE_STYLE.zone,
       interactive: false, // locked: the planner reads the areas, and never edits them here
     })
-    layer.bindTooltip(`${zone.name}${zone.code ? ' · ' + zone.code : ''}`, { sticky: true })
     layer.addTo(zoneLayer)
+    const caption = zoneCaption(L, layer, zone.kind, zone.name)
+    if (caption) caption.addTo(zoneLayer)
     try {
       bounds.extend(layer.getBounds())
     } catch {
@@ -929,9 +938,28 @@ function stopPlay() {
   drawMarkers()
 }
 
-function cycleSpeed() {
-  const at = PLAY_SPEEDS.indexOf(speed.value)
-  speed.value = PLAY_SPEEDS[(at + 1) % PLAY_SPEEDS.length]
+// ---------- the toolbar's menus, the rename dialog and the inspector's tabs ----------
+const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
+function fromMenu(action) {
+  closeMenu()
+  action()
+}
+const inspectorTab = ref('frame') // 'frame' | 'groups'
+const renaming = ref(false)
+const renameValue = ref('')
+function openRename() {
+  renameValue.value = plan.value ? plan.value.name : ''
+  renaming.value = true
+}
+function saveRename() {
+  renaming.value = false
+  renameTo(renameValue.value)
+}
+function planMeta(p) {
+  return p.status + ' · ' + countLabel(p.frame_count || 0) + (p.status === 'live' ? ' · published' : '')
+}
+function clearGroups() {
+  selectedGroups.value = new Set()
 }
 
 /**
@@ -1221,19 +1249,30 @@ function copyFrame() {
   toast(`Copied ${formatOffset(frame.t_s)}. Paste it, then drag it to the time you want.`, 'success', 3000)
 }
 
-async function pasteFrame() {
-  if (!clipboard.value || !plan.value) return
+// Duplicate: the open frame again, straight away, and the clipboard left as it was
+function duplicateFrame() {
+  const frame = selected.value
+  if (!frame) return
+  saveFrameCopy({ note: frame.note, positions: snapshotAt(tracks.value, frame.id) }, 'duplicated')
+}
+
+function pasteFrame() {
+  if (clipboard.value) saveFrameCopy(clipboard.value, 'pasted')
+}
+
+async function saveFrameCopy(from, word) {
+  if (!plan.value) return
   const last = frames.value.length ? Math.max(...frames.value.map((f) => f.t_s)) : 0
   const t = snap(last + 60, SNAP_S)
   try {
     // One write, not two: the earlier version created the frame and then overwrote it, so a failure on the
     // second call left a frame holding the wrong positions.
-    await api.saveFrame({ t_s: t, positions: clipboard.value.positions, note: clipboard.value.note })
+    await api.saveFrame({ t_s: t, positions: from.positions, note: from.note })
     const created = frames.value.find((f) => f.t_s === t)
     if (created) {
       selectOnly(created.id)
       selectedId.value = created.id
-      edits.created(frameCopy(created), `pasted a frame at ${formatOffset(t)}`)
+      edits.created(frameCopy(created), `${word} a frame at ${formatOffset(t)}`)
     }
   } catch (error) {
     toast(planErrorMessage(error), 'danger', 5000)
@@ -2172,100 +2211,87 @@ watch(
 
     <div v-else class="pv-board" :aria-busy="busy || loading ? 'true' : null">
       <header class="pv-board-head">
-      <div class="pv-toolbar">
-        <select v-if="!props.onlyGroupId" class="pv-select pv-name-field" :value="plan ? plan.id : ''" @change="choosePlan($event.target.value)">
-          <option v-for="p in plans" :key="p.id" :value="p.id">
-            <!-- "(3)" read as a third copy of the plan (QA 1 Nov); it is how many moments it has. -->
-            {{ p.name }}{{ p.status === 'live' ? ' · live' : '' }} · {{ countLabel(p.frame_count || 0) }}
-          </option>
-        </select>
+      <div class="k k2-h k2-planbar">
+        <div v-if="!props.onlyGroupId" class="wrapm" data-menu>
+          <button type="button" class="k2-planbtn" :aria-expanded="openMenu === 'plans' ? 'true' : 'false'" data-testid="plan-picker" @click="toggleMenu('plans')">
+            <span style="display: flex; flex-direction: column; line-height: 1.15; min-width: 0"><b class="text-truncate">{{ plan ? plan.name : 'Plan' }}</b><span v-if="plan" class="text-truncate">{{ plan.status }} · {{ countLabel(frames.length) }}{{ plan.status === 'live' ? ' · published' : '' }}</span></span>
+            <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <div v-if="openMenu === 'plans'" class="menu l k2-plans" role="menu">
+            <button v-for="p in plans" :key="p.id" type="button" role="menuitemradio" class="opt" :aria-checked="plan && p.id === plan.id ? 'true' : 'false'" :data-testid="'plan-option-' + p.id" @click="closeMenu(); choosePlan(p.id)">
+              <span style="display: flex; flex-direction: column; align-items: flex-start">{{ p.name }}<small>{{ planMeta(p) }}</small></span>
+              <svg v-if="plan && p.id === plan.id" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>
+            </button>
+            <template v-if="props.canEdit">
+              <hr />
+              <button type="button" role="menuitem" :disabled="busy" data-testid="plan-new" @click="fromMenu(startCreate)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New plan</button>
+              <button type="button" role="menuitem" :disabled="busy" data-testid="plan-duplicate" @click="fromMenu(fork)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg>Duplicate plan</button>
+            </template>
+          </div>
+        </div>
         <strong v-else-if="plan" data-testid="plan-name">{{ plan.name }}</strong>
 
-        <span v-if="plan" class="pv-badge" :class="{ 'is-live': plan.status === 'live' }">{{ plan.status }}</span>
-        <span v-if="props.onlyGroupId" class="pv-badge" data-testid="plan-own-group">your group only</span>
-        <span v-if="analysis.gaps.length" class="pv-badge is-bad">{{ analysis.gaps.length }} too far apart</span>
+        <span v-if="plan && plan.status === 'live'" class="chip chip-ink">LIVE</span>
+        <span v-if="props.onlyGroupId" class="chip chip-soft" data-testid="plan-own-group">your group only</span>
+        <span v-if="analysis.gaps.length" class="chip chip-warn">{{ analysis.gaps.length }} too far apart</span>
         <span
           v-if="blocking.length"
-          class="pv-badge is-blocked"
+          class="chip chip-warn"
           data-testid="plan-blocked"
           :title="`This plan can't be published yet: ${blocking.length} problem${blocking.length === 1 ? '' : 's'} to fix`"
         >
           {{ blocking.length }} problem{{ blocking.length === 1 ? '' : 's' }}
         </span>
+        <span class="sp"></span>
 
-        <div v-if="props.canEdit" class="pv-head-actions">
-          <button class="pv-btn is-quiet" data-testid="undo" :disabled="busy || !canUndo" title="Undo the last change (Ctrl+Z)" @click="runUndo"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg>Undo</button>
-          <button class="pv-btn is-quiet" data-testid="redo" :disabled="busy || !canRedo" title="Put it back (Ctrl+Y, or Ctrl+Shift+Z)" @click="runRedo"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" /></svg>Redo</button>
-          <span class="pv-sep" aria-hidden="true"></span>
+        <template v-if="props.canEdit">
+          <button type="button" class="ib k2-hm" data-testid="undo" aria-label="Undo (Ctrl+Z)" :disabled="busy || !canUndo" title="Undo (Ctrl+Z)" @click="runUndo"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button>
+          <button type="button" class="ib k2-hm" data-testid="redo" aria-label="Redo (Ctrl+Y)" :disabled="busy || !canRedo" title="Redo (Ctrl+Y)" @click="runRedo"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button>
+          <div class="wrapm" data-menu>
+            <button type="button" class="ib" aria-label="Plan options" :aria-expanded="openMenu === 'more' ? 'true' : 'false'" data-testid="plan-more" @click="toggleMenu('more')"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+            <div v-if="openMenu === 'more'" class="menu r" role="menu">
+              <button type="button" role="menuitem" :disabled="busy || !plan" data-testid="plan-rename" @click="fromMenu(openRename)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>Rename plan</button>
+              <button type="button" role="menuitem" data-testid="sheet-export" :disabled="busy || !plan || !frames.length" title="Download this plan as a CSV sheet, to read or edit in a spreadsheet" @click="fromMenu(exportSheet)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"></path></svg>Export CSV</button>
+              <button type="button" role="menuitem" data-testid="sheet-import" :disabled="busy || !plan" title="Replace every moment of this plan from a CSV sheet" @click="fromMenu(pickSheet)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"></path></svg>Import CSV</button>
+              <hr />
+              <button type="button" role="menuitem" class="danger" :disabled="busy" data-testid="plan-delete" @click="fromMenu(removePlan)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"></path></svg>Delete plan</button>
+            </div>
+          </div>
+          <!-- The whole plan as a file (step 23): the picker is hidden and the menu item is the product's own. -->
+          <input ref="sheetFile" type="file" accept=".csv,text/csv" class="pv-file" data-testid="sheet-file" @change="onSheetPicked" />
           <button
-            class="pv-btn is-primary"
+            type="button"
+            class="kb kb-ink kb-sm"
             :disabled="busy"
-            :title="
-              plan && plan.status === 'live'
-                ? 'Send the updated timetable to everyone'
-                : 'Make this the timetable everyone follows'
-            "
+            :title="plan && plan.status === 'live' ? 'Send the updated timetable to everyone' : 'Make this the timetable everyone follows'"
             @click="publish"
           >
             {{ plan && plan.status === 'live' ? 'Publish again' : 'Publish' }}
           </button>
-        </div>
+        </template>
       </div>
 
-      <div v-if="creating" class="pv-toolbar is-second">
-        <input
-          v-model="newPlanName"
-          class="pv-input pv-name-field"
-          data-testid="plan-create-name"
-          placeholder="Plan name"
-          @keyup.enter="confirmCreate"
-        />
-        <button class="pv-btn is-primary" :disabled="busy || !newPlanName.trim()" @click="confirmCreate">Create</button>
-        <button class="pv-btn is-quiet" @click="creating = false">Cancel</button>
-      </div>
-
-      <div v-if="!creating && props.canEdit" class="pv-toolbar is-second">
-        <input
-          v-if="plan"
-          class="pv-input pv-name-field"
-          :value="plan.name"
-          @change="renameTo($event.target.value)"
-        />
-        <button class="pv-btn is-quiet" :disabled="busy" title="Start a new, empty plan" @click="startCreate"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>New plan</button>
-        <button class="pv-btn is-quiet" :disabled="busy" title="Make a copy of this plan to try changes on" @click="fork"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8zM5 16V5h11" /></svg>Duplicate plan</button>
-        <span class="pv-spacer"></span>
-        <!-- The whole plan as a file (step 23). One control each: the button opens a picker nobody would design
-             themselves, so the picker is hidden and the button is the product's own. -->
-        <button
-          class="pv-btn is-quiet"
-          data-testid="sheet-export"
-          :disabled="busy || !plan || !frames.length"
-          title="Download this plan as a CSV sheet, to read or edit in a spreadsheet"
-          @click="exportSheet"
-        >
-          <svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Export CSV
-        </button>
-        <button
-          class="pv-btn is-quiet"
-          data-testid="sheet-import"
-          :disabled="busy || !plan"
-          title="Replace every moment of this plan from a CSV sheet"
-          @click="pickSheet"
-        >
-          <svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M7 10l5-5 5 5M5 20h14" /></svg>Import CSV
-        </button>
-        <input
-          ref="sheetFile"
-          type="file"
-          accept=".csv,text/csv"
-          class="pv-file"
-          data-testid="sheet-file"
-          @change="onSheetPicked"
-        />
-        <span class="pv-sep" aria-hidden="true"></span>
-        <button class="pv-btn is-quiet is-danger-text" :disabled="busy" title="Delete this plan" @click="removePlan"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>Delete plan</button>
-      </div>
+      <form v-if="creating" class="k row k2-createplan" @submit.prevent="confirmCreate">
+        <input v-model="newPlanName" class="kin" style="height: 40px; flex: 1; min-width: 160px" data-testid="plan-create-name" placeholder="Plan name" aria-label="Plan name" />
+        <button type="submit" class="kb kb-lime kb-sm" :disabled="busy || !newPlanName.trim()">Create</button>
+        <button type="button" class="kb kb-ghost kb-sm" @click="creating = false">Cancel</button>
+      </form>
       </header>
+
+      <!-- Rename plan: one input, the same save as always -->
+      <Teleport to="body">
+        <div v-if="renaming" class="k k2-scrim" @click.self="renaming = false" @keydown.esc="renaming = false">
+          <form class="modal k2-dialog" role="dialog" aria-modal="true" aria-label="Rename plan" data-testid="rename-dialog" @submit.prevent="saveRename">
+            <h3>Rename plan</h3>
+            <label class="lab" for="plan-rename-input">Plan name</label>
+            <input id="plan-rename-input" v-model="renameValue" class="kin" style="width: 100%" data-testid="plan-rename-input" />
+            <div class="row" style="margin-top: 20px; justify-content: flex-end">
+              <button type="button" class="kb kb-ghost" @click="renaming = false">Cancel</button>
+              <button type="submit" class="kb kb-lime" :disabled="!renameValue.trim()" data-testid="plan-rename-save">Save</button>
+            </div>
+          </form>
+        </div>
+      </Teleport>
 
       <!-- The running plan's revision, and the warning that it moved while this page was open (step 15). -->
       <PlanLive
@@ -2294,7 +2320,7 @@ watch(
           <template v-else-if="selectionSpan && selectionSpan.count > 1">
             {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}<template v-if="canMove"> — drag one to move them all.</template>
           </template>
-          <template v-else-if="selected">Frame {{ formatOffset(selected.t_s) }} — <template v-if="moveLock && props.canEdit">locked, unlock to drag.</template><template v-else-if="props.canEdit"><template v-if="dragTargets.length > 1">drag any of the {{ dragTargets.length }} ticked groups to move them together.</template><template v-else>drag a badge to move a group.</template></template><template v-else>where your group is at this moment.</template></template>
+          <template v-else-if="selected">Frame {{ formatOffset(selected.t_s) }} · <template v-if="moveLock && props.canEdit">locked, unlock to drag.</template><template v-else-if="props.canEdit"><template v-if="dragTargets.length > 1">drag any of the {{ dragTargets.length }} ticked groups to move them together.</template><template v-else>drag a badge to move a group.</template></template><template v-else>where your group is at this moment.</template></template>
           <!-- A plan with no moments has nothing on the bar to pick (QA 1 Nov): say what comes first instead. -->
           <template v-else-if="!frames.length">
             This plan has no moments yet.<template v-if="props.canEdit"> Press Add frame, then place each group on the map.</template>
@@ -2304,63 +2330,50 @@ watch(
       </div>
 
       <div class="pv-bar">
-        <div class="pv-bar-head">
+        <div class="pv-bar-head k k2-transport-top">
           <button
             v-if="frames.length"
-            class="pv-btn is-quiet"
+            type="button"
+            class="rp-play"
+            style="width: 40px; height: 40px"
             data-testid="play"
-            :aria-pressed="playing"
+            :aria-pressed="playing ? 'true' : 'false'"
+            :aria-label="playing ? 'Pause' : playhead != null ? 'Resume' : 'Play'"
             title="Play the walk: the map moves with the clock"
             @click="playing ? pausePlay() : startPlay()"
           >
-            <svg v-if="playing" class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-            <svg v-else class="pv-ico is-fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14l11-7z" /></svg>
-            {{ playing ? 'Pause' : playhead != null ? 'Resume' : 'Play' }}
+            <svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="fill: currentColor; stroke: none; width: 16px; height: 16px"><path :d="playing ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M7 4v16l13-8z'"></path></svg>
           </button>
-          <button v-if="playhead != null" class="pv-btn is-quiet" data-testid="play-stop" title="Back to editing" @click="stopPlay">
-            <svg class="pv-ico is-fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z" /></svg>Stop
+          <button v-if="playhead != null" type="button" class="ib" aria-label="Stop: back to editing" data-testid="play-stop" title="Back to editing" @click="stopPlay">
+            <svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="fill: currentColor; stroke: none"><path d="M6 6h12v12H6z"></path></svg>
           </button>
-          <button
-            v-if="frames.length"
-            class="pv-btn is-quiet"
-            data-testid="play-speed"
-            :title="`Play at ${speed} times real time`"
-            @click="cycleSpeed"
-          >
-            {{ speed }}×
-          </button>
-          <span v-if="playhead != null" class="pv-play-clock" data-testid="play-clock">{{ playClock }}</span>
-          <span class="pv-bar-count">{{ frames.length }} frame{{ frames.length === 1 ? '' : 's' }} · time from T+0</span>
-          <!-- Frame tools sit on the bar they act on; one group, so on a narrow screen it wraps as a whole -->
-          <div class="pv-bar-tools">
-          <template v-if="props.canEdit">
-            <button class="pv-btn is-quiet" data-testid="frame-add" :disabled="busy" title="Add a frame after the open one" @click="addFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add frame</button>
-            <button class="pv-btn is-quiet" data-testid="frame-copy" :disabled="busy || !selected" title="Copy this frame (Ctrl+C)" @click="copyFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h11v11H8zM5 16V5h11" /></svg>Copy</button>
-            <button class="pv-btn is-quiet" data-testid="frame-paste" :disabled="busy || !clipboard" title="Paste it as a new frame (Ctrl+V)" @click="pasteFrame"><svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9zM7 5H5v16h14V5h-2" /></svg>Paste</button>
-            <span class="pv-sep" aria-hidden="true"></span>
-          </template>
-          <button
-            v-if="props.canEdit"
-            class="pv-btn is-quiet pv-lock"
-            :class="{ 'is-locked': moveLock }"
-            data-testid="plan-lock"
-            :aria-pressed="moveLock"
-            :title="moveLock ? 'Unlock to drag frames and groups again' : 'Lock so frames and groups cannot be dragged by accident'"
-            @click="toggleLock"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="5" y="11" width="14" height="10" rx="2" />
-              <path :d="moveLock ? 'M8 11V7a4 4 0 0 1 8 0v4' : 'M8 11V7a4 4 0 0 1 7.5-2'" />
-            </svg>
-            {{ moveLock ? 'Locked' : 'Lock' }}
-          </button>
-          <span class="pv-zoom" role="group" aria-label="Zoom the time bar">
-            <button class="pv-btn is-quiet" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom out" @click="zoom(0.5)">−</button>
-            <button class="pv-btn is-quiet" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom in" @click="zoom(2)">+</button>
-          </span>
+          <div v-if="frames.length" class="ksel">
+            <select v-model.number="speed" aria-label="Playback speed" class="k2-sel-sm" data-testid="play-speed">
+              <option v-for="option in PLAY_SPEEDS" :key="option" :value="option">{{ option }}×</option>
+            </select>
           </div>
+          <span v-if="playhead != null" class="pv-play-clock" data-testid="play-clock">{{ playClock }}</span>
+          <span class="mut k2-hm" style="font-size: 13px; font-weight: 700">{{ frames.length }} frame{{ frames.length === 1 ? '' : 's' }} · time from T+0</span>
+          <span class="sp"></span>
+          <template v-if="props.canEdit">
+            <button type="button" class="kb kb-line kb-sm" data-testid="frame-add" :disabled="busy" title="Add a frame after the open one" @click="addFrame"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add frame</button>
+            <button type="button" class="ib" data-testid="frame-duplicate" aria-label="Duplicate frame" :disabled="busy || !selected" title="Duplicate frame" @click="duplicateFrame"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg></button>
+            <button
+              type="button"
+              class="ib k2-lockbtn"
+              data-testid="plan-lock"
+              :aria-pressed="moveLock ? 'true' : 'false'"
+              :aria-label="moveLock ? 'Unlock frames and groups' : 'Lock frames and groups'"
+              :title="moveLock ? 'Unlock to drag frames and groups again' : 'Lock so frames and groups cannot be dragged by accident'"
+              @click="toggleLock"
+            ><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg></button>
+          </template>
+          <span class="k2-mini" role="group" aria-label="Zoom the time bar">
+            <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)">−</button>
+            <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)">+</button>
+          </span>
         </div>
-        <div ref="trackEl" class="pv-track">
+        <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }">
           <!-- A sweep anywhere on the strip that is not a dot selects the run it touches. -->
           <div class="pv-track-inner" :style="{ width: trackWidth + 'px' }" @pointerdown="startSweep">
             <!-- The ruler is the scrub handle: press anywhere on it and drag to move the cursor to any moment. -->
@@ -2424,274 +2437,175 @@ watch(
         </div>
       </div>
 
-      <div class="pv-inspector">
+      <div class="pv-inspector k k2-insp">
         <div v-if="errorMsg" class="pv-warnings">{{ errorMsg }}</div>
 
         <template v-if="selectionSpan">
-          <section class="pv-sec">
-          <h3>{{ selectionSpan.count > 1 ? 'Stretch' : 'Frame' }}</h3>
+          <div class="k2-tabs" role="tablist" aria-label="Inspector">
+            <button type="button" role="tab" :aria-selected="inspectorTab === 'frame' ? 'true' : 'false'" data-testid="insp-tab-frame" @click="inspectorTab = 'frame'">{{ selectionSpan.count > 1 ? 'Stretch' : 'Frame' }}</button>
+            <button type="button" role="tab" :aria-selected="inspectorTab === 'groups' ? 'true' : 'false'" data-testid="insp-tab-groups" @click="inspectorTab = 'groups'">{{ props.onlyGroupId ? 'Your group' : 'Groups' }}<span class="n">{{ shownGroups.length }}</span></button>
+          </div>
 
-          <!-- Why the open dot is red: the walk it belongs to, and the span that walk covers. -->
-          <p v-if="stretchAtSelected.length" class="pv-note" data-testid="frame-stretch">
-            This moment is in a stretch that can't be walked in time:
-            <template v-for="(s, i) in stretchAtSelected" :key="s.groupId + i"><strong>{{ groupName(s.groupId) }}</strong>, {{ formatOffset(s.from_t_s) }} → {{ formatOffset(s.to_t_s) }}<template v-if="i < stretchAtSelected.length - 1">; </template></template>.
-          </p>
-
-          <!-- One frame: its time and its note. Several: the span they cover, and nothing to type into. -->
-          <p v-if="selectionSpan.count > 1" class="pv-note" data-testid="selection-span">
-            {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}.
-            They move together.
-          </p>
-          <template v-else-if="selected">
-            <div class="pv-field-row">
-            <div class="pv-field">
-              <label for="pv-frame-time">Time from T+0</label>
-              <input
-                id="pv-frame-time"
-                class="pv-input"
-                :value="formatOffset(selected.t_s)"
-                :disabled="!props.canEdit || isCutFrame(selected)"
-                :title="isCutFrame(selected) ? 'A copy starts here, so this frame cannot move.' : ''"
-                @blur="setFrameTime(selected.id, $event.target.value, $event.target)"
-                @keyup.enter="$event.target.blur()"
-              />
-            </div>
-            <div class="pv-field">
-              <label for="pv-frame-note">Note</label>
-              <input
-                id="pv-frame-note"
-                class="pv-input"
-                :value="selected.note || ''"
-                :disabled="!props.canEdit"
-                placeholder="e.g. doors"
-                @blur="commitNote(selected.id, $event.target.value)"
-                @keyup.enter="$event.target.blur()"
-              />
-            </div>
-            </div>
-            <!-- The copy's starting frame: the one moment the board will not let the plan be written before. -->
-            <p v-if="isCutFrame(selected)" class="pv-note pv-cut-note" data-testid="frame-cut-note">
-              This copy starts here, at {{ formatOffset(selected.t_s) }}. Earlier moments stay on the original plan.
+          <!-- ===== Frame ===== -->
+          <section v-show="inspectorTab === 'frame'" role="tabpanel">
+            <!-- Why the open dot is red: the walk it belongs to, and the span that walk covers. -->
+            <p v-if="stretchAtSelected.length" class="k2-hint" style="margin-top: 0; margin-bottom: 10px" data-testid="frame-stretch">
+              This moment is in a stretch that can't be walked in time:
+              <template v-for="(s, i) in stretchAtSelected" :key="s.groupId + i"><strong>{{ groupName(s.groupId) }}</strong>, {{ formatOffset(s.from_t_s) }} → {{ formatOffset(s.to_t_s) }}<template v-if="i < stretchAtSelected.length - 1">; </template></template>.
             </p>
-          </template>
 
-          <!-- The push controls act on the selection, so there is one set of them whether one frame or six. -->
-          <div v-if="props.canEdit" class="pv-act">
-            <span class="pv-act-label">Shift time</span>
-            <div class="pv-stack">
-              <button class="pv-btn" data-testid="push-minus-60" :disabled="busy" title="1 minute earlier" @click="push(-60)">−1m</button>
-              <button class="pv-btn" data-testid="push-60" :disabled="busy" title="1 minute later" @click="push(60)">+1m</button>
-              <button class="pv-btn" data-testid="push-300" :disabled="busy" title="5 minutes later" @click="push(300)">+5m</button>
-            </div>
-          </div>
-          <div v-if="props.canEdit && selectionSpan.count === 1" class="pv-act">
-            <button
-              class="pv-btn is-quiet is-danger-text pv-act-delete"
-              data-testid="frame-delete"
-              :disabled="busy || isCutFrame(selected)"
-              :title="isCutFrame(selected) ? 'A copy starts here, so this frame cannot be deleted.' : ''"
-              @click="removeFrame"
-            >
-              <svg class="pv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>Delete frame
-            </button>
-          </div>
+            <!-- One frame: its time and its note. Several: the span they cover, and nothing to type into. -->
+            <p v-if="selectionSpan.count > 1" class="k2-hint" style="margin-top: 0; margin-bottom: 10px" data-testid="selection-span">
+              {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}.
+              They move together.
+            </p>
+            <template v-else-if="selected">
+              <div class="k2-field">
+                <label for="pv-frame-time">Time from T+0</label>
+                <input
+                  id="pv-frame-time"
+                  class="kin"
+                  style="height: 40px; width: 100%"
+                  :value="formatOffset(selected.t_s)"
+                  :disabled="!props.canEdit || isCutFrame(selected)"
+                  :title="isCutFrame(selected) ? 'A copy starts here, so this frame cannot move.' : ''"
+                  @blur="setFrameTime(selected.id, $event.target.value, $event.target)"
+                  @keyup.enter="$event.target.blur()"
+                />
+              </div>
+              <div class="k2-field">
+                <label for="pv-frame-note">Note</label>
+                <input
+                  id="pv-frame-note"
+                  class="kin"
+                  style="height: 40px; width: 100%"
+                  :value="selected.note || ''"
+                  :disabled="!props.canEdit"
+                  placeholder="e.g. doors"
+                  @blur="commitNote(selected.id, $event.target.value)"
+                  @keyup.enter="$event.target.blur()"
+                />
+              </div>
+              <!-- The copy's starting frame: the one moment the board will not let the plan be written before. -->
+              <p v-if="isCutFrame(selected)" class="k2-hint" data-testid="frame-cut-note">
+                This copy starts here, at {{ formatOffset(selected.t_s) }}. Earlier moments stay on the original plan.
+              </p>
+            </template>
+
+            <!-- The push controls act on the selection, so there is one set of them whether one frame or six. -->
+            <template v-if="props.canEdit">
+              <div class="k2-sub">Shift time</div>
+              <div class="row" style="gap: 6px; flex-wrap: wrap">
+                <button type="button" class="k2-pillbtn" data-testid="push-minus-60" :disabled="busy" title="1 minute earlier" @click="push(-60)">−1m</button>
+                <button type="button" class="k2-pillbtn" data-testid="push-60" :disabled="busy" title="1 minute later" @click="push(60)">+1m</button>
+                <button type="button" class="k2-pillbtn" data-testid="push-300" :disabled="busy" title="5 minutes later" @click="push(300)">+5m</button>
+              </div>
+              <p v-if="selectionSpan.count === 1" style="margin: 14px 0 0">
+                <button
+                  type="button"
+                  class="k2-link danger"
+                  data-testid="frame-delete"
+                  :disabled="busy || isCutFrame(selected)"
+                  :title="isCutFrame(selected) ? 'A copy starts here, so this frame cannot be deleted.' : ''"
+                  @click="removeFrame"
+                >Delete frame</button>
+              </p>
+              <p v-if="moveLock" class="k2-hint" data-testid="lock-hint">Locked: frames and groups can't be dragged. Press the lock to change that.</p>
+            </template>
+            <p class="k2-hint">{{ formatOffset(0) }} is the start of the run.</p>
           </section>
 
-          <template v-if="selectionSpan.count === 1 && selected">
-            <section class="pv-sec">
-            <h3>{{ props.onlyGroupId ? 'Your group' : 'Groups here' }}</h3>
-            <div class="pv-groups">
-              <div v-for="group in shownGroups" :key="group.id" class="pv-group-item">
+          <!-- ===== Groups ===== -->
+          <section v-show="inspectorTab === 'groups'" role="tabpanel">
+            <template v-if="selected">
+              <div v-if="props.canEdit && shownGroups.length > 1" class="k2-row k2-selectall">
                 <button
                   type="button"
-                  class="pv-group-row"
-                  data-testid="group-row"
-                  :class="{
-                    'is-selected': isGroupSelected(group.id),
-                    'is-bad': framePosition(selected, group.id) && flaggedCells.has(group.id + '|' + selected.id),
-                  }"
-                  :aria-pressed="isGroupSelected(group.id)"
-                  :title="`Focus ${group.name} on the map`"
-                  @click="toggleGroup(group.id)"
+                  class="k2-chk"
+                  role="checkbox"
+                  data-testid="select-all-groups"
+                  :aria-checked="allGroupsTicked ? 'true' : selectedGroups.size ? 'mixed' : 'false'"
+                  aria-labelledby="k2-selectall-label"
+                  @click="toggleAllGroups"
                 >
-                  <span class="pv-swatch" :style="{ background: colorOf.get(group.id) }"></span>
-                  <span class="pv-group-name">{{ group.name }}</span>
-                  <span class="pv-group-state">
-                    {{ stateWord(framePosition(selected, group.id)) }}
-                  </span>
+                  <svg v-if="allGroupsTicked" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>
+                  <svg v-else-if="selectedGroups.size" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg>
                 </button>
-                <!-- A group the frame says nothing about has no badge to drag: Place arms the map for one tap. -->
-                <button
-                  v-if="props.canEdit && !framePosition(selected, group.id)"
-                  type="button"
-                  class="pv-btn pv-place-btn"
-                  :class="{ 'is-primary': placing === group.id }"
-                  data-testid="place-group"
-                  :data-group="group.id"
-                  :aria-pressed="placing === group.id"
-                  :disabled="busy"
-                  @click="startPlacing(group.id)"
-                >
-                  {{ placing === group.id ? 'Tap the map…' : 'Place on map' }}
-                </button>
-                <!-- The two flags on this group's position, as segmented controls: what is true now is filled, and
-                     pressing the other half is the edit. Off site is written at this moment (a row here, or the
-                     earlier on-site sentence would stand); a confirmation can only be given to a position this frame
-                     actually states, so its chips are disabled when the position is merely carried forward. -->
-                <div v-if="props.canEdit" class="pv-seg" role="group" :aria-label="`Flags for ${group.name}`">
+                <b id="k2-selectall-label" style="font-size: 14px; cursor: pointer" @click="toggleAllGroups">Select all</b>
+              </div>
+              <div v-for="group in shownGroups" :key="group.id" class="k2-row k2-grouprow" :class="{ 'is-bad': framePosition(selected, group.id) && flaggedCells.has(group.id + '|' + selected.id) }">
+                <div class="row" style="gap: 10px; width: 100%">
                   <button
                     type="button"
-                    class="pv-seg-btn"
-                    data-testid="state-on"
-                    :data-group="group.id"
-                    :class="{ 'is-on': !!framePosition(selected, group.id) && !isOffSite(selected, group.id) }"
-                    :disabled="busy || !framePosition(selected, group.id)"
-                    :aria-pressed="!!framePosition(selected, group.id) && !isOffSite(selected, group.id)"
-                    title="Standing on the map at this moment"
-                    @click="setGroupState(group.id, 'on_site')"
-                  >
-                    on site
-                  </button>
+                    class="k2-chk"
+                    role="checkbox"
+                    data-testid="group-row"
+                    :aria-checked="isGroupSelected(group.id) ? 'true' : 'false'"
+                    :aria-label="'Select ' + group.name"
+                    @click="toggleGroup(group.id)"
+                  ><svg v-if="isGroupSelected(group.id)" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></button>
+                  <span class="pv-marker k2-rowmarker" :style="{ background: colorOf.get(group.id) }" aria-hidden="true" data-testid="group-row-marker">{{ initials(group.name) }}</span>
+                  <b class="text-truncate" style="font-size: 14px; flex: 1; min-width: 0">{{ group.name }}</b>
+                  <span class="mut" style="font-size: 12px; font-weight: 700">{{ stateWord(framePosition(selected, group.id)) }}</span>
+                </div>
+                <template v-if="props.canEdit && selectionSpan.count === 1">
+                  <!-- A group the frame says nothing about has no badge to drag: Place arms the map for one tap. -->
                   <button
+                    v-if="!framePosition(selected, group.id)"
                     type="button"
-                    class="pv-seg-btn"
-                    data-testid="state-off"
+                    class="k2-pillbtn"
+                    data-testid="place-group"
                     :data-group="group.id"
-                    :class="{ 'is-on': isOffSite(selected, group.id) }"
-                    :disabled="busy || !framePosition(selected, group.id)"
-                    :aria-pressed="isOffSite(selected, group.id)"
-                    title="Not on the map at this moment, so no walk is checked"
-                    @click="setGroupState(group.id, 'off_site')"
-                  >
-                    off site
-                  </button>
-                  <span class="pv-seg-sep"></span>
-                  <button
-                    type="button"
-                    class="pv-seg-btn"
-                    data-testid="verify-auto"
-                    :data-group="group.id"
-                    :class="{ 'is-on': isStated(selected, group.id) && !isManual(selected, group.id) }"
-                    :disabled="busy || !isStated(selected, group.id)"
-                    :aria-pressed="isStated(selected, group.id) && !isManual(selected, group.id)"
-                    title="Trusted as drawn"
-                    @click="setGroupVerify(group.id, 'auto')"
-                  >
-                    auto
-                  </button>
-                  <button
-                    type="button"
-                    class="pv-seg-btn"
-                    data-testid="verify-manual"
-                    :data-group="group.id"
-                    :class="{ 'is-on': isStated(selected, group.id) && isManual(selected, group.id) }"
-                    :disabled="busy || !isStated(selected, group.id)"
-                    :aria-pressed="isStated(selected, group.id) && isManual(selected, group.id)"
-                    title="Somebody has to confirm this by hand"
-                    @click="setGroupVerify(group.id, 'manual')"
-                  >
-                    manual
-                  </button>
+                    :aria-pressed="placing === group.id ? 'true' : 'false'"
+                    :disabled="busy"
+                    @click="startPlacing(group.id)"
+                  >{{ placing === group.id ? 'Tap the map…' : 'Place on map' }}</button>
+                  <!-- The two flags on this group's position: what is true now is filled, and pressing the other half is
+                       the edit. A confirmation can only be given to a position this frame actually states. -->
+                  <div v-else class="row" style="gap: 6px; flex-wrap: wrap" role="group" :aria-label="`Flags for ${group.name}`">
+                    <span class="k2-mini">
+                      <button type="button" data-testid="state-on" :data-group="group.id" :disabled="busy" :aria-pressed="!isOffSite(selected, group.id) ? 'true' : 'false'" title="Standing on the map at this moment" @click="setGroupState(group.id, 'on_site')">On site</button>
+                      <button type="button" data-testid="state-off" :data-group="group.id" :disabled="busy" :aria-pressed="isOffSite(selected, group.id) ? 'true' : 'false'" title="Not on the map at this moment, so no walk is checked" @click="setGroupState(group.id, 'off_site')">Off site</button>
+                    </span>
+                    <span class="k2-mini">
+                      <button type="button" data-testid="verify-auto" :data-group="group.id" :disabled="busy || !isStated(selected, group.id)" :aria-pressed="isStated(selected, group.id) && !isManual(selected, group.id) ? 'true' : 'false'" title="Trusted as drawn" @click="setGroupVerify(group.id, 'auto')">Auto</button>
+                      <button type="button" data-testid="verify-manual" :data-group="group.id" :disabled="busy || !isStated(selected, group.id)" :aria-pressed="isStated(selected, group.id) && isManual(selected, group.id) ? 'true' : 'false'" title="Somebody has to confirm this by hand" @click="setGroupVerify(group.id, 'manual')">Manual</button>
+                    </span>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <template v-if="props.canEdit && selected">
+              <!-- Hold and the flags act on the ticked groups; a stretch of frames can also act on everyone standing -->
+              <div v-if="selectedGroups.size || selectionSpan.count > 1" class="k2-sel" data-testid="selection-panel">
+                <div class="row">
+                  <b style="font-size: 14px; flex: 1">{{ selectedGroups.size ? selectedGroups.size + (selectedGroups.size === 1 ? ' group' : ' groups') + ' selected' : 'All groups' }}</b>
+                  <button v-if="selectedGroups.size" type="button" class="k2-link" style="color: var(--lime)" data-testid="clear-groups" @click="clearGroups">Clear</button>
+                </div>
+                <template v-if="selectionSpan.count === 1">
+                  <!-- Hold: state these groups again, here, at a later moment -->
+                  <div class="k2-sub" data-testid="hold-target">Hold in place for</div>
+                  <div class="row" style="gap: 6px; flex-wrap: wrap">
+                    <button type="button" class="k2-pillbtn" data-testid="hold-60" :disabled="busy || !standingTargets.length" @click="hold(60)">+1m</button>
+                    <button type="button" class="k2-pillbtn" data-testid="hold-300" :disabled="busy || !standingTargets.length" @click="hold(300)">+5m</button>
+                    <button type="button" class="k2-pillbtn" data-testid="hold-600" :disabled="busy || !standingTargets.length" @click="hold(600)">+10m</button>
+                  </div>
+                </template>
+                <!-- The state buttons act on the open frame; the confirmation buttons on the whole selected stretch -->
+                <div class="k2-sub" data-testid="flag-target">On the map at {{ formatOffset(selected.t_s) }}</div>
+                <div class="row" style="gap: 6px; flex-wrap: wrap">
+                  <button type="button" class="k2-pillbtn" data-testid="bulk-state-on" :disabled="busy || !standingTargets.length" @click="bulkState('on_site')">On site</button>
+                  <button type="button" class="k2-pillbtn" data-testid="bulk-state-off" :disabled="busy || !standingTargets.length" @click="bulkState('off_site')">Off site</button>
+                </div>
+                <div class="k2-sub" data-testid="verify-scope">Confirm positions</div>
+                <div class="row" style="gap: 6px; flex-wrap: wrap">
+                  <button type="button" class="k2-pillbtn" data-testid="bulk-verify-auto" :disabled="busy || !verifyRows" @click="bulkVerify('auto')">Automatic</button>
+                  <button type="button" class="k2-pillbtn" data-testid="bulk-verify-manual" :disabled="busy || !verifyRows" @click="bulkVerify('manual')">By hand</button>
                 </div>
               </div>
-            </div>
-
-            <!-- What a drag would move. The same sentence shape as the hold line below, because it is the same
-                 question -- "who does this button act on?" -- asked of the other gesture. -->
-            <template v-if="props.canEdit">
-              <p class="pv-note" data-testid="drag-target">
-                <template v-if="dragTargets.length > 1">
-                  Drag any of {{ dragLabel }} to move them together.
-                </template>
-                <template v-else-if="dragTargets.length === 1">
-                  Drag {{ dragLabel }} to move it. Tick more groups to move them together.
-                </template>
-                <template v-else>Drag a badge to move that group. Tick two or more to move them together.</template>
-              </p>
+              <p v-else class="k2-hint">Tick groups to hold them or set flags together.</p>
             </template>
-            </section>
-            <template v-if="props.canEdit">
-              <section class="pv-sec">
-              <!-- Hold: state these groups again, here, at a later moment. One row of durations, the same shape as
-                   the push controls above, because it is the same kind of edit: one call, one sentence back. -->
-              <h3>Hold</h3>
-              <p class="pv-note" data-testid="hold-target">
-                <template v-if="standingTargets.length">
-                  Keep {{ standingLabel }} in place for longer, so the next move starts later.
-                </template>
-                <template v-else>Tick a group that stands at this frame to hold it.</template>
-              </p>
-              <div class="pv-act">
-              <span class="pv-act-label">Hold for</span>
-              <div class="pv-stack">
-                <button class="pv-btn" data-testid="hold-60" :disabled="busy || !standingTargets.length" @click="hold(60)">
-                  +1m
-                </button>
-                <button class="pv-btn" data-testid="hold-300" :disabled="busy || !standingTargets.length" @click="hold(300)">
-                  +5m
-                </button>
-                <button class="pv-btn" data-testid="hold-600" :disabled="busy || !standingTargets.length" @click="hold(600)">
-                  +10m
-                </button>
-              </div>
-              </div>
-              </section>
-            </template>
-          </template>
-
-          <!-- Flags: the same two sets the selection model keeps, applied to a position. The state buttons act on the
-               open frame, because "off site" is a statement about one moment; the confirmation buttons act on the
-               whole selected stretch in one call, which is why they can name more than one frame. -->
-          <section v-if="props.canEdit && selected" class="pv-sec">
-            <h3>Flags</h3>
-            <p class="pv-note" data-testid="flag-target">
-              <template v-if="standingTargets.length">Acting on {{ standingLabel }}.</template>
-              <template v-else>Tick a group that stands here, or place one, to flag it.</template>
-            </p>
-            <div class="pv-flag-row">
-              <span class="pv-flag-label">On the map at {{ formatOffset(selected.t_s) }}</span>
-              <div class="pv-stack">
-                <button
-                  class="pv-btn"
-                  data-testid="bulk-state-on"
-                  :disabled="busy || !standingTargets.length"
-                  @click="bulkState('on_site')"
-                >
-                  On site
-                </button>
-                <button
-                  class="pv-btn"
-                  data-testid="bulk-state-off"
-                  :disabled="busy || !standingTargets.length"
-                  @click="bulkState('off_site')"
-                >
-                  Off site
-                </button>
-              </div>
-            </div>
-            <div class="pv-flag-row">
-              <span class="pv-flag-label" data-testid="verify-scope">
-                Confirm {{ verifyRows }} position{{ verifyRows === 1 ? '' : 's' }} in {{ countLabel(flagFrames.length) }}
-              </span>
-              <div class="pv-stack">
-                <button
-                  class="pv-btn"
-                  data-testid="bulk-verify-auto"
-                  :disabled="busy || !verifyRows"
-                  @click="bulkVerify('auto')"
-                >
-                  Automatic
-                </button>
-                <button
-                  class="pv-btn"
-                  data-testid="bulk-verify-manual"
-                  :disabled="busy || !verifyRows"
-                  @click="bulkVerify('manual')"
-                >
-                  By hand
-                </button>
-              </div>
-            </div>
           </section>
         </template>
 
@@ -2751,12 +2665,6 @@ watch(
           </div>
         </div>
 
-        <p v-if="props.canEdit" class="pv-note">
-          Ctrl+C / V: copy and paste a frame. Ctrl+Z / Y: undo and redo. Shift+click two dots to select a stretch.
-        </p>
-        <p class="pv-note" style="margin-top: auto">
-          {{ formatOffset(0) }} is the start of the run.
-        </p>
       </div>
       </div>
     </div>

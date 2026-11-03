@@ -85,14 +85,9 @@ async function logout() {
   <!-- The site's top bar. The landing, log in and sign up pages draw their own, so it only hides there: it stays in the
        page because a page can put its own controls in it (#k-nav-context, #k-nav-actions). -->
   <div v-if="!isNativeApp" v-show="showTopBar" class="k kq k-topbar">
-    <header class="ke2-nav">
+    <header class="ke2-nav" :class="{ 'k2-eventbar': $route.name === 'event' }">
       <RouterLink class="ks-brand" to="/" aria-label="Planova home"><KLogo /><span>planova</span></RouterLink>
       <div id="k-nav-context" class="k-nav-context"></div>
-      <nav class="k-nav-tabs" aria-label="Main">
-        <RouterLink class="tab" to="/" :aria-current="routeName === 'home' ? 'page' : undefined">Home</RouterLink>
-        <!-- Events needs an account: a visitor would only be sent to Log in -->
-        <RouterLink v-if="auth.isLoggedIn" class="tab" to="/events" :aria-current="routeName === 'events' ? 'page' : undefined">Events</RouterLink>
-      </nav>
       <span class="sp"></span>
       <!-- Visible on every page while sharing, so users always know -->
       <RouterLink

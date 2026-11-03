@@ -15,6 +15,7 @@ import { addEventMember, setMemberRole, setArrivalTolerance, removeEventMember }
 import { findPersonByEmail, looksLikeEmail } from '../services/eventService'
 import { askConfirm, toast } from '../composables/useNotify'
 import BenchAlert from './BenchAlert.vue'
+import { useOpenMenu } from '../composables/useOpenMenu'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -29,7 +30,8 @@ const errorMsg = ref('')
 const busy = ref(false)
 const search = ref('')
 const groupFilter = ref('') // '' all | 'none' no group | group id
-const open = ref(null) // the card whose actions are open (phone)
+const adding = ref(false) // the Add person row is open
+const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
 
 const myRole = computed(() => topRole(props.me))
 const myRoleOptions = computed(() => assignableRoles(myRole.value))
@@ -173,92 +175,104 @@ async function changeTolerance(m, input) {
 </script>
 
 <template>
-  <div class="kp-stack" :aria-busy="busy ? 'true' : null">
+  <div class="k kp-stack" :aria-busy="busy ? 'true' : null">
     <BenchAlert v-if="errorMsg" data-testid="people-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
+    <div class="k2-h" style="margin-bottom: 0">
+      <h1>People</h1>
+      <span class="cnt">{{ members.length }}</span>
+      <span class="sp"></span>
+      <button v-if="canAddPeople" type="button" class="kb kb-ink kb-sm" :aria-expanded="adding ? 'true' : 'false'" data-testid="add-person-btn" @click="adding = !adding">
+        <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add person
+      </button>
+    </div>
+
     <!-- Add an existing account by their full email: nothing suggested, no one's email shown -->
-    <div v-if="canAddPeople" class="kp-card" data-testid="add-person">
-      <form class="kp-addbar" :class="{ 'has-group': managesAll }" @submit.prevent="addByEmail">
+    <div v-if="canAddPeople && adding" class="k2-card" data-testid="add-person">
+      <form class="k2-addrow" :class="{ 'has-group': managesAll }" @submit.prevent="addByEmail">
         <div>
           <label for="add-email" class="visually-hidden">Their email address</label>
-          <input id="add-email" v-model="addEmail" type="email" class="form-control" placeholder="Add by exact email" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="email" data-testid="add-email" />
+          <input id="add-email" v-model="addEmail" type="email" class="kin" style="width: 100%" placeholder="Their exact email" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="email" data-testid="add-email" />
         </div>
-        <div v-if="managesAll">
-          <select v-model="addGroupId" class="form-select" aria-label="Group" data-testid="add-group">
+        <div v-if="managesAll" class="ksel" style="width: 100%">
+          <select v-model="addGroupId" style="width: 100%" aria-label="Group" data-testid="add-group">
             <option value="">No group yet</option>
             <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
           </select>
         </div>
-        <button type="submit" class="btn btn-primary" :disabled="!canFind" data-testid="add-email-btn">
-          {{ finding ? 'Checking...' : 'Add' }}
-        </button>
+        <button type="submit" class="kb kb-lime" :disabled="!canFind" data-testid="add-email-btn">{{ finding ? 'Checking...' : 'Add' }}</button>
       </form>
-      <p v-if="addMessage" class="text-danger small mt-2 mb-0" role="status" data-testid="add-none">{{ addMessage }}</p>
-      <p v-if="!managesAll" class="kp-note mb-0">They join {{ myAdminGroupName }}.</p>
+      <p v-if="addMessage" class="k2-err" role="status" data-testid="add-none">{{ addMessage }}</p>
+      <p v-if="!managesAll" class="k2-hint">They join {{ myAdminGroupName }}.</p>
     </div>
 
-    <div class="kp-card">
-      <div class="kp-fields-2 mb-2">
-        <div>
-          <label for="people-search" class="visually-hidden">Search by name</label>
-          <input id="people-search" v-model="search" type="search" class="form-control" placeholder="Search by name" data-testid="people-search" />
-        </div>
-        <div>
-          <label for="people-group" class="visually-hidden">Filter by group</label>
-          <select id="people-group" v-model="groupFilter" class="form-select" data-testid="people-group-filter">
-            <option value="">All groups</option>
-            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-            <option value="none">No group</option>
-          </select>
-        </div>
+    <div class="k2-filterrow">
+      <div style="flex: 1 1 220px">
+        <label for="people-search" class="visually-hidden">Search by name</label>
+        <input id="people-search" v-model="search" type="search" class="kin" style="width: 100%" placeholder="Search by name" data-testid="people-search" />
       </div>
+      <div class="ksel">
+        <label for="people-group" class="visually-hidden">Filter by group</label>
+        <select id="people-group" v-model="groupFilter"  data-testid="people-group-filter">
+          <option value="">All groups</option>
+          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+          <option value="none">No group</option>
+        </select>
+      </div>
+    </div>
 
+    <div class="k2-card">
       <EmptyState v-if="!rows.length" compact icon="search" title="No one matches" text="Try another name or filter." data-testid="people-empty" />
-      <ul class="kp-list" data-testid="people-list">
-        <li v-for="r in rows" :key="r.m.id" class="kp-row" :data-testid="'person-' + r.m.username">
-          <span class="kp-av" :style="{ backgroundColor: groupColour(r.m.groupId), color: '#fff' }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
-          <div class="kp-row-main">
-            <strong>{{ r.m.display_name }}<span v-if="r.isMe" class="text-muted fw-normal"> (you)</span></strong>
-            <span>{{ groupName(r.m.groupId) }}</span>
-          </div>
-          <div class="kp-chips">
-            <span class="kp-chip" :class="{ 'kp-chip-ink': r.role === 'root', 'kp-chip-mint': r.role === 'planner', 'd-md-none': r.any && r.actions.role }" :data-testid="'person-role-' + r.m.username">{{ ROLE_LABEL[r.role] }}</span>
-            <span v-if="r.m.isAdmin && r.role !== 'admin'" class="kp-chip">Group admin</span>
-            <span v-if="r.m.isIC" class="kp-chip kp-chip-peach" :data-testid="'person-ic-' + r.m.username">IC</span>
-          </div>
-
-          <!-- Phone: the actions open from this button; wider screens show them inline -->
-          <button
-            v-if="r.any"
-            type="button"
-            class="btn btn-sm btn-ghost d-md-none"
-            :aria-expanded="open === r.m.id ? 'true' : 'false'"
-            :aria-controls="'actions-' + r.m.id"
-            :data-testid="'person-menu-' + r.m.username"
-            @click="open = open === r.m.id ? null : r.m.id"
-          >
-            Manage <span aria-hidden="true">{{ open === r.m.id ? '▴' : '▾' }}</span>
-          </button>
-          <div v-if="r.any" :id="'actions-' + r.m.id" class="kp-row-actions reveal-in" :class="open === r.m.id ? 'd-flex' : 'd-none d-md-flex'">
-            <template v-if="r.actions.role">
-              <label :for="'role-' + r.m.id" class="visually-hidden">Role of {{ r.m.display_name }}</label>
-              <select :id="'role-' + r.m.id" class="form-select form-select-sm kp-stepped" :value="r.role" :disabled="busy" :data-testid="'person-role-select-' + r.m.username" @change="changeRole(r.m, $event.target)">
-                <option v-for="role in myRoleOptions" :key="role" :value="role" :disabled="role === 'admin' && !r.m.groupId">
-                  {{ ROLE_LABEL[role] }}{{ role === 'admin' && !r.m.groupId ? ' (needs a group)' : '' }}
-                </option>
-              </select>
-            </template>
-            <!-- An IC's arrival radius: how close their phone must be for a moment to close itself (063). -->
-            <div v-if="r.actions.radius" class="kp-tol">
-              <label :for="'tol-' + r.m.id" class="mb-0">Radius</label>
-              <input :id="'tol-' + r.m.id" type="number" min="5" max="100" step="5" class="form-control form-control-sm" :value="r.m.toleranceM" :disabled="busy" :data-testid="'person-tolerance-' + r.m.username" @change="changeTolerance(r.m, $event.target)" />
-              <span>m</span>
+      <template v-else>
+        <div class="k2-pp hd" aria-hidden="true"><span>Person</span><span>Role</span><span>IC radius</span><span></span></div>
+        <div data-testid="people-list">
+          <div v-for="r in rows" :key="r.m.id" class="k2-pp" :data-testid="'person-' + r.m.username">
+            <div class="row" style="gap: 10px; min-width: 0">
+              <span class="av" :style="{ backgroundColor: groupColour(r.m.groupId), color: '#fff' }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
+              <div style="min-width: 0">
+                <b class="d-block text-truncate" style="font-size: 14px">{{ r.m.display_name }}<span v-if="r.isMe" class="mut" style="font-weight: 500"> (you)</span></b>
+                <span class="mut d-block text-truncate" style="font-size: 12px">{{ groupName(r.m.groupId) }}<template v-if="r.m.isAdmin && r.role !== 'admin'"> · Group admin</template></span>
+              </div>
             </div>
-            <button v-if="r.actions.remove" type="button" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'person-remove-' + r.m.username" @click="remove(r.m)">Remove</button>
+            <div>
+              <template v-if="r.actions.role">
+                <label :for="'role-' + r.m.id" class="visually-hidden">Role of {{ r.m.display_name }}</label>
+                <div class="ksel" style="width: 100%">
+                  <select :id="'role-' + r.m.id" class="k2-sel-sm" style="width: 100%" :value="r.role" :disabled="busy" :data-testid="'person-role-select-' + r.m.username" @change="changeRole(r.m, $event.target)">
+                    <option v-for="role in myRoleOptions" :key="role" :value="role" :disabled="role === 'admin' && !r.m.groupId">
+                      {{ ROLE_LABEL[role] }}{{ role === 'admin' && !r.m.groupId ? ' (needs a group)' : '' }}
+                    </option>
+                  </select>
+                </div>
+              </template>
+              <span v-else class="chip" :class="r.role === 'root' ? 'chip-ink' : r.role === 'planner' ? 'chip-mint' : 'chip-soft'" :data-testid="'person-role-' + r.m.username">{{ ROLE_LABEL[r.role] }}</span>
+            </div>
+            <div class="k2-ic">
+              <template v-if="r.m.isIC">
+                <span class="chip chip-soft" style="height: 24px" :data-testid="'person-ic-' + r.m.username">IC</span>
+                <!-- An IC's arrival radius: how close their phone must be for a moment to close itself (063). -->
+                <span v-if="r.actions.radius" class="k2-rad">
+                  <label :for="'tol-' + r.m.id" class="visually-hidden">IC radius of {{ r.m.display_name }}</label>
+                  <input :id="'tol-' + r.m.id" type="number" min="5" max="100" step="5" :value="r.m.toleranceM" :disabled="busy" :data-testid="'person-tolerance-' + r.m.username" @change="changeTolerance(r.m, $event.target)" />m
+                </span>
+                <span v-else-if="r.m.toleranceM != null" class="mut" style="font-size: 13px; font-weight: 700">{{ r.m.toleranceM }} m</span>
+              </template>
+              <span v-else class="mut">—</span>
+            </div>
+            <div v-if="r.actions.remove" class="wrapm" data-menu>
+              <button type="button" class="ib" :aria-label="'Options for ' + r.m.display_name" :aria-expanded="openMenu === r.m.id ? 'true' : 'false'" :data-testid="'person-menu-' + r.m.username" @click="toggleMenu(r.m.id)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>
+              <div v-if="openMenu === r.m.id" class="menu r" role="menu">
+                <button type="button" role="menuitem" class="danger" :disabled="busy" :data-testid="'person-remove-' + r.m.username" @click="closeMenu(); remove(r.m)">Remove from event</button>
+              </div>
+            </div>
+            <span v-else></span>
           </div>
-        </li>
-      </ul>
-      <p v-if="rows.length" class="kp-note mb-0" data-testid="people-scope">{{ myScope }}</p>
+        </div>
+      </template>
+      <p v-if="rows.length" class="k2-hint" data-testid="people-scope">
+        <template v-if="mode === 'edit'">ICs are set on the <RouterLink class="k2-link" :to="{ name: 'event', params: { id: eventId, page: 'groups' } }">Groups</RouterLink> page.</template>
+        <template v-else>{{ myScope }}</template>
+      </p>
     </div>
   </div>
 </template>

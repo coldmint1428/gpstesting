@@ -18,6 +18,7 @@ import './assets/kinetic-tokens.css' // Planova Kinetic design tokens
 import './assets/kinetic.css' // Planova Kinetic components
 import './assets/kinetic-bridge.css' // Kinetic look for Bootstrap and the older screens' classes (last, so it wins)
 import './assets/kinetic-pages.css' // Kinetic layouts for the inner pages (event workspace, create event, profile, share)
+import './assets/kinetic-2.css' // Kinetic v2: the event workspace and its pages (last, so it wins)
 import { isNativeApp } from './lib/platform'
 import { installFormErrors } from './lib/formErrors'
 

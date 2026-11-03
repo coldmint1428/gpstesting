@@ -6,6 +6,7 @@ import { computed, ref, watch } from 'vue'
 import { formatDay, formatDayTime, formatTime } from '../utils/time'
 import { dayKey, formatRehearsal, monthGrid, monthOf, monthTitle, shiftMonth } from '../utils/rehearsalCalendar'
 import RehearsalRequests from './RehearsalRequests.vue'
+import KDateTimePicker from './kinetic/KDateTimePicker.vue'
 
 const props = defineProps({
   rehearsals: { type: Array, default: () => [] }, // soonest first: { id, startsAt: Date, endsAt: Date|null, note }
@@ -84,6 +85,14 @@ function moveMonth(by) {
   shown.value = shiftMonth(shown.value, by)
 }
 
+const upcoming = computed(() => props.rehearsals.filter((r) => !hasStarted(r)))
+const tileDay = (r) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', day: '2-digit' }).format(r.startsAt)
+const tileMonth = (r) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', month: 'short' }).format(r.startsAt).toUpperCase()
+function openDay(rehearsal) {
+  selected.value = dayKey(rehearsal.startsAt)
+  shown.value = new Date(rehearsal.startsAt.getFullYear(), rehearsal.startsAt.getMonth(), 1)
+}
+
 function pick(day) {
   moved.value = true
   selected.value = day.key
@@ -159,18 +168,27 @@ function sendReason(rehearsal) {
     />
 
     <template v-else>
+      <!-- Those who attend: what is coming, in the recordings' style. A row opens its day below. -->
+      <section v-if="!canEdit && upcoming.length" class="k k2-card" data-testid="rehearsal-upcoming">
+        <button v-for="(rehearsal, i) in upcoming" :key="rehearsal.id" type="button" class="k2-rec k2-rehearsal" @click="openDay(rehearsal)">
+          <span class="ke2-dt"><b>{{ tileDay(rehearsal) }}</b><span>{{ tileMonth(rehearsal) }}</span></span>
+          <span style="min-width: 0"><b>{{ formatDayTime(rehearsal.startsAt) }}</b><span v-if="rehearsal.note" class="mut d-block text-truncate" style="font-size: 13px; margin-top: 2px">{{ rehearsal.note }}</span></span>
+          <span v-if="i === 0" class="chip chip-mint">Next</span>
+        </button>
+      </section>
+
       <section v-if="canEdit" class="kp-card" data-testid="rehearsal-form">
         <h2 class="kp-title mb-2">Schedule a rehearsal</h2>
         <form novalidate @submit.prevent="submit">
           <div class="kp-fields-2">
             <div>
               <label for="rh-when" class="form-label">Starts</label>
-              <input id="rh-when" v-model="form.startsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': formErrors.startsAt }" data-testid="rehearsal-when" />
+              <KDateTimePicker id="rh-when" v-model="form.startsAt" label="Starts" :invalid="Boolean(formErrors.startsAt)" testid="rehearsal-when" />
               <div v-if="formErrors.startsAt" class="invalid-feedback">{{ formErrors.startsAt }}</div>
             </div>
             <div>
               <label for="rh-until" class="form-label">Ends (optional)</label>
-              <input id="rh-until" v-model="form.endsAt" type="datetime-local" class="form-control" :class="{ 'is-invalid': formErrors.endsAt }" :min="form.startsAt || undefined" data-testid="rehearsal-until" />
+              <KDateTimePicker id="rh-until" v-model="form.endsAt" label="Ends" :min="form.startsAt" clearable :invalid="Boolean(formErrors.endsAt)" testid="rehearsal-until" />
               <div v-if="formErrors.endsAt" class="invalid-feedback">{{ formErrors.endsAt }}</div>
             </div>
           </div>

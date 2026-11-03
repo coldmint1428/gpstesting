@@ -105,7 +105,7 @@ test('the planner starts the event with the published plan', async ({ browser })
   await page.getByTestId('start-confirm-btn').click()
   const confirm = page.getByTestId('confirm-dialog')
   if (await confirm.isVisible({ timeout: 3000 }).catch(() => false)) await page.getByTestId('confirm-ok').click()
-  await expect(page.getByTestId('status-live').or(page.getByTestId('end-event-btn')).first()).toBeVisible()
+  await expect(page.getByTestId('head-live').or(page.getByTestId('event-menu-btn')).first()).toBeVisible()
   await shot(page, 'flow-03-live')
 })
 
@@ -182,6 +182,7 @@ test('the planner pushes the rest of the plan by a minute, and the member is tol
 test('the planner ends the event only after typing END', async ({ browser }) => {
   const page = await as(browser, 'root')
   await page.goto(`/events/${ev.eventId}/overview`)
+  await page.getByTestId('event-menu-btn').click()
   await page.getByTestId('end-event-btn').click()
   const ok = page.getByTestId('confirm-ok')
   await expect(ok).toBeDisabled()

@@ -57,6 +57,22 @@ export function areaTooltipHtml(value, escapedName) {
   return '<span>' + escapedName + '</span>'
 }
 
+// The caption pill on a map: its look comes from the area's type (kinetic-2.css). Takes no pointer events.
+export function zoneLabelClass(value) {
+  return 'k2-ztip k2-ztip-' + (value === 'no_go' ? 'nogo' : value === 'stage' ? 'stage' : 'zone')
+}
+
+// A caption for a shape drawn on a read-only map, to add to the same layer group. Null for a broken polygon.
+export function zoneCaption(L, shape, kind, name) {
+  const bounds = shape.getBounds()
+  if (!bounds.isValid()) return null
+  const text = document.createElement('span')
+  text.textContent = name
+  return L.tooltip({ permanent: true, direction: 'center', className: zoneLabelClass(kind), interactive: false })
+    .setLatLng(bounds.getCenter())
+    .setContent(text)
+}
+
 export function isValidAreaName(name) {
   const trimmed = String(name == null ? '' : name).trim()
   return trimmed.length >= 1 && trimmed.length <= AREA_NAME_MAX

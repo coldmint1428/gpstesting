@@ -34,7 +34,6 @@ import MembersPanel from '../components/MembersPanel.vue'
 import BenchAlert from '../components/BenchAlert.vue'
 import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
-import ZoneOverview from '../components/ZoneOverview.vue'
 import SimulatorPanel from '../components/SimulatorPanel.vue'
 import PlanBoard from '../components/plan/PlanBoard.vue'
 import PlanSchedule from '../components/plan/PlanSchedule.vue'
@@ -53,6 +52,7 @@ import SosBanner from '../components/SosBanner.vue'
 import { useSos } from '../composables/useSos'
 import PhoneTabBar from '../components/PhoneTabBar.vue'
 import BottomSheet from '../components/BottomSheet.vue'
+import { useOpenMenu } from '../composables/useOpenMenu'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import { providePageReady } from '../composables/usePageReady'
@@ -491,13 +491,44 @@ const sharingStatus = computed(() => {
 const icCount = computed(() => Object.keys(sharingStatus.value).length)
 const sharingCount = computed(() => Object.values(sharingStatus.value).filter(Boolean).length)
 
-// The status card (Start / Schedule / End, and an IC's Share): website, for the root and planners on the pages they
-// run the event from, and for ICs on the overview and live pages; phone, on Ops (and on Now for ICs)
-const showStatusCard = computed(() => {
-  if (native) return tab.value === 'ops' || (tab.value === 'now' && isIC.value)
-  if (canManage.value) return ['overview', 'live', 'timeline'].includes(tab.value)
-  return isIC.value && ['overview', 'live'].includes(tab.value)
+// The status card (Start / Schedule / End, and an IC's Share): phone, on Ops (and on Now for ICs). The website has these
+// in its top bar and the In-Charge banner instead, on every page.
+const showStatusCard = computed(() => native && (tab.value === 'ops' || (tab.value === 'now' && isIC.value)))
+
+// ---------- Website: the side navigation in sections; on a phone's browser a bottom bar with the rest under More ----------
+const navSections = computed(() => {
+  const planEdits = modeOf('timeline') === 'edit'
+  const inSection = (keys) => keys.map((k) => pages.value.find((p) => p.key === k)).filter(Boolean)
+  return [
+    { label: '', items: inSection(['overview']) },
+    { label: 'Run', items: inSection(planEdits ? ['live', 'attendance', 'playback', 'simulator'] : ['live', 'timeline', 'attendance', 'playback', 'simulator']) },
+    { label: 'Plan', items: inSection(planEdits ? ['timeline', 'rehearsals', 'map'] : ['rehearsals', 'map']) },
+    { label: 'People', items: inSection(['groups', 'people']) },
+  ].filter((section) => section.items.length)
 })
+const webBar = computed(() =>
+  (modeOf('timeline') === 'edit' ? ['overview', 'live', 'timeline', 'people'] : ['live', 'timeline', 'attendance', 'people'])
+    .map((k) => pages.value.find((p) => p.key === k))
+    .filter(Boolean),
+)
+const webMore = computed(() => pages.value.filter((p) => !webBar.value.includes(p)))
+const webMoreOpen = ref(false)
+const overviewPlan = computed(() => {
+  const list = seesWholeEvent.value ? startPlans.plans.value : []
+  const shown = list.find((p) => p.status === 'live') || list[0]
+  return shown ? shown.name : ''
+})
+const liveSide = ref('people') // the Live page's side panel: 'people' | 'message'
+const barStatus = ref(null) // the top bar's controls: the Live page's Schedule button opens their dialog
+
+// ---------- The location button and its popover, and the In-Charge banner (anyone who can share) ----------
+const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
+const locLabel = computed(() => (!isLive.value ? 'Location off' : sharingHere.value ? 'Sharing' : 'Not sharing'))
+const locHint = computed(() => {
+  if (!isLive.value) return scheduledStart.value ? 'Sharing opens ' + formatDayTime(scheduledStart.value) + '.' : 'Sharing opens when the event starts.'
+  return sharingHere.value ? 'You’re sharing. Planners can see you.' : 'You’re not sharing yet.'
+})
+const bannerGroup = computed(() => (myGroup.value ? myGroup.value.name : 'your group'))
 
 // Text under the title explaining what this person sees on the map
 const viewText = computed(() => {
@@ -762,38 +793,64 @@ async function removeEvent() {
     <!-- Which event and its state, in the site's top bar (one bar, as in the design) -->
     <Teleport v-if="!native" to="#k-nav-context">
       <div class="ks-ev">
-        <RouterLink to="/events" class="ks-crumb" data-testid="back-to-events"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Events</RouterLink>
+        <RouterLink to="/events" class="ks-crumb k2-hm" data-testid="back-to-events"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Home</RouterLink>
         <h1 class="k-ev-name text-truncate" data-testid="event-name">{{ event.name }}</h1>
-        <span v-if="isLive" class="chip chip-ink ks-hide-m" data-testid="head-live"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
-        <span v-else-if="scheduledStart" class="chip chip-mint ks-hide-m">Starts {{ formatDayTime(scheduledStart) }}</span>
-        <span v-else class="chip chip-soft ks-hide-m">Not live</span>
-        <span v-if="event.is_simulation" class="chip rl-sim ks-hide-m" data-testid="sim-badge">Sim</span>
+        <span v-if="isLive" class="chip chip-ink" data-testid="head-live"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+        <span v-else-if="scheduledStart" class="chip chip-mint k2-hm" data-testid="status-scheduled">Starts {{ formatDayTime(scheduledStart) }}</span>
+        <span v-else class="chip chip-soft k2-hm" data-testid="status-not-started">Not live</span>
+        <span v-if="event.is_simulation" class="chip rl-sim k2-hm" data-testid="sim-badge">Sim</span>
       </div>
     </Teleport>
     <Teleport v-if="!native" to="#k-nav-actions">
-      <button type="button" class="kb kb-sm k-sos sos-btn" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
+      <EventStatus
+        ref="barStatus"
+        bar
+        :sessions="sessions"
+        :event-id="id"
+        :can-manage="canManage"
+        :ic-count="icCount"
+        :sharing-count="sharingCount"
+        :plans="seesWholeEvent ? startPlans.plans.value : []"
+        :plans-ready="!seesWholeEvent || plansReady"
+        :planned-start="event.starts_at"
+        :planned-end="event.ends_at"
+      />
+      <div v-if="isIC" class="wrapm" data-menu>
+        <button type="button" class="k2-loc" aria-label="My location" :aria-expanded="openMenu === 'loc' ? 'true' : 'false'" data-testid="loc-btn" @click="toggleMenu('loc')">
+          <i class="dot" :style="{ background: isLive && sharingHere ? '#2563eb' : '#9aa89f' }"></i>
+          <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg>
+          <span>{{ locLabel }}</span>
+        </button>
+        <div v-if="openMenu === 'loc'" class="menu r" style="width: 280px; padding: 14px">
+          <div style="padding: 6px 8px 12px"><b style="font-size: 14px">My location</b><div class="mut" style="font-size: 12px; margin-top: 2px" data-testid="loc-hint">{{ locHint }}</div></div>
+          <button v-if="sharingHere" type="button" class="kb kb-line" :disabled="shareBusy" data-testid="loc-stop" @click="closeMenu(); stopSharing()">{{ shareBusy ? 'Stopping…' : 'Stop sharing' }}</button>
+          <button v-else type="button" class="kb kb-lime" :disabled="!isLive || shareBusy" data-testid="loc-share" @click="closeMenu(); startSharing()">{{ shareBusy ? 'Please wait…' : 'Share my location' }}</button>
+          <hr />
+          <RouterLink class="k-menu-link" :to="{ name: 'share', params: { id } }" data-testid="share-details-link" @click="closeMenu()">My GPS details</RouterLink>
+        </div>
+      </div>
+      <button type="button" class="k2-sos sos-btn" aria-label="SOS: send an emergency alert" data-testid="sos-btn" @click="sosDialogOpen = true">SOS</button>
     </Teleport>
 
     <div class="ev-body">
       <!-- Every page of the event, always in view -->
-      <nav v-if="!native" class="ev-nav" aria-label="Event pages">
-        <ul>
-          <li v-for="p in pages" :key="p.key">
-            <RouterLink
-              class="ev-nav-btn"
-              :aria-current="tab === p.key ? 'page' : undefined"
-              :to="{ name: 'event', params: { id, page: p.key } }"
-              replace
-              :data-testid="'tab-' + p.key"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" />
-              </svg>
-              <span class="ev-nav-text">{{ p.label }}</span>
-              <span v-if="p.badge" class="ev-nav-badge" :class="{ 'ev-nav-badge-live': p.badgeLive }">{{ p.badge }}</span>
-            </RouterLink>
-          </li>
-        </ul>
+      <nav v-if="!native" class="k k2-side k2-nav" aria-label="Event pages">
+        <template v-for="section in navSections" :key="section.label">
+          <div v-if="section.label" class="k2-sec">{{ section.label }}</div>
+          <RouterLink
+            v-for="p in section.items"
+            :key="p.key"
+            class="ks-ni"
+            :aria-current="tab === p.key ? 'page' : undefined"
+            :to="{ name: 'event', params: { id, page: p.key } }"
+            replace
+            :data-testid="'tab-' + p.key"
+          >
+            <svg viewBox="0 0 24 24" class="ki" aria-hidden="true"><path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" /></svg>
+            <span class="ev-nav-text">{{ p.label }}</span>
+            <span v-if="p.badge" class="n" :class="{ 'k2-n-live': p.badgeLive }">{{ p.badge }}</span>
+          </RouterLink>
+        </template>
         <!-- One event badge (highest role) + one group badge ("Group A: Admin, IC") -->
         <div class="ks-me k-you">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" /></svg>
@@ -820,7 +877,20 @@ async function removeEvent() {
           @show="showSos"
         />
 
-        <!-- The event's state and the Start / Schedule / End / Share controls: on every page (phone: on Ops, and on Now for ICs) -->
+        <!-- The In-Charge's location banner, above every page's title (website) -->
+        <div v-if="!native && isIC" class="k k2-banner" :class="!isLive ? 'idle' : sharingHere ? 'on' : 'urgent'" role="status" data-testid="ic-banner">
+          <span class="k2-bico"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg></span>
+          <div style="flex: 1; min-width: 0">
+            <template v-if="sharingHere"><b data-testid="sharing-banner">You’re sharing your location</b><div class="k2-bsub">Planners and {{ bannerGroup }} can see where you are.</div></template>
+            <template v-else-if="isLive"><b>The event is live — share your location</b><div class="k2-bsub">Planners can’t see {{ bannerGroup }} until you do.</div></template>
+            <template v-else><b>Share your location when the event starts</b><div class="k2-bsub" data-testid="share-locked-text"><template v-if="scheduledStart">Sharing opens {{ formatDayTime(scheduledStart) }}.</template><template v-else>Sharing opens once a planner starts {{ event.name }}.</template></div></template>
+          </div>
+          <button v-if="sharingHere" type="button" class="kb kb-line kb-sm" :disabled="shareBusy" data-testid="stop-share-btn" @click="stopSharing">{{ shareBusy ? 'Stopping…' : 'Stop sharing' }}</button>
+          <button v-else-if="isLive" type="button" class="kb kb-lime kb-sm" :disabled="shareBusy" data-testid="share-btn" @click="startSharing">{{ shareBusy ? 'Please wait…' : 'Share my location' }}</button>
+          <button v-else type="button" class="kb kb-line kb-sm" disabled data-testid="share-btn-locked">Share my location</button>
+        </div>
+
+        <!-- Phone app: the event's state and its controls (on Ops, and on Now for ICs) -->
         <EventStatus v-if="showStatusCard" :sessions="sessions" :event-id="id" :can-manage="canManage" :ic-count="icCount" :sharing-count="sharingCount"
           :plans="seesWholeEvent ? startPlans.plans.value : []"
           :plans-ready="!seesWholeEvent || plansReady"
@@ -883,17 +953,20 @@ async function removeEvent() {
 
         <!-- The page's title. Only the Live page adds a line: who this person can see on the map. The phone app's
              map and home tabs (Map, Ops, Now) go without one: the map needs the room, and the header names the event. -->
-        <div v-if="!native || !['live', 'ops', 'now'].includes(tab)" class="ev-page-head">
+        <div v-if="native ? !['live', 'ops', 'now'].includes(tab) : !['overview', 'timeline', 'people', 'playback', 'map'].includes(tab)" class="ev-page-head k2-pagehead">
           <h2>{{ currentPage.label }}</h2>
-          <p v-if="tab === 'live'" data-testid="view-scope">{{ viewText }}</p>
+          <button v-if="!native && tab === 'live' && canManage && !isLive" type="button" class="k2-schedule-out" data-testid="live-schedule-btn" @click="barStatus && barStatus.openSchedule()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"></path></svg>Schedule
+          </button>
         </div>
 
         <!-- ===== Live map: v-show keeps the map (and its live connection) alive on the other pages ===== -->
-        <div v-show="tab === 'live'" class="kp-live" :class="{ 'has-side': !native && canManage }">
+        <div v-show="tab === 'live'" class="kp-live" :class="{ 'k2-live': !native }">
           <div class="kp-live-map" :class="native ? 'ev-map-phone' : 'ev-map-only'">
             <div style="min-width: 0">
               <LiveMap
                 ref="liveMap"
+                :people-to="native ? null : '#k2-onmap'"
                 :active="tab === 'live'"
                 :event-id="id"
                 :positions="live.positions.value"
@@ -915,8 +988,15 @@ async function removeEvent() {
             </div>
           </div>
           <div v-if="!native" class="kp-live-side">
-            <!-- "Message everyone" (032): planners send one message to many groups at once (phone: on the Ops tab) -->
-            <BroadcastPanel v-if="canManage" :broadcasts="broadcasts" :groups="groups" />
+            <aside class="k k2-card" style="padding-top: 6px">
+              <div class="k2-tabs" role="tablist" aria-label="Live side panel">
+                <button type="button" role="tab" :aria-selected="liveSide === 'people' || !canManage ? 'true' : 'false'" data-testid="live-tab-people" @click="liveSide = 'people'">On the map<span class="n">{{ liveMap ? liveMap.peopleCount : 0 }}</span></button>
+                <button v-if="canManage" type="button" role="tab" :aria-selected="liveSide === 'message' ? 'true' : 'false'" data-testid="live-tab-message" @click="liveSide = 'message'">Message everyone</button>
+              </div>
+              <div v-show="liveSide === 'people' || !canManage" id="k2-onmap" role="tabpanel"></div>
+              <!-- "Message everyone" (032): planners send one message to many groups at once (phone: on the Ops tab) -->
+              <div v-if="canManage" v-show="liveSide === 'message'" role="tabpanel"><BroadcastPanel :broadcasts="broadcasts" :groups="groups" /></div>
+            </aside>
             <!-- A plan session's staff picture of the walk: a row per group, its moment, its leg and where its ICs are
                  (step 20). Mounted only while the Live page is shown: the page itself is kept alive by v-show for the
                  map, and a panel that polls every five seconds must not run behind a planner who is drawing the plan. -->
@@ -959,6 +1039,7 @@ async function removeEvent() {
           :event="event"
           :role="role"
           :mode="modeOf('overview')"
+          :plan-name="overviewPlan"
           :members="members"
           :groups="groups"
           :my-group="myGroup"
@@ -1053,7 +1134,6 @@ async function removeEvent() {
 
         <!-- Map: root / planners edit the zones (v-if: the bench holds locks and a presence row only while it is open) -->
         <template v-if="canManage && tab === 'map'">
-          <ZoneOverview :event-id="id" />
           <div class="ev-surface">
             <PolygonTestView :event-id="id" embedded />
           </div>
@@ -1099,6 +1179,23 @@ async function removeEvent() {
     </div>
 
     <SosDialog :open="sosDialogOpen" :busy="sos.busy.value" @send="onSosSend" @close="sosDialogOpen = false" />
+
+    <!-- A phone's browser: the bottom bar, and the rest of the pages under More -->
+    <nav v-if="!native" class="k2-bnav" aria-label="Event pages">
+      <RouterLink v-for="p in webBar" :key="p.key" :to="{ name: 'event', params: { id, page: p.key } }" replace :aria-current="tab === p.key ? 'page' : undefined" :data-testid="'bnav-' + p.key">
+        <svg viewBox="0 0 24 24" class="k2-bnav-ico" aria-hidden="true"><path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" /></svg>{{ p.label }}
+      </RouterLink>
+      <button v-if="webMore.length" type="button" :aria-current="webMore.some((p) => p.key === tab) ? 'page' : undefined" aria-label="More pages" data-testid="bnav-more" @click="webMoreOpen = true">
+        <svg viewBox="0 0 24 24" class="k2-bnav-ico" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>More
+      </button>
+    </nav>
+    <BottomSheet v-if="!native" :open="webMoreOpen" title="More" @close="webMoreOpen = false">
+      <div class="d-grid gap-2" data-testid="web-more-sheet">
+        <RouterLink v-for="p in webMore" :key="p.key" class="pv-more-row" :to="{ name: 'event', params: { id, page: p.key } }" replace :data-testid="'web-more-' + p.key" @click="webMoreOpen = false">
+          <strong class="flex-grow-1 text-start">{{ p.label }}</strong><span aria-hidden="true" class="pv-chev">›</span>
+        </RouterLink>
+      </div>
+    </BottomSheet>
 
     <!-- Phone app: bottom tabs that follow the role, and the More sheet for the rest -->
     <PhoneTabBar v-if="native" :items="nativeTabs" :active="activeTab" @select="selectTab" />

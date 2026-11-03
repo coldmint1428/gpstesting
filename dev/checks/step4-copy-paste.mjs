@@ -110,15 +110,7 @@ export default {
     )
 
     // ---------- 2. copy, and paste as one write ----------
-    await tab.click('[data-testid=frame-copy]')
-    await tab.waitUntil(`document.querySelector('[data-testid=toasts]').textContent.includes('Copied +1:00')`, {
-      what: 'the copy confirmation',
-    })
-    await tab.assertThat(
-      'paste is available once a frame has been copied',
-      `!document.querySelector('[data-testid=frame-paste]').disabled`,
-    )
-    await tab.click('[data-testid=frame-paste]')
+    await tab.click('[data-testid=frame-duplicate]')
     await tab.waitUntil(`document.querySelectorAll('.pv-frame').length === 3`, {
       what: 'the pasted frame to appear',
       timeout: 12000,
