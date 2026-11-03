@@ -188,6 +188,20 @@ check('S6 no rows, no stops', stopsOf([]).length === 0)
 const noMerge = await mutant('a repeat of a point is a new stop', 'if (!same) open(', 'if (true) open(')
 check('M6 the mutant splits a repeated point, so S1 is red', brief(noMerge.stopsOf(OUTING)) !== brief(outing), brief(noMerge.stopsOf(OUTING)))
 
+// ---------- 6. one stop per clock minute ----------
+const SAME_MINUTE = stopsOf([
+  row(0, GATE_LINE),
+  { ...row(10, GATE_5), note: 'Drink water' },
+  named(row(50, GATE_10), 'Stage'),
+  row(60, GATE_15),
+  row(300, null, 'not_required'),
+  row(360, GATE_20),
+])
+check('P1 points in one minute are one stop, numbered in order', brief(SAME_MINUTE) === 'place:1:0+10+50 place:2:60 off::300 place:3:360', brief(SAME_MINUTE))
+check('P2 the stop is at the first of them', SAME_MINUTE[0].point.t_s === 0, show(SAME_MINUTE[0].point))
+check('P3 and keeps what the others said', SAME_MINUTE[0].name === 'Stage' && SAME_MINUTE[0].rows.some((r) => r.note === 'Drink water'), show(SAME_MINUTE[0]))
+check('P4 and it lasts until the next stop', SAME_MINUTE[0].endsAt === SAME_MINUTE[1].startsAt, show(SAME_MINUTE[0]))
+
 // ---------- verdict ----------
 if (failures.length) {
   console.log('')
