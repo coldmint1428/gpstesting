@@ -325,6 +325,12 @@ async function here(row) {
 /** The list of stops, group by group. Ops staff read a row per moment instead while live (see the top of this file). */
 const stops = computed(() => [...walksOf(rows.value).values()].flatMap((walk) => stopsOf(walk.rows)))
 
+/** "6 stops", over the list. */
+const stopCount = computed(() => {
+  const count = stops.value.filter((stop) => stop.number).length
+  return count === 1 ? '1 stop' : count + ' stops'
+})
+
 const currentStop = computed(() => stops.value.findIndex((stop) => stop.rows.some((row) => row.frame_id === currentFrameId.value)))
 
 /** The first stop the clock has not reached yet: a carried moment ahead is not somewhere to go next. */
@@ -540,6 +546,11 @@ watch(
         :walk-rows="rows"
       />
 
+      <h3 v-if="loaded && rows.length" class="pv-sched-listhead" data-testid="sched-list-head">
+        Full schedule
+        <span v-if="!whole" class="pv-sched-listcount" data-testid="sched-list-count">{{ stopCount }}</span>
+      </h3>
+
       <SkeletonLoader v-if="!loaded" variant="board" :rows="4" label="Reading the schedule…" data-testid="sched-loading" />
 
       <EmptyState
@@ -586,7 +597,9 @@ watch(
                 <span class="pv-sched-what">
                   <span v-if="whole" class="pv-sched-group">{{ stop.rows[0].group_name }}</span>
                   <span class="pv-sched-place" data-testid="sched-place">{{ stopText(stop) }}</span>
-                  <span v-for="note in notesOf(stop)" :key="note.id" class="pv-sched-note" data-testid="sched-note">{{ note.text }}</span>
+                  <ul v-if="notesOf(stop).length" class="pv-sched-notes">
+                    <li v-for="note in notesOf(stop)" :key="note.id" class="pv-sched-note" data-testid="sched-note">{{ note.text }}</li>
+                  </ul>
                 </span>
               </div>
               <div class="pv-sched-marks">

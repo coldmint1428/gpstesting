@@ -90,7 +90,8 @@ export function whereAt(rows, clockMs) {
 /**
  * One group's rows as the stops a person walks between, in the plan's order. A stop is a point and every moment spent at
  * it: the statement, the moments that carry it, and a further statement of the same point (a different name at the same
- * point is a different stop, because a planner wrote it). Off-site moments make one 'off' entry, and moments before the
+ * point is a different stop, because a planner wrote it). Points in the same clock minute are one stop too, at the first
+ * of them: seconds apart they would be rows and pins all saying the same time. Off-site moments make one 'off' entry, and moments before the
  * first point make one 'none' entry; neither takes a number, so the numbers are the pins on the map. A stop lasts until
  * the next entry starts (`endsAt`), and the last one has no end the plan can state.
  */
@@ -116,8 +117,10 @@ export function stopsOf(rows) {
     if (row.state === 'not_required') {
       if (!stop || stop.kind !== 'off') open('off', row)
     } else if (row.lat != null) {
-      const same = stop && stop.kind === 'place' && stop.point.lat === row.lat && stop.point.lng === row.lng
-        && (!row.place || !stop.name || row.place === stop.name)
+      const same = stop && stop.kind === 'place' && (
+        Math.floor(at(row) / 60000) === Math.floor(at(stop.point) / 60000)
+        || (stop.point.lat === row.lat && stop.point.lng === row.lng && (!row.place || !stop.name || row.place === stop.name))
+      )
       if (!same) open('place', row)
       if (!stop.name && row.place) stop.name = row.place
     } else if (!stop) {

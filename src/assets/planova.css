@@ -1035,6 +1035,37 @@
   min-width: 0;
 }
 
+/* Under the map: every stop, numbered as its pin is. */
+.pv-sched-listhead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 14px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pv-ink);
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-line);
+}
+
+.pv-sched-listcount {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pv-ink-soft);
+}
+
+.pv-sched-notes {
+  margin: 3px 0 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.pv-sched-notes .pv-sched-note {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .pv-sched-num {
   flex: none;
   display: inline-flex;

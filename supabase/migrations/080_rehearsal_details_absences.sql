@@ -6,7 +6,7 @@
 -- root and planners read everyone's. All the writes are the three calls below, because a table grant could not stop a
 -- person from writing their own request as already approved.
 
--- ============================================================
+-- ==========================================================
 -- 1. A rehearsal's end time and notes (both optional)
 -- ============================================================
 alter table public.event_rehearsals add column if not exists ends_at timestamptz;
