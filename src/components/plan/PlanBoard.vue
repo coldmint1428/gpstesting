@@ -3606,6 +3606,11 @@ watch(
             ><svg v-if="moveLock" class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z" style="fill: currentColor"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>
             <svg v-else class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 6.9-.8"></path></svg></button>
           </template>
+          <template v-if="props.canEdit">
+            <!-- The header's undo/redo is hidden on a phone, so the toolbar carries its own pair there, beside the zoom -->
+            <button type="button" class="ib k2-so" data-testid="undo-mobile" aria-label="Undo" :disabled="busy || !canUndo" title="Undo" @click="runUndo"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button>
+            <button type="button" class="ib k2-so" data-testid="redo-mobile" aria-label="Redo" :disabled="busy || !canRedo" title="Redo" @click="runRedo"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button>
+          </template>
           <span class="k2-mini" role="group" aria-label="Zoom the time bar">
             <button type="button" data-testid="zoom-out" title="Zoom the strip out (Ctrl + wheel)" aria-label="Zoom timeline out" @click="zoom(0.5)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg></button>
             <button type="button" data-testid="zoom-in" title="Zoom the strip in (Ctrl + wheel)" aria-label="Zoom timeline in" @click="zoom(2)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"></path></svg></button>
