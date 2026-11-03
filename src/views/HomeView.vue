@@ -296,7 +296,7 @@ const year = new Date().getFullYear()
       </header>
 
       
-      <h1 class="kl-h1 U">Right place.<br /><span class="hl">Right time.</span></h1>
+      <h1 class="kl-h1 U"><span class="hl">Planova</span></h1>
 
       <section class="kl-hero">
         <div class="kl-copy">
@@ -338,7 +338,7 @@ const year = new Date().getFullYear()
     <div class="kl-in">
       <section id="how" class="kl-block">
         <span class="ey">How it works</span>
-        <h2 class="kl-h2">Plan it once. Run it live.<br />Replay it after.</h2>
+        <h2 class="kl-h2">Plan it once. <span class="kl-nw">Run it live.</span><br />Replay it after.</h2>
         <div class="kl-steps">
           <article class="kl-step"><div class="big">01</div><h3>Plan</h3><p>Draw zones, place every group on one timeline and publish. Bring your run sheet as a CSV.</p><div class="who"><span class="rlp" style="background: var(--mint)">Planner</span></div></article>
           <article class="kl-step lime"><div class="big">02</div><h3>Run</h3><p>Press Start. In-Charges share location with one tap. Every member gets their next move and a “leave now” nudge.</p><div class="who"><span class="rlp" style="background: #fff">In-Charge</span><span class="rlp" style="background: #fff">Member</span></div></article>

@@ -1,11 +1,14 @@
 <script setup>
 // BottomSheet - a sheet that rises from the bottom of the phone screen over a dimmed page (Figma "Join an event",
 // "Problem actions"). Tapping the dimmed page or the close button closes it; the page underneath keeps its place.
-defineProps({
+import { useEscape } from '../composables/useEscape'
+
+const props = defineProps({
   open: { type: Boolean, default: false },
   title: { type: String, default: '' },
 })
 const emit = defineEmits(['close'])
+useEscape(() => props.open, () => emit('close'))
 </script>
 
 <template>

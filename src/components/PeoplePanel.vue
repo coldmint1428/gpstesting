@@ -8,6 +8,7 @@
 // IC (a duty of a member) is switched on the Groups page (MembersPanel.vue); here it is a badge only.
 // An IC's arrival radius (063) stays here, beside the IC it belongs to.
 import { ref, computed, watch } from 'vue'
+import { textOn, NO_GROUP_COLOUR } from '../utils/groupColours'
 import EmptyState from './EmptyState.vue'
 import { initials } from '../utils/people'
 import { ROLE_RANK, ROLE_LABEL, topRole, canManage, assignableRoles, canSetIC, canRemove } from '../utils/permissions'
@@ -42,7 +43,7 @@ const myRoleOptions = computed(() => assignableRoles(myRole.value))
 
 const groupById = computed(() => Object.fromEntries(props.groups.map((g) => [g.id, g])))
 const groupName = (id) => (groupById.value[id] ? groupById.value[id].name : 'No group')
-const groupColour = (id) => (groupById.value[id] ? groupById.value[id].colour : '#6c757d')
+const groupColour = (id) => (groupById.value[id] ? groupById.value[id].colour : NO_GROUP_COLOUR)
 
 // The sort picked above: by group (A-Z, people without a group last), by name, or highest role first.
 // Ties always fall back to role, then name.
@@ -208,7 +209,7 @@ async function changeTolerance(m, input) {
   <div class="k kp-stack" :aria-busy="busy ? 'true' : null">
     <BenchAlert v-if="errorMsg" data-testid="people-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
-    <div class="k2-h" style="margin-bottom: 0">
+    <div class="k2-h" style="margin-bottom: 8px">
       <h1>People</h1>
       <span class="cnt">{{ members.length }}</span>
       <span class="sp"></span>
@@ -230,7 +231,7 @@ async function changeTolerance(m, input) {
             <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
           </select>
         </div>
-        <button type="submit" class="kb kb-lime" :disabled="!canFind" data-testid="add-email-btn">{{ finding ? 'Checking...' : 'Add' }}</button>
+        <button type="submit" class="kb kb-lime" :disabled="!canFind" data-testid="add-email-btn">{{ finding ? 'Checking…' : 'Add' }}</button>
       </form>
       <p v-if="addMessage" class="k2-err" role="status" data-testid="add-none">{{ addMessage }}</p>
       <p v-if="!managesAll" class="k2-hint">They join {{ myAdminGroupName }}.</p>
@@ -273,7 +274,7 @@ async function changeTolerance(m, input) {
         <div data-testid="people-list">
           <div v-for="r in rows" :key="r.m.id" class="k2-pp" :data-testid="'person-' + r.m.username">
             <div class="row" style="gap: 10px; min-width: 0">
-              <span class="av" :style="{ backgroundColor: groupColour(r.m.groupId), color: '#fff' }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
+              <span class="av" :style="{ backgroundColor: groupColour(r.m.groupId), color: textOn(groupColour(r.m.groupId)) }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
               <div style="min-width: 0">
                 <b class="d-block text-truncate" style="font-size: 14px">{{ r.m.display_name }}<span v-if="r.isMe" class="mut" style="font-weight: 500"> (you)</span></b>
                 <span class="mut d-block text-truncate" style="font-size: 12px">{{ groupName(r.m.groupId) }}<template v-if="r.m.isAdmin && r.role !== 'admin'"> · Group admin</template></span>
@@ -302,7 +303,7 @@ async function changeTolerance(m, input) {
                 </span>
                 <span v-else-if="r.m.toleranceM != null" class="mut" style="font-size: 13px; font-weight: 700">{{ r.m.toleranceM }} m</span>
               </template>
-              <span v-else class="mut">—</span>
+              <span v-else class="mut k2-ic-none">—</span>
             </div>
             <div v-if="r.actions.remove" class="wrapm" data-menu>
               <button type="button" class="ib" :aria-label="'Options for ' + r.m.display_name" :aria-expanded="openMenu === r.m.id ? 'true' : 'false'" :data-testid="'person-menu-' + r.m.username" @click="toggleMenu(r.m.id)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></button>

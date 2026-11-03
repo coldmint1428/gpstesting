@@ -53,7 +53,9 @@ beforeEach(() => {
 describe('HomeView for a visitor', () => {
   it('shows the landing page and loads no events', async () => {
     const { wrapper } = await mountHome()
-    expect(wrapper.find('h1').text()).toContain('Right place.')
+    expect(wrapper.find('h1').text()).toContain('Planova')
+    expect(wrapper.find('.kl-copy').text()).toContain('Plan where every group should be.')
+    expect(wrapper.find('[data-testid="visitor-join-code"]').exists()).toBe(true)
     expect(service.getMyEvents).not.toHaveBeenCalled()
   })
 

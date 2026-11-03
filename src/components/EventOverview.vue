@@ -124,7 +124,7 @@ function saveDetails() {
       <template v-else>
         <header class="k ov2-head">
           <div class="row" style="gap: 6px; flex-wrap: wrap">
-            <span v-if="status === 'Live'" class="chip chip-ink"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+            <span v-if="isLive" class="chip chip-ink"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
             <span v-else class="chip chip-soft">{{ status }}</span>
             <span class="chip" :class="role === 'root' ? 'rl-root' : role === 'planner' ? 'rl-planner' : 'chip-soft'">{{ ROLE_LABEL[role] }}</span>
             <span v-if="myGroup" class="chip chip-soft">{{ myGroup.name }}</span>

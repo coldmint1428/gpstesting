@@ -283,6 +283,8 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
         return command.added ? restoreFrames([command.frame]) : writePositions(command.frameId, command.after)
       case 'fill':
         return back ? removeFrames(command.added) : restoreFrames(command.added)
+      case 'deleteMany':
+        return back ? restoreFrames(command.frames) : removeFrames(command.frames)
       case 'planName':
         return renamePlan(back ? command.before : command.after)
       case 'batch': {
@@ -345,6 +347,7 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
     if (command.frame && command.frame.id) return command.frame.id
     if (command.frameId) return command.frameId
     if (command.added && command.added.length) return command.added[0].id
+    if (command.frames && command.frames.length && command.kind === 'deleteMany') return command.frames[0].id
     return null
   }
 
@@ -387,6 +390,10 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
     record({ kind: 'delete', frame: copy, label })
   }
 
+  function deletedMany(copies, label) {
+    record({ kind: 'deleteMany', frames: copies, label })
+  }
+
   function held({ frameId, added, before, after, frame }, label) {
     record({ kind: 'hold', frameId, added, before, after, frame, label })
   }
@@ -414,6 +421,7 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
     batch,
     created,
     deleted,
+    deletedMany,
     held,
     filled,
     planName,

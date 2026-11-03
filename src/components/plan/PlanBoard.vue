@@ -36,6 +36,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import L from 'leaflet'
 import { zoneHoverShape } from '../../utils/areaKinds'
 import { useOpenMenu } from '../../composables/useOpenMenu'
+import { useEscape } from '../../composables/useEscape'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createOneMapLayer } from '../../utils/onemap'
@@ -64,7 +65,7 @@ import {
 } from '../../utils/planFrames'
 import { readSheet, sheetFileName, sheetGaps, sheetText } from '../../utils/planSheet'
 import '../../assets/planova.css'
-import { GROUP_PALETTE } from '../../utils/groupColours'
+import { GROUP_PALETTE, textOn } from '../../utils/groupColours'
 import { useLoadGate } from '../../composables/usePageReady'
 
 const props = defineProps({
@@ -122,8 +123,8 @@ const sheetFile = ref(null)
 // groups are already here, and the artefact's Playback tab is this same picture with the clock running.
 const playhead = ref(null) // seconds from T+0 while a run is on the strip, or null
 const playing = ref(false)
-const speed = ref(60) // 1x, 10x or 60x: a thirty-minute plan at 60x is half a minute
-const PLAY_SPEEDS = [1, 10, 60]
+const speed = ref(60) // 1x, 10x, 60x or 120x: a thirty-minute plan at 60x is half a minute
+const PLAY_SPEEDS = [1, 10, 60, 120]
 let playRaf = null
 let playLast = 0
 let playDrawnAt = 0
@@ -771,23 +772,15 @@ let fitted = false
 let fittedWithFrames = false
 let zoneBounds = null
 
-const ZONE_STYLE = {
-  zone: { color: '#0b3d2e', weight: 2.5, fillOpacity: 0.6, fillColor: '#9be7c4' },
-  no_go: { color: '#c2410c', weight: 2.5, dashArray: '10 7', fillOpacity: 0.35, fillColor: '#ff8a65' },
-  obstacle: { color: '#56685f', weight: 1.5, dashArray: '3 3', fillOpacity: 0.16, fillColor: '#56685f' },
-  stage: { color: '#0a1f17', weight: 2.5, fillOpacity: 0.75, fillColor: '#c6f36b' },
-  entrance: { color: '#14523e', weight: 1.5, fillOpacity: 0.08, fillColor: '#14523e' },
-}
-
 function drawZones() {
   if (!map || !zoneLayer) return
   zoneLayer.clearLayers()
   const bounds = L.latLngBounds([])
   for (const zone of zones.value) {
     if (!zone.geojson) continue
-    // The planner reads the areas and never edits them here; a name shows only while the pointer is over a zone
+    // The planner reads the areas and never edits them here; a name shows only while the pointer is over a zone.
+    // The same colour per type as the Zones tab and the live map
     const layer = zoneHoverShape(L, zone.geojson, zone.kind, zone.name)
-    layer.setStyle(ZONE_STYLE[zone.kind] || ZONE_STYLE.zone)
     layer.addTo(zoneLayer)
     try {
       bounds.extend(layer.getBounds())
@@ -1003,9 +996,9 @@ function drawLines() {
   }
   // A fix on show: the walk it covers, and the new frames it would add along it.
   if (walkFix.value && walkFix.value.route.length > 1) {
-    L.polyline(walkFix.value.route.map((p) => [p.lat, p.lng]), { color: '#15803d', weight: 4, opacity: 0.9, interactive: false }).addTo(lineLayer)
+    L.polyline(walkFix.value.route.map((p) => [p.lat, p.lng]), { color: '#16a34a', weight: 4, opacity: 0.9, interactive: false }).addTo(lineLayer)
     for (const spot of walkFix.value.fills.flatMap((fill) => fill.spots)) {
-      L.circleMarker([spot.lat, spot.lng], { radius: 6, color: '#15803d', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(lineLayer)
+      L.circleMarker([spot.lat, spot.lng], { radius: 6, color: '#16a34a', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(lineLayer)
     }
   }
   // Warnings the planner has not dismissed, amber where an error is red; and the walk "Show on map" asked for, wide.
@@ -1020,7 +1013,7 @@ function drawLines() {
     if (problem.level === 'warning') L.polyline(line, { color: '#d97706', weight: 3, opacity: 0.95, dashArray: '2 4', interactive: false }).addTo(lineLayer)
     const spot = shown && !walkFix.value ? spotOf(problem) : null
     if (spot) {
-      L.polyline([[from.lat, from.lng], [spot.lat, spot.lng]], { color: '#15803d', weight: 3, dashArray: '6 6', interactive: false }).addTo(lineLayer)
+      L.polyline([[from.lat, from.lng], [spot.lat, spot.lng]], { color: '#16a34a', weight: 3, dashArray: '6 6', interactive: false }).addTo(lineLayer)
       L.marker([spot.lat, spot.lng], {
         interactive: false,
         keyboard: false,
@@ -1034,6 +1027,14 @@ function drawLines() {
       }).addTo(lineLayer)
     }
   }
+}
+
+// What a badge says when the pointer rests on it
+function markerText(group, point, run, other) {
+  const when = run
+    ? point.moving ? 'walking to ' + formatOffset(point.next.t_s) : 'held at ' + formatOffset(point.t_s)
+    : (point.defined ? 'set at ' : 'unchanged since ') + formatOffset(point.t_s)
+  return `${group.name} · ${when}` + (other ? ` · ${other.display_name || 'Somebody'} is editing` : '')
 }
 
 function drawMarkers() {
@@ -1070,6 +1071,7 @@ function drawMarkers() {
     if (reuse && markers.has(group.id)) {
       const there = markers.get(group.id)
       there.setLatLng([point.lat, point.lng])
+      there.setTooltipContent(markerText(group, point, run, null))
       continue
     }
     const color = colorOf.value.get(group.id) || '#0b3d2e'
@@ -1084,7 +1086,7 @@ function drawMarkers() {
     const own = run || !frame || other ? null : ownCells.value.get(cell) || null
     const icon = L.divIcon({
       className: 'pv-marker-wrap',
-      html: `<div class="pv-marker${dim ? ' is-dim' : ''}${bad ? ' is-bad' : ''}${run ? ' is-walking' : ''}${other ? ' is-busy' : ''}${own ? ' is-held' : ''}" style="background:${color}">${initials(group.name)}</div>`,
+      html: `<div class="pv-marker${dim ? ' is-dim' : ''}${bad ? ' is-bad' : ''}${run ? ' is-walking' : ''}${other ? ' is-busy' : ''}${own ? ' is-held' : ''}" style="background:${color};color:${textOn(color)}">${initials(group.name)}</div>`,
       iconSize: [26, 26],
       iconAnchor: [13, 13],
     })
@@ -1103,9 +1105,8 @@ function drawMarkers() {
       marker.on('drag', () => onGroupDrag(group.id))
       marker.on('dragend', () => endGroupDrag(group.id))
     }
-    // No hover text of its own: the group's name and its time are in the Groups list beside the map. The one thing that
-    // is not there is that somebody else has their hand on the badge.
-    if (other) marker.bindTooltip(`${group.name} · ${other.display_name || 'Somebody'} is editing`, { direction: 'top', offset: [0, -14] })
+    // Hover: the group's name and its time, and whose hand is on the badge when somebody else has it.
+    marker.bindTooltip(markerText(group, point, run, other), { direction: 'top', offset: [0, -14] })
     markers.set(group.id, marker)
     marker.addTo(markerLayer)
     // The ids a browser check holds on to. A badge is drawn by Leaflet, so it has no Vue template to put them in; the
@@ -1860,6 +1861,7 @@ function fromMenu(action) {
 }
 const inspectorTab = ref('frame') // 'frame' | 'groups'
 const renaming = ref(false)
+useEscape(() => renaming.value, () => (renaming.value = false))
 const renameValue = ref('')
 function openRename() {
   renameValue.value = plan.value ? plan.value.name : ''
@@ -1898,13 +1900,40 @@ function startDrag(frame, event) {
   // Selecting a locked frame is fine, and is all this press does: it cannot be dragged until the errors are fixed.
   if (!selectedFrames.value.every((f) => editAllowed(errors.value, f.t_s))) return
   const startX = event.clientX
+  const track = trackEl.value
+  const startScroll = track ? track.scrollLeft : 0
+  let lastX = event.clientX
+  let edgeFrame = 0
   dragState.value = { delta: 0, from_s: span.from_s, to_s: span.to_s }
-  const move = (e) => {
-    const raw = Math.round((e.clientX - startX) / pxPerSecond.value)
+  const place = () => {
+    // The strip may have scrolled under the pointer: the distance dragged includes it
+    const raw = Math.round((lastX - startX + (track ? track.scrollLeft - startScroll : 0)) / pxPerSecond.value)
     const delta = Math.max(snap(raw, SNAP_S), -span.from_s)
     dragState.value = { delta, from_s: span.from_s, to_s: span.to_s }
   }
+  // A frame dragged to the edge of the strip carries the strip with it, faster the nearer the edge (as the map does)
+  const EDGE = 48
+  const edgeScroll = () => {
+    edgeFrame = 0
+    if (!track) return
+    const rect = track.getBoundingClientRect()
+    let v = 0
+    if (lastX < rect.left + EDGE) v = -Math.ceil((rect.left + EDGE - lastX) / 4)
+    else if (lastX > rect.right - EDGE) v = Math.ceil((lastX - (rect.right - EDGE)) / 4)
+    if (!v) return
+    const before = track.scrollLeft
+    track.scrollLeft = Math.max(0, before + Math.min(Math.max(v, -40), 40))
+    if (track.scrollLeft !== before) place()
+    edgeFrame = requestAnimationFrame(edgeScroll)
+  }
+  const move = (e) => {
+    lastX = e.clientX
+    place()
+    if (!edgeFrame) edgeFrame = requestAnimationFrame(edgeScroll)
+  }
   const up = async () => {
+    if (edgeFrame) cancelAnimationFrame(edgeFrame)
+    edgeFrame = 0
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     window.removeEventListener('pointercancel', up)
@@ -2061,8 +2090,57 @@ function countLabel(n) {
 // Frames can be a second apart, and a dot is 16 px across: this is the zoom that tells them apart
 const MAX_PX_PER_SECOND = 34
 
-function zoom(factor) {
-  pxPerSecond.value = Math.min(MAX_PX_PER_SECOND, Math.max(0.08, pxPerSecond.value * factor))
+/**
+ * Zoom the strip. The view goes to what the planner is looking at: the open frame when there is one, else the cursor,
+ * else the time under the pointer (a Ctrl+wheel) or the middle of what is on screen. Without that the strip zoomed about
+ * its left edge and the frame being worked on slid out of view.
+ */
+function zoom(factor, pointerX = null) {
+  const track = trackEl.value
+  const before = pxPerSecond.value
+  const next = Math.min(MAX_PX_PER_SECOND, Math.max(0.08, before * factor))
+  if (next === before) return
+  let anchor = null // the time that stays in place, and where on screen it stays
+  if (track) {
+    const half = track.clientWidth / 2
+    if (selected.value) anchor = { t: selected.value.t_s, at: half }
+    else if (playhead.value != null) anchor = { t: playhead.value, at: half }
+    else {
+      const rect = track.getBoundingClientRect()
+      const at = pointerX != null ? pointerX - rect.left : half
+      anchor = { t: (track.scrollLeft + at - PAD_LEFT) / before, at }
+    }
+  }
+  pxPerSecond.value = next
+  if (!anchor) return
+  nextTick(() => {
+    track.scrollLeft = Math.max(0, PAD_LEFT + anchor.t * next - anchor.at)
+  })
+}
+
+/** Ctrl (or Cmd) and the wheel zooms the strip, the way the map does; a plain wheel scrolls it as before. */
+function onTrackWheel(event) {
+  if (!(event.ctrlKey || event.metaKey)) return
+  event.preventDefault()
+  zoom(event.deltaY < 0 ? 1.25 : 0.8, event.clientX)
+}
+
+// Opening a frame that is out of view (from the Problems list, an undo) brings it into view
+watch(
+  () => (selected.value ? selected.value.id : null),
+  (id) => {
+    if (id && selected.value) nextTick(() => scrollToTime(selected.value.t_s))
+  },
+)
+
+/** Keep a frame in view: the strip scrolls just far enough, and no further. */
+function scrollToTime(t_s) {
+  const track = trackEl.value
+  if (!track) return
+  const x = xOf(t_s)
+  const margin = 40
+  if (x < track.scrollLeft + margin) track.scrollLeft = Math.max(0, x - margin)
+  else if (x > track.scrollLeft + track.clientWidth - margin) track.scrollLeft = x - track.clientWidth + margin
 }
 
 // ---------- writing frames ----------
@@ -2565,10 +2643,40 @@ function onKeydown(event) {
 function deleteFromKeyboard() {
   const span = selectionSpan.value
   if (span && span.count > 1) {
-    toast('That is a stretch of frames. Open the one you want to delete first.', 'warning', 3600)
+    removeSelectedFrames()
     return
   }
   removeFrame()
+}
+
+/** Every selected frame at once, after one question, and one Undo puts them all back. A frame a copy starts at stays. */
+async function removeSelectedFrames() {
+  const doomed = selectedFrames.value.filter((f) => !isCutFrame(f))
+  if (!doomed.length) return
+  const kept = selectedFrames.value.length - doomed.length
+  const ok = await askConfirm({
+    title: `Delete ${countLabel(doomed.length)}?`,
+    message: kept ? `${countLabel(kept)} stay, because a copy starts there.` : undefined,
+    confirmText: 'Delete',
+    danger: true,
+  })
+  if (!ok) return
+  const copies = doomed.map((f) => frameCopy(f))
+  const gone = []
+  try {
+    // Latest first, so the strip is emptied from its end
+    for (const frame of [...doomed].sort((a, b) => b.t_s - a.t_s)) {
+      await api.deleteFrame(frame.id, frame.rev)
+      gone.push(copies.find((c) => c.id === frame.id))
+    }
+  } catch (error) {
+    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
+  }
+  if (gone.length) {
+    selection.value = new Set()
+    selectedId.value = null
+    edits.deletedMany(gone, `deleted ${countLabel(gone.length)}`)
+  }
 }
 
 /** Step back, then put the planner on the frame the change was about (an undone delete gives one back). */
@@ -3318,7 +3426,7 @@ watch(
           <!-- The whole plan as a file (step 23): the picker is hidden and the menu item is the product's own. -->
           <input ref="sheetFile" type="file" accept=".csv,text/csv" class="pv-file" data-testid="sheet-file" @change="onSheetPicked" />
           <button
-            class="pv-btn is-primary kb kb-ink kb-sm"
+            class="kb kb-ink kb-sm"
             data-testid="plan-publish"
             type="button"
             :disabled="busy"
@@ -3331,7 +3439,7 @@ watch(
       </div>
 
       <form v-if="creating" class="k row k2-createplan" @submit.prevent="confirmCreate">
-        <input v-model="newPlanName" class="kin" style="height: 40px; flex: 1; min-width: 160px" data-testid="plan-create-name" placeholder="Plan name" aria-label="Plan name" />
+        <input v-model="newPlanName" class="kin" style="height: 40px; flex: 1; min-width: min(160px, 100%)" data-testid="plan-create-name" placeholder="Plan name" aria-label="Plan name" />
         <button type="submit" class="kb kb-lime kb-sm" :disabled="busy || !newPlanName.trim()">Create</button>
         <button type="button" class="kb kb-ghost kb-sm" @click="creating = false">Cancel</button>
       </form>
@@ -3339,7 +3447,8 @@ watch(
 
       <!-- Rename plan: one input, the same save as always -->
       <Teleport to="body">
-        <div v-if="renaming" class="k k2-scrim" @click.self="renaming = false" @keydown.esc="renaming = false">
+        <Transition name="k2-pop">
+        <div v-if="renaming" class="k k2-scrim" @click.self="renaming = false">
           <form class="modal k2-dialog" role="dialog" aria-modal="true" aria-label="Rename plan" data-testid="rename-dialog" @submit.prevent="saveRename">
             <h3>Rename plan</h3>
             <label class="lab" for="plan-rename-input">Plan name</label>
@@ -3350,6 +3459,7 @@ watch(
             </div>
           </form>
         </div>
+        </Transition>
       </Teleport>
 
       <!-- The running plan's revision, and the warning that it moved while this page was open (step 15). -->
@@ -3390,9 +3500,7 @@ watch(
             aria-label="Dismiss"
             data-testid="plan-refusal-dismiss"
             @click="clearRefusal"
-          >
-            ×
-          </button>
+          ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
         </div>
 
         <!-- Who else is editing, and what: the stack answers "why will that badge not move?" before the planner has to
@@ -3481,11 +3589,11 @@ watch(
             <svg v-else class="ki" viewBox="0 1 24 24" aria-hidden="true"><path d="M6 11h12v10H6z"></path><path d="M8.5 11V8a3.5 3.5 0 0 1 6.9-.8"></path></svg></button>
           </template>
           <span class="k2-mini" role="group" aria-label="Zoom the time bar">
-            <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)">−</button>
-            <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)">+</button>
+            <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg></button>
+            <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"></path></svg></button>
           </span>
         </div>
-        <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }">
+        <div ref="trackEl" class="pv-track" :class="{ 'k2-track-locked': moveLock }" @wheel="onTrackWheel">
           <!-- A sweep anywhere on the strip that is not a dot selects the run it touches. -->
           <div class="pv-track-inner" :style="{ width: trackWidth + 'px' }" @pointerdown="startSweep">
             <!-- The ruler is the scrub handle: press anywhere on it and drag to move the cursor to any moment. -->
@@ -3523,7 +3631,7 @@ watch(
             ></div>
 
             <div class="pv-frames">
-              <button
+              <button type="button"
                 v-for="frame in frames"
                 :key="frame.id"
                 class="pv-frame"
@@ -3641,6 +3749,9 @@ watch(
                 <button type="button" class="k2-pillbtn" data-testid="push-60" :disabled="busy" title="1 minute later" @click="push(60)">+1m</button>
                 <button type="button" class="k2-pillbtn" data-testid="push-300" :disabled="busy" title="5 minutes later" @click="push(300)">+5m</button>
               </div>
+              <p v-if="selectionSpan.count > 1" style="margin: 14px 0 0">
+                <button type="button" class="k2-link danger" data-testid="frames-delete" :disabled="busy" @click="removeSelectedFrames">Delete {{ countLabel(selectionSpan.count) }}</button>
+              </p>
               <p v-if="selectionSpan.count === 1" style="margin: 14px 0 0">
                 <button
                   type="button"
@@ -3682,7 +3793,7 @@ watch(
                   <svg v-if="allGroupsTicked" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>
                   <svg v-else-if="selectedGroups.size" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg>
                 </button>
-                <b id="k2-selectall-label" style="font-size: 14px; cursor: pointer" @click="toggleAllGroups">{{ visibleGroups.length < shownGroups.length ? 'Select the ' + visibleGroups.length + ' showing' : 'Select all' }}</b>
+                <button id="k2-selectall-label" type="button" class="k2-selectall" @click="toggleAllGroups">{{ visibleGroups.length < shownGroups.length ? 'Select the ' + visibleGroups.length + ' showing' : 'Select all' }}</button>
               </div>
               <p v-if="!visibleGroups.length" class="k2-hint" data-testid="group-none-match">No group matches.</p>
               <div class="k2-gscroll" data-testid="group-scroll">
@@ -3697,7 +3808,7 @@ watch(
                     :aria-label="'Select ' + group.name"
                     @click="toggleGroup(group.id)"
                   ><svg v-if="isGroupSelected(group.id)" class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></button>
-                  <span class="pv-marker k2-rowmarker" :style="{ background: colorOf.get(group.id) }" aria-hidden="true" data-testid="group-row-marker">{{ initials(group.name) }}</span>
+                  <span class="pv-marker k2-rowmarker" :style="{ background: colorOf.get(group.id), color: textOn(colorOf.get(group.id)) }" aria-hidden="true" data-testid="group-row-marker">{{ initials(group.name) }}</span>
                   <b class="text-truncate" style="font-size: 14px; flex: 1; min-width: 0">{{ group.name }}</b>
                   <span class="mut" style="font-size: 12px; font-weight: 700">{{ stateWord(framePosition(selected, group.id)) }}</span>
                 </div>
@@ -3770,7 +3881,7 @@ watch(
             At each moment you set where every group is, and the app works out the walk in between.<template v-if="props.canEdit"> Add the first frame, then place each group on the map.</template>
           </p>
           <div v-if="props.canEdit" class="pv-stack">
-            <button class="pv-btn is-primary" data-testid="frame-add-first" :disabled="busy" @click="addFrame">
+            <button type="button" class="pv-btn is-primary" data-testid="frame-add-first" :disabled="busy" @click="addFrame">
               Add the first frame
             </button>
           </div>

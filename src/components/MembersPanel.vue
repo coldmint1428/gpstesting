@@ -17,7 +17,7 @@ import { setGroupIC } from '../services/memberService'
 import BenchAlert from './BenchAlert.vue'
 import EmptyState from './EmptyState.vue'
 import { askConfirm, toast } from '../composables/useNotify'
-import { nextGroupColour, textOn } from '../utils/groupColours'
+import { nextGroupColour, textOn, NO_GROUP_COLOUR } from '../utils/groupColours'
 
 const props = defineProps({
   eventId: { type: String, required: true },
@@ -42,7 +42,7 @@ const openGroup = computed(() => {
   if (props.onlyGroupId) return shownGroups.value[0] || null
   const id = route.query.group
   if (!id) return null
-  if (id === 'none') return props.canManage ? { id: 'none', name: 'No group', colour: '#6c757d' } : null
+  if (id === 'none') return props.canManage ? { id: 'none', name: 'No group', colour: NO_GROUP_COLOUR } : null
   return shownGroups.value.find((g) => g.id === id) || null
 })
 // Planners run the whole event and are never in a group (036), so they are not "without a group" either
@@ -167,7 +167,7 @@ async function toggleIC(m, box) {
 // ---------- Rename / recolour the open group (root / planners, update_group 035) ----------
 const editingGroup = ref(false)
 const editName = ref('')
-const editColour = ref('#0d6efd')
+const editColour = ref('#0072B2')
 function startEditGroup() {
   editName.value = openGroup.value.name
   editColour.value = openGroup.value.colour
@@ -201,7 +201,7 @@ const myAdminGroupId = computed(() => (props.me && props.me.isAdmin ? props.me.g
 
 function groupColour(groupId) {
   const g = props.groups.find((x) => x.id === groupId)
-  return g ? g.colour : '#6c757d'
+  return g ? g.colour : NO_GROUP_COLOUR
 }
 
 // Run one database action, show its error, then tell the parent to reload
@@ -491,10 +491,10 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                 <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
               </select>
               <!-- Group admin: add to / remove from own group -->
-              <button v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="assignGroup(m, myAdminGroupId)">Add</button>
-              <button v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-ghost" :disabled="busy" @click="removeFromMyGroup(m)">Remove</button>
+              <button type="button" v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="assignGroup(m, myAdminGroupId)">Add</button>
+              <button type="button" v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-ghost" :disabled="busy" @click="removeFromMyGroup(m)">Remove</button>
 
-              <button v-if="canStopSharing(m)" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'stop-sharing-' + m.username" @click="stopSharing(m)">Stop sharing</button>
+              <button type="button" v-if="canStopSharing(m)" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'stop-sharing-' + m.username" @click="stopSharing(m)">Stop sharing</button>
             </div>
           </li>
         </ul>
@@ -510,7 +510,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           <input v-model="newGroupName" class="form-control" placeholder="New group name" maxlength="50" required aria-label="Group name" data-testid="new-group-name" />
           <button class="btn btn-primary" type="submit" :disabled="busy" data-testid="create-group-btn">Add</button>
         </form>
-        <button v-if="groups.length" class="btn btn-sm btn-ghost" data-testid="group-details-btn" @click="openDetails">
+        <button type="button" v-if="groups.length" class="btn btn-sm btn-ghost" style="margin-left: auto" data-testid="group-details-btn" @click="openDetails">
           {{ showDetails ? 'Hide details' : 'Edit all details' }}
         </button>
       </div>
@@ -544,7 +544,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                 <td data-label="Radio"><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
                 <td class="text-nowrap">
                   <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
-                  <button v-else class="btn btn-sm btn-outline-secondary" :disabled="busy || !detailsChanged(g)" data-testid="gd-save" @click="saveDetails(g)">Save</button>
+                  <button type="button" v-else class="btn btn-sm btn-outline-secondary" :disabled="busy || !detailsChanged(g)" data-testid="gd-save" @click="saveDetails(g)">Save</button>
                 </td>
               </tr>
             </tbody>
@@ -596,7 +596,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
             <dd>{{ c.adminNames }}</dd>
           </dl>
           <div class="kp-group-foot">
-            <span v-for="m in c.preview" :key="m.id" class="kp-av kp-av-sm" :style="{ backgroundColor: c.g.colour, color: '#fff' }" :title="m.display_name" aria-hidden="true">{{ initials(m.display_name) }}</span>
+            <span v-for="m in c.preview" :key="m.id" class="kp-av kp-av-sm" :style="{ backgroundColor: c.g.colour, color: textOn(c.g.colour) }" :title="m.display_name" aria-hidden="true">{{ initials(m.display_name) }}</span>
             <span v-if="c.more" class="small text-muted">+{{ c.more }}</span>
             <span v-if="c.live" class="small ms-auto fw-bold" :class="c.allSharing ? 'text-success' : 'text-warning'">{{ c.sharingText }}</span>
           </div>

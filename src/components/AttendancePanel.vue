@@ -131,7 +131,22 @@ watch(
     }
   },
 )
-const qrBar = computed(() => (qrShown.value ? Math.round((qrShown.value.secondsLeft / 5) * 100) : 0))
+// The bar runs smoothly from full to empty over the life of each code. It restarts with every new code (the element is
+// keyed by the code's text); the animation is set once per code, from how much of the 5 seconds was left when it was
+// first seen, so it does not jump on every tick of the countdown.
+const QR_LIFE_S = 5
+const qrSeenLeft = ref(QR_LIFE_S)
+watch(
+  () => (qrShown.value ? qrShown.value.text : ''),
+  () => {
+    qrSeenLeft.value = Math.min(QR_LIFE_S, qrShown.value ? qrShown.value.secondsLeft : QR_LIFE_S)
+  },
+  { immediate: true, flush: 'sync' },
+)
+const qrBarStyle = computed(() => ({
+  animationDuration: qrSeenLeft.value + 's',
+  animationDelay: '0s',
+}))
 const big = ref(false) // the QR full screen, easier to scan from a few steps away
 
 const newTitle = ref('')
@@ -217,7 +232,7 @@ const history = computed(() =>
         <input id="att-mode-qr" v-model="modeChoice" type="radio" value="qr" :disabled="busy" data-testid="attendance-mode-qr" @change="$emit('set-mode', 'qr')" />
         <label for="att-mode-qr">QR code</label>
       </div>
-      <span class="small text-muted">{{ modeChoice === 'qr' ? 'Everyone scans the IC’s screen. The code changes every 5 s.' : 'The IC ticks who is there.' }}</span>
+      <span class="small text-muted">{{ modeChoice === 'qr' ? 'Everyone scans the IC’s screen. The code changes every 5 seconds.' : 'The IC ticks who is there.' }}</span>
     </section>
 
     <!-- ========== My group's roll call (anyone in a group who does not run it) ========== -->
@@ -294,7 +309,7 @@ const history = computed(() =>
           <img v-if="qrImage" :src="qrImage" alt="Attendance QR code: scan it with the app" class="kp-qr-img" data-testid="attendance-qr" />
           <div v-else class="kp-qr-img kp-qr-wait">Loading…</div>
           <div class="progress kp-qr-bar" role="progressbar" :aria-valuenow="qrShown ? qrShown.secondsLeft : 0" aria-valuemin="0" aria-valuemax="5" aria-label="Seconds until the QR code changes">
-            <div class="progress-bar" :style="{ width: qrBar + '%' }"></div>
+            <div v-if="qrShown" :key="qrShown.text" class="progress-bar kp-qr-run" :style="qrBarStyle"></div>
           </div>
           <div class="small text-muted">{{ roster.present.length }} of {{ rosterTotal }} present</div>
           <div class="kp-actions">
@@ -312,7 +327,7 @@ const history = computed(() =>
           <div>
             <h3 class="kp-label">Not yet</h3>
             <p v-if="!roster.waiting.length" class="small text-success">Everyone is marked.</p>
-            <ul class="kp-list">
+            <ul class="kp-list k2-longlist">
               <li v-for="w in roster.waiting" :key="w.m.id" class="kp-row py-2" :data-testid="'att-waiting-' + w.m.username">
                 <span class="me-auto text-truncate">{{ w.m.display_name }}</span>
                 <template v-if="canMark">
@@ -324,7 +339,7 @@ const history = computed(() =>
           </div>
           <div>
             <h3 class="kp-label">Present</h3>
-            <ul class="kp-list">
+            <ul class="kp-list k2-longlist">
               <li v-for="p in roster.present" :key="p.m.id" class="kp-row py-2" :data-testid="'att-present-' + p.m.username">
                 <span class="text-success" aria-hidden="true">✓</span>
                 <span class="me-auto text-truncate">{{ p.m.display_name }}</span>
@@ -334,7 +349,7 @@ const history = computed(() =>
             </ul>
             <template v-if="roster.excused.length">
               <h3 class="kp-label mt-3">Excused</h3>
-              <ul class="kp-list">
+              <ul class="kp-list k2-longlist">
                 <li v-for="x in roster.excused" :key="x.m.id" class="kp-row py-2">
                   <span class="me-auto text-truncate">{{ x.m.display_name }}</span>
                   <button v-if="canMark" type="button" class="btn btn-sm btn-ghost" :disabled="busy" @click="mark(x.m, null)">Undo</button>
@@ -368,7 +383,7 @@ const history = computed(() =>
     <section class="kp-card" data-testid="attendance-history">
       <h2 class="kp-title mb-2">Past roll calls</h2>
       <p v-if="!history.length" class="text-muted mb-0">None yet.</p>
-      <ul v-else class="kp-list">
+      <ul v-else class="kp-list k2-longlist">
         <li v-for="h in history" :key="h.r.id" class="kp-row">
           <span class="kp-dot" :style="{ backgroundColor: h.group.colour }" aria-hidden="true"></span>
           <div class="kp-row-main">

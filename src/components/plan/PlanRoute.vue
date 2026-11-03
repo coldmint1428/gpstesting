@@ -38,8 +38,9 @@ import L from 'leaflet'
 import { venueBounds } from '../../utils/venueFrame'
 import 'leaflet/dist/leaflet.css'
 import { createSingaporeMap } from '../../utils/onemap'
-import { areaStyle, zoneHoverShape } from '../../utils/areaKinds'
+import { zoneHoverShape } from '../../utils/areaKinds'
 import { escapeHtml } from '../../utils/people'
+import { textOn, NO_GROUP_COLOUR } from '../../utils/groupColours'
 import { stopsOf, walksOf, whereAt } from '../../utils/planWalk'
 import { formatDayTime, formatDuration, formatTime } from '../../utils/time'
 import { usePlanWalk } from '../../composables/usePlanWalk'
@@ -100,8 +101,8 @@ const phase = computed(() => {
   return 'live'
 })
 const phaseWord = computed(() => {
-  if (phase.value === 'live' && !isLive.value) return 'not live'
-  return { none: 'not started', live: 'live', scheduled: 'scheduled', ended: 'ended' }[phase.value]
+  if (phase.value === 'live' && !isLive.value) return 'Not live'
+  return { none: 'Not started', live: 'Live', scheduled: 'Scheduled', ended: 'Ended' }[phase.value]
 })
 // What the event header calls live (useEventSessions): a session whose scheduled end has passed is no longer live.
 const isLive = computed(() => {
@@ -182,7 +183,7 @@ const nextIn = computed(() => {
 
 function colourOf(groupId) {
   const group = props.groups.find((g) => g.id === groupId)
-  return (group && group.colour) || '#244f3f'
+  return (group && group.colour) || NO_GROUP_COLOUR
 }
 
 /**
@@ -221,11 +222,15 @@ function stopName(stop) {
   return stop.name || (pin || stop.number ? 'Stop ' + (pin || stop.number) : '')
 }
 
-/** What a dot says. Live: its clock time and its place, or the time alone at a route point. Static: just its place. */
+const CROWDED_PINS = 12
+const crowded = ref(false)
+
+/** What a dot says: its clock time beside it always, and its place when a planner named it (the number says the rest). */
 function dotText(track, stop) {
   const parts = props.whole ? [track.name] : []
-  if (isLive.value) parts.push(formatTime(stop.point.planned_at))
-  if (stop.name || !isLive.value) parts.push(stopName(stop))
+  const at = stop.point.planned_at
+  if (at) parts.push(formatTime(at))
+  if (stop.name || !at) parts.push(stopName(stop))
   return parts.join(' · ')
 }
 
@@ -258,6 +263,11 @@ function draw() {
   routeLayer.clearLayers()
   dotLayer.clearLayers()
 
+  // Every dot carries its time and place beside it, until there are so many that the labels would bury the map: then
+  // the labels go and one hover box (below) says the same thing. Never both.
+  let pins = 0
+  for (const track of tracks.value.values()) for (const stop of track.stops) if (stop.kind === 'place') pins++
+  crowded.value = pins > CROWDED_PINS
   for (const track of tracks.value.values()) {
     for (const run of track.runs) {
       if (run.length < 2) continue
@@ -290,7 +300,7 @@ function draw() {
       const icon = L.divIcon({
         className: 'pv-route-pin',
         html:
-          `<span class="${classes.join(' ')}" style="--pv-dot:${track.colour}"` +
+          `<span class="${classes.join(' ')}" style="--pv-dot:${track.colour};--pv-dot-ink:${textOn(track.colour)}"` +
           ` data-testid="route-dot" data-group="${track.id}" data-t="${row.t_s}">` +
           `<span class="pv-route-dot-mark">${(props.pinNumbers && props.pinNumbers.get(track.id + '|' + row.frame_id)) || stop.number}</span>` +
           `<span class="pv-route-dot-label" data-testid="route-dot-label">${escapeHtml(dotText(track, stop))}</span>` +
@@ -300,8 +310,8 @@ function draw() {
       })
       // Later stops stand on top of earlier ones, as they would in the plan
       const order = (props.pinNumbers && props.pinNumbers.get(track.id + '|' + row.frame_id)) || stop.number || 0
-      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, title: dotText(track, stop), zIndexOffset: order * 100 })
-      marker.bindTooltip(dotText(track, stop), { direction: 'top', offset: [0, -12] })
+      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: order * 100 })
+      if (crowded.value) marker.bindTooltip(dotText(track, stop), { direction: 'top', offset: [0, -12] })
       marker.addTo(dotLayer)
     }
   }
@@ -349,7 +359,15 @@ function showMoment(t_s, groupId) {
 
 watch(() => props.pinNumbers, () => draw())
 
-defineExpose({ showMoment, zones })
+/** Undo showMoment: no moment picked, and the map back on the whole route. */
+function clearMoment() {
+  shownT = null
+  draw()
+  fittedWithPoints = false
+  fit()
+}
+
+defineExpose({ showMoment, clearMoment, zones })
 
 /** Open on the moment the schedule's link named, once, and mark it. */
 function applyFocus() {
@@ -447,7 +465,7 @@ watch(
 
 <template>
   <div class="pv">
-    <section class="pv-route" :class="{ 'is-embedded': embedded }" data-testid="plan-route">
+    <section class="pv-route" :class="{ 'is-embedded': embedded, 'is-crowded': crowded }" data-testid="plan-route">
       <header v-if="!embedded" class="pv-route-head">
         <div class="pv-route-id">
           <h2 class="pv-route-title">{{ whole ? 'The route' : 'Your route' }}</h2>

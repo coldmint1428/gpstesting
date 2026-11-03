@@ -64,10 +64,10 @@
   --signal-tint: #fdf0dc; /* behind live things only */
   --mint: #8fd3bf; /* links and accents on dark chrome */
   --attention-ring: #14201b; /* "needs attention", the same on every map and list */
-  --font-ui: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Bricolage Grotesque', Inter, system-ui, sans-serif;
-  --font-brand: 'Bricolage Grotesque', Inter, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-ui: var(--font-body);
+  --font-display: Unbounded, 'Arial Black', system-ui, sans-serif;
+  --font-brand: var(--font-display);
+  --font-mono: var(--font-body);
 }
 
 /* The phone app uses the website's type since 2 Nov (kinetic-tokens.css: Unbounded and Manrope) */
@@ -124,7 +124,6 @@ html .btn-outline-warning {
 /* Website headlines: Bricolage Grotesque. The plan board (.pv) keeps its own type. */
 html:not(.native-app) h1,
 html:not(.native-app) .h1,
-html:not(.native-app) .ev-title,
 html:not(.native-app) .pl-h-page {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
@@ -133,8 +132,7 @@ html:not(.native-app) .pl-h-page {
   font-family: var(--font-ui);
 }
 .mono,
-.show-num,
-.ops-num {
+.show-num {
   font-family: var(--font-mono);
 }
 
@@ -149,27 +147,6 @@ html:not(.native-app) .pl-h-page {
   50% {
     transform: scale(0.65);
     opacity: 0.55;
-  }
-}
-html .ev-chip-live {
-  background: #14201b !important;
-  color: #ffffff !important;
-  border-color: #14201b !important;
-}
-html .ev-chip-live::before {
-  content: '';
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 6px;
-  border-radius: 999px;
-  background: var(--signal);
-  vertical-align: 1px;
-  animation: planova-live-pulse 1.6s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  html .ev-chip-live::before {
-    animation: none;
   }
 }
 
@@ -274,10 +251,6 @@ html .pl-live {
 }
 
 /* Side rail "LIVE" (was red) and the plan board's "live" tag (was green): marigold with ink text */
-html .ev-nav-badge-live {
-  background: var(--signal);
-  color: #14201b;
-}
 html .pv .pv-badge.is-live {
   background: #14201b;
   color: #ffffff;

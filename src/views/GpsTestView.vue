@@ -125,7 +125,32 @@ onMounted(() => {
 
   // Already sharing (started on the event page)? Show where I am straight away
   if (current.value) updateMap(current.value.lat, current.value.lng, current.value.accuracy)
+  else zoomToMe()
 })
+
+// Before the first shared reading (or when not sharing at all) the map still opens on me: one look at the device's
+// position, only when the browser has already been allowed to give it -- opening this page must not raise a prompt.
+async function zoomToMe() {
+  if (!navigator.geolocation) return
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      const status = await navigator.permissions.query({ name: 'geolocation' })
+      if (status.state !== 'granted') return
+    } else {
+      return
+    }
+  } catch {
+    return
+  }
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      if (!map || marker) return // a shared reading got there first
+      updateMap(position.coords.latitude, position.coords.longitude, position.coords.accuracy)
+    },
+    () => {},
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+  )
+}
 
 // Leaving this page does NOT stop sharing - the tracker is shared by the whole app
 onUnmounted(() => {
@@ -145,14 +170,16 @@ function updateMap(lat, lng, accuracy) {
       radius: 8,
       color: '#fff',
       weight: 2,
-      fillColor: '#0d6efd',
+      fillColor: '#0072B2',
       fillOpacity: 1,
     }).addTo(map)
-    map.setView([lat, lng], 17)
+    map.setView([lat, lng], Math.max(map.getZoom(), 17))
   } else {
     marker.setLatLng([lat, lng])
     accuracyCircle.setLatLng([lat, lng])
     accuracyCircle.setRadius(accuracy)
+    // Keep me in view: if I have walked out of the map's frame, it follows
+    if (!map.getBounds().pad(-0.2).contains([lat, lng])) map.panTo([lat, lng])
   }
 }
 </script>
@@ -163,8 +190,8 @@ function updateMap(lat, lng, accuracy) {
       <RouterLink :to="{ name: 'event', params: { id } }" class="kp-back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>Back to event</RouterLink>
       <div class="kp-head mb-0">
         <h1>My GPS</h1>
-        <button v-if="!sharingHere" class="btn btn-success" :disabled="!canShare" data-testid="start-btn" @click="startSharing">Start sharing</button>
-        <button v-else class="btn btn-outline-danger" data-testid="stop-btn" @click="stop">Stop sharing</button>
+        <button type="button" v-if="!sharingHere" class="btn btn-success" :disabled="!canShare" data-testid="start-btn" @click="startSharing">Start sharing</button>
+        <button type="button" v-else class="btn btn-outline-danger" data-testid="stop-btn" @click="stop">Stop sharing</button>
       </div>
       <div class="kp-inline mt-1" style="flex-wrap: wrap">
         <span v-if="event" class="small text-muted" data-testid="share-context">{{ event.name }}<span v-if="myGroup"> · {{ myGroup.name }}</span></span>
@@ -186,7 +213,7 @@ function updateMap(lat, lng, accuracy) {
       <div class="kp-stack">
         <section class="kp-card">
           <h2 class="kp-title mb-2">Position</h2>
-          <p v-if="!current" class="text-muted mb-0" data-testid="no-reading">{{ isTracking ? 'Waiting for first reading...' : 'Press Start sharing.' }}</p>
+          <p v-if="!current" class="text-muted mb-0" data-testid="no-reading">{{ isTracking ? 'Waiting for first reading…' : 'Press Start sharing.' }}</p>
           <dl v-else class="kp-dl kp-mono">
             <dt>Latitude</dt>
             <dd data-testid="current-lat">{{ current.lat.toFixed(6) }}</dd>
@@ -222,7 +249,7 @@ function updateMap(lat, lng, accuracy) {
             <label for="tolerance-input" class="visually-hidden">Arrival radius in metres</label>
             <input id="tolerance-input" v-model.number="tolerance" type="number" min="5" max="100" step="5" class="form-control form-control-sm" style="flex: 0 0 6rem" data-testid="tolerance-input" />
             <span class="small text-muted me-auto">metres</span>
-            <button class="btn btn-sm btn-primary" :disabled="tolSaving || !tolDirty" data-testid="tolerance-save" @click="saveTolerance">Save</button>
+            <button type="button" class="btn btn-sm btn-primary" :disabled="tolSaving || !tolDirty" data-testid="tolerance-save" @click="saveTolerance">Save</button>
           </div>
           <p v-if="tolMsg" class="small mb-0 mt-2" :class="tolOk ? 'text-success' : 'text-danger'" data-testid="tolerance-msg">{{ tolMsg }}</p>
         </section>

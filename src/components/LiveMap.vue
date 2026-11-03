@@ -47,7 +47,7 @@ import { initials, escapeHtml, timeAgo, freshness } from '../utils/people'
 import BenchAlert from './BenchAlert.vue'
 import { formatTime, formatTimeSeconds } from '../utils/time'
 import { areaStyle, zoneHoverShape } from '../utils/areaKinds'
-import { textOn } from '../utils/groupColours'
+import { textOn, NO_GROUP_COLOUR } from '../utils/groupColours'
 
 const props = defineProps({
   peopleTo: { type: String, default: null }, // website: the side panel the people list is shown in
@@ -124,7 +124,7 @@ const people = computed(() =>
         name: member ? member.display_name : 'Unknown',
         username: member ? member.username : '',
         groupName: group ? group.name : '-',
-        colour: group ? group.colour : '#6c757d',
+        colour: group ? group.colour : NO_GROUP_COLOUR,
         state: freshness(p.time, now.value, p.source),
       }
     })
@@ -418,7 +418,7 @@ async function loadTrail(userId) {
 function selectedColour() {
   const p = positions.value[selectedId.value]
   const g = p ? groupOf(p.groupId) : null
-  return g ? g.colour : '#0072B2'
+  return g ? g.colour : NO_GROUP_COLOUR
 }
 
 // Called every frame for the selected person: the trail ends exactly at the marker
@@ -469,7 +469,7 @@ function drawTrailBody(track) {
     lastDot = p.t
     const dot = L.circleMarker([p.lat, p.lng], {
       radius: isStart ? 6 : 4,
-      color: isStart ? '#198754' : colour,
+      color: isStart ? '#16a34a' : colour,
       weight: 2,
       fillColor: '#fff',
       fillOpacity: 1,
@@ -624,7 +624,7 @@ function drawSos() {
       existing.circle.setLatLng(at).setRadius(s.accuracy || 0)
       continue
     }
-    const circle = L.circle(at, { radius: s.accuracy || 0, color: '#dc3545', weight: 1, fillOpacity: 0.12, interactive: false }).addTo(sosLayer)
+    const circle = L.circle(at, { radius: s.accuracy || 0, color: '#C2410C', weight: 1, fillOpacity: 0.12, interactive: false }).addTo(sosLayer)
     const marker = L.marker(at, {
       icon: L.divIcon({ className: '', html: '<div class="sos-pin">SOS</div>', iconSize: [44, 44], iconAnchor: [22, 22] }),
       zIndexOffset: 10000, // above every person and group
@@ -700,7 +700,8 @@ function refreshZoneState() {
   const occupied = new Set(props.noGoOccupied)
   for (const [id, entry] of Object.entries(zoneShapes)) {
     const alarm = occupied.has(id)
-    entry.shape.setStyle(alarm ? { ...areaStyle(entry.kind), weight: 4, fillOpacity: 0.45, dashArray: null } : areaStyle(entry.kind))
+    const style = areaStyle(entry.kind)
+    entry.shape.setStyle(alarm ? { ...style, weight: 4, fillOpacity: 0.45, dashArray: null } : style)
   }
 }
 
@@ -735,6 +736,7 @@ const plan = usePlanWalk({
 })
 const showPlan = ref(true) // a layer, not a preference: not remembered across a reload (the same as Zones)
 let planLayer = null
+let arrivalLayer = null // a group's badge at the stop it arrived at, while it has no GPS
 
 const planWalks = computed(() => walksOf(plan.rows.value))
 const planRev = computed(() => {
@@ -762,6 +764,58 @@ const legKey = computed(() => {
   return parts.join('|')
 })
 
+// ---------- "We're here" with no GPS ----------
+// An IC who presses We're here has said where the group is. While nobody in the group is sending a position (no fix, or
+// none for a minute), the group's badge stands at the stop that was just arrived at, so the map does not lose the group.
+const FIX_FRESH_MS = 60000
+function hasFix(groupId) {
+  const gp = props.groupPositions[groupId]
+  return !!(gp && gp.icsSharing > 0 && gp.lastSeen && props.now - gp.lastSeen.getTime() < FIX_FRESH_MS)
+}
+/** Per group, the stop it last arrived at while it has no fix: { group, row (the arrival), at (the stop's point) }. */
+const arrivals = computed(() => {
+  const out = []
+  for (const walk of planWalks.value.values()) {
+    if (hasFix(walk.id)) continue
+    let arrived = -1
+    walk.rows.forEach((row, i) => {
+      if (row.state === 'arrived') arrived = i
+    })
+    if (arrived < 0) continue
+    let point = null
+    for (let i = arrived; i >= 0; i--) {
+      if (walk.rows[i].lat != null) {
+        point = walk.rows[i]
+        break
+      }
+    }
+    if (point) out.push({ id: walk.id, row: walk.rows[arrived], point })
+  }
+  return out
+})
+const arrivalKey = computed(() => arrivals.value.map((a) => a.id + '@' + a.row.frame_id).join('|'))
+
+function drawArrivals() {
+  if (!arrivalLayer) return
+  arrivalLayer.clearLayers()
+  for (const a of arrivals.value) {
+    const group = groupOf(a.id)
+    const colour = group ? group.colour : NO_GROUP_COLOUR
+    const name = group ? group.name : 'A group'
+    const when = a.row.marked_at ? ' at ' + formatTime(a.row.marked_at) : ''
+    const icon = L.divIcon({
+      className: 'pv-marker-wrap',
+      html: `<div class="pv-marker" style="background:${colour};color:${textOn(colour)}">${escapeHtml(initials(name))}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+    })
+    const marker = L.marker([a.point.lat, a.point.lng], { icon, keyboard: false, zIndexOffset: 400 })
+    marker.bindTooltip(escapeHtml(name) + ' · arrived' + when + ' (no GPS)', { direction: 'top', offset: [0, -14] })
+    marker.addTo(arrivalLayer)
+  }
+}
+watch([arrivalKey, () => props.groups], drawArrivals, { flush: 'post' })
+
 /**
  * Draw the walk, or clear it. A run is a dashed line in the group's colour at 55 %; the leg the clock is on is the same
  * line again, bold and solid, over it -- the stretch the group is meant to be walking right now. Every path says which
@@ -774,7 +828,7 @@ function drawPlan() {
   if (!showPlan.value) return
   for (const walk of planWalks.value.values()) {
     const group = groupOf(walk.id)
-    const colour = group ? group.colour : '#244f3f'
+    const colour = group ? group.colour : NO_GROUP_COLOUR
     for (const run of walk.runs) {
       if (run.length < 2) continue
       const line = L.polyline(run, {
@@ -841,6 +895,7 @@ onMounted(() => {
   map = createSingaporeMap(mapEl.value)
   zoneLayer = L.layerGroup().addTo(map) // under the trail and the markers
   planLayer = L.layerGroup().addTo(map) // the plan's walk: over the zones, under the people and their trails
+  arrivalLayer = L.layerGroup().addTo(map) // groups that arrived with no GPS
   trailLayer = L.layerGroup().addTo(map)
   sosLayer = L.layerGroup().addTo(map) // last: on top
   watchZones()
@@ -896,7 +951,7 @@ onUnmounted(() => {
       <!-- Shown while following someone (on top of the map) -->
       <div v-if="followedId" class="follow-bar shadow-sm" data-testid="follow-bar">
         <span class="text-truncate">Following <strong>{{ followedName }}</strong></span>
-        <button class="btn btn-sm btn-outline-secondary py-0" data-testid="stop-follow-btn" @click="stopFollowing">Stop</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary py-0" data-testid="stop-follow-btn" @click="stopFollowing">Stop</button>
       </div>
       <!-- Website: the Zones and Plan toggles and the legend float on the map -->
       <div v-if="peopleTo && (zoneCount || planLine)" class="k kfloat k2-maptogs">
@@ -905,15 +960,15 @@ onUnmounted(() => {
       </div>
       <!-- What the marker styles mean -->
       <div :class="peopleTo ? 'k k2-legend k2-maplegend' : 'd-flex flex-wrap gap-3 small text-muted mt-3'" data-testid="map-legend">
-        <span><span class="dot d-inline-block align-middle me-1" style="background-color: #0072B2"></span>Live</span>
-        <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: #0072B2"></span>No update 2–10 min</span>
+        <span><span class="dot d-inline-block align-middle me-1" style="background-color: var(--ink)"></span>Live</span>
+        <span><span class="dot dot-stale d-inline-block align-middle me-1" style="background-color: var(--ink)"></span>No update 2–10 min</span>
         <span><span class="dot dot-offline d-inline-block align-middle me-1"></span>Lost contact 10+ min</span>
         <span><span class="dot dot-stopped d-inline-block align-middle me-1"></span>Stopped sharing</span>
         <!-- The plan under the people (step 30): what a dashed line is, and which one is loud. -->
         <span v-if="planLine" data-testid="map-plan-legend">
           <span class="plan-swatch" aria-hidden="true"></span>Plan · bold is due now
         </span>
-        <span v-if="sosAlerts.length" class="text-danger fw-semibold"><span class="dot d-inline-block align-middle me-1" style="background-color: #dc3545"></span>SOS</span>
+        <span v-if="sosAlerts.length" class="text-danger fw-semibold"><span class="dot d-inline-block align-middle me-1" style="background-color: var(--danger)"></span>SOS</span>
         <label v-if="!peopleTo && zoneCount" class="form-check form-check-inline mb-0 ms-auto" data-testid="zones-toggle">
           <input v-model="showZones" class="form-check-input" type="checkbox" />
           <span class="form-check-label">Zones ({{ zoneCount }})</span>

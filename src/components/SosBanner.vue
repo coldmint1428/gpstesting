@@ -4,7 +4,8 @@
 //   Others'    : who needs help and where, "Show on map", "I'm on my way", and "Mark handled" for the people who may
 //                end it (root, planners, and an IC or admin of the person's group).
 // It only shows things and emits what was pressed; the event page (EventView.vue) calls the database.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import ExpandTransition from './ExpandTransition.vue'
 import { timeAgo } from '../utils/people'
 
 const props = defineProps({
@@ -41,6 +42,14 @@ const others = computed(() =>
     }),
 )
 
+// An SOS is never hidden. With more than two at once the two oldest stay in view, the rest open from one line, and the
+// list scrolls inside its own box.
+const SHOWN = 2
+const sosOpen = ref(false)
+const firstOthers = computed(() => others.value.slice(0, SHOWN))
+const shownOthers = computed(() => (sosOpen.value ? others.value : firstOthers.value))
+const laterCount = computed(() => Math.max(0, others.value.length - SHOWN))
+
 const myHelpers = computed(() => (props.mine ? props.mine.helpers.map((h) => h.name).join(', ') : ''))
 const myGpsText = computed(() => {
   if (props.gps === 'on') return 'Your location is being sent.'
@@ -50,7 +59,7 @@ const myGpsText = computed(() => {
 </script>
 
 <template>
-  <div v-if="mine || others.length" class="kp-stack" style="gap: 8px" data-testid="sos-banners">
+  <div v-if="mine || others.length" class="kp-stack k2-notice-pile" style="gap: 8px; margin-bottom: 14px" data-testid="sos-banners">
     <!-- My SOS -->
     <div v-if="mine" class="kp-banner kp-banner-danger" role="alert" aria-live="assertive" data-testid="sos-mine">
       <div class="kp-banner-text">
@@ -64,7 +73,8 @@ const myGpsText = computed(() => {
     </div>
 
     <!-- Other people's SOS -->
-    <div v-for="o in others" :key="o.a.id" class="kp-banner kp-banner-danger" role="alert" aria-live="assertive" :data-testid="'sos-' + o.a.id">
+    <div class="kp-stack sb-list" :class="{ 'sb-scroll': sosOpen && others.length > SHOWN }" style="gap: 8px">
+    <div v-for="o in shownOthers" :key="o.a.id" class="kp-banner kp-banner-danger" role="alert" aria-live="assertive" :data-testid="'sos-' + o.a.id">
       <div class="kp-banner-text">
         <strong>SOS: {{ o.name }} needs help</strong><span v-if="o.group"> · {{ o.group }}</span>
         <span class="small"> · {{ o.ago }}</span>
@@ -78,5 +88,18 @@ const myGpsText = computed(() => {
         <button v-if="o.canResolve" type="button" class="btn btn-sm btn-ghost" :disabled="busy" data-testid="sos-resolve" @click="$emit('resolve', o.a.id)">Mark handled</button>
       </div>
     </div>
+    </div>
+    <button v-if="laterCount" type="button" class="btn btn-sm btn-outline-danger align-self-start" :aria-expanded="sosOpen ? 'true' : 'false'" data-testid="sos-more" @click="sosOpen = !sosOpen">
+      {{ sosOpen ? 'Show fewer SOS' : laterCount + ' more SOS ' + (laterCount === 1 ? 'alert' : 'alerts') }}
+    </button>
   </div>
 </template>
+
+<style scoped>
+.sb-scroll {
+  max-height: min(50vh, 400px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+}
+</style>

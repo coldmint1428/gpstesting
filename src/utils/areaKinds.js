@@ -1,18 +1,20 @@
 // The five area types, and everything the page derives from them.
 //
 // A type decides an area's colour and icon -- there is no colour picker, because the
-// type IS the meaning. That keeps the map and the list from ever disagreeing.
+// type IS the meaning. That keeps the map and the list from ever disagreeing. Each type has a colour of its own, used
+// for the outline, the fill and the name label on every map: Zone grey, No-Go red, Obstacle orange, Stage blue,
+// Entrance green.
 //
 // IMPORTANT: the same five values are listed in supabase/migrations/005_layouts.sql
 // (inside public.area_ok). Adding a type here without adding it there means saves start
 // failing with "The layout data is not valid".
 
 export const AREA_KINDS = [
-  { value: 'zone', label: 'Zone', colour: '#0B3D2E', icon: 'square' },
-  { value: 'no_go', label: 'No-Go', colour: '#C2410C', icon: 'square' },
-  { value: 'obstacle', label: 'Obstacle', colour: '#56685F', icon: 'square' },
-  { value: 'stage', label: 'Stage', colour: '#0A1F17', icon: 'square' },
-  { value: 'entrance', label: 'Entrance', colour: '#14523E', icon: 'triangle' },
+  { value: 'zone', label: 'Zone', colour: '#56685F', icon: 'square' },
+  { value: 'no_go', label: 'No-Go', colour: '#DC2626', icon: 'square' },
+  { value: 'obstacle', label: 'Obstacle', colour: '#EA580C', icon: 'square' },
+  { value: 'stage', label: 'Stage', colour: '#2563EB', icon: 'square' },
+  { value: 'entrance', label: 'Entrance', colour: '#16A34A', icon: 'triangle' },
 ]
 
 export const AREA_NAME_MAX = 50
@@ -59,18 +61,7 @@ export function areaTooltipHtml(value, escapedName) {
 
 // The caption pill on a map: its look comes from the area's type (kinetic-2.css). Takes no pointer events.
 export function zoneLabelClass(value) {
-  return 'k2-ztip k2-ztip-' + (value === 'no_go' ? 'nogo' : value === 'stage' ? 'stage' : 'zone')
-}
-
-// A caption for a shape drawn on a read-only map, to add to the same layer group. Null for a broken polygon.
-export function zoneCaption(L, shape, kind, name) {
-  const bounds = shape.getBounds()
-  if (!bounds.isValid()) return null
-  const text = document.createElement('span')
-  text.textContent = name
-  return L.tooltip({ permanent: true, direction: 'center', className: zoneLabelClass(kind), interactive: false })
-    .setLatLng(bounds.getCenter())
-    .setContent(text)
+  return 'k2-ztip k2-ztip-' + (value === 'no_go' ? 'nogo' : value === 'stage' ? 'stage' : value === 'obstacle' ? 'obstacle' : value === 'entrance' ? 'entrance' : 'zone')
 }
 
 // A zone on a read-only map: the outline, with its NAME shown only while the pointer is over it (a pill that follows the

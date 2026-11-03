@@ -1,6 +1,9 @@
 // Group colours (Planova 2 "Harbour & Signal"). Cool Okabe–Ito hues only: warm colours mean live (marigold), late
 // (amber) and danger (red) everywhere in the app, so a group is never orange or red. Five hues; a sixth group repeats
 // the first, and the map always shows the group's code, so colour is never the only cue.
+// A person or walk with no group (or a group with no colour) is drawn in the muted grey, everywhere
+export const NO_GROUP_COLOUR = '#56685F'
+
 export const GROUP_PALETTE = ['#0072B2', '#56B4E9', '#009E73', '#CC79A7', '#6A4C93']
 
 // The colour a new group gets: the next one in the palette (it can still be changed)

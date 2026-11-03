@@ -23,6 +23,8 @@ const props = defineProps({
   eventName: { type: String, default: '' },
   members: { type: Array, default: () => [] }, // names for people who start sharing during a live rewind
   active: { type: Boolean, default: true }, // tab visible
+  // The event page's live session id: the Live badge shows only on that session's recording, and only while it is live
+  liveSessionId: { type: String, default: null },
 })
 const emit = defineEmits(['go-live'])
 
@@ -93,12 +95,12 @@ function untilText(item) {
 // ---------- Play / download from the database ----------
 async function fetchRecording(item) {
   busyKey.value = item.key
-  progress.value = 'Loading...'
+  progress.value = 'Loading…'
   errorMsg.value = ''
   try {
     const to = item.endedAt ? item.endedAt.getTime() : Date.now()
     const recording = await loadRecording(props.eventId, item.startsAt, to, (n) => {
-      progress.value = 'Loading ' + n.toLocaleString() + ' readings...'
+      progress.value = 'Loading ' + n.toLocaleString() + ' readings…'
     })
     return markRaw(recording) // large: keep it out of Vue's reactivity
   } catch (err) {
@@ -272,7 +274,7 @@ onUnmounted(() => clearInterval(liveTimer))
     />
 
     <template v-else>
-      <div class="k k2-h" style="margin-bottom: 0">
+      <div class="k k2-h" style="margin-bottom: 8px">
         <h1>Playback</h1>
         <span v-if="items.length" class="cnt">{{ items.length }}</span>
         <span class="sp"></span>
@@ -283,7 +285,7 @@ onUnmounted(() => clearInterval(liveTimer))
         <SkeletonLoader v-if="loadingList && !items.length" :rows="3" label="Loading recordings…" />
         <EmptyState v-else-if="!items.length" compact icon="play" title="No recordings yet" text="Each time the event runs, a recording appears here." data-testid="no-recordings" />
 
-        <div data-testid="recording-list">
+        <div class="k2-longlist k2-longlist-tall" data-testid="recording-list">
           <div v-for="item in items" :key="item.key" class="k2-rec" :data-testid="'recording-' + item.kind">
             <button
               v-if="!item.expired"
@@ -301,7 +303,7 @@ onUnmounted(() => clearInterval(liveTimer))
             <span v-else></span>
             <div style="min-width: 0">
               <div class="row" style="gap: 8px; flex-wrap: wrap">
-                <span v-if="item.live" class="chip chip-ink" style="height: 22px"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+                <span v-if="item.live && item.key === liveSessionId" class="chip chip-ink" style="height: 22px"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
                 <form v-if="renamingKey === item.key" class="row" style="gap: 6px; flex-wrap: nowrap" @submit.prevent="saveRename(item)">
                   <label class="visually-hidden" :for="'rec-name-' + item.key">Recording name</label>
                   <input :id="'rec-name-' + item.key" v-model="renameText" class="kin" style="min-width: 0; width: 260px; max-width: 100%" maxlength="80" :placeholder="item.timesTitle" data-testid="rename-recording-input" @keydown.esc.prevent="renamingKey = null" />
@@ -343,7 +345,8 @@ onUnmounted(() => clearInterval(liveTimer))
             <span v-else></span>
           </div>
         </div>
-        <p class="k2-hint">Download a CSV to keep one longer.</p>
+        <!-- Only under a list: on the empty card it would sit left-aligned under a centred message, about nothing -->
+        <p v-if="items.length" class="k2-hint">Download a CSV to keep one longer.</p>
       </section>
 
       <section class="k k2-card">

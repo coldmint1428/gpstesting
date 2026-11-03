@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
       <span data-testid="plan-stale">
         A newer version of this plan was published (v{{ stale.to }}). You are seeing v{{ stale.from }}.
       </span>
-      <button class="pv-btn is-primary" data-testid="plan-reload" :disabled="checking" @click="useFresh">
+      <button type="button" class="pv-btn is-primary" data-testid="plan-reload" :disabled="checking" @click="useFresh">
         Show version {{ stale.to }}
       </button>
     </div>

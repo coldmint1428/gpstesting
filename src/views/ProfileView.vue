@@ -96,7 +96,7 @@ async function logout() {
       <BenchAlert v-if="errorMsg" data-testid="profile-error" @dismiss="errorMsg = ''">{{ errorMsg }}</BenchAlert>
 
       <button type="submit" class="btn btn-primary" :disabled="!canSave" data-testid="profile-save">
-        {{ busy ? 'Saving...' : 'Save changes' }}
+        {{ busy ? 'Saving…' : 'Save changes' }}
       </button>
     </form>
   </main>

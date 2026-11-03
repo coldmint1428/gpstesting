@@ -870,11 +870,14 @@ await phase('rehearsals', {
     { name: '080_rehearsal_details_absences.sql', sql: read('supabase/migrations/080_rehearsal_details_absences.sql') },
     { name: '085_edit_rehearsal.sql', sql: read('supabase/migrations/085_edit_rehearsal.sql') },
     { name: '086_recording_names.sql', sql: read('supabase/migrations/086_recording_names.sql') },
+    { name: '088_absence_one_per_day.sql', sql: read('supabase/migrations/088_absence_one_per_day.sql') },
+    { name: '089_rehearsal_absence_rules.sql', sql: read('supabase/migrations/089_rehearsal_absence_rules.sql') },
   ],
   body: async (db) => {
     await runSql(db, read('supabase/tests/edit_rehearsal_and_recording_test.sql'), 'edit_rehearsal_and_recording_test.sql')
     await runSql(db, read('supabase/migrations/085_edit_rehearsal.sql'), '085 a second time')
     await runSql(db, read('supabase/migrations/086_recording_names.sql'), '086 a second time')
+    await runSql(db, read('supabase/migrations/089_rehearsal_absence_rules.sql'), '089 after the earlier ones are re-applied')
     await runSql(db, read('supabase/tests/rehearsals_test.sql'), 'rehearsals_test.sql')
     await runSql(db, read('supabase/tests/rehearsal_absences_test.sql'), 'rehearsal_absences_test.sql')
     await runSql(db, read('supabase/migrations/079_rehearsals.sql'), '079 a second time')

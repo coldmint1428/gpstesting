@@ -6,14 +6,16 @@ import { supabase } from '../lib/supabase'
 
 const TICK_MS = 30000 // "next" moves on when a rehearsal's time passes
 
-export function useRehearsals(eventId) {
+export function useRehearsals(eventId, myUserIdRef = null) {
   const rehearsals = ref([]) // soonest first: { id, startsAt: Date, endsAt: Date|null, note }
   const absences = ref([]) // { id, rehearsalId, userId, reason, status, decidedBy, decidedAt: Date|null, createdAt: Date }
   const errorMsg = ref('')
   const busy = ref(false)
   const now = ref(Date.now())
 
-  const next = computed(() => rehearsals.value.find((r) => r.startsAt.getTime() > now.value) || null)
+  // The next rehearsal this person is expected at: one they have been excused from is not "next" for them
+  const excused = (r) => !!myUserIdRef && absences.value.some((a) => a.rehearsalId === r.id && a.userId === myUserIdRef.value && a.status === 'approved')
+  const next = computed(() => rehearsals.value.find((r) => r.startsAt.getTime() > now.value && !excused(r)) || null)
 
   async function load() {
     const [times, requests] = await Promise.all([

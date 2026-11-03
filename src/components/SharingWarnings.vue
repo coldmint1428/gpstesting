@@ -15,7 +15,7 @@ const { isNative, powerSaveOn, batteryRestricted, openBatterySettings } = useLoc
       <!-- Shown when the app is NOT "Unrestricted". That is usually Android's default ("Optimized"), not
            "Restricted", so the sentence says exactly what was checked. -->
       <strong>Set battery use to Unrestricted</strong> so sharing keeps running.
-      <button class="btn btn-sm btn-warning ms-1" data-testid="battery-settings-btn" @click="openBatterySettings">
+      <button type="button" class="btn btn-sm btn-warning ms-1" data-testid="battery-settings-btn" @click="openBatterySettings">
         Allow in background
       </button>
           </div>

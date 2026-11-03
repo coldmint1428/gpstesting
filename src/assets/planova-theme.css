@@ -53,8 +53,7 @@ html h5,
 html h6 {
   font-weight: 600;
 }
-html code,
-html .font-monospace {
+html code {
   font-family: var(--font-mono);
 }
 
@@ -254,38 +253,6 @@ html .badge.text-bg-primary {
   background-color: var(--brand-primary) !important;
 }
 
-/* ---------- Top bar: dark chrome with the Planova logo ---------- */
-html .app-nav {
-  background: var(--bg-chrome);
-  border-bottom: 1px solid var(--chrome-border);
-  font-family: var(--font-ui);
-  min-height: var(--topbar-mobile);
-}
-html .app-nav .navbar-brand {
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-}
-html .app-nav .navbar-brand img {
-  display: block;
-  height: 36px;
-  width: auto;
-}
-html .app-nav .nav-link,
-html .app-nav .navbar-text {
-  color: var(--text-on-chrome-muted);
-  font-weight: 500;
-}
-html .app-nav .nav-link:hover,
-html .app-nav .nav-link:focus-visible,
-html .app-nav .nav-link.router-link-exact-active,
-html .app-nav .navbar-text:hover {
-  color: var(--text-on-chrome);
-}
-/* The current page's underline is drawn by motion.css (it grows in); a shadow here as well drew a double line. */
-html .app-nav :focus-visible {
-  outline-color: var(--focus-on-chrome);
-}
 
 /* ---------- Event workspace: event-shell.css colours re-pointed at the tokens ---------- */
 html .ev {
@@ -303,9 +270,7 @@ html .ev {
   font-family: var(--font-ui);
   color: var(--text-primary);
 }
-html .ev .mono,
-html .ev .show-num,
-html .ev .ops-num {
+html .ev .mono,html .ev .show-num {
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
@@ -313,111 +278,15 @@ html .ev .ops-num {
 html .ev {
   --ev-head-muted: var(--text-secondary);
 }
-html .ev-head {
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-subtle);
-}
-html .ev-back {
-  color: var(--text-link);
-  font-weight: 500;
-}
-html .ev-back:hover,
-html .ev-back:focus-visible {
-  color: var(--brand-primary-pressed);
-}
-html .ev-title {
-  font-weight: 600;
-  font-size: 28px;
-  letter-spacing: -0.28px;
-  color: var(--text-primary);
-}
-html .ev-chip {
-  border: 1px solid var(--border-subtle);
-  font-weight: 500;
-}
-html .ev-chip-live {
-  background: var(--status-success-bg);
-  color: var(--status-success-fg);
-  border-color: var(--status-success-border);
-}
-html .ev-chip-sched {
-  background: var(--status-warning-bg);
-  color: var(--status-warning-fg);
-  border-color: var(--status-warning-border);
-}
-html .ev-chip-off {
-  background: var(--bg-canvas);
-  color: var(--text-secondary);
-  border-color: var(--border-default);
-}
-html .ev-chip-role {
-  background: var(--brand-primary-subtle);
-  color: var(--text-link);
-  border-color: var(--border-default);
-}
-html .ev-desc {
-  color: var(--text-secondary);
-}
-@media (max-width: 991.98px) {
-  html .ev-title {
-    font-size: 22px;
-  }
-}
 /* The page navigation is the design's dark sidebar: chrome, a light selected row with a sage bar */
 html .ev-nav {
   background: var(--bg-chrome);
   border-color: var(--bg-chrome);
 }
-html .ev-nav-btn {
-  position: relative;
-  color: var(--text-on-chrome-muted);
-}
-html .ev-nav-btn:hover {
-  background: var(--chrome-hover);
-  color: var(--text-on-chrome);
-}
-html .ev-nav-btn:focus-visible {
-  outline-color: var(--focus-on-chrome);
-}
-html .ev-nav-btn[aria-current='page'] {
-  background: var(--chrome-selected);
-  color: var(--text-on-chrome);
-  box-shadow: none;
-}
-html .ev-nav-btn[aria-current='page']::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--chrome-indicator);
-}
-html .ev-nav-hint,
-html .ev-nav-btn[aria-current='page'] .ev-nav-hint {
-  color: var(--text-on-chrome-muted);
-}
-html .ev-nav-badge {
-  background: var(--chrome-hover);
-  color: var(--text-on-chrome);
-}
-html .ev-nav-badge-live {
-  background: var(--bg-surface);
-  color: var(--status-error-fg);
-}
-html .ev-nav-foot {
-  border-top-color: var(--chrome-border);
-}
 html .ev-page-head h2 {
   font-weight: 600;
   font-size: 28px;
   letter-spacing: -0.28px;
-}
-html .ev-label {
-  font-weight: 600;
-  letter-spacing: 1.2px;
 }
 html .ev .ev-surface {
   background: var(--bg-surface);
@@ -432,17 +301,6 @@ html .ev .ev-surface {
   }
 }
 
-/* ---------- Ops statuses: text keeps 4.5:1 on white, symbol and word still carry the meaning ---------- */
-html .ops-late { color: var(--status-error-fg); }
-html .ops-risk { color: var(--danger-strong); }
-html .ops-ok { color: var(--status-info-fg); }
-html .ops-done { color: var(--status-success-fg); }
-html .ops-pill.ops-late,
-html .ops-chip.ops-late { background: var(--status-error-bg); }
-html .ops-pill.ops-risk,
-html .ops-chip.ops-risk { background: var(--status-warning-bg); border-color: var(--status-warning-border); }
-html .ops-pill.ops-ok,
-html .ops-chip.ops-ok { background: var(--status-info-bg); border-color: var(--status-info-border); }
 
 /* ================= Redrawn screens (pl- classes) ================= */
 
@@ -880,9 +738,6 @@ html .text-success {
 html .text-danger {
   color: var(--status-error-fg) !important;
 }
-html .text-warning-emphasis {
-  color: var(--danger-strong) !important;
-}
 html .btn-link {
   color: var(--text-link);
 }
@@ -1080,18 +935,6 @@ html .ev .card-header {
 }
 
 /* The Start / Schedule / End panel inside the status card */
-html .time-panel {
-  background: var(--bg-inset);
-  border-color: var(--border-subtle);
-}
-html .time-card {
-  background: var(--bg-surface);
-  border-color: var(--border-subtle);
-}
-html .time-label {
-  letter-spacing: 1px;
-  color: var(--text-secondary);
-}
 
 @media (prefers-reduced-motion: reduce) {
   html *,

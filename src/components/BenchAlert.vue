@@ -24,18 +24,18 @@ const emit = defineEmits(['dismiss'])
   <!-- `data-testid` is on the alert itself so existing locators keep working; the close
        button gets `-close` for anything that wants to press it. -->
   <div
-    class="alert py-2 alert-dismissible"
+    class="alert py-2 k2-alert"
     :class="'alert-' + variant"
     role="alert"
     :data-testid="testid || undefined"
   >
-    <slot />
+    <span class="k2-alert-text"><slot /></span>
     <button
       type="button"
-      class="btn-close"
+      class="k2-alert-x"
       :data-testid="testid ? testid + '-close' : undefined"
       aria-label="Close"
       @click="emit('dismiss')"
-    ></button>
+    ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
   </div>
 </template>

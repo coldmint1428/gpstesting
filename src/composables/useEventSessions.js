@@ -107,9 +107,22 @@ export function useEventSessions(eventId) {
   }
   document.addEventListener('visibilitychange', onVisible)
 
+  // A start or an end must reach a screen that is already open without a refresh, whatever the live connection did
+  // (it can drop quietly, or be refused for a role). So the clock ticks, to turn "scheduled" into "live" the second the
+  // start passes even when this device's clock is a little behind the server's, and the sessions are read again every
+  // few seconds while the page is on screen: a missed push costs at most that long.
+  const tick = setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+  const poll = setInterval(() => {
+    if (!document.hidden) load()
+  }, 10000)
+
   onUnmounted(() => {
     clearTimeout(startTimer)
     clearTimeout(reloadTimer)
+    clearInterval(tick)
+    clearInterval(poll)
     document.removeEventListener('visibilitychange', onVisible)
     supabase.removeChannel(channel)
   })

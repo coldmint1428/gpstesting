@@ -2,6 +2,7 @@
 // SosDialog - asks "Send SOS?" before alerting everyone in the event (so a stray tap does not). An optional message says
 // what happened. Emits `send` with the message, or `close`. The event page (EventView.vue) sends it.
 import { ref, watch } from 'vue'
+import { useEscape } from '../composables/useEscape'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -10,6 +11,7 @@ const props = defineProps({
 const emit = defineEmits(['send', 'close'])
 
 const note = ref('')
+useEscape(() => props.open && !props.busy, () => emit('close'))
 watch(
   () => props.open,
   (isOpen) => {
@@ -20,8 +22,8 @@ watch(
 
 <template>
   <Teleport to="body">
-    <template v-if="open">
-      <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sos-title" data-testid="sos-dialog" @click.self="emit('close')">
+    <Transition name="dialog">
+      <div v-if="open" class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="sos-title" data-testid="sos-dialog" @click.self="emit('close')">
         <div class="modal-dialog modal-dialog-centered">
           <form class="modal-content" @submit.prevent="emit('send', note)">
             <div class="modal-header bg-danger text-white">
@@ -50,7 +52,9 @@ watch(
           </form>
         </div>
       </div>
-      <div class="modal-backdrop show"></div>
-    </template>
+    </Transition>
+    <Transition name="backdrop">
+      <div v-if="open" class="modal-backdrop show"></div>
+    </Transition>
   </Teleport>
 </template>

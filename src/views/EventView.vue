@@ -22,6 +22,7 @@ import { useZoneActivity } from '../composables/useZoneActivity'
 import { usePhoneReadiness } from '../composables/usePhoneReadiness'
 import { formatDayTime, formatTimeSeconds } from '../utils/time'
 import { groupRoleLabel } from '../utils/people'
+import { textOn } from '../utils/groupColours'
 import { PAGES, PAGE_LABEL, ROLE_LABEL, topRole, viewRole, canView, pageMode } from '../utils/permissions'
 import { leaveEvent as leaveEventCall, fetchMembership, rememberMembership, updateEventDetails, deleteEvent } from '../services/memberService'
 import { isNativeApp } from '../lib/platform'
@@ -36,7 +37,6 @@ import PlaybackPanel from '../components/PlaybackPanel.vue'
 import PolygonTestView from './PolygonTestView.vue'
 import PlanBoard from '../components/plan/PlanBoard.vue'
 import PlanSchedule from '../components/plan/PlanSchedule.vue'
-import PlanRoute from '../components/plan/PlanRoute.vue'
 import PlanOps from '../components/plan/PlanOps.vue'
 import { usePlan } from '../composables/usePlan'
 import { useBroadcasts } from '../composables/useBroadcasts'
@@ -223,7 +223,7 @@ async function onAttScan(text) {
 
 // Rehearsals (079, 080): a calendar for everyone, scheduled by the root and planners. Anyone can say they are not
 // available, and the root or a planner decides. The page emits what was asked.
-const rehearsals = useRehearsals(props.id)
+const rehearsals = useRehearsals(props.id, computed(() => (auth.user ? auth.user.id : null)))
 const rehearsalError = ref('')
 async function onRehearsalAdd(details) {
   rehearsalError.value = await rehearsals.add(details)
@@ -416,6 +416,11 @@ watch(
 const tracker = useLocationTracker()
 const { isTracking, sharingEventId, errorMsg: shareError, busy: shareBusy } = tracker
 const sharingHere = computed(() => isTracking.value && sharingEventId.value === props.id)
+// The chip for my group wears the group's own colour, with text that reads on it
+const groupChipStyle = computed(() => {
+  const colour = myGroup.value && myGroup.value.colour
+  return colour ? { background: colour, color: textOn(colour), boxShadow: 'inset 0 0 0 1.5px rgba(10,31,23,.55)' } : null
+})
 const isIC = computed(() => !!(me.value && me.value.isIC && myGroup.value))
 
 // Phone app: anything missing (location "all the time", battery, notifications...) opens "Set up sharing"
@@ -482,9 +487,16 @@ watch(
     exactAllowed.value = await exactRemindersAllowed()
   },
 )
+let askingExact = false // the system settings page opens once per tap, not twice on a double tap
 async function allowExact() {
-  exactAllowed.value = await allowExactReminders()
-  syncStartReminders(auth.user.id, sharingEventId.value)
+  if (askingExact) return
+  askingExact = true
+  try {
+    exactAllowed.value = await allowExactReminders()
+    syncStartReminders(auth.user.id, sharingEventId.value)
+  } finally {
+    askingExact = false
+  }
 }
 
 // ---------- Who is sharing (for planners while live) ----------
@@ -541,19 +553,38 @@ const navSections = computed(() => {
     { label: 'People', items: inSection(['groups', 'people']) },
   ].filter((section) => section.items.length)
 })
-const webBar = computed(() =>
-  (modeOf('timeline') === 'edit' ? ['overview', 'live', 'timeline', 'people'] : ['live', 'timeline', 'attendance', 'people'])
-    .map((k) => pages.value.find((p) => p.key === k))
-    .filter(Boolean),
-)
-const webMore = computed(() => pages.value.filter((p) => !webBar.value.includes(p)))
+// The website's bottom bar on a phone: the four pages each role uses while the event runs, in the order they are used.
+// Planners (and root): Live · Attendance · Timeline · Map. Everyone else: Live · Schedule · Attendance · My group.
+// The More sheet lists the rest in a fixed, sensible order: the event's details first, then planning, then people,
+// then what comes after the event.
+const BAR_PLANNER = ['live', 'attendance', 'timeline', 'map']
+const BAR_FOLLOWER = ['live', 'timeline', 'attendance', 'groups']
+const MORE_ORDER = ['overview', 'live', 'timeline', 'attendance', 'rehearsals', 'map', 'groups', 'people', 'playback']
+const pageList = (keys) => keys.map((k) => pages.value.find((p) => p.key === k)).filter(Boolean)
+const webBar = computed(() => pageList(modeOf('timeline') === 'edit' ? BAR_PLANNER : BAR_FOLLOWER))
+const webMore = computed(() => {
+  const rest = pages.value.filter((p) => !webBar.value.includes(p))
+  return rest.sort((a, b) => (MORE_ORDER.indexOf(a.key) + 1 || 99) - (MORE_ORDER.indexOf(b.key) + 1 || 99))
+})
 const webMoreOpen = ref(false)
 const overviewPlan = computed(() => {
   const list = seesWholeEvent.value ? startPlans.plans.value : []
   const shown = list.find((p) => p.status === 'live') || list[0]
   return shown ? shown.name : ''
 })
-const liveSide = ref('people') // the Live page's side panel: 'people' | 'message'
+const liveSide = ref('ops') // the Live page's side panel: 'ops' | 'plan' | 'message' | 'people'
+// The tabs this person has: Operations and the Plan log for staff who see the whole event (the log only while a plan
+// runs), Messages for whoever may send them, and the people on the map for everyone
+const liveTabs = computed(() => {
+  const out = []
+  if (seesWholeEvent.value) out.push('ops')
+  if (seesWholeEvent.value && planSession.value) out.push('plan')
+  if (canManage.value) out.push('message')
+  out.push('people')
+  return out
+})
+const liveTab = computed(() => (liveTabs.value.includes(liveSide.value) ? liveSide.value : liveTabs.value[0]))
+const planLogCount = ref(0) // the plan log's length, as PlanOps last read it
 const barStatus = ref(null) // the top bar's controls: the Live page's Schedule button opens their dialog
 
 // ---------- The location button and its popover, and the In-Charge banner (anyone who can share) ----------
@@ -664,7 +695,7 @@ const MORE_HINT = computed(() => ({
   overview: 'Details, invite, and leave the event',
   timeline: modeOf('timeline') === 'edit' ? 'The plan board' : 'Where to be and when',
   rehearsals: 'When to practise',
-  map: canManage.value ? 'Areas, doors and No-Go areas' : 'Your route on the plan',
+  map: 'Areas, doors and No-Go areas',
   people: 'Who is in it, roles',
   groups: 'Groups and their ICs',
   attendance: 'Roll calls',
@@ -795,7 +826,7 @@ async function removeEvent() {
 </script>
 
 <template>
-  <SkeletonLoader v-if="loading || (event && !pageReady)" variant="event" :page="native && tab === 'map' ? 'live' : tab" :status="showStatusCard" label="Loading the event…" />
+  <SkeletonLoader v-if="loading || (event && !pageReady)" variant="event" :page="native && tab === 'map' ? 'live' : tab === 'timeline' && role && modeOf('timeline') !== 'edit' ? 'schedule' : tab" :status="showStatusCard" label="Loading the event…" />
   <div v-if="!loading && !event" class="ev-missing">
     <EmptyState tone="danger" icon="alert" title="Can't open this event" :text="errorMsg || 'Event not found.'" data-testid="event-error">
       <template #actions>
@@ -847,11 +878,11 @@ async function removeEvent() {
       />
       <div v-if="isIC" class="wrapm" data-menu>
         <button type="button" class="k2-loc" aria-label="My location" :aria-expanded="openMenu === 'loc' ? 'true' : 'false'" data-testid="loc-btn" @click="toggleMenu('loc')">
-          <i class="dot" :style="{ background: isLive && sharingHere ? '#2563eb' : '#9aa89f' }"></i>
+          <i class="dot" :style="{ background: isLive && sharingHere ? '#0072B2' : '#9aa89f' }"></i>
           <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg>
           <span>{{ locLabel }}</span>
         </button>
-        <div v-if="openMenu === 'loc'" class="menu r" style="width: 280px; padding: 14px">
+        <div v-if="openMenu === 'loc'" class="menu r k2-locmenu" style="width: min(280px, calc(100vw - 32px)); padding: 14px">
           <div style="padding: 6px 8px 12px"><b style="font-size: 14px">My location</b><div class="mut" style="font-size: 12px; margin-top: 2px" data-testid="loc-hint">{{ locHint }}</div></div>
           <button v-if="sharingHere" type="button" class="kb kb-line" :disabled="shareBusy" data-testid="loc-stop" @click="closeMenu(); stopSharing()">{{ shareBusy ? 'Stopping…' : 'Stop sharing' }}</button>
           <button v-else type="button" class="kb kb-lime" :disabled="!isLive || shareBusy" data-testid="loc-share" @click="closeMenu(); startSharing()">{{ shareBusy ? 'Please wait…' : 'Share my location' }}</button>
@@ -901,7 +932,7 @@ async function removeEvent() {
           <span class="k-you-label">You</span>
           <div class="k-you-pills">
             <span class="chip" :class="topRole(me) === 'root' ? 'rl-root' : topRole(me) === 'planner' ? 'rl-planner' : 'chip-soft'" data-testid="event-role-badge">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
-            <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
+            <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" :style="groupChipStyle" data-testid="group-role-badge">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
           </div>
         </div>
       </nav>
@@ -950,13 +981,13 @@ async function removeEvent() {
                   <template v-else>Sharing opens when the event starts</template>
                 </span>
               </span>
-              <button v-if="sharingHere" class="btn btn-sm btn-outline-secondary" :disabled="shareBusy" data-testid="stop-share-btn" @click="stopSharing">
+              <button type="button" v-if="sharingHere" class="btn btn-sm btn-outline-secondary" :disabled="shareBusy" data-testid="stop-share-btn" @click="stopSharing">
                 {{ shareBusy ? 'Stopping…' : 'Stop sharing' }}
               </button>
-              <button v-else-if="isLive" class="btn btn-sm btn-success" :disabled="shareBusy" data-testid="share-btn" @click="startSharing">
+              <button type="button" v-else-if="isLive" class="btn btn-sm btn-success" :disabled="shareBusy" data-testid="share-btn" @click="startSharing">
                 {{ shareBusy ? 'Please wait…' : 'Share my location' }}
               </button>
-              <button v-else class="btn btn-sm btn-success" disabled data-testid="share-btn-locked">Share my location</button>
+              <button type="button" v-else class="btn btn-sm btn-success" disabled data-testid="share-btn-locked">Share my location</button>
               <RouterLink :to="{ name: 'share', params: { id } }" class="btn btn-sm btn-ghost" data-testid="share-details-link">
                 My GPS
               </RouterLink>
@@ -966,7 +997,7 @@ async function removeEvent() {
 
         <div v-if="isIC && scheduledStart && tracker.isNative && !exactAllowed" class="kp-banner">
           <span class="kp-banner-text">Allow alarms to get your reminder on time.</span>
-          <button class="btn btn-sm btn-outline-secondary" @click="allowExact">Allow alarms</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" @click="allowExact">Allow alarms</button>
         </div>
 
         <!-- I (an IC) am inside a No-Go area right now -->
@@ -995,9 +1026,6 @@ async function removeEvent() {
              map and home tabs (Map, Ops, Now) go without one: the map needs the room, and the header names the event. -->
         <div v-if="native ? !['live', 'ops', 'now'].includes(tab) : !['overview', 'timeline', 'people', 'playback', 'map'].includes(tab)" class="ev-page-head k2-pagehead">
           <h2>{{ currentPage.label }}</h2>
-          <button v-if="!native && tab === 'live' && canManage && !isLive" type="button" class="k2-schedule-out" data-testid="live-schedule-btn" @click="barStatus && barStatus.openSchedule()">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"></path></svg>Schedule
-          </button>
         </div>
 
         <!-- ===== Live map: v-show keeps the map (and its live connection) alive on the other pages ===== -->
@@ -1028,19 +1056,30 @@ async function removeEvent() {
             </div>
           </div>
           <div v-if="!native" class="kp-live-side">
-            <aside class="k k2-card" style="padding-top: 6px">
+            <aside class="k k2-card k2-liveside">
               <div class="k2-tabs" role="tablist" aria-label="Live side panel">
-                <button type="button" role="tab" :aria-selected="liveSide === 'people' || !canManage ? 'true' : 'false'" data-testid="live-tab-people" @click="liveSide = 'people'">On the map<span class="n">{{ liveMap ? liveMap.peopleCount : 0 }}</span></button>
-                <button v-if="canManage" type="button" role="tab" :aria-selected="liveSide === 'message' ? 'true' : 'false'" data-testid="live-tab-message" @click="liveSide = 'message'">Message everyone</button>
+                <button v-if="liveTabs.includes('ops')" type="button" role="tab" :aria-selected="liveTab === 'ops' ? 'true' : 'false'" data-testid="live-tab-ops" @click="liveSide = 'ops'">Operations</button>
+                <button v-if="liveTabs.includes('plan')" type="button" role="tab" :aria-selected="liveTab === 'plan' ? 'true' : 'false'" data-testid="live-tab-plan" @click="liveSide = 'plan'">Plan<span class="n">{{ planLogCount }}</span></button>
+                <button v-if="liveTabs.includes('message')" type="button" role="tab" :aria-selected="liveTab === 'message' ? 'true' : 'false'" data-testid="live-tab-message" @click="liveSide = 'message'">Messages<span class="n">{{ broadcasts.active.value.length }}</span></button>
+                <button type="button" role="tab" :aria-selected="liveTab === 'people' ? 'true' : 'false'" data-testid="live-tab-people" @click="liveSide = 'people'">On the map<span class="n">{{ liveMap ? liveMap.peopleCount : 0 }}</span></button>
               </div>
-              <div v-show="liveSide === 'people' || !canManage" id="k2-onmap" role="tabpanel"></div>
-              <!-- "Message everyone" (032): planners send one message to many groups at once (phone: on the Ops tab) -->
-              <div v-if="canManage" v-show="liveSide === 'message'" role="tabpanel"><BroadcastPanel :broadcasts="broadcasts" :groups="groups" /></div>
+              <div class="k2-liveside-body">
+                <!-- A plan session's staff picture of the walk (step 20) and the plan's log (step 22): one PlanOps, two
+                     tabs. Mounted only while the Live page is shown: the page itself is kept alive by v-show for the
+                     map, and a panel that polls every five seconds must not run behind a planner drawing the plan. -->
+                <div v-if="tab === 'live' && planSession && seesWholeEvent" v-show="liveTab === 'ops' || liveTab === 'plan'" role="tabpanel">
+                  <PlanOps :session="liveSession" :groups="groups" :view="liveTab === 'plan' ? 'log' : 'ops'" @counts="(c) => (planLogCount = c.log)" />
+                </div>
+                <div v-else-if="liveTab === 'ops'" role="tabpanel" class="k2-ops-empty" data-testid="ops-not-live">
+                  <strong>{{ isLive ? 'No plan running' : 'Not live yet' }}</strong>
+                  <span>{{ isLive ? 'The event is live without a plan: the map shows where everyone is.' : 'Operations appear once the event starts.' }}</span>
+                </div>
+                <!-- "Message everyone" (032): planners send one message to many groups at once (phone: on the Ops tab) -->
+                <div v-if="canManage" v-show="liveTab === 'message'" role="tabpanel"><BroadcastPanel :broadcasts="broadcasts" :groups="groups" /></div>
+                <!-- The people list is teleported here by LiveMap, so this stays in the page on every tab -->
+                <div v-show="liveTab === 'people'" id="k2-onmap" role="tabpanel"></div>
+              </div>
             </aside>
-            <!-- A plan session's staff picture of the walk: a row per group, its moment, its leg and where its ICs are
-                 (step 20). Mounted only while the Live page is shown: the page itself is kept alive by v-show for the
-                 map, and a panel that polls every five seconds must not run behind a planner who is drawing the plan. -->
-            <PlanOps v-if="tab === 'live' && planSession && seesWholeEvent" :session="liveSession" />
           </div>
         </div>
 
@@ -1170,6 +1209,7 @@ async function removeEvent() {
           :event-id="id"
           :event-name="event.name"
           :members="members"
+          :live-session-id="liveSession ? liveSession.id : null"
           @go-live="goLive"
         />
 
@@ -1179,17 +1219,6 @@ async function removeEvent() {
             <PolygonTestView :event-id="id" embedded />
           </div>
         </template>
-
-        <!-- Map: the follower's own walk for everyone the board is not for (step 29) -->
-        <PlanRoute
-          v-if="tab === 'map' && !canManage"
-          :event-id="id"
-          :session="scheduleSession"
-          :whole="seesWholeEvent"
-          :my-group="myGroup"
-          :groups="groups"
-          :focus-t="route.query.t"
-        />
 
         <!-- Timeline: the plan board for the people who draw it, and the timetable for the people who follow it
              (step 16). Root and planner get the strip, the map and the inspector; a member, an IC or a group admin gets
@@ -1225,13 +1254,14 @@ async function removeEvent() {
       <RouterLink v-for="p in webBar" :key="p.key" :to="{ name: 'event', params: { id, page: p.key } }" replace :aria-current="tab === p.key ? 'page' : undefined" :data-testid="'bnav-' + p.key">
         <svg viewBox="0 0 24 24" class="k2-bnav-ico" aria-hidden="true"><path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" /></svg>{{ p.label }}
       </RouterLink>
-      <button v-if="webMore.length" type="button" :aria-current="webMore.some((p) => p.key === tab) ? 'page' : undefined" aria-label="More pages" data-testid="bnav-more" @click="webMoreOpen = true">
+      <button v-if="webMore.length" type="button" :aria-current="webMore.some((p) => p.key === tab) ? 'page' : undefined" aria-label="More pages" :aria-expanded="webMoreOpen ? 'true' : 'false'" data-testid="bnav-more" @click="webMoreOpen = true">
         <svg viewBox="0 0 24 24" class="k2-bnav-ico" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>More
       </button>
     </nav>
     <BottomSheet v-if="!native" :open="webMoreOpen" title="More" @close="webMoreOpen = false">
       <div class="d-grid gap-2" data-testid="web-more-sheet">
         <RouterLink v-for="p in webMore" :key="p.key" class="pv-more-row" :to="{ name: 'event', params: { id, page: p.key } }" replace :data-testid="'web-more-' + p.key" @click="webMoreOpen = false">
+          <svg viewBox="0 0 24 24" class="k2-more-ico" aria-hidden="true"><path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" /></svg>
           <strong class="flex-grow-1 text-start">{{ p.label }}</strong><span aria-hidden="true" class="pv-chev">›</span>
         </RouterLink>
       </div>

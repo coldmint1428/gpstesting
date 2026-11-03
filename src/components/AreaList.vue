@@ -18,6 +18,7 @@
 //
 // This component never writes to the database: it reports what changed and the page decides
 // when to save (which, in this app, is always "when the planner locks something").
+import { NO_GROUP_COLOUR } from '../utils/groupColours'
 import { computed, ref, watch } from 'vue'
 import { AREA_KINDS, AREA_NAME_MAX, areaColour, areaKind, isValidAreaName } from '../utils/areaKinds'
 import { outlinePoints } from '../utils/areaOutline'
@@ -35,7 +36,7 @@ const props = defineProps({
   showCode: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-duplicated'])
+const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-duplicated', 'area-show'])
 
 // Who has each area, keyed by the area's id. A plain object here rather than a ref, because a ref
 // inside a plain object is not unwrapped in a template.
@@ -88,7 +89,7 @@ const groups = computed(() => {
     const rows = buckets.get(kind.value)
     if (rows.length) out.push({ key: kind.value, label: kind.label, colour: kind.colour, rows })
   }
-  if (unknown.length) out.push({ key: '', label: 'Other', colour: '#6c757d', rows: unknown })
+  if (unknown.length) out.push({ key: '', label: 'Other', colour: NO_GROUP_COLOUR, rows: unknown })
   return out
 })
 
@@ -137,6 +138,7 @@ function pick(row) {
   if (!props.editable) return
   openId.value = isOpen(row) ? null : row.area.id
   if (openId.value && !row.area.locked) emit('area-edit', row.area.id)
+  else if (openId.value) emit('area-show', row.area.id) // locked: it is not opened, but the map goes to it
 }
 
 </script>
@@ -323,7 +325,7 @@ function pick(row) {
    tinted rather than white-on-colour so it stays readable at both ends of the palette. */
 .area-who {
   border: 1px solid;
-  font-size: 0.65rem;
+  font-size: 11px;
   font-weight: 600;
 }
 .area-swatch-square {
@@ -342,7 +344,8 @@ function pick(row) {
 }
 .area-code-input {
   max-width: 9.5rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
   text-transform: uppercase;
 }
 </style>

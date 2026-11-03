@@ -3,8 +3,6 @@
 :root{--k-bg:var(--canvas);--k-f:var(--forest);--k-f2:var(--forest-2);--k-lime:var(--lime);--k-lime2:var(--lime-shadow);--k-mint:var(--mint);--k-ink:var(--ink);--k-mut:var(--muted);--k-line:rgba(10,31,23,.12);--k-w:#ffffff;--k-red:var(--danger);--k-redbg:var(--danger-bg)}
 /* ===== Planova Kinetic · planner views v2 ===== */
 .k2{height:100%;display:grid;grid-template-columns:240px minmax(0,1fr);grid-template-rows:68px minmax(0,1fr)}
-.k2-top{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid var(--k-line);background:var(--k-bg);position:relative;z-index:40}
-.k2-top .ks-brand{width:auto;margin-right:10px}
 .k2-sos{height:40px;padding:0 18px;border-radius:999px;border:0;background:#c2410c;color:#fff;font:800 14px Unbounded;letter-spacing:.02em;box-shadow:3px 4px 0 var(--k-ink)}
 .k2-sos:hover{transform:translate(-1px,-1px);box-shadow:5px 6px 0 var(--k-ink)}
 .k2-loc{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px 0 10px;border-radius:999px;border:0;background:#fff;box-shadow:0 0 0 1.5px var(--k-line) inset;font:700 13px Manrope;color:var(--k-ink)}
@@ -13,7 +11,6 @@
 .k2-sec{font:800 10px Manrope;letter-spacing:.16em;text-transform:uppercase;color:var(--k-mut);padding:16px 14px 6px}
 .k2-sec:first-child{padding-top:4px}
 .k2-side .ks-ni{height:44px;font-size:14px}
-.k2-main{overflow:auto;padding:24px 30px 60px;min-width:0}
 .k2-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;min-height:44px}
 .k2-h h1{font:800 36px/1 Unbounded;letter-spacing:-.06em;margin:0}
 .k2-h .cnt{font:700 14px Manrope;color:var(--k-mut)}
@@ -39,11 +36,8 @@
 .k2-pillbtn:disabled{opacity:.35;background:#fff}
 .k2-link{border:0;background:none;padding:0;font:700 13px Manrope;color:var(--k-f);text-decoration:underline;text-underline-offset:3px}
 .k2-link.danger{color:var(--k-red)}
-/* status bar under top bar on Live/Timeline */
-.k2-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border-radius:18px;padding:10px 12px 10px 16px;margin-bottom:16px;font-size:14px}
 /* Live */
 .k2-live{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
-.k2-mapfloat{position:absolute;display:flex;gap:8px;align-items:center}
 .k2-legend{position:absolute;left:12px;bottom:12px;display:flex;gap:12px;flex-wrap:wrap;background:rgba(255,255,255,.92);border-radius:14px;padding:8px 12px;font:600 12px Manrope;color:var(--k-mut);max-width:calc(100% - 200px)}
 .k2-legend span{display:flex;align-items:center;gap:6px}
 .k2-qt{display:flex;flex-wrap:wrap;gap:6px}
@@ -65,24 +59,12 @@
 .k2-dt{display:grid;grid-template-columns:1fr 130px;gap:8px}
 .k2-sum{display:flex;align-items:center;gap:10px;background:var(--k-bg);border-radius:14px;padding:12px 14px;margin-top:16px;font:700 14px Manrope}
 /* Timeline */
-.k2-tl{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
 .k2-planbtn{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 14px 0 18px;border-radius:999px;border:0;background:#fff;box-shadow:inset 0 0 0 1.5px var(--k-line);text-align:left}
 .k2-planbtn b{font:700 16px Unbounded;letter-spacing:-.04em}
 .k2-planbtn span{font-size:12px;color:var(--k-mut);font-weight:700}
 .k2-plans{min-width:330px}
 .k2-plans .opt{justify-content:space-between}
 .k2-plans .opt small{color:var(--k-mut);font-weight:600;font-size:12px}
-.k2-maphint{max-width:calc(100% - 40px);overflow:hidden;text-overflow:ellipsis;position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--k-ink);color:#fff;font:700 12px Manrope;padding:6px 12px;border-radius:999px;white-space:nowrap}
-.k2-transport{margin-top:12px;background:#fff;border-radius:22px;padding:12px 16px 16px}
-.k2-transport .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.k2-track{position:relative;height:56px;margin-top:10px;overflow-x:auto;overflow-y:hidden}
-.k2-track-in{position:relative;height:56px}
-.k2-track-in:before{content:"";position:absolute;left:0;right:0;top:34px;height:4px;border-radius:2px;background:rgba(10,31,23,.1)}
-.k2-tick{position:absolute;top:0;font:700 11px Manrope;color:var(--k-mut);transform:translateX(-50%)}
-.k2-tick:after{content:"";position:absolute;left:50%;top:16px;width:1px;height:8px;background:rgba(10,31,23,.25)}
-.k2-fr{position:absolute;top:28px;width:16px;height:16px;margin-left:-8px;border-radius:50%;border:0;background:#fff;box-shadow:0 0 0 2px var(--k-ink);padding:0}
-.k2-fr[aria-pressed="true"]{background:var(--k-lime);transform:scale(1.35);box-shadow:0 0 0 2px var(--k-ink),2px 3px 0 var(--k-ink);z-index:2}
-.k2-fr.locked{background:var(--k-ink)}
 .k2-insp{background:#fff;border-radius:24px;padding:6px 18px 18px}
 .k2-insp .k2-tabs{margin:0 -6px 14px}
 .k2-field{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin-bottom:10px}
@@ -97,9 +79,6 @@
 .k2-sel .seg button[aria-pressed="true"]{background:var(--k-lime);color:var(--k-ink)}
 /* Map */
 .k2-mapp{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
-.k2-jump{position:absolute;left:62px;right:12px;top:12px;display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
-.k2-jump button{flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px 0 8px;border-radius:999px;border:0;background:#fff;box-shadow:0 0 0 1px var(--k-line),0 2px 6px rgba(0,0,0,.08);font:700 12px Manrope}
-.k2-jump button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--k-ink)}
 .k2-sw{width:14px;height:14px;border-radius:4px;flex:none}
 .k2-area{border-top:1px solid var(--k-line)}
 .k2-area:first-of-type{border-top:0}
@@ -123,54 +102,47 @@
 .k2-rad:focus-within{box-shadow:inset 0 0 0 1.5px var(--k-ink)}
 .k2-ic{display:inline-flex;align-items:center;gap:6px}
 /* Attendance */
-.k2-att{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
-.k2-progress{display:flex;align-items:center;gap:12px;margin:14px 0 6px}
-.k2-progress b{font:700 26px Unbounded;letter-spacing:-.05em}
-.k2-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px}
-.k2-person{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--k-line);font-size:14px}
-.k2-person:first-of-type{border-top:0}
 .k2-empty{padding:18px 0;color:var(--k-mut);font-size:14px}
-.k2-past summary{cursor:pointer;font:700 13px Manrope;color:var(--k-f);margin-top:4px}
 /* Playback */
 .k2-rec{display:grid;grid-template-columns:48px minmax(0,1fr) auto 40px 40px;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--k-line)}
 .k2-rec:first-child{border-top:0}
 .k2-rec b{font:700 15px Manrope}
 .k2-player{margin-top:12px;background:#fff;border-radius:22px;padding:16px 18px}
 .k2-clock{font:700 28px Unbounded;letter-spacing:-.05em}
-.k2-scrub{position:relative;height:28px;margin:10px 0 4px}
-.k2-scrub:before{content:"";position:absolute;left:0;right:0;top:12px;height:4px;border-radius:2px;background:rgba(10,31,23,.1)}
-.k2-scrub .fill{position:absolute;left:0;top:12px;height:4px;border-radius:2px;background:var(--k-f)}
-.k2-scrub .knob{position:absolute;top:4px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:var(--k-lime);box-shadow:0 0 0 2px var(--k-ink),2px 3px 0 var(--k-ink)}
-.k2-scrub .mark{position:absolute;top:6px;width:3px;height:16px;border-radius:2px;background:var(--k-f);opacity:.5}
 .k2-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
 .k2-speed .seg button{height:30px;padding:0 10px;font-size:12px}
 /* sheet (mobile More) */
-.k2-sheet{position:absolute;left:0;right:0;bottom:0;z-index:85;background:#fff;border-radius:26px 26px 0 0;padding:10px 14px 24px;box-shadow:0 -10px 30px rgba(0,0,0,.18);animation:kpop .18s}
-.k2-sheet .grip{width:44px;height:5px;border-radius:3px;background:#d6dcd8;margin:0 auto 10px}
-.k2-sheet button{display:flex;align-items:center;gap:12px;width:100%;height:52px;border:0;background:none;font:700 15px Manrope;border-radius:14px;padding:0 10px}
-.k2-sheet button[aria-current="page"]{background:var(--k-ink);color:var(--k-lime)}
 @media (max-width: 767.98px){
   .k2{grid-template-columns:1fr;grid-template-rows:60px minmax(0,1fr)}
-  .k2-top{grid-column:1;padding:0 10px;gap:6px}
-  .k2-top .ks-brand span,.k2-top .ks-crumb,.k .k2-hm{display:none}
-  .k2-top .ks-ev b{font-size:14px;max-width:110px;overflow:hidden;text-overflow:ellipsis}
-  .k2-top .kb{height:36px;padding:0 12px;font-size:13px}
+  .k .k2-hm {display:none}
   .k2-sos{height:36px;padding:0 12px;font-size:12px}
-  .k2-loc{width:36px;height:36px;padding:0;justify-content:center}.k2-loc span{display:none}
+  /* On a phone the location button is a round icon the size of the avatar: the pin in the middle, and the sharing
+     dot as a small badge on its top-right edge (squeezed beside the pin, it touched the button's rim) */
+  .k2-loc{position:relative;width:40px;height:40px;padding:0;justify-content:center}.k2-loc span{display:none}
+  .k2-loc .dot{position:absolute;top:1px;right:1px;width:11px;height:11px;border-radius:50%;box-shadow:0 0 0 2px #fff}
+  /* The location menu hangs from a button in the middle of the bar, so anchored to it the menu ran off the left edge.
+     On a phone it sits under the top bar instead, 12px in from both sides. */
+  html body .k .menu.k2-locmenu{position:fixed;top:68px;left:12px;right:12px;width:auto!important}
   .k2-side{display:none}
-  .k2-main{padding:14px 12px 110px}
   .k2-h h1{font-size:26px}
-  .k2-live,.k2-tl,.k2-mapp,.k2-att{grid-template-columns:minmax(0,1fr)}
-  .k2-maphint{max-width:calc(100% - 120px);overflow:hidden;text-overflow:ellipsis;font-size:11px}
+  .k2-live,.k2-mapp {grid-template-columns:minmax(0,1fr)}
   .k2-legend{max-width:calc(100% - 24px);font-size:11px;gap:8px}
-  .k2-pp{grid-template-columns:minmax(0,1fr) auto 44px}
-  .k2-pp .k2-ic{grid-column:1/3}
+  /* A phone row: the person, then a fixed-width role column (so every dropdown and badge starts at one x), then the ⋯.
+     The IC radius goes under the name, lined up with its text; a person who is not an IC has no second line. */
+  .k2-pp{grid-template-columns:minmax(0,1fr) 112px 40px;gap:10px}
+  .k2-pp > .row{flex-wrap:nowrap}
+  .k2-pp > .row > div{flex:1 1 auto;min-width:0}
+  .k2-pp .k2-ic{grid-column:1/-1;grid-row:2;padding-left:50px}
+  .k2-pp .k2-ic:has(> .k2-ic-none){display:none}
+  /* Filter tabs stay one pill on a phone: tighter tabs, and a row that still does not fit scrolls sideways
+     instead of breaking onto a second line inside the pill */
+  html body .k2-wrapseg{flex-wrap:nowrap;max-width:100%;overflow-x:auto;scrollbar-width:none;border-radius:999px}
+  html body .k2-wrapseg::-webkit-scrollbar{display:none}
+  html body .k2-wrapseg > button{flex:none;padding:0 12px}
   .k2-pp.hd{display:none}
-  .k2-cols{grid-template-columns:1fr}
   .k2-rec{grid-template-columns:44px minmax(0,1fr) 40px}
   .k2-rec .k2-hm{display:none}
   .k2-dt{grid-template-columns:1fr 110px}
-  .k2-jump{left:56px}
   .k2-field{grid-template-columns:96px 1fr}
 }
 
@@ -221,52 +193,24 @@
 .k2-uico.change{background:#ffe4d9;color:#9a330a}
 .k2-uico.msg{background:var(--k-mint);color:var(--k-ink)}
 .k2-updtxt{font-size:13px;color:var(--k-mut);margin-top:2px}
-.k2-sched{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
-.k2-stoppin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;border:0;background:#e11dcc;color:#fff;font:800 11px Manrope;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--k-ink);padding:0;z-index:2}
-.k2-stoppin.on{background:var(--k-lime);color:var(--k-ink);width:32px;height:32px;z-index:3;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--k-ink),3px 4px 0 var(--k-ink)}
-.k2-stoplbl{position:absolute;left:40px;top:50%;transform:translateY(-50%);background:var(--k-ink);color:#fff;font:700 12px Manrope;padding:5px 10px;border-radius:999px;white-space:nowrap}
-.k2-stops{max-height:520px;overflow:auto;margin:0 -6px;padding:0 6px}
-.k2-stop{display:flex;align-items:center;gap:12px;width:100%;padding:10px 8px;border:0;border-radius:14px;background:none;text-align:left}
-.k2-stop:hover{background:var(--k-bg)}
-.k2-stop[aria-pressed="true"]{background:var(--k-bg);box-shadow:inset 0 0 0 1.5px var(--k-ink)}
-.k2-stop b{display:block;font-size:14px}.k2-stop .mut{font-size:12px}
-.k2-sn{width:28px;height:28px;border-radius:50%;background:#e11dcc;color:#fff;display:grid;place-items:center;font:800 12px Manrope;flex:none}
-.k2-stop[aria-pressed="true"] .k2-sn{background:var(--k-lime);color:var(--k-ink);box-shadow:inset 0 0 0 2px var(--k-ink)}
-.k2-dur{font:700 13px Manrope;font-variant-numeric:tabular-nums}
-.k2-show{color:var(--k-mut);display:grid}.k2-show .ki{width:16px;height:16px}
 .k2-arealist{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px}
 .k2-arealist button{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px 0 8px;border-radius:999px;border:0;background:#fff;box-shadow:0 0 0 1px var(--k-line);font:700 12px Manrope}
 .k2-arealist button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--k-ink)}
 .k .gp[data-mine="true"]{box-shadow:0 0 0 2px var(--k-ink),5px 6px 0 var(--k-ink)}
-.k2-roleic .ov2-head .kb,.k2-roleic .ov2-grid>section>.link{display:none}
 @media (max-width: 767.98px){
-  .k2-sched{grid-template-columns:minmax(0,1fr)}
-  .k2-banner{flex-wrap:wrap;padding:12px}
+  /* On a phone the location banner is a compact strip: a smaller icon and title, the action full width under it. Before
+     the event starts there is nothing to press, so the greyed-out button is left out (the line under the title says
+     when sharing opens). */
+  .k2-banner{flex-wrap:wrap;gap:10px 12px;padding:12px 14px;margin-bottom:12px;border-radius:18px}
+  .k2-banner b{font-size:14px;line-height:1.3}
+  .k2-banner .k2-bsub{font-size:12px}
+  .k2-banner .k2-bico{width:32px;height:32px}
+  .k2-banner .k2-bico .ki{width:16px;height:16px}
   .k2-banner .kb{width:100%}
+  .k2-banner.idle .kb:disabled{display:none}
   .k2-cal{width:min(304px,calc(100vw - 48px))}
   .k2-time{right:0}
   .k2-upd{flex-wrap:wrap}
-}
-
-.k2-zlbl{position:absolute;transform:translate(-50%,-50%);background:var(--k-ink);color:#fff;font:700 11px Manrope;padding:4px 9px;border-radius:999px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.18);z-index:1}
-.k2-zlbl.nogo{background:#c2410c}
-.k2-zlbl.stage{background:var(--k-lime);color:var(--k-ink);box-shadow:inset 0 0 0 1.5px var(--k-ink)}
-.k2-schedmap{aspect-ratio:16/9;margin-bottom:16px}
-.k2-schedlist{padding:14px 20px 10px}
-.k2-srow{display:grid;grid-template-columns:36px 210px minmax(0,1fr) 70px 24px;gap:14px;align-items:center;width:100%;padding:12px 8px;border:0;border-top:1px solid var(--k-line);background:none;text-align:left;border-radius:0}
-.k2-srow.hd{font:800 11px Manrope;letter-spacing:.14em;text-transform:uppercase;color:var(--k-mut);padding:6px 8px;border-top:0}
-.k2-srow:not(.hd):hover{background:var(--k-bg)}
-.k2-srow[aria-pressed="true"]{background:var(--k-bg);box-shadow:inset 3px 0 0 #e11dcc}
-.k2-srow[aria-pressed="true"] .k2-sn{background:var(--k-lime);color:var(--k-ink);box-shadow:inset 0 0 0 2px var(--k-ink)}
-.k2-stime{font:700 14px Manrope;font-variant-numeric:tabular-nums;white-space:nowrap}
-.k2-szone{font:700 15px Manrope;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media (max-width: 767.98px){
-  .k2-srow{grid-template-columns:30px minmax(0,1fr) 20px;gap:10px}
-  .k2-srow .k2-stime{grid-column:2;grid-row:2;font-size:12px;color:var(--k-mut)}
-  .k2-srow>.row{grid-column:2;grid-row:1}
-  .k2-srow .k2-show{grid-column:3;grid-row:1/3}
-  .k2-srow .k2-sn{grid-row:1/3}
-  .k2-srow.hd{display:none}
 }
 
 /* ===== The app's shell around the design's parts ===== */
@@ -286,7 +230,7 @@ html body .k-topbar .ke2-nav.k2-eventbar{height:68px;padding:0 20px;gap:10px}
 .k2-dialog fieldset{border:0;padding:0;margin:0;min-width:0}
 .k2-dialog legend{float:none;width:auto;padding:0}
 .k2-opt[aria-pressed="true"],.k2-opt[aria-pressed="true"]:hover{background:var(--ink);color:var(--lime)}
-.k2-err{margin:10px 0 0;color:#b91c1c;font:700 13px Manrope}
+.k2-err{margin:10px 0 0;color:var(--danger);font:700 13px Manrope}
 .k2-t0{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
 .k2-radio{display:inline-flex;align-items:center;gap:8px;font:600 14px Manrope;cursor:pointer}
 .k2-radio input{width:18px;height:18px;accent-color:var(--ink)}
@@ -301,12 +245,10 @@ html body .ev:not(.ev-native) .ev-main{padding:24px 30px 60px;min-width:0}
 .k2-nav .ev-nav-text{flex:0 1 auto;min-width:0}
 html body .ev:not(.ev-native) .k2-pagehead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 18px;min-height:44px}
 html body .ev:not(.ev-native) .k2-pagehead h2{font:800 36px/1 Unbounded;letter-spacing:-.06em;margin:0;flex:1 1 auto}
-.k2-schedule-out{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border:0;border-radius:999px;background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink);font:700 14px Manrope;color:var(--ink)}
-.k2-schedule-out svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .k2-bnav{display:none}
 /* Keyboard focus, everywhere in the new parts */
 .k2-side :focus-visible,.k-topbar :focus-visible,.k2-scrim :focus-visible,.ev-main .k :focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-.k2-bnav :focus-visible,.k2-banner.urgent :focus-visible{outline:3px solid var(--lime);outline-offset:2px}
+.k2-banner.urgent :focus-visible{outline:3px solid var(--lime);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){
   .k2-banner.urgent .k2-bico,.k .pulse{animation:none}
 }
@@ -320,17 +262,28 @@ html body .ev:not(.ev-native) .k2-pagehead h2{font:800 36px/1 Unbounded;letter-s
   html body .ev:not(.ev-native) .ev-main{padding:14px 12px 110px}
   html body .ev:not(.ev-native) .k2-pagehead h2{font-size:26px}
   .k.k2-nav{display:none}
-  .k2-bnav{display:flex;position:fixed;left:10px;right:10px;bottom:10px;z-index:1000;background:var(--ink);border-radius:24px;padding:6px}
-  .k2-bnav a,.k2-bnav button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:56px;border:0;border-radius:18px;background:transparent;color:rgba(255,255,255,.7);font:700 11px Manrope;text-decoration:none}
-  .k2-bnav [aria-current="page"]{background:var(--lime);color:var(--ink)}
-  .k2-bnav-ico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  /* The phone's bottom bar: a floating dark bar, clear of the home indicator. The open page (and More while its sheet
+     is open) is marked the way phone apps do it: a lime pill behind its icon and a brighter label. */
+  .k2-bnav{display:flex;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:1000;max-width:520px;margin:0 auto;background:var(--ink);border-radius:26px;padding:6px 4px;box-shadow:0 10px 28px rgba(10,31,23,.28),0 0 0 1px rgba(255,255,255,.06) inset}
+  .k2-bnav a,.k2-bnav button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:58px;padding:0 2px;border:0;border-radius:18px;background:transparent;color:rgba(255,255,255,.62);font:700 11px/1 Manrope;letter-spacing:0;text-decoration:none;white-space:nowrap;outline:0;-webkit-tap-highlight-color:transparent}
+  .k2-bnav-ico{flex:none;width:52px;height:30px;padding:5px 16px;border-radius:999px;box-sizing:border-box;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:background-color .18s,color .18s,transform .12s}
+  .k2-bnav :is([aria-current="page"],[aria-expanded="true"]){color:#fff}
+  .k2-bnav :is([aria-current="page"],[aria-expanded="true"]) .k2-bnav-ico{background:var(--lime);color:var(--ink)}
+  .k2-bnav a:active .k2-bnav-ico,.k2-bnav button:active .k2-bnav-ico{transform:scale(.92)}
+  /* No box or ring around an item: focus fills the icon's pill with the same solid lime as the open page */
+  html body .k2-bnav :is(a,button):focus-visible{outline:0;box-shadow:none;color:#fff}
+  html body .k2-bnav :is(a,button):focus-visible .k2-bnav-ico{background:var(--lime);color:var(--ink);box-shadow:none}
   .k2-scrim{padding:16px 10px}
 }
 
 /* Zone captions on every map (the pill is the tooltip itself) */
 html body .leaflet-tooltip.k2-ztip{background:var(--ink);color:#fff;font:700 11px Manrope;padding:4px 9px;border:0;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.18);pointer-events:none;white-space:nowrap}
-html body .leaflet-tooltip.k2-ztip-nogo{background:#c2410c}
-html body .leaflet-tooltip.k2-ztip-stage{background:var(--lime);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+/* Each area type's name pill is the type's own colour (areaKinds.js), white text on all five */
+html body .leaflet-tooltip.k2-ztip-zone{background:#56685f}
+html body .leaflet-tooltip.k2-ztip-nogo{background:#dc2626}
+html body .leaflet-tooltip.k2-ztip-obstacle{background:#ea580c}
+html body .leaflet-tooltip.k2-ztip-stage{background:#2563eb}
+html body .leaflet-tooltip.k2-ztip-entrance{background:#16a34a}
 html body .leaflet-tooltip.k2-ztip::before{display:none}
 
 /* Live */
@@ -351,6 +304,8 @@ html body .leaflet-tooltip.k2-ztip::before{display:none}
 
 /* Timeline (the website; the phone app keeps its own arrangement of these parts) */
 html:not(.native-app) body .ev .pv-board{display:block;background:transparent;padding:0;border:0;box-shadow:none}
+/* No plan yet: the "Planning" bar and the empty message are one white card, not a bar over the bare page */
+html:not(.native-app) body .ev .pv-board.is-empty{background:#fff;border-radius:24px;overflow:hidden;padding-bottom:8px}
 html:not(.native-app) body .ev .pv-board-head{display:block;background:transparent;padding:0;border:0;margin:0}
 .k2-planbar{margin-bottom:14px}
 .k2-planbtn{max-width:min(420px,100%)}
@@ -388,18 +343,10 @@ html:not(.native-app) body .ev .pv-frame.is-bad .pv-frame-dot{background:#c2410c
 /* Pages that draw their own header: the phone app already titles them */
 .ev-native .k2-h h1{display:none}
 /* Schedule */
-.k2-schedhead{align-items:flex-start}
-.k2-schedsub{margin:6px 0 0;font-size:14px}
-html body .ev .pv-route.is-embedded .pv-route-stage{aspect-ratio:16/9;height:auto;min-height:0;border-radius:24px;overflow:hidden;margin-bottom:16px}
+html body .ev .pv-route.is-embedded .pv-route-stage{aspect-ratio:2/1;height:auto;max-height:48vh;min-height:0;border-radius:24px;overflow:hidden;margin-bottom:16px}
 html body .ev .pv-route.is-embedded .pv-map{height:100%;min-height:0}
-html:not(.native-app) body .ev .pv-route-dot-mark{width:26px;height:26px;background:var(--pv-dot);color:#fff;font:800 11px Manrope;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
+html:not(.native-app) body .ev .pv-route-dot-mark{width:26px;height:26px;background:var(--pv-dot);color:var(--pv-dot-ink,#fff);font:800 11px Manrope;box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
 html:not(.native-app) body .ev .pv-route-dot.is-focused .pv-route-dot-mark{width:32px;height:32px;background:var(--lime);color:var(--ink);box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink),3px 4px 0 var(--ink)}
-.k2-srowwrap .k2-srow{color:var(--ink);cursor:pointer}
-.k2-srowwrap .k2-srow:disabled{cursor:default;opacity:1}
-.k2-srow[aria-pressed="true"]{box-shadow:inset 3px 0 0 var(--c)}
-.k2-srow .k2-sn{background:var(--c)}
-.k2-srowwrap.is-now .k2-srow{background:var(--canvas)}
-.k2-srowextra{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 8px 10px 58px}
 /* People */
 .k2-addrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .k2-addrow.has-group{grid-template-columns:minmax(0,1fr) 220px auto}
@@ -421,7 +368,6 @@ html:not(.native-app) body .ev .playback-map{height:auto;aspect-ratio:16/9;min-h
 .k2-player input[type=range]::-moz-range-thumb{background:var(--lime);box-shadow:0 0 0 2px var(--ink),2px 3px 0 var(--ink)}
 @media (max-width: 767.98px){
   .k2-addrow,.k2-addrow.has-group{grid-template-columns:minmax(0,1fr)}
-  .k2-srowextra{padding-left:48px}
   html body .ev .pv-route.is-embedded .pv-route-stage{aspect-ratio:16/9}
 }
 
@@ -447,6 +393,8 @@ html:not(.native-app) body .ev .bench-map{height:min(66vh,620px);border-radius:2
 /* The bridge's reset for a .row's children (width:auto, padding:0) must not reach the design's fixed-size parts */
 .k .row > .tog{width:44px!important}
 .k .row > .av{width:40px!important;height:40px}
+/* The account button in the top bar: the same bold initials as every other avatar (a button reset was setting it in regular body text) */
+html body .ks-av{font:700 13px Unbounded;letter-spacing:0;color:var(--ink)}
 .k .row > .k2-pillbtn{padding:0 12px!important}
 .k .row > .k2-mini{padding:3px!important}
 .k .row > .k2-sw{width:14px!important}
@@ -461,11 +409,16 @@ html:not(.native-app) body .ev .bench-map{height:min(66vh,620px);border-radius:2
 .k-topbar .k2-sos{color:#fff;font:800 14px Unbounded}
 html:not(.native-app) body .ev .pv-stage .pv-map{position:relative}
 html:not(.native-app) body .ev .k2-transport-top{background:transparent}
-html:not(.native-app) body .ev .pv-sched{background:transparent;padding:0;border:0;box-shadow:none}
-/* A zone's caption never covers what stands on it */
-html:not(.native-app) body .pv-map .leaflet-marker-pane,html:not(.native-app) body .live-map .leaflet-marker-pane{z-index:660}
-html:not(.native-app) body .ev .pv-route-dot-label{display:none}
-html:not(.native-app) body .ev .pv-route-dot.is-focused .pv-route-dot-label{display:block}
+html:not(.native-app) body .ev .pv-sched{background:transparent;padding:0;border:0;box-shadow:none;gap:16px;overflow:visible}
+html:not(.native-app) body .ev .pv-sched-card{background:#fff;border-radius:24px;overflow:hidden;display:flex;flex-direction:column}
+html:not(.native-app) body .ev .pv-sched-list{max-height:min(60vh,520px);overflow-y:auto;overscroll-behavior:contain}
+html:not(.native-app) body .ev .k2-schedhead{margin-bottom:8px}
+/* Hover tags (Leaflet's tooltip layer, 650) stay in front of every pin (the marker layer, 600): zone names on these maps
+   only show on hover now, so nothing permanent sits in that layer to cover a pin */
+/* The pin under the pointer, with its own label, comes in front of every other pin */
+.pv-map .leaflet-marker-icon:hover,.live-map .leaflet-marker-icon:hover{z-index:100000!important}
+html:not(.native-app) body .ev .pv-route.is-crowded .pv-route-dot-label{display:none}
+html:not(.native-app) body .ev .pv-route.is-crowded .pv-route-dot.is-focused .pv-route-dot-label{display:block}
 .k2-maplegend{bottom:28px}
 @media (max-width: 767.98px){.k-topbar .k2-sos{font-size:12px}}
 
@@ -497,6 +450,8 @@ html:not(.native-app) .pv-sheet h2{font:800 22px Unbounded;letter-spacing:-.05em
 html:not(.native-app) .pv-grabber{width:44px;height:5px;border-radius:3px;background:#d6dcd8;margin:0 auto 10px}
 html:not(.native-app) .pv-more-row{display:flex;align-items:center;gap:12px;min-height:52px;padding:0 10px;border-radius:14px;font:700 15px Manrope;color:var(--ink);text-decoration:none}
 html:not(.native-app) .pv-more-row:hover{background:var(--canvas)}
+/* Each page in the More sheet has the same icon it has in the menu and the bottom bar */
+.k2-more-ico{flex:none;width:36px;height:36px;padding:8px;border-radius:12px;background:var(--canvas,#eef0e8);box-sizing:border-box;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html:not(.native-app) .pv-more-row strong{font-weight:700}
 html:not(.native-app) .pv-chev{font-size:24px;line-height:1;color:var(--muted)}
 /* A chip that also carries .k keeps its own fill (.k paints the canvas) */
@@ -542,11 +497,9 @@ html body .k .ksel:after{display:none}
 .k2-rowmarker{flex:none;width:26px!important;height:26px;font:700 10px Manrope}
 .k2-selectall{gap:10px}
 .k2-chk[aria-checked="mixed"]{background:var(--ink);color:var(--lime)}
-.k2-srow{grid-template-columns:36px 210px minmax(0,1fr) 24px}
-@media (max-width: 767.98px){.k2-srow{grid-template-columns:30px minmax(0,1fr) 20px}}
 
 /* ===== Hover: anything that does something when pressed says so under the pointer ===== */
-.k2-pillbtn,.k2-tabs button,.k2-mini button,.k2-chk,.k2-lock,.k2-arealist button,.k2-areaopen,.k2-link,.k2-loc,.k2-planbtn,.tog,.k .seg button,.k2-bnav a,.k2-bnav button,.k2-schedule-out,.kp-group,.k2-srow,.k2-personrow,.k2-rehearsal,.pv-frame-dot,.k2-sos,.pv-btn{transition:background-color .12s,color .12s,box-shadow .12s,transform .12s,border-color .12s}
+.k2-pillbtn,.k2-tabs button,.k2-mini button,.k2-chk,.k2-lock,.k2-arealist button,.k2-areaopen,.k2-link,.k2-loc,.k2-planbtn,.tog,.k .seg button,.k2-bnav a,.k2-bnav button,.kp-group,.k2-personrow,.k2-rehearsal,.pv-frame-dot,.k2-sos,.pv-btn {transition:background-color .12s,color .12s,box-shadow .12s,transform .12s,border-color .12s}
 .k button:disabled,.k .kb:disabled{cursor:not-allowed}
 @media (hover: hover){
   .k .kb:disabled:hover,.k .ib:disabled:hover{transform:none}
@@ -562,13 +515,13 @@ html body .k .ksel:after{display:none}
   .k2-area .hd:hover{background:rgba(10,31,23,.04);border-radius:10px}
   .k2-link:hover:not(:disabled){text-decoration-thickness:2px;opacity:.8}
   .k2-loc:hover{box-shadow:0 0 0 1.5px var(--ink) inset}
-  .k2-planbtn:hover,.k2-schedule-out:hover{box-shadow:inset 0 0 0 2px var(--ink);background:rgba(10,31,23,.03)}
+  .k2-planbtn:hover {box-shadow:inset 0 0 0 2px var(--ink);background:rgba(10,31,23,.03)}
   .tog:hover:not(:disabled){box-shadow:0 0 0 2px rgba(10,31,23,.2)}
   .k .seg button:hover:not(:disabled):not([aria-pressed="true"]):not([aria-selected="true"]){color:var(--ink);background:rgba(10,31,23,.07)}
-  .k2-bnav a:hover:not([aria-current="page"]),.k2-bnav button:hover:not([aria-current="page"]){color:#fff;background:rgba(255,255,255,.1)}
+  .k2-bnav :is(a,button):hover:not([aria-current="page"]):not([aria-expanded="true"]){color:#fff}
+  .k2-bnav :is(a,button):hover:not([aria-current="page"]):not([aria-expanded="true"]) .k2-bnav-ico{background:rgba(255,255,255,.1)}
   .kp-group:hover{transform:translate(-1px,-1px);box-shadow:3px 4px 0 var(--ink)}
   .kp-group[data-mine="true"]:hover{box-shadow:0 0 0 2px var(--ink),7px 8px 0 var(--ink)}
-  .k2-srow:hover:not(.hd):not(:disabled){background:var(--canvas)}
   .k2-personrow:hover{background:var(--canvas)}
   html:not(.native-app) body .ev .pv-frame:hover .pv-frame-dot{transform:scale(1.25);background:var(--lime)}
   .k2-sos:hover{filter:brightness(1.08)}
@@ -585,7 +538,7 @@ html body .k .ksel:after{display:none}
   html body select:not([multiple]):not([size]){display:inline-flex;align-items:center;line-height:1.2}
 }
 /* Date and time side by side: room for the time and its arrow */
-.k2-dt{grid-template-columns:minmax(0,1fr) 150px}
+.k2-dt{grid-template-columns:minmax(0,1fr) 172px}
 @media (max-width: 767.98px){
   .k2-dt{grid-template-columns:minmax(0,1fr) 124px}
   .k2-dt .k2-fbtn{padding:0 10px;gap:6px;font-size:14px}
@@ -606,14 +559,10 @@ html body .k .ksel:after{display:none}
 /* The timeline's "too far apart" card: a soft red panel inside the inspector, one row per stretch, with the fix as a pill
    (the same pill as Place on map). It scrolls inside its own box if there are very many. */
 html body .ev .pv-inspector > .pv-warnings{margin:14px 0 0;padding:6px 14px;gap:0;max-height:min(46vh,420px);overflow-y:auto;overscroll-behavior:contain;border:0;border-radius:18px;background:var(--k-redbg);box-shadow:inset 0 0 0 1.5px rgba(194,65,12,.3);font:600 13px/1.4 Manrope,system-ui,sans-serif;color:var(--k-red)}
-html body .ev .pv-warnings .pv-gap,html body .ev .pv-warnings .pv-block{align-items:center;gap:12px;margin:0;padding:10px 0;border:0;border-top:1px solid rgba(194,65,12,.2)}
 html body .ev .pv-warnings > :first-child{border-top:0}
-html body .ev .pv-warnings .pv-gap-text,html body .ev .pv-warnings .pv-block-text{flex:1;min-width:0}
 html body .ev .pv-warnings strong{font-weight:800}
 html body .ev .pv-warnings .k2-pillbtn{flex:none;height:28px;padding:0 12px;font-size:12px;color:var(--k-red);box-shadow:inset 0 0 0 1.5px var(--k-red)}
 html body .ev .pv-warnings .k2-pillbtn:hover:not(:disabled){background:var(--k-red);color:#fff}
-html body .ev .pv-warnings .pv-warn-head .k2-pillbtn{background:var(--k-ink);color:var(--k-lime);box-shadow:none}
-html body .ev .pv-warnings .pv-warn-head .k2-pillbtn:hover:not(:disabled){background:var(--k-f);color:var(--k-lime)}
 
 /* Slim scroll bars for the two boxes above: a rounded thumb on a faint track, no arrow buttons */
 .k2-gscroll::-webkit-scrollbar,html body .ev .pv-inspector > .pv-warnings::-webkit-scrollbar{width:8px}
@@ -642,12 +591,6 @@ html:not(.native-app) body .ev .pv-inspector.k2-insp > .k2-tabs{flex:none;margin
 }
 /* The card's summary line: what is wrong, the one button that fixes it all, and Details for the rows */
 html body .ev .pv-inspector > .pv-warnings{max-height:none;overflow:visible;padding:10px 14px;margin:10px 0 4px}
-.pv-warn-top{display:flex;align-items:center;gap:10px}
-.pv-warn-top .pv-gap-text{flex:1;min-width:0;font-weight:800}
-.pv-warn-top .k2-link{color:var(--k-red);flex:none}
-html body .ev .pv-warnings .k2-pill-ink{background:var(--k-ink);color:var(--k-lime);box-shadow:none}
-html body .ev .pv-warnings .k2-pill-ink:hover:not(:disabled){background:var(--k-f);color:var(--k-lime)}
-.pv-warn-rows{max-height:min(30vh,240px);overflow-y:auto;overscroll-behavior:contain;margin-top:8px}
 html body .ev .pv-warnings > :first-child{border-top:0}
 
 /* The side menu folds to a rail of icons. The column animates (240px to 72px), the labels fade, and the items keep their
@@ -676,10 +619,6 @@ html body ::-webkit-scrollbar-thumb{background:rgba(10,31,23,.28);border-radius:
 html body ::-webkit-scrollbar-thumb:hover{background:rgba(10,31,23,.45)}
 html body ::-webkit-scrollbar-button{display:none;width:0;height:0}
 html body ::-webkit-scrollbar-corner{background:transparent}
-/* inside the red "too far apart" card the thumb is red too */
-.pv-warn-rows::-webkit-scrollbar-track{background:rgba(194,65,12,.1)}
-.pv-warn-rows::-webkit-scrollbar-thumb{background:rgba(194,65,12,.5)}
-.pv-warn-rows{padding-right:6px}
 
 /* A zone on a read-only map is hovered for its name, but the map still drags and clicks through it */
 .leaflet-interactive.k2-zone-hover{cursor:inherit}
@@ -691,3 +630,363 @@ html body ::-webkit-scrollbar-corner{background:transparent}
 .k2-lock,.k .k2-lockbtn{padding:0;display:inline-grid;place-items:center}
 .k2-lock{width:30px;height:30px}
 .k2-lock .ki,.k2-lockbtn .ki{display:block;margin:0}
+
+/* ===== Live: the map and the side panel share one height (the tabs stay put and the panel body scrolls).
+   `contain: size` keeps the panel content from stretching the row, so the row is the map height. ===== */
+html:not(.native-app) body .ev .kp-live.k2-live{grid-template-columns:minmax(0,1fr) 400px;align-items:stretch}
+html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:clamp(520px,calc(100vh - 190px),980px);min-height:0}
+html:not(.native-app) body .ev .k2-live .kp-live-map .position-relative.mb-3{margin-bottom:0!important}
+.k2-live .kp-live-side{display:flex;flex-direction:column;min-height:0}
+.k2-liveside{flex:1;display:flex;flex-direction:column;contain:size;min-height:0;overflow:hidden;padding:6px 6px 0 16px}
+.k2-liveside > .k2-tabs{flex:none;gap:0;margin:0 10px 0 -6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.k2-liveside > .k2-tabs::-webkit-scrollbar{display:none}
+.k2-liveside > .k2-tabs button{flex:none;padding:0 10px;white-space:nowrap}
+.k2-liveside-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 10px 18px 0}
+.k2-liveside-body::-webkit-scrollbar{width:8px}
+.k2-liveside-body::-webkit-scrollbar-track{background:rgba(10,31,23,.05);border-radius:999px}
+.k2-liveside-body::-webkit-scrollbar-thumb{background:rgba(10,31,23,.28);border-radius:999px}
+.k2-liveside-body::-webkit-scrollbar-button{display:none;width:0;height:0}
+.k2-ops-empty{display:grid;gap:6px;justify-items:center;text-align:center;padding:48px 16px;color:var(--muted);font-size:14px}
+.k2-ops-empty strong{font:800 18px/1.2 Unbounded;letter-spacing:-.04em;color:var(--ink)}
+@media (max-width: 991.98px){
+  html:not(.native-app) body .ev .kp-live.k2-live{grid-template-columns:minmax(0,1fr)}
+  html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:62vh;min-height:360px}
+  .k2-liveside{contain:none;overflow:visible}
+  .k2-liveside-body{overflow:visible;padding-right:10px}
+}
+
+/* ===== Live: Operations ===== */
+.k2-ops .k2-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.k2-opsview,.k2-logview{display:grid;gap:14px;min-width:0}
+.k2-runclock{background:var(--forest);color:var(--on-forest-body);border-radius:20px;padding:16px 18px;display:grid;gap:12px}
+.k2-rc-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.k2-rc-live{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--lime);color:var(--ink);font:800 11px Manrope;letter-spacing:.08em;text-transform:uppercase}
+.k2-rc-live i{width:7px;height:7px;border-radius:50%;background:var(--ink);animation:kpulse 1.6s infinite}
+.k2-rc-rev{font:700 13px Manrope;color:var(--on-forest-muted)}
+.k2-rc-mid{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.k2-rc-elapsed{font:800 40px/1 Unbounded;letter-spacing:-.05em;color:var(--lime);font-variant-numeric:tabular-nums}
+.k2-rc-times{display:grid;gap:2px;font:600 12px/1.4 Manrope;color:var(--on-forest-body)}
+.k2-rc-bar{display:flex;height:10px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.12)}
+.k2-rc-bar i{display:block;height:100%;transition:width .4s ease}
+.k2-rc-bar .is-active,.k2-rc-legend .is-active{background:var(--mint)}
+.k2-rc-bar .is-pending,.k2-rc-legend .is-pending{background:rgba(255,255,255,.35)}
+.k2-rc-bar .is-done,.k2-rc-legend .is-done{background:var(--lime)}
+.k2-rc-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font:600 12px Manrope;color:var(--on-forest-body)}
+.k2-rc-legend span{display:inline-flex;align-items:center;gap:6px}
+.k2-rc-legend i{width:8px;height:8px;border-radius:50%}
+.k2-rc-n{flex-basis:100%;font:700 13px Manrope;color:#fff}
+.k2-ops-error{display:flex;align-items:flex-start;gap:10px;margin:0;padding:10px 12px;border-radius:14px;background:var(--danger-bg);color:var(--danger-strong);font:600 13px/1.4 Manrope}
+.k2-ops-error > span{flex:1;min-width:0}
+.k2-ops-x{flex:none;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer}
+.k2-ops-none{margin:0;padding:18px 4px;color:var(--muted);font-size:14px;text-align:center}
+.k2-opsbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 14px;border:0;border-radius:999px;background:#fff;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink);font:700 13px Manrope;white-space:nowrap;cursor:pointer;transition:transform .15s,box-shadow .15s,background-color .15s}
+.k2-opsbtn.is-ink{background:var(--ink);color:#fff;box-shadow:2px 3px 0 var(--lime-shadow)}
+.k2-opsbtn:disabled{cursor:not-allowed;opacity:.5;box-shadow:inset 0 0 0 1.5px var(--k-line)}
+.k2-opsbtn.is-ink:disabled{background:rgba(10,31,23,.12);color:var(--muted);box-shadow:none;opacity:1}
+.k2-opsfilter{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--canvas);width:max-content;max-width:100%}
+.k2-opsfilter button{height:32px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--muted);font:700 13px Manrope;white-space:nowrap;cursor:pointer;transition:background-color .15s,color .15s}
+.k2-opsfilter button span{opacity:.7;margin-left:2px}
+.k2-opsfilter button[aria-pressed="true"]{background:var(--ink);color:var(--lime)}
+.k2-gcards{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.k2-gcard{position:relative;display:grid;gap:8px;padding:12px 14px;border-radius:16px;background:#fff;box-shadow:inset 0 0 0 1px var(--k-line);transition:background-color .15s}
+.k2-gcard.is-soon{background:#f7fbea;box-shadow:inset 3px 0 0 var(--lime-shadow),inset 0 0 0 1px rgba(122,168,46,.25)}
+.k2-gc-top{display:flex;align-items:center;gap:8px;min-width:0}
+.k2-gc-dot{flex:none;width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(10,31,23,.25)}
+.k2-gc-name{min-width:0;font:700 15px Manrope;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k2-gc-state{flex:none;height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;font:700 12px Manrope;background:var(--soft);color:var(--ink)}
+.k2-gc-state.is-active{background:var(--ink);color:var(--lime)}
+.k2-gc-state.is-done{background:var(--mint);color:var(--ink)}
+.k2-gc-sig{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:4px;font:700 11px Manrope;white-space:nowrap}
+.k2-gc-sig svg{width:12px;height:12px;fill:currentColor}
+.k2-gc-sig.is-none{color:var(--danger-strong)}
+.k2-gc-sig.is-quiet{color:#9a6a00}
+.k2-gc-sig.is-live{color:#0072B2}
+.k2-gc-move{display:flex;align-items:center;gap:8px;min-width:0}
+.k2-gc-moves{flex:1;min-width:0;font:700 15px Manrope;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.k2-gc-moves small{font:600 12px Manrope;color:var(--muted)}
+.k2-gc-arrow{margin:0 6px;color:var(--muted);font-weight:600}
+.k2-gc-pill{flex:none;height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;background:var(--canvas);color:var(--ink);font:700 12px Manrope;font-variant-numeric:tabular-nums}
+.k2-gc-pill.is-due{background:var(--lime);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.k2-gc-bar{height:5px;border-radius:999px;background:rgba(10,31,23,.08);overflow:hidden}
+.k2-gc-bar i{display:block;height:100%;background:var(--forest);border-radius:inherit;transition:width 1s linear}
+.k2-gc-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:30px}
+.k2-gc-meta{flex:1;min-width:0;display:inline-flex;align-items:center;gap:5px;font:600 12px Manrope;color:var(--muted)}
+.k2-gc-meta svg{flex:none;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.k2-gc-marked{margin-left:auto;height:30px;display:inline-flex;align-items:center;padding:0 12px;border-radius:999px;font:700 12px Manrope;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k2-gc-marked.is-arrived{background:var(--lime);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.k2-gc-marked.is-miss{background:var(--danger);color:#fff}
+
+/* ===== Live: Plan log ===== */
+.k2-logs{list-style:none;margin:0;padding:0}
+.k2-logentry{display:grid;gap:6px;justify-items:start;padding:14px 0;border-top:1px solid var(--k-line)}
+.k2-logentry:first-child{border-top:0;padding-top:0}
+.k2-logtag{height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;background:var(--mint);color:var(--ink);font:700 12px Manrope}
+.k2-logtag.is-timeline{background:var(--danger-bg);color:var(--danger-strong)}
+.k2-logmeta{font:600 12px Manrope;color:var(--muted)}
+.k2-logbody{margin:0;font:600 14px/1.45 Manrope;color:var(--ink)}
+.k2-logack{display:inline-flex;align-items:center;gap:10px;font:700 12px Manrope;color:var(--ink)}
+.k2-logbar{width:64px;height:5px;border-radius:999px;background:rgba(10,31,23,.1);overflow:hidden}
+.k2-logbar i{display:block;height:100%;background:var(--forest)}
+.k2-logwait{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.k2-logwait-h{font:600 12px Manrope;color:var(--muted)}
+.k2-waitchip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--canvas);font:700 12px Manrope;color:var(--ink)}
+.k2-waitchip i{width:8px;height:8px;border-radius:50%}
+
+/* ===== Schedule: Mark all as read ===== */
+.k2-readall{margin-left:auto;height:30px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--k-line);font:700 13px Manrope;cursor:pointer;transition:background-color .15s,box-shadow .15s}
+.k2-readall:disabled{opacity:.5;cursor:not-allowed}
+.pv-sched-ackall{align-self:flex-end;margin-bottom:6px}
+
+/* ===== Timeline: a taller map, and the right panel exactly as tall as it (the frame strip runs underneath both) ===== */
+html:not(.native-app) body .ev .pv-map{height:clamp(480px,calc(100vh - 250px),900px)}
+html:not(.native-app) body .ev .pv-inspector.k2-insp{grid-row:1}
+html:not(.native-app) body .ev .pv-bar{grid-column:1/-1}
+@media (max-width: 767.98px){
+  html:not(.native-app) body .ev .pv-map{height:56vh;min-height:320px}
+  html:not(.native-app) body .ev .pv-inspector.k2-insp,html:not(.native-app) body .ev .pv-bar{grid-column:1;grid-row:auto}
+}
+
+/* ===== Hover: the play buttons, Add frame, outline buttons and the Live panel ===== */
+.rp-play{transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease;cursor:pointer}
+@media (hover: hover){
+  .rp-play:hover:not(:disabled){transform:translate(-1px,-1px);background:#d4f88a;box-shadow:0 0 0 2px var(--ink) inset,3px 4px 0 var(--ink)}
+  html body .k .kb.kb-ink:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:5px 6px 0 var(--lime-shadow)}
+  html body .k .kb.kb-line:hover:not(:disabled){background:var(--canvas);box-shadow:0 0 0 2px var(--ink) inset;transform:translate(-1px,-1px)}
+  html body .k .kb.kb-lime:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:0 0 0 2px var(--ink) inset,4px 5px 0 var(--ink)}
+  .k2-opsbtn:hover:not(:disabled){transform:translateY(-1px);box-shadow:inset 0 0 0 2px var(--ink),0 4px 10px rgba(10,31,23,.12)}
+  .k2-opsbtn.is-ink:hover:not(:disabled){box-shadow:3px 5px 0 var(--lime-shadow),0 4px 10px rgba(10,31,23,.12)}
+  .k2-opsfilter button:hover:not([aria-pressed="true"]){background:var(--soft);color:var(--ink)}
+  .k2-gcard:hover{background:#fafbf8}
+  .k2-gcard.is-soon:hover{background:#f2f8e0}
+  .k2-ops-x:hover{background:rgba(154,51,10,.12)}
+  .k2-readall:hover:not(:disabled){background:var(--canvas);box-shadow:inset 0 0 0 1.5px var(--ink)}
+}
+.k2-opsbtn:focus-visible,.k2-opsfilter button:focus-visible,.k2-readall:focus-visible,.rp-play:focus-visible,.k2-liveside > .k2-tabs button:focus-visible {outline:3px solid var(--ink);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  .k2-rc-live i{animation:none}
+  .rp-play:hover,.k2-opsbtn:hover,html body .k .kb:hover{transform:none!important}
+}
+/* `.k button{font:inherit}` outranks a bare class: the Live panel and Schedule buttons say their own type */
+.k .k2-opsbtn,.k .k2-opsfilter button,.k .k2-readall{font:700 13px Manrope,system-ui,sans-serif}
+/* Playback: Play is already dark, so under the pointer it turns forest with lime type (the jumps beside it fill dark) */
+@media (hover: hover){html body .k .pb-transport .kb.kb-ink:hover:not(:disabled){background:var(--forest);color:var(--lime);transform:translate(-1px,-1px);box-shadow:5px 6px 0 var(--lime-shadow)}}
+.k .pb-transport .kb.kb-ink{transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease,color .15s ease}
+
+/* ===== Round 3: taller Timeline map + panel, medium widths stack so no map is squeezed, Schedule spacing ===== */
+html:not(.native-app) body .ev .pv-map{height:clamp(560px,calc(100vh - 200px),980px)}
+html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:clamp(560px,calc(100vh - 170px),1000px)}
+/* The green selection card keeps to a share of the panel and scrolls inside itself instead of crowding the rest */
+.k2-insp-body .k2-sel{max-height:min(230px,34vh);overflow-y:auto;overscroll-behavior:contain}
+.pv-sched-listhead{margin-top:24px}
+@media (max-width: 1100px){
+  /* Beside a 340-400px panel the map is too narrow here: the panel goes underneath and the map takes the full width */
+  html:not(.native-app) body .ev .pv-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto}
+  html:not(.native-app) body .ev .pv-stage,html:not(.native-app) body .ev .pv-bar,html:not(.native-app) body .ev .pv-inspector.k2-insp{grid-column:1;grid-row:auto}
+  html:not(.native-app) body .ev .pv-map{height:clamp(440px,68vh,720px)}
+  html:not(.native-app) body .ev .pv-inspector.k2-insp{contain:none;overflow:visible;padding:6px 18px 18px;min-height:360px}
+  .k2-insp-body{overflow:visible;margin:0;padding:0}
+  .k2-insp-body .k2-gtools,.k2-insp-body .k2-sel{position:static;box-shadow:none}
+  html:not(.native-app) body .ev .kp-live.k2-live{grid-template-columns:minmax(0,1fr)}
+  html:not(.native-app) body .ev .k2-live .ev-map-only .live-map{height:clamp(440px,68vh,720px);min-height:0}
+  .k2-liveside{contain:none;overflow:visible;min-height:420px}
+  .k2-liveside-body{overflow:visible;padding-right:10px}
+  .k2-mapp {grid-template-columns:minmax(0,1fr)}
+}
+/* Spacing: a row of buttons under a form's fields, and the zone chips under the map, never sit tight to what is above */
+.kp-card form > .kp-actions:not(:first-child),.kp-card > .kp-actions:not(:first-child){margin-top:16px}
+.k2-arealist{gap:8px;margin-top:16px;margin-bottom:4px}
+.k2-arealist button.is-locked{background:var(--k-bg2,#f3f4ee)}
+.plan-row.is-locked{padding:8px 12px;border-radius:14px}
+.plan-scroll{display:flex;flex-direction:column;gap:8px;padding-right:6px}
+
+/* A pale group colour (yellow, sky) still reads on the map: a thin ink ring beside the white one */
+.pv-marker{box-shadow:0 0 0 1px rgba(10,31,23,.55),0 1px 4px rgba(10,31,23,.4)}
+html:not(.native-app) body .ev .pv-route-dot-mark{box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--ink)}
+/* The zoom buttons sit clear of the rounded corner of the card the map is in, instead of being clipped by it */
+.pv-route-stage .leaflet-top.leaflet-left,.pv-stage .leaflet-top.leaflet-left{margin:10px 0 0 10px}
+
+/* A list that can grow without end (a roll call of hundreds, a long log, every recording) scrolls inside its own card
+   instead of pushing the page down; the page's own scroll bar stays for the page. */
+.k2-longlist{max-height:min(52vh,460px);overflow-y:auto;overscroll-behavior:contain;padding-right:6px}
+.k2-longlist-tall{max-height:min(70vh,640px)}
+
+/* Schedule: one white card (title, map, list), the same as on the phone */
+html:not(.native-app) body .ev .pv-sched-head{padding:16px 20px;background:#fff;border-bottom:1px solid var(--k-line)}
+html:not(.native-app) body .ev .pv-sched-title{font:800 20px/1.2 Unbounded;letter-spacing:-.04em;margin:0}
+html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded{padding:12px 16px 4px}
+html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded .pv-route-stage{margin-bottom:0}
+html:not(.native-app) body .ev .pv-sched-listhead{padding:14px 20px 10px;background:#fff}
+html:not(.native-app) body .ev .pv-sched-moment{padding-left:20px;padding-right:20px}
+/* A schedule row: the stop, then its status, then "We're here" (only on the stop the group is at), then a round map
+   button at the right edge, the same place on every row. Rows with no map point keep the empty column, so every
+   status still lines up. */
+html:not(.native-app) body .ev .pv-sched-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto 36px;align-items:center;gap:6px 12px}
+html:not(.native-app) body .ev .pv-sched-row > .pv-sched-where{grid-column:1}
+html:not(.native-app) body .ev .pv-sched-marks{grid-column:2;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}
+html:not(.native-app) body .ev .pv-sched-row > .pv-sched-here{grid-column:3}
+html:not(.native-app) body .ev .pv-sched-actions{grid-column:4;justify-content:flex-end}
+html:not(.native-app) body .ev .pv-sched-what,html:not(.native-app) body .ev .pv-sched-where{align-items:flex-start}
+html:not(.native-app) body .ev .pv-sched-show{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%}
+html:not(.native-app) body .ev .pv-sched-show .ki{width:17px;height:17px}
+html:not(.native-app) body .ev .pv-sched-moment.is-shown .pv-sched-show{background:var(--ink);color:var(--lime);box-shadow:none}
+html body .ev .pv-sched-skel{padding:8px 20px}
+html:not(.native-app) body .ev .pv-sched-line{margin:0;padding:8px 20px;background:#fff}
+
+/* The Problems panel is a solid white card: header, list and rows each paint their own white, so nothing behind it (the
+   page, the timeline, the inspector) shows through while it scrolls */
+html:not(.native-app) body .ev .pv-probs{background:#fff;border:0;border-radius:24px;isolation:isolate}
+html:not(.native-app) body .ev .pv-probs-head{background:#fff;position:relative;z-index:2}
+html:not(.native-app) body .ev .pv-probs-list{background:#fff;border-radius:0 0 24px 24px}
+html:not(.native-app) body .ev .pv-prob,html:not(.native-app) body .ev .pv-probs-section,html:not(.native-app) body .ev .pv-probs-lock+*{background:#fff}
+html:not(.native-app) body .ev .pv-probs-toggle{background:#fff}
+
+/* Segmented controls: one pill that slides to the chosen item (src/lib/segSlide.js). Until the script has placed it
+   (or without it) the chosen item paints its own background as before. */
+.seg[data-slide],.kp-seg[data-slide]{position:relative;--seg-bg:var(--ink,#0a1f17)}
+.k2-sel .seg[data-slide]{--seg-bg:var(--k-lime)}
+.kl-views .seg[data-slide]{--seg-bg:var(--lime)}
+.seg[data-slide]::before,.kp-seg[data-slide]::before{content:"";position:absolute;left:0;top:0;width:var(--seg-w);height:var(--seg-h);transform:translate(var(--seg-x),var(--seg-y));border-radius:inherit;border-radius:999px;background:var(--seg-bg);pointer-events:none}
+.seg[data-slide="on"]::before,.kp-seg[data-slide="on"]::before{transition:transform .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1),height .28s cubic-bezier(.4,0,.2,1)}
+.seg[data-slide] > button,.kp-seg[data-slide] > label{position:relative;z-index:1;transition:color .2s}
+.k .seg[data-slide] button[aria-pressed="true"],.k .seg[data-slide] button[aria-selected="true"],.k2-sel .seg[data-slide] button[aria-pressed="true"],.kl-views .seg[data-slide] button[aria-pressed="true"],.kp-seg[data-slide] input:checked + label{background:transparent}
+.kp-seg[data-slide] > input{z-index:0}
+@media (prefers-reduced-motion: reduce){.seg[data-slide="on"]::before,.kp-seg[data-slide="on"]::before{transition:none}}
+
+/* A page's title keeps clear of what is under it (a control row, a card) and of a banner above it. Every page title,
+   the shell's (.k2-pagehead) and a page's own (.k2-h), ends 28px above the first thing under it. */
+html body .ev:not(.ev-native) .k2-pagehead{margin-bottom:8px}
+html body .ev:not(.ev-native) .ev-main > .kp-banner + .k2-pagehead,html body .ev:not(.ev-native) .ev-main > .kp-stack + .k2-pagehead{margin-top:8px}
+
+/* An alert with a close button: the text, then a round X that sits centred at the right (not Bootstrap's corner X) */
+.alert.k2-alert{display:flex;align-items:center;gap:12px;padding-right:12px}
+.k2-alert-text{flex:1;min-width:0}
+.k2-alert-x{flex:none;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer;transition:background-color .12s}
+.k2-alert-x:hover{background:rgba(10,31,23,.1)}
+.k2-alert-x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+
+/* ===== One button system for the website =====
+   Big 44px (.btn, .kb), small 36px (.btn-sm, .kb-sm), mini 32px (the buttons inside lists, rows and cards), and round
+   icon buttons. The older plan/ops/schedule buttons (.pv-btn, .pv-sched-show, .pv-sched-here, .pv-sched-ack,
+   .pv-ops-act, .pv-strip-action) are the mini size and look: an ink-ringed pill, the same as .k2-pillbtn. */
+html:not(.native-app) body .k2-pillbtn,
+html:not(.native-app) body .pv-btn,
+html:not(.native-app) body .pv-sched-show,
+html:not(.native-app) body .pv-sched-here,
+html:not(.native-app) body .pv-sched-ack,
+html:not(.native-app) body .pv-ops-act,
+html:not(.native-app) body .pv-strip-action{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;min-height:32px;padding:0 14px;border:0;border-radius:999px;background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink);color:var(--ink);font:700 13px/1 Manrope,system-ui,sans-serif;letter-spacing:0;white-space:nowrap;cursor:pointer;text-decoration:none}
+html:not(.native-app) body .k2-pillbtn:hover:not(:disabled),
+html:not(.native-app) body .pv-btn:hover:not(:disabled),
+html:not(.native-app) body .pv-sched-show:hover:not(:disabled),
+html:not(.native-app) body .pv-sched-ack:hover:not(:disabled),
+html:not(.native-app) body .pv-ops-act:hover:not(:disabled),
+html:not(.native-app) body .pv-strip-action:hover:not(:disabled){background:var(--canvas,#eef0e8);color:var(--ink)}
+html:not(.native-app) body .pv-sched-here{background:var(--lime);box-shadow:inset 0 0 0 1.5px var(--ink)}
+html:not(.native-app) body .pv-sched-here:hover:not(:disabled){background:var(--ink);color:var(--lime)}
+html:not(.native-app) body .pv-btn.is-primary{background:var(--ink);color:var(--lime);box-shadow:none}
+html:not(.native-app) body .pv-btn.is-danger{color:var(--k-red);box-shadow:inset 0 0 0 1.5px var(--k-red)}
+html:not(.native-app) body .pv-btn.is-quiet{background:transparent;box-shadow:none}
+/* The coloured mini buttons keep their colour on hover (the shared hover above would turn them pale) */
+html:not(.native-app) body .pv-btn.is-primary:hover:not(:disabled){background:var(--forest);color:var(--lime)}
+html:not(.native-app) body .pv-btn.is-danger:hover:not(:disabled){background:var(--k-red);color:#fff}
+html:not(.native-app) body .pv-btn.is-quiet:hover:not(:disabled){background:rgba(10,31,23,.08)}
+html:not(.native-app) body .k2-pillbtn:disabled,
+html:not(.native-app) body .pv-btn:disabled,
+html:not(.native-app) body .pv-sched-show:disabled,
+html:not(.native-app) body .pv-sched-here:disabled,
+html:not(.native-app) body .pv-ops-act:disabled{opacity:.4;cursor:not-allowed}
+html:not(.native-app) body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here,.pv-sched-ack,.pv-ops-act,.pv-strip-action):focus-visible,
+html:not(.native-app) body :is(.kb,.btn,.ib,.k2-lock):focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+/* Icons in buttons: one stroke, and a size that goes with the button */
+html body :is(.kb,.btn) .ki{width:18px;height:18px}
+/* Headings and short titles share their words across lines evenly, so a narrow screen never leaves one word alone on
+   the last line ("Where Banana Gang should / be") */
+html body :is(h1,h2,h3,.pv-sched-title,.k2-banner b,.k2-card b.U){text-wrap-style:balance}
+/* A plan status badge (Schedule, Route, Ops) looks like the event's own status badge in the top bar ("Not live"):
+   sentence case, the same size and weight */
+html:not(.native-app) body .ev .pv-badge{height:28px;padding:0 11px;font:800 12px Manrope;letter-spacing:0;text-transform:none;background:rgba(10,31,23,.07);color:var(--ink)}
+html:not(.native-app) body .ev .pv-badge.is-live{background:var(--mint);color:var(--ink)}
+/* A big button on the same line as a text field or dropdown takes the field's 46px, so the two line up (Groups "Add", Attendance "Start") */
+html:not(.native-app) body :is(.kp-inline > .btn, .row.align-items-end > [class*=col] > .btn):not(.btn-sm){min-height:46px}
+html body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here,.pv-ops-act) .ki{width:16px;height:16px}
+html body .ki{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* Round icon-only buttons: the lock beside a name is the same height as the mini buttons */
+.k2-lock,.k .k2-lockbtn{width:32px;height:32px}
+/* Bootstrap's own close X, wherever one is left: the round X of the alerts */
+html body .btn-close{width:30px;height:30px;padding:0;border-radius:50%;opacity:1;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230a1f17' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6 6 18'/%3E%3C/svg%3E") center/16px no-repeat}
+html body .btn-close:hover{background-color:rgba(10,31,23,.1)}
+html body .btn-close-white{filter:invert(1)}
+/* "Got it for all": a button like its neighbour, not loose text */
+.bb-pile-head .btn-ghost{box-shadow:inset 0 0 0 1.5px var(--ink)}
+
+/* The Live panel's Messages tab: its section headers and rows use the same type as the labels above them, in any panel width */
+html body .k2-fold{font:800 11px/1 Manrope,system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--k-mut)}
+html body .k2-fold .n{font:800 11px Manrope;letter-spacing:0}
+.k2-msg .row{align-items:center}
+.k2-got{row-gap:4px}
+
+/* ===== Small windows and phones ===== */
+.k2-plans{min-width:min(330px,100%)}
+.k2-cal{max-width:calc(100vw - 32px)}
+@media (max-width: 575.98px){
+  /* Rows with two or more buttons wrap instead of running off the card. A row of a name and one action stays on one
+     line, the name shortening instead. */
+  .k .row:has(> :is(.k2-pillbtn,.kb,.btn,.k2-mini,.k2-link) ~ :is(.k2-pillbtn,.kb,.btn,.k2-mini,.k2-link)){flex-wrap:wrap}
+  .rh-item-head{flex-wrap:wrap}
+  /* Phone: the status goes under the stop's name, and the map button stays at the right, centred on the row */
+  /* Phone: the status under the stop's name, the map button at the right, and "We're here" a full-width button under
+     both, easy to hit with a thumb */
+  html:not(.native-app) body .ev .pv-sched-row{grid-template-columns:minmax(0,1fr) 40px;gap:6px 10px}
+  html:not(.native-app) body .ev .pv-sched-marks{grid-column:1;grid-row:2;justify-content:flex-start}
+  html:not(.native-app) body .ev .pv-sched-marks:empty{display:none}
+  html:not(.native-app) body .ev .pv-sched-actions{grid-column:2;grid-row:1 / span 2}
+  html:not(.native-app) body .ev .pv-sched-row > .pv-sched-here{grid-column:1 / -1;grid-row:3;width:100%;margin-top:4px}
+  html:not(.native-app) body .pv-sched-head{padding:14px 16px}
+  html:not(.native-app) body .pv-sched-title{font-size:17px}
+  html:not(.native-app) body .ev .pv-sched .pv-route.is-embedded{padding:8px 10px 0}
+  html:not(.native-app) body .ev .pv-sched-moment{padding-left:14px;padding-right:14px}
+}
+/* A finger needs more than 32px: on a touch screen the mini buttons and lock grow to a comfortable size */
+@media (pointer: coarse){
+  html:not(.native-app) body :is(.k2-pillbtn,.pv-btn,.pv-sched-show,.pv-sched-here,.pv-sched-ack,.pv-ops-act,.pv-strip-action){height:40px;min-height:40px}
+  html:not(.native-app) body .ev .pv-sched-show{width:40px;height:40px}
+  .k2-lock,.k .k2-lockbtn{width:40px;height:40px}
+  html body :is(.btn-close,.k2-alert-x,.k2-ops-x,.pv-ops-error-x,.pv-strip-close){width:40px;height:40px}
+  html body .k2-mini button{height:36px}
+  html:not(.native-app) body .ev .pv-hint .pv-btn,html body .ev .pv-warnings .k2-pillbtn{height:36px}
+}
+
+/* ===== Pages outside the event shell (My GPS, Profile, Me, Create event) look like the event pages ===== */
+.kp-head h1{font-size:36px;line-height:1}
+.kp-head{margin-bottom:24px;min-height:44px}
+.kp-card{border-radius:24px;padding:20px}
+.kp-banner{border-radius:18px}
+@media (max-width: 767.98px){.kp-head h1{font-size:26px}.kp-card{padding:16px;border-radius:20px}}
+
+/* Every dismiss X is the same round 30px button with the same drawn X (the alerts' one) */
+:is(.k2-ops-x,.pv-ops-error-x,.pv-strip-close) svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+html body :is(.pv-ops-error-x,.pv-strip-close){flex:none;display:inline-grid;place-items:center;width:30px;height:30px;padding:0;margin-left:6px;border:0;border-radius:50%;background:transparent;color:inherit;opacity:1;cursor:pointer}
+html body :is(.pv-ops-error-x,.pv-strip-close):hover{background:rgba(10,31,23,.1)}
+
+/* The Kinetic pop-ups (End / Schedule, Rename plan) fade in while the box rises and settles, and reverse on close */
+.k2-pop-enter-active,.k2-pop-leave-active{transition:opacity .2s ease}
+.k2-pop-enter-active .k2-dialog,.k2-pop-leave-active .k2-dialog{transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+.k2-pop-enter-from,.k2-pop-leave-to{opacity:0}
+.k2-pop-enter-from .k2-dialog,.k2-pop-leave-to .k2-dialog{transform:translateY(14px) scale(.98)}
+@media (prefers-reduced-motion: reduce){.k2-pop-enter-active,.k2-pop-leave-active,.k2-pop-enter-active .k2-dialog,.k2-pop-leave-active .k2-dialog{transition:none}}
+/* Timeline "Select all": a real button that reads as the checkbox's label */
+.k2-selectall{padding:0;border:0;background:transparent;color:inherit;font:800 14px var(--font-body);cursor:pointer;text-align:left}
+
+/* The same sliding pill for the Timeline's small toggles and the Live panel's group filter, and a sliding underline
+   for the underlined tab rows (Map side panel, Inspector, Live side panel). segSlide.js places them. */
+.k2-mini[data-slide],.k2-opsfilter[data-slide],.k2-tabs[data-slide]{position:relative}
+.k2-mini[data-slide]::before,.k2-opsfilter[data-slide]::before,.k2-tabs[data-slide]::before{content:"";position:absolute;left:0;top:0;width:var(--seg-w);height:var(--seg-h);transform:translate(var(--seg-x),var(--seg-y));border-radius:999px;pointer-events:none}
+.k2-mini[data-slide]::before{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12),0 0 0 1px var(--k-line)}
+.k2-opsfilter[data-slide]::before{background:var(--ink)}
+.k2-tabs[data-slide]::before{top:calc(var(--seg-h) - 3px);height:3px;border-radius:2px;background:var(--k-ink)}
+:is(.k2-mini,.k2-opsfilter,.k2-tabs)[data-slide="on"]::before{transition:transform .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1),height .28s cubic-bezier(.4,0,.2,1)}
+:is(.k2-mini,.k2-opsfilter,.k2-tabs)[data-slide] > button{position:relative;z-index:1}
+.k2-mini[data-slide] > button[aria-pressed="true"],.k2-opsfilter[data-slide] > button[aria-pressed="true"]{background:transparent;box-shadow:none}
+.k2-tabs[data-slide] > button[aria-selected="true"]{border-bottom-color:transparent}
+@media (prefers-reduced-motion: reduce){:is(.k2-mini,.k2-opsfilter,.k2-tabs)[data-slide="on"]::before{transition:none}}
+.k2-mini button .ki{width:14px;height:14px;vertical-align:middle}

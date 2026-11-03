@@ -75,7 +75,8 @@ async function copyLink() {
     <div style="min-width: 0">
       <span class="ey" style="color: var(--lime)">Invite people</span>
       <div class="mut2">Event code</div>
-      <div class="row" style="gap: 6px">
+      <!-- Not Bootstrap's .row: its children take the full width, which put the copy button on a line of its own -->
+      <div class="d-flex align-items-center" style="gap: 6px">
         <span class="ov2-code U" data-testid="join-code-display">{{ joinCode }}</span>
         <button type="button" class="ib" aria-label="Copy event code" data-testid="copy-code" @click="copyCode"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg></button>
       </div>
