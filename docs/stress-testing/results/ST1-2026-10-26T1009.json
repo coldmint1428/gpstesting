@@ -1,0 +1,90 @@
+{
+  "test": "ST1",
+  "event": "d19b4a53-8e85-4530-8c1f-859754cddd89",
+  "session": "159087cd-13ca-4b1f-ab0e-70f75dbadf11",
+  "startedAt": "2026-10-26T01:59:49.281Z",
+  "endedAt": "2026-10-26T02:09:49.898Z",
+  "minutes": 10,
+  "groups": 50,
+  "virtualIcs": 50,
+  "phones": {
+    "phones": 3,
+    "sent": 338,
+    "failed": 0,
+    "replyMs": {
+      "n": 338,
+      "min": 134.40039999998407,
+      "median": 189.3176000000094,
+      "p95": 476.7066000000341,
+      "max": 1502.0701000000117
+    },
+    "errors": {}
+  },
+  "simTickGapS": {
+    "n": 51,
+    "min": 5.545,
+    "median": 11.416,
+    "p95": 11.919,
+    "max": 12.317
+  },
+  "readingsPerTick": 49.983050847457626,
+  "opsBoardMs": {
+    "n": 52,
+    "min": 140.06970000010915,
+    "median": 174.58870000002207,
+    "p95": 556.7883000000002,
+    "max": 1075.0323999999964
+  },
+  "opsRows": {
+    "n": 52,
+    "min": 36,
+    "median": 58,
+    "p95": 58,
+    "max": 58
+  },
+  "needsAttention": {
+    "n": 52,
+    "min": 1,
+    "median": 9,
+    "p95": 12,
+    "max": 55
+  },
+  "opsErrors": 0,
+  "showBoardMs": {
+    "n": 52,
+    "min": 153.41380000009667,
+    "median": 328.8778999999922,
+    "p95": 599.4902999999467,
+    "max": 670.1763000000501
+  },
+  "showErrors": 0,
+  "lag": {
+    "phoneArrivalAndNoSignalS": {
+      "n": 0,
+      "min": null,
+      "median": null,
+      "p95": null,
+      "max": null
+    },
+    "phoneArrivalS": [],
+    "noSignalS": [],
+    "simArrivalS": {
+      "n": 12,
+      "min": 2.6735,
+      "median": 3.8675,
+      "p95": 108.9155,
+      "max": 108.9155
+    }
+  },
+  "cuesOnTime": [
+    {
+      "code": "C01",
+      "type": "flexible",
+      "due": "2026-10-26T02:04:00+00:00",
+      "started": "2026-10-26T02:04:00+00:00",
+      "lateS": 0
+    }
+  ],
+  "gos": [],
+  "recordingDeleted": null
+}

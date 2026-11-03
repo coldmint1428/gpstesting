@@ -1,0 +1,21 @@
+{
+  "test": "ST12",
+  "session": "159087cd-13ca-4b1f-ab0e-70f75dbadf11",
+  "switches": [
+    {
+      "n": 1,
+      "to": "Wet weather",
+      "at": "10:09:01",
+      "ok": true,
+      "ms": 219.82800000009593,
+      "checks": [
+        {
+          "afterS": 12,
+          "active": 27,
+          "wrong": 0
+        }
+      ],
+      "settled": true
+    }
+  ]
+}
