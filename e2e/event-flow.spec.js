@@ -171,11 +171,15 @@ test('the planner pushes the rest of the plan by a minute, and the member is tol
   await expect.poll(async () => (await sb.from('plans').select('rev').eq('id', ev.planId).single()).data.rev, { timeout: 20_000 }).toBeGreaterThan(before)
   await shot(planner, 'flow-09-pushed', { fullPage: true })
 
+  const rev = (await sb.from('plans').select('rev').eq('id', ev.planId).single()).data.rev
   const member = await as(browser, 'member')
   await member.goto(`/events/${ev.eventId}/timeline`)
-  await expect(member.getByTestId('sched-rev').first()).toBeVisible({ timeout: 30_000 })
-  const lastLabel = '+' + Math.floor((t0[t0.length - 1] + 60) / 60) + ':00'
-  await expect(member.getByText(lastLabel, { exact: true })).toBeVisible({ timeout: 30_000 }) // the new time reached the member
+  // The Schedule (079) lists stops by clock time, not "+14:00": the new version and the moved moment reached the member
+  await expect(member.getByTestId('sched-rev').first()).toHaveText(String(rev), { timeout: 30_000 })
+  const movedTo = String(t0[t0.length - 1] + 60)
+  await expect
+    .poll(() => member.getByTestId('sched-moment').evaluateAll((els) => els.map((el) => el.dataset.t)), { timeout: 30_000 })
+    .toContain(movedTo)
   await shot(member, 'flow-10-member-updated', { fullPage: true })
 })
 

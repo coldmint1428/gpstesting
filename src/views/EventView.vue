@@ -45,6 +45,8 @@ import { useBroadcasts } from '../composables/useBroadcasts'
 import BroadcastBanner from '../components/BroadcastBanner.vue'
 import BroadcastPanel from '../components/BroadcastPanel.vue'
 import AttendancePanel from '../components/AttendancePanel.vue'
+import RehearsalsPanel from '../components/RehearsalsPanel.vue'
+import { useRehearsals } from '../composables/useRehearsals'
 import { useAttendance } from '../composables/useAttendance'
 import SosDialog from '../components/SosDialog.vue'
 import SosBanner from '../components/SosBanner.vue'
@@ -220,6 +222,33 @@ async function onAttScan(text) {
   else scanMessage.value = result.message
 }
 
+// Rehearsals (079, 080): a calendar for everyone, scheduled by the root and planners. Anyone can say they are not
+// available, and the root or a planner decides. The page emits what was asked.
+const rehearsals = useRehearsals(props.id)
+const rehearsalError = ref('')
+async function onRehearsalAdd(details) {
+  rehearsalError.value = await rehearsals.add(details)
+  if (!rehearsalError.value) toast('Rehearsal scheduled for ' + formatDayTime(details.startsAt) + '.', 'success', 4000)
+}
+async function onAbsenceRequest({ rehearsalId, reason }) {
+  rehearsalError.value = await rehearsals.requestAbsence(rehearsalId, reason)
+  if (!rehearsalError.value) toast('Sent. The root or a planner needs to approve it.', 'success', 4000)
+}
+async function onAbsenceWithdraw(rehearsalId) {
+  rehearsalError.value = await rehearsals.withdrawAbsence(rehearsalId)
+}
+async function onAbsenceDecide({ id, approve }) {
+  rehearsalError.value = await rehearsals.decideAbsence(id, approve)
+}
+async function onRehearsalRemove(id) {
+  const ok = await askConfirm({
+    title: 'Remove this rehearsal?',
+    message: 'It comes off everyone’s calendar.',
+    confirmText: 'Remove rehearsal',
+  })
+  if (ok) rehearsalError.value = await rehearsals.remove(id)
+}
+
 // SOS (072): anyone in the event can call for help. Everyone sees it as a banner on every page and on the map, with a
 // toast (and a vibration on phones) when it arrives. The banner and dialog emit what was pressed; it is done here.
 const sos = useSos(
@@ -310,6 +339,9 @@ function goToPage(name, query = {}) {
 const PHONE_ONLY = ['now', 'ops']
 const phoneTab = ref(null)
 const tab = computed(() => phoneTab.value || page.value) // what is on screen
+// The Rehearsals tab is the only thing here that needs Realtime: its channel opens when that tab is first shown,
+// not when the event page opens (deep links and the phone tab bar both arrive through `tab`).
+watch(tab, (name) => { if (name === 'rehearsals') rehearsals.start() }, { immediate: true })
 function openPage(key) {
   if (PHONE_ONLY.includes(key)) phoneTab.value = key
   else {
@@ -483,6 +515,7 @@ function goLive() {
 const ICONS = {
   overview: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16v-4', 'M12 8h.01'],
   timeline: ['M9 6h12', 'M9 12h12', 'M9 18h12', 'M4 6h.01', 'M4 12h.01', 'M4 18h.01'],
+  rehearsals: ['M8 2v4', 'M16 2v4', 'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M3 10h18'],
   map: ['M12 3l8 5v8l-8 5-8-5V8z'],
   people: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   groups: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
@@ -503,8 +536,8 @@ const PAGE_INFO = computed(() => ({
           about: 'Where each group must be, and when. Pick a plan when you start the event.',
         }
       : {
-          hint: 'Your timetable',
-          about: seesWholeEvent.value ? "Every group's moments on the plan's clock." : "Your group's moments on the plan's clock.",
+          hint: 'Where to be and when',
+          about: 'A map of where your group should be and when. Once the event starts, it also shows if you are late or on schedule.',
         },
   map: canManage.value
     ? {
@@ -512,6 +545,11 @@ const PAGE_INFO = computed(() => ({
         about: 'The places groups must reach, and No-Go zones. Everyone sees them on the live map.',
       }
     : { hint: 'Your route', about: 'Where your group goes, and when it is due at each place.' },
+  rehearsals: {
+    hint: modeOf('rehearsals') === 'edit' ? 'Schedule and requests' : 'When to practise',
+    badge: modeOf('rehearsals') === 'edit' ? rehearsals.absences.value.filter((a) => a.status === 'pending').length || '' : '',
+    about: modeOf('rehearsals') === 'edit' ? 'Schedule rehearsals. Everyone in the event sees them on this calendar.' : 'When the event’s rehearsals are.',
+  },
   people: {
     hint: 'Who is in it, roles',
     badge: members.value.length,
@@ -560,7 +598,8 @@ const nativeTabs = computed(() => {
 })
 const MORE_HINT = computed(() => ({
   overview: 'Details, invite, and leave the event',
-  timeline: modeOf('timeline') === 'edit' ? 'The plan board' : 'Your timetable',
+  timeline: modeOf('timeline') === 'edit' ? 'The plan board' : 'Where to be and when',
+  rehearsals: 'When to practise',
   map: canManage.value ? 'Areas, doors and No-Go areas' : 'Your route on the plan',
   people: 'Who is in it, roles',
   groups: 'Groups and their ICs',
@@ -886,7 +925,7 @@ async function removeEvent() {
         </div>
 
         <!-- ===== Phone app pages (the website shows these on the Live map and Timeline pages) ===== -->
-        <!-- Now: an IC's or member's own moments on the plan's clock (the same read as the Schedule page) -->
+        <!-- Now: where an IC's or member's group should be, the same as the Schedule page -->
         <template v-if="native && tab === 'now'">
           <PlanSchedule
             v-if="scheduleSession"
@@ -894,7 +933,10 @@ async function removeEvent() {
             :session="scheduleSession"
             :whole="seesWholeEvent"
             :my-group="myGroup"
+            :groups="groups"
             :can-press="isIC"
+            :next-rehearsal="rehearsals.next.value"
+            :event-starts-at="event.starts_at"
           />
           <div v-else class="pv-empty" data-testid="now-empty">
             <strong>{{ scheduledStart ? 'Starts ' + formatDayTime(scheduledStart) : 'Not started yet' }}</strong>
@@ -941,6 +983,26 @@ async function removeEvent() {
           :only-group-id="ownGroupOnly ? (myGroup ? myGroup.id : 'none') : null"
           :sharing-status="sharingStatus"
           @changed="load"
+        />
+
+        <RehearsalsPanel
+          v-if="tab === 'rehearsals'"
+          :rehearsals="rehearsals.rehearsals.value"
+          :absences="rehearsals.absences.value"
+          :next="rehearsals.next.value"
+          :can-edit="modeOf('rehearsals') === 'edit'"
+          :my-id="me ? me.id : null"
+          :members="members"
+          :groups="groups"
+          :event-starts-at="event.starts_at"
+          :now="rehearsals.now.value"
+          :busy="rehearsals.busy.value"
+          :error-msg="rehearsalError || rehearsals.errorMsg.value"
+          @add="onRehearsalAdd"
+          @remove="onRehearsalRemove"
+          @request-absence="onAbsenceRequest"
+          @withdraw-absence="onAbsenceWithdraw"
+          @decide-absence="onAbsenceDecide"
         />
 
         <AttendancePanel
@@ -1010,7 +1072,7 @@ async function removeEvent() {
 
         <!-- Timeline: the plan board for the people who draw it, and the timetable for the people who follow it
              (step 16). Root and planner get the strip, the map and the inspector; a member, an IC or a group admin gets
-             their own moments on the plan's clock, from the one read that is already scoped to them (052). -->
+             the map and list of where to be, from the one read that is already scoped to them (052). -->
         <template v-if="tab === 'timeline'">
           <PlanBoard
             v-if="modeOf('timeline') === 'edit'"
@@ -1025,7 +1087,10 @@ async function removeEvent() {
             :session="scheduleSession"
             :whole="seesWholeEvent"
             :my-group="myGroup"
+            :groups="groups"
             :can-press="isIC"
+            :next-rehearsal="rehearsals.next.value"
+            :event-starts-at="event.starts_at"
           />
         </template>
 

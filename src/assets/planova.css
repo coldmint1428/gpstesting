@@ -308,6 +308,111 @@
   color: var(--pv-ink-soft);
 }
 
+/* The one strip for refusals, along the top of the map. Red, anchored at its top edge so a sentence that wraps grows
+   down the map rather than half off the top of it -- and wide enough that a refusal is not cut in half with an
+   ellipsis, because a sentence about who has the badge is the whole answer. */
+.pv-strip {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(76%, 34rem);
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--danger-bg);
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  box-shadow: var(--pv-shadow);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pv-strip-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pv-strip-action {
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.pv-strip-close {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--danger);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* Who else is editing, as a stack of chips: one per person, with how many badges they are on. Above Leaflet's
+   attribution rather than on it, and never taking a press -- the map behind it is the thing that is being worked. */
+.pv-presence {
+  position: absolute;
+  right: 10px;
+  bottom: 34px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.pv-presence-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 15rem;
+  padding: 3px 8px 3px 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--pv-shadow);
+  font-size: 11.5px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-presence-initials {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #64748b;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pv-presence-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-presence-count {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--line);
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .pv-marker-wrap {
   background: transparent;
   border: 0;
@@ -610,6 +715,46 @@
     0 1px 4px rgba(10, 31, 23, 0.4);
 }
 
+/* Somebody else has this badge right now (081): a slate ring, broken rather than solid, so it reads as "not yours to
+   hold" instead of as the red mistake ring. The tooltip names who, and the presence stack says what they are on. */
+.pv-marker.is-busy {
+  box-shadow:
+    0 0 0 3px rgba(100, 116, 139, 0.6),
+    0 1px 4px rgba(10, 31, 23, 0.4);
+}
+
+/* A hold of my own account -- this gesture, or my other window: a quiet solid ring in the board's own green. It is
+   feedback, not a warning, so it sits closer to the badge than the two above. */
+.pv-marker.is-held {
+  box-shadow:
+    0 0 0 2px rgba(11, 61, 46, 0.45),
+    0 1px 4px rgba(10, 31, 23, 0.4);
+}
+
+/* Where a colleague is TAKING a badge they are dragging (phase 4): a hollow badge on the ghost layer, under the real
+   one. Dashed and unfilled on purpose -- it is a preview from a broadcast, never a position, so it must not read as a
+   badge the plan has. It keeps the group's colour, because it is still a statement about who. */
+.pv-ghost-wrap {
+  background: transparent;
+  border: 0;
+  pointer-events: none;
+}
+
+.pv-ghost {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px dashed var(--pv-ghost-colour, #0b3d2e);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--pv-ghost-colour, #0b3d2e);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
 .pv-swatch {
   width: 10px;
   height: 10px;
@@ -837,36 +982,6 @@
   font-weight: 600;
 }
 
-.pv-sched-clock {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  padding: 4px 10px;
-  border: 1px solid var(--pv-line);
-  border-radius: var(--pv-radius);
-  background: var(--canvas);
-  font-variant-numeric: tabular-nums;
-}
-
-.pv-sched-now {
-  font-size: 20px;
-  font-weight: 650;
-  line-height: 1.15;
-  color: var(--pv-ink);
-}
-
-.pv-sched-t0 {
-  font-size: 12px;
-  color: var(--pv-ink-soft);
-}
-
-.pv-sched-elapsed {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--pv-primary);
-}
-
 .pv-sched-line {
   margin: 0;
   padding: 8px 14px;
@@ -897,37 +1012,37 @@
   padding: 0;
 }
 
+/* One moment: the time, where to be, the status once the event is live, and the action. */
 .pv-sched-moment {
-  position: relative;
   display: grid;
-  grid-template-columns: 104px 1fr;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
   gap: 12px;
-  padding: 9px 14px;
+  padding: 11px 14px;
   border-bottom: 1px solid var(--pv-line);
+  background: var(--pv-surface);
 }
 
 .pv-sched-moment:last-child {
   border-bottom: 0;
 }
 
-.pv-sched-moment.is-next {
+.pv-sched-moment.is-past .pv-sched-at,
+.pv-sched-moment.is-past .pv-sched-place {
+  color: var(--pv-ink-soft);
+  font-weight: 500;
+}
+
+/* The moment the clock is on: a bar down the side, so the eye finds it in a long list. */
+.pv-sched-moment.is-now {
+  box-shadow: inset 3px 0 0 var(--pv-primary);
   background: var(--canvas);
 }
 
-.pv-sched-moment.is-next::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
+.pv-sched-moment.is-shown .pv-sched-show {
+  border-color: var(--pv-primary);
   background: var(--pv-primary);
-}
-
-.pv-sched-when {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  color: #fff;
 }
 
 .pv-sched-at {
@@ -937,68 +1052,151 @@
   font-variant-numeric: tabular-nums;
 }
 
-.pv-sched-offset {
-  font-size: 12px;
-  color: var(--pv-ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.pv-sched-note {
-  font-size: 12px;
-  font-style: italic;
-  color: var(--pv-ink-soft);
-}
-
 .pv-sched-rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .pv-sched-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.pv-sched-where {
+  flex: 1 1 140px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .pv-sched-group {
-  min-width: 84px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--pv-ink);
-}
-
-.pv-sched-state {
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: var(--canvas);
-  color: var(--pv-ink-soft);
-}
-
-.pv-sched-detail {
   font-size: 12px;
+  font-weight: 600;
   color: var(--pv-ink-soft);
 }
 
-/* Where the moment is (062): the zone its drawn point stands in, named before the detail. A route point stands in
-   none, so it prints nothing rather than a dash -- "no place" is not a fact worth a mark. */
 .pv-sched-place {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--pv-ink);
+}
+
+.pv-sched-note {
+  font-size: 12px;
+  color: var(--pv-ink-soft);
+}
+
+.pv-sched-marks,
+.pv-sched-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 .pv-sched-flag {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pv-primary);
+}
+
+.pv-sched-state {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pv-sched-state.is-ok {
+  background: var(--mint);
+  color: var(--pv-ok);
+}
+
+.pv-sched-state.is-late,
+.pv-sched-state.is-missed {
+  background: var(--pv-danger-soft);
+  color: var(--pv-danger);
+}
+
+.pv-sched-show {
+  padding: 4px 11px;
+  border: 1px solid var(--pv-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pv-ink);
+  cursor: pointer;
+}
+
+.pv-sched-show:hover {
+  border-color: var(--pv-primary);
+  color: var(--pv-primary);
+}
+
+.pv-sched-show:focus-visible {
+  outline: 2px solid var(--pv-ok);
+  outline-offset: 2px;
+}
+
+/* A stop in one group's list: its time is a range, and its number is the pin's on the map. */
+.pv-sched-stop {
+  grid-template-columns: 124px 1fr;
+}
+
+/* Static mode: no clock column, just the place and how long. */
+.pv-sched-moment.is-static {
+  grid-template-columns: 1fr;
+}
+
+.pv-sched-for {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pv-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The number has its own column, kept even for a row with no number, so every name and note lines up beside it. */
+.pv-sched-where-stop {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pv-sched-node {
+  flex: none;
+  display: flex;
+  width: 20px;
+  min-height: 20px;
+}
+
+.pv-sched-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pv-sched-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--pv-dot, var(--pv-primary));
+  color: #fff;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--pv-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-sched-moment.is-past .pv-sched-num {
+  opacity: 0.6;
 }
 
 /* The IC's own press (step 28): a small quiet action inside the row it belongs to, so the schedule still reads as a
@@ -1032,28 +1230,6 @@
   margin-top: 3px;
 }
 
-/* The five words, coloured so a glance reads the night: arrived is done, late is amber, missed is the one to look
-   at, and not required is deliberately grey -- nobody is expected anywhere. */
-.pv-sched-row.is-arrived .pv-sched-state {
-  background: var(--mint);
-  color: var(--pv-ok);
-}
-
-.pv-sched-row.is-late .pv-sched-state {
-  background: var(--danger-bg);
-  color: var(--pv-warn);
-}
-
-.pv-sched-row.is-missed .pv-sched-state {
-  background: var(--pv-danger-soft);
-  color: var(--pv-danger);
-}
-
-.pv-sched-row.is-not-required .pv-sched-state,
-.pv-sched-row.is-not-required .pv-sched-detail {
-  color: var(--pv-ink-faint);
-}
-
 .pv-sched-foot {
   margin: 0;
   padding: 9px 14px 11px;
@@ -1064,23 +1240,10 @@
 }
 
 @media (max-width: 640px) {
-  .pv-sched-head {
-    flex-direction: column;
-  }
-
-  .pv-sched-clock {
-    align-items: flex-start;
-  }
-
   .pv-sched-moment {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-
-  .pv-sched-when {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 8px;
+    grid-template-columns: 62px 1fr;
+    gap: 10px;
+    align-items: start;
   }
 }
 
@@ -1713,17 +1876,38 @@
   border-bottom: 1px solid var(--pv-line);
 }
 
-/* The next moment, over the map: "Next 7:40 pm · Main Gate · in 12 min", and one tap centres the map on it. */
-.pv-route-next {
+/* On the Schedule page: part of that page's card, and shorter so the list stays in view under it. */
+.pv-route.is-embedded {
+  border: 0;
+  border-bottom: 1px solid var(--pv-line);
+  border-radius: 0;
+}
+
+.pv-route.is-embedded .pv-route-stage {
+  height: clamp(260px, 42vh, 420px);
+  border-bottom: 0;
+}
+
+/* Top right: clear of the zoom buttons (top left) and the map's credits (bottom), which wrap on a phone. */
+.pv-route-cards {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
+  top: 12px;
+  right: 12px;
   z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 76px);
+}
+
+/* A moment, over the map: "Next 7:40 pm · Main Gate · in 12 min", and one tap centres the map on it. */
+.pv-route-next {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 8px;
-  max-width: min(340px, calc(100% - 24px));
+  max-width: 340px;
   padding: 9px 13px;
   border: 1px solid var(--pv-line-strong);
   border-radius: var(--pv-radius);
@@ -1805,17 +1989,24 @@
 .pv-route-dot {
   position: relative;
   display: block;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
 }
 
 .pv-route-dot-mark {
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 2px solid #fff;
   background: var(--pv-dot, var(--pv-primary));
   box-shadow: 0 1px 3px rgba(10, 31, 23, 0.45);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 /* The moment the clock is on: bigger, with the ring a person's eye lands on. */
@@ -1831,7 +2022,7 @@
 
 .pv-route-dot-label {
   position: absolute;
-  left: 18px;
+  left: 26px;
   top: 50%;
   transform: translateY(-50%);
   padding: 2px 7px;
@@ -1861,24 +2052,6 @@
   border-color: var(--pv-line);
   background: #fff;
   color: var(--pv-ink);
-}
-
-/* A place on the schedule is a way to the map (step 29): quiet until pointed at, so the timetable still reads as text. */
-.pv-sched-place-link {
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px dashed var(--pv-line-strong);
-}
-
-.pv-sched-place-link:hover,
-.pv-sched-place-link:focus-visible {
-  color: var(--pv-primary);
-  border-bottom-color: var(--pv-primary);
-}
-
-.pv-sched-place-link:focus-visible {
-  outline: 2px solid var(--pv-ok);
-  outline-offset: 2px;
 }
 
 /* ---------- scrubbing and placing (QA 1 Nov) ----------

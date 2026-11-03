@@ -12,8 +12,20 @@
 import { computed, onScopeDispose, ref } from 'vue'
 import { supabase } from '../lib/supabase'
 import { readTimetable as readTimetableShared, forgetTimetable, staleTimetables } from '../lib/timetableReader'
+import { draftCell } from '../utils/planDraft'
+import { usePlanLocks } from './usePlanLocks'
+import { usePlanStream } from './usePlanStream'
 
 const P409 = 'PT409'
+
+/**
+ * A refusal from the ownership doors: somebody else has this badge or this moment (081). HTTP 423 in the handler,
+ * PT423 from the database, and the sentence is already written for a planner -- so a caller shows the words, and
+ * decides WHERE (the board's strip rather than a toast, because a snap-back is not a success notice).
+ */
+export function isLockRefusal(error) {
+  return !!error && (error.code === 'PT423' || error.status === 423)
+}
 
 /** Turn a PostgREST/Postgres error into something worth putting in front of a planner. */
 export function planErrorMessage(error) {
@@ -40,15 +52,29 @@ export function usePlan(eventId) {
   const busy = ref(false)
   const errorMsg = ref('')
 
-  async function call(fn, args) {
+  /**
+   * One door, one error. `quiet` is for the calls whose failure is presented elsewhere or is not news: the ownership
+   * doors (a refusal is the board's strip, or nothing at all for a lapsed heartbeat), and the presence read. A quiet
+   * call neither writes `errorMsg` nor clears it, so a refusal on the strip is not said twice in the inspector.
+   */
+  async function call(fn, args, opts = {}) {
     const { data, error } = await supabase.rpc(fn, args)
     if (error) {
-      errorMsg.value = planErrorMessage(error)
+      if (!opts.quiet) errorMsg.value = planErrorMessage(error)
       throw error
     }
-    errorMsg.value = ''
+    if (!opts.quiet) errorMsg.value = ''
     return data
   }
+
+  // Ownership of a badge while it is being written (081, 082). Everything it does is one of the plan_* doors.
+  const locks = usePlanLocks(call)
+
+  // Where a badge somebody else is dragging is going, this second (phase 4). A broadcast, never a write: see
+  // usePlanStream for why that is the whole design. The board decides when it is on (the `?concurrent=0` flag turns
+  // it off with the rest of the ownership picture) and who draws it; this composable only owns the socket's lifetime.
+  const stream = usePlanStream()
+  let onDrafts = null // the board's renderer, registered through onDraft()
 
   // Reads of the same rows are queued, one at a time, and each applies before the next starts. Overlapping reads do
   // not have to come back in the order they left: a save's own reload and a background one, or a plan switch against
@@ -158,7 +184,9 @@ export function usePlan(eventId) {
   async function deletePlan(id) {
     busy.value = true
     try {
-      await call('plan_delete', { p_plan: id })
+      // The session lets the database say whose hand is in the plan it is about to take away (083): a plan is not a
+      // lockable thing, so a delete is refused while anybody is mid-edit anywhere in it.
+      await call('plan_delete', { p_plan: id, p_session: locks.session() })
       if (plan.value && plan.value.id === id) {
         plan.value = null
         clearFrames()
@@ -200,8 +228,18 @@ export function usePlan(eventId) {
   }
 
   /**
-   * Write one frame. `positions` is replaced wholesale on the server when present, so pass the complete set of
-   * stated positions for that frame, not just the one that moved.
+   * Write one frame: its time and its note, and -- only when the frame does not exist yet -- its first badges.
+   *
+   * 082 split the write. A frame that is already in the plan refuses a `positions` payload outright, because the
+   * payload was the bug: it carried every badge on the frame as the page had last read them, so one planner's drag
+   * put everybody else's back. Badges of a frame that already stands are written by placeCells() below, one cell at
+   * a time and against a hold on it. A frame this call creates still takes its first map, because a moment that did
+   * not exist a statement ago cannot have somebody else's badge on it (that is also how plan_import() writes a
+   * sheet, and how undo puts a deleted frame back).
+   *
+   * A frame this page can see also has its MOMENT held for the length of the write: the note and the time are one
+   * resource, and two people editing the same moment are refused with a sentence rather than a stale-revision
+   * error. A frame it cannot see is a restore (041) -- there is nothing to hold.
    */
   async function saveFrame(frame) {
     const payload = { t_s: frame.t_s }
@@ -209,9 +247,14 @@ export function usePlan(eventId) {
     if (frame.rev != null) payload.rev = frame.rev
     if (frame.note !== undefined) payload.note = frame.note
     if (frame.positions !== undefined) payload.positions = frame.positions
+    const known = Boolean(frame.id) && frames.value.some((f) => f.id === frame.id)
     busy.value = true
     try {
-      const row = await call('frame_save', { p_plan: plan.value.id, p_frame: payload })
+      const row = known
+        ? await locks.withMoment(plan.value.id, frame.id, () =>
+            call('frame_save', { p_plan: plan.value.id, p_frame: payload, p_session: locks.session() }),
+          )
+        : await call('frame_save', { p_plan: plan.value.id, p_frame: payload })
       await loadFrames()
       await loadPlans()
       return row
@@ -224,10 +267,195 @@ export function usePlan(eventId) {
     }
   }
 
+  /**
+   * Write badges at one frame: `map` is `groupId -> { lat, lng, state?, verify? }` -- the shape the board already
+   * builds for a drag, a placement, an off-site toggle and a bulk state change.
+   *
+   * One call for the whole map because a gesture is one statement: a drag with three badges ticked writes all
+   * three or none, and a refusal names whoever has the first one in the way. The rows in the payload are the only
+   * rows touched (082), so a colleague's badge at the same moment is not carried along and cannot be lost.
+   *
+   * The hold is taken here rather than by the caller: a write that is not held is refused by the database, and
+   * making the two a single call is what keeps them in step.
+   */
+  async function placeCells(frameId, map, options = {}) {
+    if (!plan.value || !frameId) return 0
+    const cells = Object.entries(map || {}).map(([group, at]) => ({
+      frame: frameId,
+      group,
+      lat: at.lat,
+      lng: at.lng,
+      ...(at.state ? { state: at.state } : {}),
+      ...(at.verify ? { verify: at.verify } : {}),
+    }))
+    if (!cells.length) return 0
+    busy.value = true
+    try {
+      const written = await locks.place(plan.value.id, cells, options)
+      await loadFrames()
+      await loadPlans()
+      return written
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * Hold badges for a gesture -- the length of a drag, not one write. `cells` is `[{ frame, group }]`: a hold is
+   * about a cell's identity, and the lat/lng belongs to the write that comes later. Nothing is written here and no
+   * frame is re-read: a refusal is the caller's to present, and a hold that is merely held changes nothing on screen.
+   *
+   * The heartbeat (2 s) belongs to the hold, so a caller that forgets to let go does not keep a badge for ever: the
+   * page still stops refreshing it 12 s after it stops being true, and the idle release is the board's own rule.
+   */
+  async function holdCells(cells, options = {}) {
+    if (!plan.value || !cells || !cells.length) return 0
+    await locks.hold(plan.value.id, cells, options)
+    return cells.length
+  }
+
+  /** Let go of badges held for a gesture. Best effort: a hold that is not let go of lapses on its own (081). */
+  async function releaseCells(cells) {
+    if (!plan.value || !cells || !cells.length) return
+    await locks.letGo(plan.value.id, cells)
+  }
+
+  /** Who is editing what on the open plan (081's plan_lock_holders). Quiet: a presence read that fails says nothing. */
+  async function lockHolders() {
+    if (!plan.value) return []
+    return locks.holders(plan.value.id)
+  }
+
+  /** Everything this page is holding on the open plan, given up at once -- on a hidden tab, a page unload, a plan switch. */
+  async function releaseAllHolds() {
+    await locks.releaseAll(plan.value ? plan.value.id : null)
+  }
+
+  /** Tell the page when a badge it believed it held is somebody else's (the heartbeat found out). */
+  function onHoldLost(fn) {
+    locks.onLost(fn)
+  }
+
+  // ---------- live drafts: where a badge somebody else is dragging is going (phase 4) ----------
+
+  /**
+   * Join this plan's draft channel. The board calls it when a plan opens and stopDrafts() when it leaves, because
+   * whether the stream is wanted is the board's decision -- `?concurrent=0` turns it off with the rest of the
+   * ownership picture. Nothing here reads the database and nothing here writes it: see usePlanStream.
+   */
+  function startDrafts(planId) {
+    stream.start(planId, (rows) => {
+      if (onDrafts) onDrafts(rows)
+    })
+  }
+
+  /** Leave the draft channel (a plan switch, a teardown, or the ownership picture turned off). */
+  function stopDrafts() {
+    stream.stop()
+  }
+
+  /** Publish where a badge is going, for everybody else's screen. `cell` is `{ frame, group }`. */
+  function planDraft(cell, at) {
+    if (!cell) return
+    stream.send(draftCell(cell.frame, cell.group), at)
+  }
+
+  /** A gesture has ended: the ghosts for these badges go now rather than when their two and a half seconds run out. */
+  function clearDrafts(cells) {
+    stream.clear(cells)
+  }
+
+  /** The board's renderer for other planners' drags: `fn(rows)`, a whole list, after every change. */
+  function onDraft(fn) {
+    onDrafts = fn
+  }
+
+  /** Take badges off the plan -- the only way a position disappears (082), and a write like any other. */
+  async function unplaceCells(frameId, groupIds) {
+    if (!plan.value || !frameId) return 0
+    const cells = (groupIds || []).map((group) => ({ frame: frameId, group }))
+    if (!cells.length) return 0
+    busy.value = true
+    try {
+      const removed = await locks.unplace(plan.value.id, cells)
+      await loadFrames()
+      await loadPlans()
+      return removed
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * Put a frame's badges back the way an undo or a redo remembers them (phase 4).
+   *
+   * `target` is a whole `groupId -> { lat, lng, state, verify }` map -- what an inverse command remembers -- while a
+   * write is a per-cell statement (082). So "as it was" is not one payload: it is the cells that DIFFER from what the
+   * frame states at this moment. The ones that moved or appeared are placed; the ones that were taken away are
+   * unplaced. The comparison is against the live frame, not against the command's own other map, because a command
+   * remembers where the frame was and not what somebody else has done to it since -- so a badge taken away in the
+   * meantime comes back, which is what the planner asked for.
+   *
+   * Both directions go through ONE hold (usePlanLocks.rewrite): every cell the inverse touches is asked for in a
+   * single call first, so a badge somebody else is holding refuses the whole undo before a single row is written, and
+   * the command stays on the stack for when it is free.
+   */
+  async function rewriteCells(frameId, target) {
+    const empty = { placed: 0, removed: 0 }
+    if (!plan.value || !frameId) return empty
+    const frame = frames.value.find((f) => f.id === frameId)
+    if (!frame) throw new Error('That frame is no longer in the plan, so there is nothing to put back.')
+    const wanted = target || {}
+    const current = frame.positions || {}
+    const changed = {}
+    for (const [groupId, point] of Object.entries(wanted)) {
+      const was = current[groupId]
+      if (
+        !was ||
+        was.lat !== point.lat ||
+        was.lng !== point.lng ||
+        was.state !== point.state ||
+        was.verify !== point.verify
+      ) {
+        changed[groupId] = point
+      }
+    }
+    const gone = Object.keys(current).filter((groupId) => !(groupId in wanted))
+    const cells = Object.entries(changed).map(([group, at]) => ({
+      frame: frameId,
+      group,
+      lat: at.lat,
+      lng: at.lng,
+      ...(at.state ? { state: at.state } : {}),
+      ...(at.verify ? { verify: at.verify } : {}),
+    }))
+    if (!cells.length && !gone.length) return empty
+    busy.value = true
+    try {
+      const written = await locks.rewrite(
+        plan.value.id,
+        cells,
+        gone.map((group) => ({ frame: frameId, group })),
+      )
+      await loadFrames()
+      await loadPlans()
+      return written
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * Retime one moment. The moment lock is taken for the length of the call (083, and the same shape as a note in
+   * saveFrame): a retime is a gesture on the frame lock, so a colleague retiming the same moment is refused by name
+   * before anything is written, rather than being overwritten by a revision they never saw.
+   */
   async function moveFrame(id, t_s, rev) {
     busy.value = true
     try {
-      await call('frame_move', { p_id: id, p_t_s: t_s, p_rev: rev })
+      await locks.withMoment(plan.value.id, id, () =>
+        call('frame_move', { p_id: id, p_t_s: t_s, p_rev: rev, p_session: locks.session() }),
+      )
       await loadFrames()
       await loadPlans()
     } catch (error) {
@@ -238,10 +466,15 @@ export function usePlan(eventId) {
     }
   }
 
+  /**
+   * Delete one moment. The session goes with it so the database can say whose hand is in the moment it is about to
+   * take away (083) -- a badge being dragged in it, its own clock being retimed, or the same in another window of
+   * mine. A refusal writes nothing, so there is no half-deleted moment to reason about.
+   */
   async function deleteFrame(id, rev) {
     busy.value = true
     try {
-      await call('frame_delete', { p_id: id, p_rev: rev })
+      await call('frame_delete', { p_id: id, p_rev: rev, p_session: locks.session() })
       await loadFrames()
       await loadPlans()
     } finally {
@@ -253,6 +486,9 @@ export function usePlan(eventId) {
    * Push a stretch of frames later (or earlier) by `delta_s`, in one call whatever the number of frames. Name both
    * ends and only the frames between them move; pass `to_s` null and everything at or after `from_s` travels, which
    * is the "we are five minutes behind" move. The board always names both ends, because a selection is a stretch.
+   *
+   * The session is only so the database can name whoever is retiming a moment in that stretch (083): a push takes no
+   * hold of its own -- it is one action across many frames, not a hand on any of them.
    */
   async function shiftFrom(from_s, delta_s, to_s = null) {
     busy.value = true
@@ -262,6 +498,7 @@ export function usePlan(eventId) {
         p_from_s: from_s,
         p_delta_s: delta_s,
         p_to_s: to_s,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -285,6 +522,7 @@ export function usePlan(eventId) {
         p_from: fromId,
         p_to: toId,
         p_groups: groupIds && groupIds.length ? groupIds : null,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -307,6 +545,7 @@ export function usePlan(eventId) {
         p_frame: frameId,
         p_seconds: seconds,
         p_groups: groupIds && groupIds.length ? groupIds : null,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -332,6 +571,7 @@ export function usePlan(eventId) {
         p_frames: frameIds,
         p_groups: groupIds && groupIds.length ? groupIds : null,
         p_verify: verify,
+        p_session: locks.session(),
       })
       await loadFrames()
       await loadPlans()
@@ -353,7 +593,7 @@ export function usePlan(eventId) {
   async function importFrames(planId, frameList) {
     busy.value = true
     try {
-      const summary = await call('plan_import', { p_plan: planId, p_frames: frameList })
+      const summary = await call('plan_import', { p_plan: planId, p_frames: frameList, p_session: locks.session() })
       await loadFrames()
       await loadPlans()
       return summary || { frames: 0, positions: 0 }
@@ -591,7 +831,28 @@ export function usePlan(eventId) {
       if (status === 'SUBSCRIBED') onLiveChange(null)
     })
 
+  // A page that is going away, or a tab that has been hidden, is not working on anything: its holds are given up
+  // rather than waited out. `visibilitychange` fires first and reliably (a phone switching apps, a tab switch);
+  // `pagehide` covers a close, a reload and a back navigation. Both are best effort -- every hold also expires on its
+  // own after 12 s (081) -- and both are silent, because this is housekeeping rather than a change the planner made.
+  function letEverythingGo() {
+    locks.releaseAll(plan.value ? plan.value.id : null)
+  }
+  function onVisibility() {
+    if (document.visibilityState === 'hidden') letEverythingGo()
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', letEverythingGo)
+    document.addEventListener('visibilitychange', onVisibility)
+  }
+
   onScopeDispose(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', letEverythingGo)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+    locks.dispose()
+    stream.stop()
     clearTimeout(liveTimer)
     clearTimeout(livePauseTimer)
     supabase.removeChannel(liveChannel)
@@ -622,6 +883,19 @@ export function usePlan(eventId) {
     forkPlan,
     publishPlan,
     saveFrame,
+    placeCells,
+    unplaceCells,
+    holdCells,
+    releaseCells,
+    lockHolders,
+    releaseAllHolds,
+    onHoldLost,
+    rewriteCells,
+    startDrafts,
+    stopDrafts,
+    planDraft,
+    clearDrafts,
+    onDraft,
     moveFrame,
     deleteFrame,
     shiftFrom,
