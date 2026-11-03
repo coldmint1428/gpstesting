@@ -2832,10 +2832,9 @@ watch(
           <!-- The whole plan as a file (step 23): the picker is hidden and the menu item is the product's own. -->
           <input ref="sheetFile" type="file" accept=".csv,text/csv" class="pv-file" data-testid="sheet-file" @change="onSheetPicked" />
           <button
-            class="pv-btn is-primary"
+            class="pv-btn is-primary kb kb-ink kb-sm"
             data-testid="plan-publish"
             type="button"
-            class="kb kb-ink kb-sm"
             :disabled="busy"
             :title="plan && plan.status === 'live' ? 'Send the updated timetable to everyone' : 'Make this the timetable everyone follows'"
             @click="publish"
@@ -3021,7 +3020,8 @@ watch(
               :title="moveLock ? 'Unlock to drag frames and groups again' : 'Lock so frames and groups cannot be dragged by accident'"
               @click="toggleLock"
             ><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg></button>
-          </template>
+          </span>
+        </div>
           <span class="k2-mini" role="group" aria-label="Zoom the time bar">
             <button type="button" data-testid="zoom-out" title="Zoom the strip out" aria-label="Zoom timeline out" @click="zoom(0.5)">−</button>
             <button type="button" data-testid="zoom-in" title="Zoom the strip in" aria-label="Zoom timeline in" @click="zoom(2)">+</button>
