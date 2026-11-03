@@ -2697,6 +2697,34 @@ function deleteFromKeyboard() {
   removeFrame()
 }
 
+/** Step back, then put the planner on the frame the change was about (an undone delete gives one back). */
+async function runUndo() {
+  const command = await edits.undo()
+  if (command) revealFrame(edits.focusOf(command))
+}
+
+async function runRedo() {
+  const command = await edits.redo()
+  if (command) revealFrame(edits.focusOf(command))
+}
+
+/**
+ * Open the frame an undo or a redo left the plan at, or let the selection go when that frame is now gone: an undone
+ * paste takes away the frame that was open, and the inspector must not go on describing a frame that is not there.
+ */
+function revealFrame(frameId) {
+  const frame = frameId ? frames.value.find((f) => f.id === frameId) : null
+  if (frame) {
+    selectOnly(frame.id)
+    selectedId.value = frame.id
+    return
+  }
+  if (selectedId.value && !frames.value.some((f) => f.id === selectedId.value)) {
+    selection.value = new Set()
+    selectedId.value = null
+  }
+}
+
 /**
  * Delete what is selected: the whole stretch when there is one, else the open frame. Several frames are one question
  * and one step of the undo stack, so Ctrl+Z gives the stretch back in one go. They are deleted latest first, one call
