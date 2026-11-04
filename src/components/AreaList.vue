@@ -22,7 +22,6 @@ import { NO_GROUP_COLOUR } from '../utils/groupColours'
 import { computed, ref, watch } from 'vue'
 import { AREA_KINDS, AREA_NAME_MAX, areaColour, areaKind, isValidAreaName } from '../utils/areaKinds'
 import { outlinePoints } from '../utils/areaOutline'
-import { askConfirm } from '../composables/useNotify'
 
 const props = defineProps({
   areas: { type: Array, default: () => [] },
@@ -36,7 +35,7 @@ const props = defineProps({
   showCode: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['area-updated', 'area-deleted', 'area-edit', 'area-duplicated', 'area-show'])
+const emit = defineEmits(['area-updated', 'area-edit', 'area-duplicated', 'area-show'])
 
 // Who has each area, keyed by the area's id. A plain object here rather than a ref, because a ref
 // inside a plain object is not unwrapped in a template.
@@ -103,16 +102,6 @@ function rename(area, value) {
 function retype(area, value) {
   if (value === area.kind) return
   emit('area-updated', { id: area.id, patch: { kind: value } })
-}
-
-async function remove(area) {
-  const ok = await askConfirm({
-    title: 'Delete "' + area.name + '"?',
-    message: props.showCode ? 'Its zone goes with it.' : '',
-    confirmText: 'Delete',
-    danger: true,
-  })
-  if (ok) emit('area-deleted', area.id)
 }
 
 // A zone code: capitals, digits and _ (the database checks the same and that it is not taken).
@@ -228,18 +217,6 @@ function pick(row) {
                   <option v-for="kind in AREA_KINDS" :key="kind.value" :value="kind.value">{{ kind.label }}</option>
                 </select>
               </div>
-            </div>
-            <div class="row" style="margin-top: 8px">
-              <button type="button" class="k2-pillbtn" :aria-label="'Duplicate ' + row.area.name" :data-testid="'area-duplicate-' + row.area.name" @click="emit('area-duplicated', row.area)">Duplicate</button>
-              <span class="sp"></span>
-              <button
-                type="button"
-                class="k2-link danger"
-                :disabled="Boolean(blocked(row.area.id)) || Boolean(row.area.locked)"
-                :aria-label="'Delete ' + row.area.name"
-                :data-testid="'area-delete-' + row.area.name"
-                @click="remove(row.area)"
-              >Delete</button>
             </div>
           </template>
         </div>

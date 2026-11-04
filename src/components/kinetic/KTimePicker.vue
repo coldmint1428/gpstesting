@@ -1,6 +1,7 @@
 <script setup>
 // A time field with the design's three scrolling columns instead of the browser's popup. The value stays 'HH:mm'.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { usePlacedPopup } from '../../composables/useOpenMenu'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -11,6 +12,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const open = ref(false)
+// Opened above the field, or moved in from an edge, when there is no room for all of it below (useOpenMenu)
+usePlacedPopup(open)
 const wrap = ref(null)
 const parts = computed(() => {
   const [h, m] = (props.modelValue || '00:00').split(':').map(Number)

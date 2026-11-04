@@ -430,10 +430,24 @@ function showMoment(t_s, groupId) {
   if (!map || !point) return
   shownT = point.t_s
   draw()
-  map.flyTo([point.lat, point.lng], SHOW_ZOOM, {
-    duration: 0.6,
-    animate: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  })
+  goTo(L.latLng(point.lat, point.lng), SHOW_ZOOM)
+}
+
+/**
+ * Move the camera to a place. A fly always dips out and back in, even to where the map already is, so pressing the same
+ * card twice made the map shake: at the zoom already, it slides over (or stays, when it is there), and only a change
+ * of zoom flies.
+ */
+function goTo(latlng, zoom) {
+  const animate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const target = Math.min(zoom, map.getMaxZoom())
+  map.stop()
+  if (Math.abs(map.getZoom() - target) < 0.01) {
+    const off = map.latLngToContainerPoint(latlng).distanceTo(map.getSize().divideBy(2))
+    if (off > 2) map.panTo(latlng, { animate, duration: 0.4 })
+    return
+  }
+  map.flyTo(latlng, target, { duration: 0.6, animate })
 }
 
 watch(() => props.pinNumbers, () => draw())

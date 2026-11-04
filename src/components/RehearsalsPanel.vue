@@ -37,6 +37,7 @@ const reason = ref('')
 
 const todayKey = computed(() => dayKey(props.now))
 const eventKey = computed(() => (props.eventStartsAt ? dayKey(props.eventStartsAt) : null))
+const eventDayText = computed(() => (props.eventStartsAt ? formatDay(props.eventStartsAt) : ''))
 const weeks = computed(() => monthGrid(shown.value))
 const pendingCount = computed(() => props.absences.filter((a) => a.status === 'pending').length)
 
@@ -97,17 +98,13 @@ function moveMonth(by) {
 const upcoming = computed(() => props.rehearsals.filter((r) => !hasStarted(r)))
 const tileDay = (r) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', day: '2-digit' }).format(r.startsAt)
 const tileMonth = (r) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', month: 'short' }).format(r.startsAt).toUpperCase()
-function openDay(rehearsal) {
-  selected.value = dayKey(rehearsal.startsAt)
-  shown.value = new Date(rehearsal.startsAt.getFullYear(), rehearsal.startsAt.getMonth(), 1)
-}
-
 function pick(day) {
   moved.value = true
   selected.value = day.key
   if (!day.inMonth) shown.value = monthOf(day.key + 'T12:00:00+08:00')
-  // Scheduling starts from the day that was tapped, keeping a time already typed
-  if (props.canEdit) {
+  // Scheduling starts from the day that was tapped, keeping a time already typed. Not from the event day or later:
+  // a rehearsal is before the event (090).
+  if (props.canEdit && !(eventKey.value && day.key >= eventKey.value)) {
     form.value.startsAt = day.key + 'T' + (form.value.startsAt.slice(11) || '19:00')
     if (form.value.endsAt) form.value.endsAt = day.key + 'T' + form.value.endsAt.slice(11)
   }
@@ -133,7 +130,9 @@ function submit() {
   const endsAt = form.value.endsAt ? new Date(form.value.endsAt) : null
   if (!form.value.startsAt || Number.isNaN(startsAt.getTime())) errors.startsAt = 'Choose a date and time.'
   else if (startsAt.getTime() <= Date.now()) errors.startsAt = 'Choose a time in the future.'
-  if (endsAt && !errors.startsAt && endsAt.getTime() <= startsAt.getTime()) errors.endsAt = 'Choose a time after the start.'
+  else if (eventKey.value && dayKey(startsAt) >= eventKey.value) errors.startsAt = 'Choose a day before the event (' + eventDayText.value + ').'
+  if (endsAt && !errors.startsAt && eventKey.value && dayKey(endsAt) >= eventKey.value) errors.endsAt = 'End it before the event day (' + eventDayText.value + ').'
+  if (endsAt && !errors.startsAt && !errors.endsAt && endsAt.getTime() <= startsAt.getTime()) errors.endsAt = 'Choose a time after the start.'
   formErrors.value = errors
   if (Object.keys(errors).length) return
   moved.value = true
@@ -195,27 +194,28 @@ function sendReason(rehearsal) {
     />
 
     <template v-else>
-      <!-- Those who attend: what is coming, in the recordings' style. A row opens its day below. -->
+      <!-- Those who attend: what is coming, in the recordings' style. Read only: the calendar below is where a day is picked. -->
       <section v-if="!canEdit && upcoming.length" class="k k2-card" data-testid="rehearsal-upcoming">
-        <button v-for="(rehearsal, i) in upcoming" :key="rehearsal.id" type="button" class="k2-rec k2-rehearsal" @click="openDay(rehearsal)">
+        <div v-for="(rehearsal, i) in upcoming" :key="rehearsal.id" class="k2-rec k2-rehearsal">
           <span class="ke2-dt"><b>{{ tileDay(rehearsal) }}</b><span>{{ tileMonth(rehearsal) }}</span></span>
           <span style="min-width: 0"><b>{{ formatDayTime(rehearsal.startsAt) }}</b><span v-if="rehearsal.note" class="mut d-block text-truncate" style="font-size: 13px; margin-top: 2px">{{ rehearsal.note }}</span></span>
           <span v-if="i === 0" class="chip chip-mint">Next</span>
-        </button>
+        </div>
       </section>
 
       <section v-if="canEdit" class="kp-card" data-testid="rehearsal-form">
         <h2 class="kp-title mb-2">{{ editingId ? 'Change this rehearsal' : 'Schedule a rehearsal' }}</h2>
+        <p v-if="eventKey" class="k2-hint" style="margin: -4px 0 10px" data-testid="rehearsal-before">Rehearsals go before the event day, {{ eventDayText }}.</p>
         <form novalidate @submit.prevent="submit">
           <div class="kp-fields-2">
             <div>
               <label for="rh-when" class="form-label">Starts</label>
-              <KDateTimePicker id="rh-when" v-model="form.startsAt" label="Starts" :invalid="Boolean(formErrors.startsAt)" testid="rehearsal-when" />
+              <KDateTimePicker id="rh-when" v-model="form.startsAt" label="Starts" :before="eventKey || ''" :invalid="Boolean(formErrors.startsAt)" testid="rehearsal-when" />
               <div v-if="formErrors.startsAt" class="invalid-feedback">{{ formErrors.startsAt }}</div>
             </div>
             <div>
               <label for="rh-until" class="form-label">Ends (optional)</label>
-              <KDateTimePicker id="rh-until" v-model="form.endsAt" label="Ends" :min="form.startsAt" clearable :invalid="Boolean(formErrors.endsAt)" testid="rehearsal-until" />
+              <KDateTimePicker id="rh-until" v-model="form.endsAt" label="Ends" :min="form.startsAt" :before="eventKey || ''" clearable :invalid="Boolean(formErrors.endsAt)" testid="rehearsal-until" />
               <div v-if="formErrors.endsAt" class="invalid-feedback">{{ formErrors.endsAt }}</div>
             </div>
           </div>

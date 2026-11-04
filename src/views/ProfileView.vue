@@ -10,6 +10,12 @@ import BenchAlert from '../components/BenchAlert.vue'
 const auth = useAuthStore()
 const router = useRouter()
 
+// Back to wherever Profile was opened from (the account menu is on every page); opened directly, to My events
+function goBack() {
+  if (window.history.state && window.history.state.back) router.back()
+  else router.push('/events')
+}
+
 const firstName = ref('')
 const lastName = ref('')
 const username = ref('')
@@ -57,6 +63,7 @@ async function logout() {
 
 <template>
   <main class="kp-page kp-page-sm">
+    <a href="/events" class="ks-crumb k2-backlink" data-testid="profile-back" @click.prevent="goBack"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Back</a>
     <div class="kp-head">
       <h1>Profile</h1>
       <button type="button" class="btn btn-sm btn-ghost" data-testid="profile-logout" @click="logout">Log out</button>

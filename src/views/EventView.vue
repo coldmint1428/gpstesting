@@ -55,6 +55,7 @@ import { useOpenMenu } from '../composables/useOpenMenu'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import { providePageReady } from '../composables/usePageReady'
+import { useFitText } from '../composables/useFitText'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -64,6 +65,17 @@ const native = isNativeApp // phone app: "Message everyone" opens as a bottom sh
 
 const { event, groups, members, loading, errorMsg, load, me, isRoot, canManage, seesWholeEvent, myGroup } =
   useEventData(props.id)
+// The event's name in the top bar, as big as the room allows: on one line from 20px (desktop) or 17px (phone) down to
+// 14px; on a phone a longer name may then take two lines, down to 12px. Only a name too long even for that ends in "…".
+const evNameEl = ref(null)
+const phoneWidth = () => window.innerWidth < 768
+useFitText(evNameEl, {
+  max: () => (phoneWidth() ? 17 : 20),
+  oneLineMin: 14,
+  min: 12,
+  lines: () => (phoneWidth() ? 2 : 1),
+  text: () => (event.value ? event.value.name : ''),
+})
 
 // Is the event live? (ICs can only share while it is)
 const sessions = useEventSessions(props.id)
@@ -866,8 +878,8 @@ async function removeEvent() {
     <Teleport v-if="!native" to="#k-nav-context">
       <div class="ks-ev">
         <RouterLink to="/events" class="ks-crumb k2-hm" data-testid="back-to-events"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>Home</RouterLink>
-        <h1 class="k-ev-name text-truncate" data-testid="event-name">{{ event.name }}</h1>
-        <span v-if="isLive" class="chip chip-ink" data-testid="head-live"><i class="dot pulse" style="background: var(--lime)"></i>Live</span>
+        <h1 ref="evNameEl" class="k-ev-name text-truncate" :title="event.name" data-testid="event-name">{{ event.name }}</h1>
+        <span v-if="isLive" class="chip chip-ink k2-livechip" title="Live" aria-label="Live" data-testid="head-live"><i class="dot pulse" style="background: var(--lime)"></i><span class="k2-hm">Live</span></span>
         <span v-else-if="scheduledStart" class="chip chip-mint k2-hm" data-testid="status-scheduled">Starts {{ formatDayTime(scheduledStart) }}</span>
         <span v-else class="chip chip-soft k2-hm" data-testid="status-not-started">Not live</span>
       </div>
@@ -1226,7 +1238,7 @@ async function removeEvent() {
         <!-- Map: root / planners edit the zones (v-if: the bench holds locks and a presence row only while it is open) -->
         <template v-if="canManage && tab === 'map'">
           <div class="ev-surface">
-            <PolygonTestView :event-id="id" embedded />
+            <PolygonTestView :event-id="id" embedded :locked="isLive" />
           </div>
         </template>
 
@@ -1269,6 +1281,19 @@ async function removeEvent() {
       </button>
     </nav>
     <BottomSheet v-if="!native" :open="webMoreOpen" title="More" @close="webMoreOpen = false">
+      <!-- What the desktop shows in the top bar and the sidebar's "You" card, which a phone's bar has no room for -->
+      <div class="k k2-more-you" data-testid="web-more-you">
+        <div class="k2-more-state">
+          <template v-if="isLive"><span class="chip chip-ink"><i class="dot pulse" style="background: var(--lime)"></i>Live</span><span v-if="sessions.scheduledEnd.value" class="mut" data-testid="web-more-ends">Ends {{ formatDayTime(sessions.scheduledEnd.value) }}</span></template>
+          <span v-else-if="scheduledStart" class="chip chip-mint" data-testid="web-more-starts">Starts {{ formatDayTime(scheduledStart) }}</span>
+          <span v-else class="chip chip-soft">Not live</span>
+        </div>
+        <div class="k-you-pills">
+          <span class="mut" style="font-size: 12px; font-weight: 700">You</span>
+          <span class="chip" :class="topRole(me) === 'root' ? 'rl-root' : topRole(me) === 'planner' ? 'rl-planner' : 'chip-soft'">{{ ROLE_LABEL[topRole(me)] || 'Member' }}</span>
+          <span v-if="myGroup" class="chip" :class="me && me.isIC ? 'rl-ic' : 'chip-soft'" :style="groupChipStyle">{{ groupRoleLabel(myGroup.name, me && me.isAdmin, me && me.isIC) }}</span>
+        </div>
+      </div>
       <div class="d-grid gap-2" data-testid="web-more-sheet">
         <RouterLink v-for="p in webMore" :key="p.key" class="pv-more-row" :to="{ name: 'event', params: { id, page: p.key } }" replace :data-testid="'web-more-' + p.key" @click="webMoreOpen = false">
           <svg viewBox="0 0 24 24" class="k2-more-ico" aria-hidden="true"><path v-for="(d, i) in ICONS[p.key]" :key="i" :d="d" /></svg>

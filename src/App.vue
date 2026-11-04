@@ -10,6 +10,7 @@ import PhoneTabBar from './components/PhoneTabBar.vue'
 import { isNativeApp } from './lib/platform'
 import { pendingNavigation } from './router' // QA-09: the bar while a page change waits on the server
 import KLogo from './components/kinetic/KLogo.vue'
+import { usePlacedPopup } from './composables/useOpenMenu'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -72,6 +73,8 @@ function closeMe(event) {
   if (meOpen.value && meWrap.value && !meWrap.value.contains(event.target)) meOpen.value = false
 }
 onMounted(() => document.addEventListener('pointerdown', closeMe))
+// Placed like every other menu, so none of it is cut off (useOpenMenu)
+usePlacedPopup(meOpen)
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMe))
 
 async function logout() {
@@ -89,15 +92,6 @@ async function logout() {
       <RouterLink class="ks-brand" to="/" aria-label="Planova home"><KLogo /><span>planova</span></RouterLink>
       <div id="k-nav-context" class="k-nav-context"></div>
       <span class="sp"></span>
-      <!-- Visible on every page while sharing, so users always know -->
-      <RouterLink
-        v-if="tracker.isTracking.value && tracker.sharingEventId.value"
-        :to="{ name: 'share', params: { id: tracker.sharingEventId.value } }"
-        class="chip chip-ink k-sharing"
-        data-testid="nav-sharing"
-      >
-        <i class="dot pulse" style="background: var(--lime)"></i>Sharing location
-      </RouterLink>
       <div id="k-nav-actions" class="k-nav-actions"></div>
       <div v-if="auth.isLoggedIn" ref="meWrap" class="wrapm">
         <button type="button" class="ks-av" aria-label="Account" :aria-expanded="meOpen ? 'true' : 'false'" data-testid="nav-account" @click="meOpen = !meOpen">{{ initials }}</button>

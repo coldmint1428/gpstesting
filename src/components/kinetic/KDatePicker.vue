@@ -1,11 +1,13 @@
 <script setup>
 // A date field with the design's calendar instead of the browser's popup. The value stays 'YYYY-MM-DD'.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { usePlacedPopup } from '../../composables/useOpenMenu'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
   label: { type: String, required: true },
   min: { type: String, default: '' }, // days before this are disabled
+  before: { type: String, default: '' }, // this day and the days after it are disabled
   testid: { type: String, default: null },
 })
 const emit = defineEmits(['update:modelValue'])
@@ -20,6 +22,8 @@ const parse = (v) => {
 }
 
 const open = ref(false)
+// Opened above the field, or moved in from an edge, when there is no room for all of it below (useOpenMenu)
+usePlacedPopup(open)
 const wrap = ref(null)
 const shown = ref(new Date()) // the first of the month on screen
 const cursor = ref('') // the day the arrow keys are on
@@ -40,7 +44,7 @@ const days = computed(() => {
     const d = new Date(y, m, 1 - lead + i)
     if (i >= 35 && d.getMonth() !== m) break
     const v = iso(d)
-    out.push({ v, n: d.getDate(), out: d.getMonth() !== m, disabled: !!props.min && v < props.min, aria: d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() })
+    out.push({ v, n: d.getDate(), out: d.getMonth() !== m, disabled: (!!props.min && v < props.min) || (!!props.before && v >= props.before), aria: d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() })
   }
   return out
 })
@@ -119,7 +123,7 @@ watch(() => props.modelValue, (v) => { if (open.value && parse(v)) show(parse(v)
         >{{ d.n }}</button>
       </div>
       <div class="row" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line)">
-        <button type="button" class="k2-link" :disabled="!!min && today < min" @click="pick(today)">Today</button>
+        <button type="button" class="k2-link" :disabled="(!!min && today < min) || (!!before && today >= before)" @click="pick(today)">Today</button>
         <span class="sp"></span>
         <button type="button" class="kb kb-ink kb-sm" @click="open = false">Done</button>
       </div>

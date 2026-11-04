@@ -37,6 +37,8 @@ import { areaColour, areaLabel } from '../utils/areaKinds'
 const props = defineProps({
   eventId: { type: String, default: '' }, // set: this event's bench (Zones tab); empty: the demo bench
   embedded: { type: Boolean, default: false }, // inside the event page: no page heading of its own
+  // The event is live: the zones are looked at, not changed (the map still pans and zooms)
+  locked: { type: Boolean, default: false },
 })
 
 const locks = useBenchLocks()
@@ -64,7 +66,9 @@ locks.watchBusy(bench.busy)
 // was its own were ignored, so fetch them (shape by shape -- see catchUp in useBenchDoc).
 locks.whenLost(() => bench.catchUp())
 
-const { data: layout, loading, errorMsg, saving, bytes, open, layoutId, myView, saveView, canEdit } = bench
+const { data: layout, loading, errorMsg, saving, bytes, open, layoutId, myView, saveView, canEdit: canEditBench } = bench
+// Everything below that asks "may this person change the zones" gets the live lock too
+const canEdit = computed(() => canEditBench.value && !props.locked)
 // Until its first answer, this holds the event page's one-shot skeleton (usePageReady)
 useLoadGate(() => loading.value)
 
@@ -72,6 +76,13 @@ useLoadGate(() => loading.value)
 // nothing to say about the view: the map pans and zooms in every one of these states, except while an
 // area is being drawn.
 const mode = ref(null)
+// A drawing left open when the event goes live is put down: the zones are locked from here on
+watch(
+  () => props.locked,
+  (on) => {
+    if (on) mode.value = null
+  },
+)
 
 // One undo stack for the whole canvas, and it reads the document through this getter so the state it
 // captures is always the state as it is at that moment (see composables/useDocHistory).
@@ -825,7 +836,8 @@ onUnmounted(() => {
         <h1 v-if="embedded">Map</h1>
         <h1 v-else>Polygon bench</h1>
         <p v-if="embedded && !canEdit" class="small text-muted mb-1" data-testid="zones-intro">
-          <template v-if="!canEdit">Only the root and planners can edit zones.</template>
+          <template v-if="locked">Zones are locked while the event is live.</template>
+          <template v-else>Only the root and planners can edit zones.</template>
         </p>
         <!-- Who else is on the bench. A planner working alone sees nothing here at all, which is
              the point: collaboration chrome on an empty bench is noise. A planner's own other
@@ -903,6 +915,7 @@ onUnmounted(() => {
       ref="benchView"
       v-model:mode="mode"
       :can-edit="canEdit"
+      :locked="locked"
       :plans="plans"
       :areas="areas"
       :view="startView"
