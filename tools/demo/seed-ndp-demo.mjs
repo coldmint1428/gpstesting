@@ -22,7 +22,8 @@ const id = async (name) => (await clientFor(name)).user.id
 const [planner, ic, cadet] = [await id('planner'), await id('ic1'), await id('member')]
 
 // ---------- the event, its people and its groups ----------
-const start = new Date()
+// A week ahead: a rehearsal must be before the event day (090), and segment 6 adds one. Start now still runs it today.
+const start = new Date(Date.now() + 7 * 86400_000)
 const eventId = must(
   await root.rpc('create_event_with_setup', {
     p_event: {
