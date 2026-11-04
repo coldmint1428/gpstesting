@@ -15,7 +15,7 @@ const props = defineProps({
   result: { type: Object, default: null },
   resultCanUndo: { type: Boolean, default: false },
 })
-defineEmits(['show', 'timeline', 'act', 'dismiss', 'restore', 'fix-all', 'fill-all', 'dismiss-all', 'apply-fix', 'cancel-fix', 'undo-fix', 'clear-result'])
+defineEmits(['show', 'timeline', 'act', 'dismiss', 'restore', 'fill-all', 'dismiss-all', 'apply-fix', 'cancel-fix', 'undo-fix', 'clear-result'])
 
 const showDismissed = ref(false)
 const errors = computed(() => props.problems.filter((p) => p.level === 'error'))
@@ -50,15 +50,6 @@ const sections = computed(() => {
           title="Add frames to every stretch that is too far apart"
           @click="$emit('fill-all')"
         >Fill all</button>
-        <button
-          v-if="canEdit && warnings.length"
-          type="button"
-          class="pv-pb"
-          data-testid="problems-fix-all"
-          :disabled="busy || errors.length > 0"
-          :title="errors.length ? 'Fix the errors first' : 'Add the time every warning needs'"
-          @click="$emit('fix-all')"
-        >Fix all timing</button>
         <button
           v-if="warnings.length"
           type="button"

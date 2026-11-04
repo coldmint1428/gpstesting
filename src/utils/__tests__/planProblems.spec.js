@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calmCase, editAllowed, extraSeconds, problemWords, problemsOf, suggestedSpot, walkFixPlan, walkFixWords } from '../planProblems'
+import { calmCase, editAllowed, problemWords, problemsOf, suggestedSpot, walkFixPlan, walkFixWords } from '../planProblems'
 import { metresBetween, resolveTracks } from '../planFrames'
 
 const gap = { groupId: 'a', from: { frameId: 'f1', t_s: 0 }, to: { frameId: 'f2', t_s: 60 }, metres: 120.4, steps: 1, budget: 25 }
@@ -8,14 +8,16 @@ const pace = row({ severity: 'warning', message: '15 m in +0:01 (from +1:25:25 t
 const zone = row({ from_s: 30, message: '20 m in +1:00 (from +0:30 to +1:30) -- the straight line crosses the no-go area "Store"' })
 
 describe('plan problems', () => {
-  it('lists errors first, then warnings', () => {
-    const list = problemsOf([gap], [pace, zone])
-    expect(list.map((p) => [p.kind, p.level])).toEqual([['far', 'error'], ['zone', 'error'], ['pace', 'warning']])
+  it('lists the errors, in time order', () => {
+    const list = problemsOf([gap], [zone])
+    expect(list.map((p) => [p.kind, p.level])).toEqual([['far', 'error'], ['zone', 'error']])
     expect(list[1].zone).toBe('the no-go area "Store"')
   })
 
-  it('treats too fast as a warning even before the migration that relabels it', () => {
-    expect(problemsOf([], [{ ...pace, severity: 'error' }])[0].level).toBe('warning')
+  it('has no speed rule: a group may ride as well as walk', () => {
+    expect(problemsOf([], [pace])).toEqual([])
+    expect(problemsOf([], [{ ...pace, severity: 'error' }])).toEqual([])
+    expect(problemsOf([gap], [pace, zone]).map((p) => p.kind)).toEqual(['far', 'zone'])
   })
 
   it('says one problem once', () => {
@@ -23,20 +25,12 @@ describe('plan problems', () => {
     expect(problemsOf([gap], [same])).toHaveLength(1)
   })
 
-  it('brings a dismissed warning back when the walk changes', () => {
-    const before = problemsOf([], [pace])[0].id
-    expect(problemsOf([], [{ ...pace, metres: 40 }])[0].id).not.toBe(before)
-  })
-
-  it('works out the time a walk needs', () => {
-    expect(extraSeconds(15, 1)).toBe(10)
-    expect(extraSeconds(1, 60)).toBe(1)
+  it('brings a dismissed problem back when the walk changes', () => {
+    const before = problemsOf([], [zone])[0].id
+    expect(problemsOf([], [{ ...zone, metres: 40 }])[0].id).not.toBe(before)
   })
 
   it('says what happened and how to fix it', () => {
-    const words = problemWords(problemsOf([], [pace])[0], 'Monkey Party')
-    expect(words.title).toBe('Monkey Party moves too fast')
-    expect(words.detail).toBe('15 m in 1 s (15.0 m/s). Walking takes about 11 s.')
     expect(problemWords(problemsOf([], [zone])[0], 'Monkey Party').title).toBe('Monkey Party crosses the no-go area "Store"')
     const far = problemWords(problemsOf([gap], [])[0], 'Monkey Party')
     expect(far.title).toBe('Monkey Party jumps too far')
@@ -57,11 +51,6 @@ describe('plan problems', () => {
     it('leaves room for a drop that lands off centre', () => {
       const spot = suggestedSpot({ kind: 'far', budget: 25, fromS: 0, toS: 2 }, from, to)
       expect(25 - metres(from, spot)).toBeGreaterThan(3)
-    })
-
-    it('stops a walk being faster than running', () => {
-      const spot = suggestedSpot({ kind: 'pace', fromS: 0, toS: 2 }, from, to)
-      expect(metres(from, spot) / 2).toBeLessThan(5.5)
     })
 
     it('suggests nothing when the walk is already inside it', () => {
@@ -127,7 +116,6 @@ describe('plan problems', () => {
       expect(plan.times).toEqual([{ frameId: 'f3', from_s: 106, seconds: 3 }]) // 5 steps need 5 s, and it has 2
       expect(plan.fills[0].spots).toHaveLength(4)
       expect(plan.newFrames).toBe(4)
-      expect(plan.stillFast).toBeCloseTo(97 / 5, 0)
     })
 
     it('uses the room a jump already has, and adds no time', () => {
@@ -135,7 +123,6 @@ describe('plan problems', () => {
       expect(plan.times).toEqual([])
       expect(plan.totalSeconds).toBe(0)
       expect(plan.fills[0].spots).toHaveLength(4)
-      expect(plan.stillFast).toBe(0)
     })
 
     it('adds only as many frames as the limit needs', () => {
@@ -153,26 +140,11 @@ describe('plan problems', () => {
       expect(plan.fills[0].spots.every((spot) => spot.lng === 103.85)).toBe(true)
     })
 
-    it('fixes a too-fast walk with time alone', () => {
-      const frames = walk(2)
-      frames[3].t_s = frames[2].t_s + 1
-      frames[3].positions.a.lat = north(4 + 20)
-      const rows = [{ severity: 'warning', group_id: 'a', from_frame: 'f2', from_s: frames[2].t_s, to_frame: 'f3', to_s: frames[3].t_s, metres: 20, message: '20 m -- 20 m/s is faster than running' }]
-      const { plan } = planOf(frames, 0, rows)
-      expect(plan.fills).toEqual([])
-      expect(plan.times).toHaveLength(1)
-      expect(plan.times[0].from_s).toBe(frames[3].t_s)
-    })
-
-    it('takes in the problems of its own kind joined to it, and no others', () => {
-      const frames = walk(2)
+    it('takes in only its own walk: a too-fast row is no problem at all', () => {
       const row = (a, b) => ({ severity: 'warning', group_id: 'a', from_frame: a, from_s: 0, to_frame: b, to_s: 1, metres: 2, message: 'faster than running' })
-      const { plan } = planOf(frames, 1, [row('f1', 'f2'), row('f2', 'f3'), row('f5', 'f6')])
-      expect(plan.run.map((p) => p.fromFrame)).toEqual(['f1', 'f2'])
-      expect(plan.kind).toBe('pace')
-
       const quick = walk(97).map((f, i) => ({ ...f, t_s: 100 + i * 2 }))
       const mixed = planOf(quick, 0, [row('f1', 'f2')])
+      expect(mixed.problems.map((p) => p.kind)).toEqual(['far'])
       expect(mixed.plan.kind).toBe('far')
       expect(mixed.plan.run).toHaveLength(1)
     })
@@ -211,11 +183,11 @@ describe('plan problems', () => {
       expect(words.note).toBe('')
     })
 
-    it('says speed is a separate problem when a filled walk stays too fast', () => {
+    it('says nothing about speed when a filled walk is still quick: a group may ride', () => {
       const quick = walk(97).map((f, i) => ({ ...f, t_s: 100 + i * 2 }))
       const words = walkFixWords(planOf(quick).plan, 'hii', (id) => Number(id.slice(1)) + 1)
       expect(words.changes[1]).toContain('to make room')
-      expect(words.note).toContain('Speed is separate')
+      expect(words.note).not.toMatch(/speed|fast/i)
     })
   })
 

@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/auth'
 import { getMyEvents, getLiveEventIds, joinEventByCode } from '../services/eventService'
 import { ROLE_LABEL, topRole, viewRole } from '../utils/permissions'
 import BenchAlert from '../components/BenchAlert.vue'
+import ExpandTransition from '../components/ExpandTransition.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import KLogo from '../components/kinetic/KLogo.vue'
 import KVenueMap from '../components/kinetic/KVenueMap.vue'
@@ -439,7 +440,7 @@ const year = new Date().getFullYear()
           <div>
             <div v-for="([q, a], i) in FAQ" :key="q" class="kl-q">
               <button type="button" :aria-expanded="faqOpen === i ? 'true' : 'false'" @click="faqOpen = faqOpen === i ? -1 : i">{{ q }}<i>+</i></button>
-              <p v-if="faqOpen === i">{{ a }}</p>
+              <ExpandTransition><div v-if="faqOpen === i"><p>{{ a }}</p></div></ExpandTransition>
             </div>
           </div>
         </div>

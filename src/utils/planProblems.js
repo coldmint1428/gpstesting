@@ -2,26 +2,21 @@
 // No map, no Vue, no Supabase: the board's Problems panel draws these, and its lock asks editAllowed().
 //
 // TWO LEVELS. An error is a walk the plan cannot have: too far for its steps (the board's own 25 m rule) or across a
-// no-go area or obstacle (plan_check). It locks the plan until it is fixed. A warning is a walk that is possible but
-// asks a lot: faster than running (plan_check, a warning since 084). It can be dismissed, and it does not lock anything.
+// no-go area or obstacle (plan_check). It locks the plan until it is fixed. A warning can be dismissed and locks
+// nothing.
+//
+// NO SPEED RULE. plan_check still says when a move is "faster than running", but a group may be on a bus, a boat or a
+// float rather than on foot, so how fast a group moves is the planner's call: those rows are left out here, and the
+// board shows no "moves too fast" warning and offers no time for it.
 import { MAX_FRAME_GAP_M, metresBetween } from './planFrames'
 import { formatDuration } from './time'
 
-// A crowd walks at about 1.4 m/s (049): the time "Add time" offers is what the walk takes at that pace
-const WALK_MPS = 1.4
-// How far inside each limit a suggested spot sits. A dragged badge lands a few metres off wherever it is aimed, so a spot
-// right at the limit (25 m, or plan_check's 6 m/s) can be hit and still leave the error standing.
+// How far inside the limit a suggested spot sits. A dragged badge lands a few metres off wherever it is aimed, so a spot
+// right at the 25 m limit can be hit and still leave the error standing.
 const SUGGEST_MARGIN = 0.85
-const RUNNING_MPS = 6
-const SUGGEST_MPS = RUNNING_MPS * SUGGEST_MARGIN
 const METRES_PER_DEGREE = 111320
 
 const isPace = (row) => String(row.message || '').includes('faster than running')
-
-/** The seconds to add so a walk of `metres` that has `seconds` can be done at walking pace. */
-export function extraSeconds(metres, seconds) {
-  return Math.max(1, Math.ceil(metres / WALK_MPS) - seconds)
-}
 
 /**
  * One list out of the board's gaps (annotate) and the database's rows (plan_check), errors first. A row naming the same
@@ -45,14 +40,14 @@ export function problemsOf(gaps = [], rows = []) {
   }))
   for (const row of rows) {
     if (told.has(`${row.group_id}|${row.from_frame}|${row.to_frame}`)) continue
-    const pace = isPace(row)
-    if (!pace && row.severity !== 'error') continue
+    // Speed is not a rule (see the top of this file)
+    if (isPace(row) || row.severity !== 'error') continue
     const crossing = String(row.message || '').match(/crosses (.+)$/)
     list.push({
-      // The distance is in the id so a dismissed warning comes back if the walk changes
-      id: `${pace ? 'pace' : 'zone'}|${row.group_id}|${row.from_frame}|${row.to_frame}|${row.metres}`,
-      level: pace ? 'warning' : 'error',
-      kind: pace ? 'pace' : crossing ? 'zone' : 'other',
+      // The distance is in the id so a dismissed problem comes back if the walk changes
+      id: `zone|${row.group_id}|${row.from_frame}|${row.to_frame}|${row.metres}`,
+      level: 'error',
+      kind: crossing ? 'zone' : 'other',
       groupId: row.group_id,
       fromFrame: row.from_frame,
       fromS: row.from_s,
@@ -95,15 +90,6 @@ export function problemWords(problem, groupName) {
       title: `${groupName} crosses ${problem.zone}`,
       detail: '',
       fix: seconds < 2 ? 'No room for a frame between: add time first.' : 'Add a frame between, then drag them to the suggested spot.',
-    }
-  }
-  if (problem.kind === 'pace') {
-    const speed = seconds > 0 ? (problem.metres / seconds).toFixed(1) : '?'
-    const walk = formatDuration(Math.ceil(problem.metres / WALK_MPS) * 1000)
-    return {
-      title: `${groupName} moves too fast`,
-      detail: `${problem.metres} m in ${formatDuration(seconds * 1000)} (${speed} m/s). Walking takes about ${walk}.`,
-      fix: '',
     }
   }
   return { title: `${groupName} cannot do this walk`, detail: problem.message, fix: 'Change these positions or times.' }
@@ -161,7 +147,7 @@ function legIsClear(a, b, rings) {
 }
 
 /**
- * Where to send the group instead, or null when there is no answer worth drawing. Too far or too fast: the place along
+ * Where to send the group instead, or null when there is no answer worth drawing. Too far: the place along
  * the same line that is just inside the limit. Across an area: the nearest place to one side of the line's middle from
  * which both legs miss every no-go area and obstacle. It is a suggestion to drag to, never a write: only the planner
  * knows the ground, and the hop after it may then need moving too.
@@ -173,8 +159,8 @@ export function suggestedSpot(problem, from, to, zones = []) {
   const b = flat.toXY(to.lat, to.lng)
   const length = Math.hypot(b.x - a.x, b.y - a.y)
   if (!length) return null
-  if (problem.kind === 'far' || problem.kind === 'pace') {
-    const reach = problem.kind === 'far' ? problem.budget * SUGGEST_MARGIN : SUGGEST_MPS * (problem.toS - problem.fromS)
+  if (problem.kind === 'far') {
+    const reach = problem.budget * SUGGEST_MARGIN
     if (reach >= length) return null
     return flat.toLatLng({ x: a.x + ((b.x - a.x) * reach) / length, y: a.y + ((b.y - a.y) * reach) / length })
   }
@@ -192,8 +178,7 @@ export function suggestedSpot(problem, from, to, zones = []) {
 }
 
 // ---------- fixing a whole walk ----------
-// Two rules, two fixes. Fill is for the 25 m limit and adds frames. Add time is for speed and adds time. Neither does the
-// other's job: a walk that is filled is exactly as fast as it was, and says so.
+// Fill is for the 25 m limit: it adds frames, and only the seconds those frames need to sit on (whole seconds each).
 
 // frames_fill's own step (042): 24 m, not the 25 m limit, so that rounding cannot tip a step over it
 const FILL_STEP_M = 24
@@ -221,12 +206,11 @@ function walkOf(clicked, problems) {
  *
  * Too far: new frames along the hop's line (frames_fill, 042), the fewest that bring each step inside the limit, at the
  * times and places frames_fill works out, so what the preview promises is what is written. Frames sit on whole seconds,
- * so a hop too short to hold them gets just the seconds that make room, and no more: its speed is not this fix's business.
- * Too fast: the time to be walked, and nothing else.
+ * so a hop too short to hold them gets just the seconds that make room, and no more.
  */
 export function walkFixPlan(clicked, problems, points, zones = []) {
   const run = walkOf(clicked, problems)
-  const base = { problemId: clicked.id, groupId: clicked.groupId, kind: clicked.kind, run, fills: [], newFrames: 0, times: [], totalSeconds: 0, route: [], frameIds: [], crosses: false, stillFast: 0, blocked: '' }
+  const base = { problemId: clicked.id, groupId: clicked.groupId, kind: clicked.kind, run, fills: [], newFrames: 0, times: [], totalSeconds: 0, route: [], frameIds: [], crosses: false, blocked: '' }
   const stops = points.filter((p) => p.defined && p.state !== 'off_site')
   const pairs = []
   for (const problem of run) {
@@ -238,23 +222,17 @@ export function walkFixPlan(clicked, problems, points, zones = []) {
 
   const times = []
   const fills = []
-  let stillFast = 0
   for (const [a, b] of pairs) {
     if (points.some((p) => p.state === 'off_site' && p.index > a.index && p.index < b.index)) {
       return { ...base, blocked: 'This group goes off site during this walk, so it cannot be filled in. Drag these positions closer on the map instead.' }
     }
     const metres = metresBetween(a, b)
     let seconds = b.t_s - a.t_s
-    if (clicked.kind === 'pace') {
-      times.push({ frameId: b.frameId, from_s: b.t_s, seconds: extraSeconds(metres, seconds) })
-      continue
-    }
     const steps = Math.ceil(metres / FILL_STEP_M)
     if (seconds < steps) {
       times.push({ frameId: b.frameId, from_s: b.t_s, seconds: steps - seconds })
       seconds = steps
     }
-    stillFast = Math.max(stillFast, metres / seconds > RUNNING_MPS ? metres / seconds : 0)
     const taken = new Set(points.filter((p) => p.index > a.index && p.index < b.index).map((p) => p.t_s))
     const at = new Set()
     const spots = []
@@ -288,7 +266,6 @@ export function walkFixPlan(clicked, problems, points, zones = []) {
     route: route.map((stop) => ({ lat: stop.lat, lng: stop.lng })),
     frameIds: route.map((stop) => stop.frameId),
     crosses,
-    stillFast,
   }
 }
 
@@ -303,10 +280,7 @@ export function walkFixWords(plan, groupName, frameNumber) {
   const notes = []
   const first = plan.times.length ? Math.min(...plan.times.map((t) => frameNumber(t.frameId))) : 0
   const added = formatDuration(plan.totalSeconds * 1000)
-  if (plan.kind === 'pace') {
-    changes.push(`Adds ${added} so ${groupName} can walk it. Every group's frames from ${first} onward run that much later.`)
-    changes.push('No frames are added.')
-  } else {
+  {
     const count = plan.newFrames === 1 ? '1 new frame' : plan.newFrames + ' new frames'
     const fill = plan.fills[0]
     const where = plan.fills.length === 1 ? `between frames ${frameNumber(fill.fromFrame)} and ${frameNumber(fill.toFrame)}` : 'along this walk'
@@ -315,7 +289,6 @@ export function walkFixWords(plan, groupName, frameNumber) {
     changes.push(plan.times.length
       ? `Adds ${added} to make room: frames sit on whole seconds. Every group's frames from ${first} onward run that much later.`
       : 'No time is added.')
-    if (plan.stillFast) notes.push(`Speed is separate: this walk stays at about ${plan.stillFast.toFixed(1)} m/s, so it will show as too-fast warnings.`)
   }
   changes.push(`${groupName} keeps the same route: no existing frame moves.`)
   if (plan.crosses) notes.push('This route crosses a no-go area or obstacle, so that error will appear next.')

@@ -46,7 +46,7 @@
 .k2-qt button:hover{box-shadow:inset 0 0 0 1.5px var(--k-ink)}
 .k2-count{font-size:12px;color:var(--k-mut);text-align:right;margin-top:4px}
 .k2-fold{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;padding:0;margin:20px 0 8px;font:800 11px Manrope;letter-spacing:.14em;text-transform:uppercase;color:var(--k-mut);text-align:left}
-.k2-fold .ki{width:14px;height:14px;transition:transform .15s}
+.k2-fold .ki{width:14px;height:14px;transition:transform var(--motion-fold,320ms) var(--ease-fold,ease)}
 .k2-fold[aria-expanded="true"] .ki{transform:rotate(90deg)}
 .k2-fold .n{font-size:11px;opacity:.7;margin-left:2px}
 .k2-sel .k2-fold{color:var(--k-lime)}
@@ -454,7 +454,7 @@ html:not(.native-app) body .ev .pv-stage .pv-map{position:relative}
 html:not(.native-app) body .ev .k2-transport-top{background:transparent}
 html:not(.native-app) body .ev .pv-sched{background:transparent;padding:0;border:0;box-shadow:none;gap:16px;overflow:visible}
 html:not(.native-app) body .ev .pv-sched-card{background:#fff;border-radius:24px;overflow:hidden;display:flex;flex-direction:column}
-html:not(.native-app) body .ev .pv-sched-list{max-height:min(60vh,520px);overflow-y:auto;overscroll-behavior:contain}
+html:not(.native-app) body .ev .pv-sched-list{max-height:min(60vh,520px);overflow-y:auto;overscroll-behavior:contain;position:relative}
 html:not(.native-app) body .ev .k2-schedhead{margin-bottom:8px}
 /* Hover tags (Leaflet's tooltip layer, 650) stay in front of every pin (the marker layer, 600): zone names on these maps
    only show on hover now, so nothing permanent sits in that layer to cover a pin */
@@ -521,6 +521,10 @@ html body select:not([multiple]):not([size]):hover:not(:disabled){border-color:v
 html body select:not([multiple]):not([size]):focus{outline:0;border-color:var(--ink);box-shadow:3px 4px 0 var(--lime)}
 html body select:not([multiple]):not([size]):disabled{opacity:.5;background-color:var(--canvas);cursor:not-allowed}
 html body .k .ksel:after{display:none}
+/* A dropdown's text stays on one line (selectWidth.js keeps the box one width and shrinks long text to fit) */
+html body select:not([multiple]):not([size]){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Filter and sort dropdowns above a list: the compact size */
+html body .k2-filterrow select:not([multiple]):not([size]){height:40px;padding:0 32px 0 12px;border-radius:12px;font-size:13px;background-position:right 10px center}
 /* The open list, where the browser lets it be styled (the others open their own list) */
 @supports (appearance: base-select){
   html body select:not([multiple]):not([size]),html body select::picker(select){appearance:base-select}
@@ -1102,18 +1106,31 @@ html body .k .menu.is-up,html body .k2-cal.is-up{top:auto!important;bottom:calc(
 @media (max-width:767px){
   html:not(.native-app) .k2-stacktable thead{display:none}
   html:not(.native-app) .k2-stacktable,html:not(.native-app) .k2-stacktable tbody{display:block;width:100%}
-  html:not(.native-app) .k2-stacktable tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 10px;padding:12px 0;border-bottom:1px solid var(--k-line)}
+  html:not(.native-app) .k2-stacktable tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px;padding:12px 0;border-bottom:1px solid var(--k-line)}
   html:not(.native-app) .k2-stacktable tr:last-child{border-bottom:0}
   html:not(.native-app) .k2-stacktable td{display:block;border:0;padding:0;min-width:0}
   html:not(.native-app) .k2-stacktable td:first-child{grid-column:1/-1;font-weight:700}
-  /* Folded: only the group's line shows; tapping it opens its fields */
-  html:not(.native-app) .k2-stacktable tr:not(.is-open) > td:not(:first-child){display:none}
-  html:not(.native-app) .k2-stacktable tr{padding:4px 0}
-  html:not(.native-app) .k2-stacktable tr.is-open{padding-bottom:12px}
+  /* Folded: only the group's line shows; tapping it slides its fields open (the rows under the name grow from 0 to
+     their height, the way ExpandTransition opens a section) and fades them in. Folded fields are also hidden from the
+     keyboard: visibility switches off only once the slide has closed. */
+  html:not(.native-app) .k2-stacktable tr{padding:4px 0;grid-template-rows:auto 0fr 0fr;transition:grid-template-rows var(--motion-fold,320ms) var(--ease-fold,ease),padding-bottom var(--motion-fold,320ms) var(--ease-fold,ease)}
+  html:not(.native-app) .k2-stacktable tr.is-open{padding-bottom:12px;grid-template-rows:auto 1fr 1fr}
+  /* Two lines of boxes, Save at the end of the second (beside Radio), so both lines are the same height and the slide
+     has no empty line under them: Category | Code, Sector | Radio  Save */
+  html:not(.native-app) .k2-stacktable tr{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
+  html:not(.native-app) .k2-stacktable tr > td:nth-child(2){grid-column:1;grid-row:2}
+  html:not(.native-app) .k2-stacktable tr > td:nth-child(3){grid-column:2/4;grid-row:2}
+  html:not(.native-app) .k2-stacktable tr > td:nth-child(4){grid-column:1;grid-row:3}
+  html:not(.native-app) .k2-stacktable tr > td:nth-child(5){grid-column:2;grid-row:3}
+  html:not(.native-app) .k2-stacktable tr > td:not(:first-child){min-height:0;overflow:hidden;opacity:0;visibility:hidden;transition:opacity var(--motion-fold,320ms) var(--ease-fold,ease),visibility 0s linear var(--motion-fold,320ms)}
+  html:not(.native-app) .k2-stacktable tr.is-open > td:not(:first-child){opacity:1;visibility:visible;transition:opacity var(--motion-fold,320ms) var(--ease-fold,ease),visibility 0s}
+  /* Room for an input's focus ring inside the clipped cell */
+  html:not(.native-app) .k2-stacktable tr > td:not(:first-child):not(:last-child){padding:0 3px 4px}
   .k2-gdtoggle{pointer-events:auto!important;cursor:pointer!important;min-height:44px}
   .k2-gdchev{display:block!important}
   tr.is-open .k2-gdchev{transform:rotate(180deg)}
-  html:not(.native-app) .k2-stacktable td:last-child{grid-column:1/-1;display:flex;justify-content:flex-end;margin-top:8px}
+  html:not(.native-app) .k2-stacktable td:last-child{grid-column:3;grid-row:3;display:flex;justify-content:flex-end;align-items:flex-end;padding:0 0 4px 0}
+  html:not(.native-app) .k2-stacktable td:last-child > .btn{height:44px}
   html:not(.native-app) .k2-stacktable td[data-label]::before{content:attr(data-label);display:block;font:600 12px Manrope;color:var(--k-mut,#6b7280);margin:6px 0 3px}
 }
 
@@ -1132,12 +1149,22 @@ html body .k .menu.is-up,html body .k2-cal.is-up{top:auto!important;bottom:calc(
 .k2-gdtoggle{display:flex;align-items:center;gap:6px;width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;pointer-events:none;cursor:default}
 .k2-gdname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .k2-gdunsaved{flex:none;font:700 11px Manrope;color:var(--k-red,#c2410c)}
-.k2-gdchev{display:none;width:18px;height:18px;margin-left:auto;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.k2-gdchev{display:none;width:18px;height:18px;margin-left:auto;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:transform var(--motion-fold,320ms) var(--ease-fold,ease)}
 .k2-gdname{flex:0 1 auto}
-/* Wide: many groups scroll inside the card, under a header that stays put */
+/* Wide: many groups scroll inside the card, under a rounded header that stays put. Only the rows scroll, so the
+   scrollbar starts under the header; the header keeps the same gutter, so its columns stay over their boxes. */
 @media (min-width:768px){
-  [data-testid="group-details"] .table-responsive{max-height:min(60vh,560px);overflow-y:auto}
-  [data-testid="group-details"] .k2-stacktable thead th{position:sticky;top:0;z-index:1;background:var(--k-bg2,#f3f4ee)}
+  [data-testid="group-details"] .table-responsive{overflow:visible}
+  [data-testid="group-details"] .k2-stacktable,[data-testid="group-details"] .k2-stacktable thead,[data-testid="group-details"] .k2-stacktable tbody{display:block;width:100%}
+  [data-testid="group-details"] .k2-stacktable thead{overflow-y:hidden;scrollbar-gutter:stable;scrollbar-width:thin;margin-bottom:4px}
+  [data-testid="group-details"] .k2-stacktable tbody{max-height:min(60vh,520px);overflow-y:auto;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:rgba(10,31,23,.25) transparent}
+  [data-testid="group-details"] .k2-stacktable tr{display:table;width:100%;table-layout:fixed}
+  [data-testid="group-details"] .k2-stacktable :is(th,td):first-child{width:24%}
+  [data-testid="group-details"] .k2-stacktable :is(th,td):last-child{width:84px}
+  [data-testid="group-details"] .k2-stacktable thead th{background:var(--k-bg2,#f3f4ee);border-bottom:0;padding-top:10px;padding-bottom:10px}
+  [data-testid="group-details"] .k2-stacktable thead th:first-child{border-radius:12px 0 0 12px;padding-left:12px}
+  [data-testid="group-details"] .k2-stacktable thead th:last-child{border-radius:0 12px 12px 0}
+  [data-testid="group-details"] .k2-stacktable tbody td:first-child{padding-left:12px}
 }
 
 /* Phone More sheet: the event's state and who you are in it (the desktop's top bar and "You" card) */
@@ -1160,7 +1187,7 @@ html body .ks-crumb.k2-backlink{display:inline-flex;margin-bottom:12px;min-heigh
 html body .k2-backlink .ki{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 
 /* Filters: buttons when there is room, one dropdown on a phone */
-.k2-segsel{display:none}
+.k2-segsel,.k .k2-segsel{display:none}
 @media (max-width: 767.98px){
   .k2-filterrow .k2-segbtns{display:none!important}
   .k2-filterrow .k2-segsel{display:block;flex:1 1 0;min-width:0}
@@ -1225,3 +1252,51 @@ html:not(.native-app) body .ev .k2-mapp .k2-benchside{height:var(--map-h);overfl
   /* stacked: the zones list follows the map at its natural length */
   html:not(.native-app) body .ev .k2-mapp .k2-benchside{height:auto;overflow:visible}
 }
+
+/* The Full schedule list: a rounded box inset in its card (not a flat band edge to edge), with a slim scrollbar
+   that stays inside the rounded corners */
+html:not(.native-app) body .ev .pv-sched-listhead{border-bottom:0;padding-bottom:8px}
+html:not(.native-app) body .ev .pv-sched-list{margin:0 12px 12px;border:1.5px solid var(--line);border-radius:18px;background:#fff;scrollbar-width:thin;scrollbar-color:rgba(10,31,23,.25) transparent;scrollbar-gutter:auto}
+html:not(.native-app) body .ev .pv-sched-list > .pv-sched-moment{padding-left:16px;padding-right:12px}
+@media (max-width: 767.98px){
+  html:not(.native-app) body .ev .pv-sched-list{margin:0 8px 8px;border-radius:16px}
+  html:not(.native-app) body .ev .pv-sched-list > .pv-sched-moment{padding-left:12px;padding-right:10px}
+}
+/* People: a person's group opens that group's page */
+.k2-grouplink{color:inherit;text-decoration:underline;text-decoration-color:rgba(10,31,23,.3);text-underline-offset:2px}
+.k2-grouplink:hover,.k2-grouplink:focus-visible{color:var(--k-ink,var(--ink));text-decoration-color:currentColor}
+/* A split button (Start now | ▾): only the half under the pointer lifts, and its shadow never lies on the other half.
+   A lifted (transformed) half paints above its neighbour, so its shadow is cut off at the edge they share: it still
+   falls on the page below and to the side, never across the other button. */
+html body .k .ks-split > .kb{position:relative}
+@media (hover: hover){
+  html body .k .ks-split > .kb:hover:not(:disabled){z-index:1}
+  html body .k .ks-split > .kb:first-child:hover:not(:disabled){clip-path:inset(-12px 0 -12px -12px)}
+  html body .k .ks-split > .kb:last-child:hover:not(:disabled){clip-path:inset(-12px -12px -12px 0)}
+}
+/* A dialog's long list (a plan's warnings): folded under one button; opened, it scrolls inside the dialog */
+.k2-foldbtn{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px 0 14px;margin-top:2px;border:1.5px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);font:700 13px Manrope;cursor:pointer}
+.k2-foldbtn:hover{border-color:var(--ink)}
+.k2-foldbtn:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.k2-foldbtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform var(--motion-fold,320ms) var(--ease-fold,ease)}
+.k2-foldbtn svg.is-open{transform:rotate(180deg)}
+.k2-foldlist{max-height:min(40vh,320px);overflow-y:auto;overscroll-behavior:contain;padding:10px 12px 10px 28px!important;border-radius:14px;background:var(--canvas);scrollbar-width:thin}
+.k2-foldlist li + li{margin-top:6px}
+/* The frame dots sit clear under the time ruler. A dot can grow (selected: 1.35x; a problem's dot: a 6 px ring), and
+   on a touch screen the ruler is 28 px tall while the dots still started at 22 px, so they cut across its line. */
+html:not(.native-app) body .ev .pv-frame{top:10px}
+@media (pointer: coarse){
+  html:not(.native-app) body .ev .pv-frames{top:28px}
+}
+.k2-foldpad{padding-top:10px}
+/* A fold inside a stack with a 16 px gap: the wrapper sits 16 px up and its card 16 px down, so a folded (0 px) wrapper
+   adds no gap and the open one the usual gap, and the slide has no jump at either end */
+.k2-gapfold{margin-top:-16px}
+.k2-gapfold > *{margin-top:16px}
+
+/* Plan board: the reminder to plan for each group's transport */
+.k2-transport{position:relative;margin:12px 0 4px;padding:10px 36px 10px 12px;border:1.5px solid var(--line);border-radius:14px;background:var(--k-soft,rgba(0,0,0,.03))}
+.k2-transport p{margin:0;font-size:13px;line-height:1.45}
+.k2-transport-x{position:absolute;top:6px;right:6px;width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.65;cursor:pointer}
+.k2-transport-x:hover{opacity:1;background:rgba(0,0,0,.06)}
+.k2-transport-x svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}

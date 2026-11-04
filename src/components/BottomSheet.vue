@@ -1,6 +1,7 @@
 <script setup>
 // BottomSheet - a sheet that rises from the bottom of the phone screen over a dimmed page (Figma "Join an event",
 // "Problem actions"). Tapping the dimmed page or the close button closes it; the page underneath keeps its place.
+import { watch, onBeforeUnmount } from 'vue'
 import { useEscape } from '../composables/useEscape'
 
 const props = defineProps({
@@ -9,6 +10,21 @@ const props = defineProps({
 })
 const emit = defineEmits(['close'])
 useEscape(() => props.open, () => emit('close'))
+
+// While a sheet is open the page under it stays still: a finger on the dimmed page must not scroll it. Counted, so
+// two open sheets do not unlock each other.
+let locked = false
+function lock(on) {
+  if (on === locked) return
+  locked = on
+  const root = document.documentElement
+  const n = (+root.dataset.sheetLocks || 0) + (on ? 1 : -1)
+  if (n > 0) root.dataset.sheetLocks = String(n)
+  else delete root.dataset.sheetLocks
+  root.classList.toggle('pv-scroll-locked', n > 0)
+}
+watch(() => props.open, lock, { immediate: true })
+onBeforeUnmount(() => lock(false))
 </script>
 
 <template>

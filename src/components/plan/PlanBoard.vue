@@ -44,7 +44,7 @@ import { isLockRefusal, planErrorMessage, usePlan } from '../../composables/useP
 import { usePlanUndo } from '../../composables/usePlanUndo'
 import PlanLive from './PlanLive.vue'
 import PlanProblems from './PlanProblems.vue'
-import { calmCase, editAllowed, extraSeconds, problemWords, problemsOf, suggestedSpot, walkFixPlan, walkFixWords } from '../../utils/planProblems'
+import { calmCase, editAllowed, problemWords, problemsOf, suggestedSpot, walkFixPlan, walkFixWords } from '../../utils/planProblems'
 import { placeName } from '../../composables/useReverseGeocode'
 import EmptyState from '../EmptyState.vue'
 import { askConfirm, askNotice, toast } from '../../composables/useNotify'
@@ -143,6 +143,25 @@ function readLock() {
     return localStorage.getItem(LOCK_KEY) === '1'
   } catch {
     return false
+  }
+}
+// A reminder for planners: groups may walk, ride a bus, take a boat or follow a float, so the plan has no speed rule
+// and the timing is theirs to set. Closed once, it stays closed on this device.
+const TRANSPORT_KEY = 'planova.transportTipClosed'
+const transportTip = ref(readTransportTip())
+function readTransportTip() {
+  try {
+    return localStorage.getItem(TRANSPORT_KEY) !== '1'
+  } catch {
+    return true
+  }
+}
+function closeTransportTip() {
+  transportTip.value = false
+  try {
+    localStorage.setItem(TRANSPORT_KEY, '1')
+  } catch {
+    /* private mode: closed until the page closes */
   }
 }
 function toggleLock() {
@@ -256,9 +275,8 @@ watch(problems, (list) => {
 
 function problemActions(problem) {
   const seconds = problem.toS - problem.fromS
-  // Two rules, two fixes: frames for the 25 m limit, time for speed (planProblems)
+  // Frames for the 25 m limit. How fast a group moves is the planner's call, so there is no rule or fix for it.
   if (problem.kind === 'far') return [{ key: 'walk', label: 'Fill', testid: 'gap-fill' }]
-  if (problem.kind === 'pace') return [{ key: 'walk', label: 'Add time', testid: 'problem-time' }]
   if (problem.kind === 'zone' && seconds >= 2) return [{ key: 'between', label: 'Add frame between', testid: 'problem-between' }]
   if (problem.kind === 'zone') return [{ key: 'time', seconds: 10, label: 'Add 10 s', testid: 'problem-time' }]
   return []
@@ -483,9 +501,7 @@ async function applyWalkFix() {
   if (timeAdded) lines.push(`Added ${formatDuration(timeAdded * 1000)}${fix.kind === 'far' ? ' to make room for them' : ''}. The plan runs that much longer.`)
   if (failure) lines.push(failure, commands.length ? 'The changes above are still in place.' : 'Nothing was changed.')
   for (const p of left) lines.push(`Still open: ${p.title}. ${p.detail}`.trim())
-  const fast = others.filter((p) => p.kind === 'pace').length
-  if (fast) lines.push(`${fast === 1 ? '1 too-fast warning' : fast + ' too-fast warnings'} on this walk ${fast === 1 ? 'is' : 'are'} separate: use Add time or Fix all timing.`)
-  for (const p of others.filter((o) => o.kind !== 'pace')) lines.push(`Now showing: ${p.title}.`)
+  for (const p of others) lines.push(`Now showing: ${p.title}.`)
   walkFixResult.value = {
     title: failure ? 'The fix stopped partway' : left.length ? 'Partly fixed' : fix.kind === 'far' ? 'Filled: this walk is inside the 25 m limit' : 'Time added: this walk can be walked',
     tone: failure || left.length ? 'warn' : 'ok',
@@ -501,38 +517,6 @@ async function applyWalkFix() {
 async function undoWalkFix() {
   walkFixResult.value = null
   await runUndo()
-}
-
-/**
- * Fix all timing: give every open too-fast walk the time it needs, as one edit. Later walks go first, so a walk's times
- * still mean what they said when its turn comes: pushing an end only moves what comes after it.
- */
-async function fixAllTiming() {
-  if (blockedByErrors()) return
-  const list = openWarnings.value.filter((p) => p.kind === 'pace').sort((a, b) => b.toS - a.toS)
-  if (!list.length) return
-  const needs = list.map((problem) => ({ problem, seconds: extraSeconds(problem.metres, problem.toS - problem.fromS) }))
-  const total = needs.reduce((sum, row) => sum + row.seconds, 0)
-  const ok = await askConfirm({
-    title: `Add ${formatDuration(total * 1000)} to this plan?`,
-    message: `${list.length === 1 ? 'This walk gets' : list.length + ' walks get'} enough time to be walked, and everything after each one moves later. The plan runs ${formatDuration(total * 1000)} longer. Undo puts it all back.`,
-    confirmText: 'Add time',
-  })
-  if (!ok) return
-  const done = []
-  try {
-    for (const { problem, seconds } of needs) {
-      const to_s = Math.max(...frames.value.map((f) => f.t_s))
-      const at = frames.value.filter((f) => f.t_s >= problem.toS).map((f) => ({ id: f.id, t_s: f.t_s }))
-      await api.shiftFrom(problem.toS, seconds, to_s)
-      done.push({ from_s: problem.toS, to_s, delta: seconds, frames: at })
-    }
-    toast(`Added ${formatDuration(total * 1000)}.`, 'success', 3000)
-  } catch (error) {
-    // A walk somebody is retiming refuses its push. The ones already moved stay, and Undo still reaches them.
-    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
-  }
-  if (done.length) edits.batch(done.map((one) => ({ kind: 'shift', ...one })), `added ${formatDuration(total * 1000)} to ${list.length === 1 ? 'a walk' : list.length + ' walks'}`)
 }
 
 function dismissAllWarnings() {
@@ -2973,6 +2957,7 @@ async function publish() {
         : 'This becomes the timetable everyone follows. Any other live plan stops.') +
       (warned.length ? ` This plan has ${warned.length === 1 ? 'a warning' : warned.length + ' warnings'}:` : ''),
     lines: warned.map((p) => `${p.when}: ${p.title}. ${p.detail}`),
+    linesLabel: warned.length === 1 ? 'warning' : 'warnings',
     confirmText: again ? 'Publish again' : 'Publish',
   })
   if (!ok) return
@@ -3722,7 +3707,6 @@ watch(
         @show="showProblemOnMap"
         @timeline="showProblemOnTimeline"
         @act="actOnProblem"
-        @fix-all="fixAllTiming"
         @fill-all="fillAllGaps"
         :preview="walkFix"
         :result="walkFixResult"
@@ -3812,6 +3796,16 @@ watch(
               </p>
               <p v-if="moveLock" class="k2-hint" data-testid="lock-hint">Locked: frames and groups can't be dragged. Press the lock to change that.</p>
             </template>
+            <div v-if="props.canEdit && transportTip" class="k2-transport" role="note" data-testid="transport-tip">
+              <p>
+                <strong>Plan for how each group travels.</strong> Some groups walk, others may ride a bus, a boat or a float.
+                Give each group a route and timing that suits it: the plan does not check speed. For a ride off the
+                route, mark the group <em>Off site</em> for that stretch, so no walk is checked there.
+              </p>
+              <button type="button" class="k2-transport-x" aria-label="Close this reminder" title="Close" data-testid="transport-tip-close" @click="closeTransportTip">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              </button>
+            </div>
             <p class="k2-hint">{{ formatOffset(0) }} is the start of the run.</p>
           </section>
 

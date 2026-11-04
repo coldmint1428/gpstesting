@@ -259,9 +259,9 @@
 .kl-q{border-top:1px solid var(--line)}
 .kl-q:last-child{border-bottom:1px solid var(--line)}
 .kl-q button{display:flex;width:100%;align-items:center;gap:16px;padding:22px 0;border:0;background:none;text-align:left;font:700 19px Manrope;color:var(--ink)}
-.kl-q button i{margin-left:auto;width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-style:normal;font-size:20px;box-shadow:0 0 0 1.5px var(--ink) inset;transition:transform .2s,background .2s}
+.kl-q button i{margin-left:auto;width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-style:normal;font-size:20px;box-shadow:0 0 0 1.5px var(--ink) inset;transition:transform var(--motion-fold,320ms) var(--ease-fold,ease),background var(--motion-fold,320ms) var(--ease-fold,ease)}
 .kl-q button[aria-expanded="true"] i{transform:rotate(45deg);background:var(--lime)}
-.kl-q p{margin:-6px 0 22px;color:var(--muted);font-size:16px;line-height:1.6;max-width:640px;animation:kfade .2s}
+.kl-q p{margin:0;padding:0 0 22px;color:var(--muted);font-size:16px;line-height:1.6;max-width:640px}
 .kl-cta2{background:var(--forest);color:#fff;border-radius:34px;margin:40px 0 0;padding:70px 56px 60px;position:relative;overflow:hidden}
 .kl-cta2 h2{font:800 clamp(40px,7vw,104px)/.9 Unbounded;letter-spacing:-.07em;text-transform:uppercase;margin:0}
 .kl-cta2 h2 em{font-style:normal;color:var(--lime)}

@@ -16,6 +16,9 @@
   --motion-base: 200ms;
   --motion-slow: 260ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Opening and closing a section, and the chevron that says so: slower and softer than a hover, the same everywhere */
+  --motion-fold: 320ms;
+  --ease-fold: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   --lift-shadow: 0 6px 18px rgba(10, 31, 23, 0.1), 0 2px 4px rgba(10, 31, 23, 0.06);
@@ -374,7 +377,7 @@ html .pl-disclosure svg {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: transform var(--motion-base) var(--ease-out);
+  transition: transform var(--motion-fold) var(--ease-fold);
 }
 html .pl-disclosure[aria-expanded='true'] svg {
   transform: rotate(90deg);
@@ -395,8 +398,8 @@ html .collapsing {
 .expand-leave-active {
   overflow: hidden;
   transition:
-    height var(--motion-base) var(--ease-out),
-    opacity var(--motion-base) var(--ease-out);
+    height var(--motion-fold) var(--ease-fold),
+    opacity var(--motion-fold) var(--ease-fold);
 }
 .expand-enter-from,
 .expand-leave-to {
