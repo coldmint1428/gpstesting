@@ -113,6 +113,63 @@ async function write(locator, text) {
   await wait(300)
 }
 const byId = (id, p = page) => p.getByTestId(id)
+
+// ---------- pacing: each segment lasts about as long as its narration ----------
+// The seconds each segment's lines take to say (the run sheet's words at 145 a minute). When a segment's own actions
+// are done sooner, the cursor goes on through what is on screen while the speaker talks, the way a presenter's hand
+// does: across the areas, the list rows, the cards and the badges in reading order, scrolling a list where there is
+// more below. It is motion, so the merge keeps it (only a screen that stands still is cut).
+const TALK = { 1: 42, 2: 31, 3: 37, 4: 60, 5: 36, 6: 23, 7: 25, 8: 26, 9: 41, 10: 48, 11: 30, 12: 31, 13: 35, 14: 10, 15: 6, 16: 10 }
+const LOOK = 'main h2, main h3, main [data-testid$="-row"], main li, main .kp-card, main .k2-pp, .pv-map .pv-marker, .leaflet-marker-icon, .k2-ztip, main button:not([disabled])'
+async function browse(p, ms) {
+  const end = Date.now() + ms
+  let hop = 0
+  while (Date.now() < end - 900) {
+    const spots = await p
+      .evaluate((sel) => {
+        const out = []
+        for (const el of document.querySelectorAll(sel)) {
+          const r = el.getBoundingClientRect()
+          if (r.width < 10 || r.height < 10 || r.bottom < 80 || r.top > innerHeight - 40 || r.right < 0 || r.left > innerWidth) continue
+          out.push({ x: r.left + r.width / 2, y: r.top + Math.min(r.height / 2, 18) })
+        }
+        return out.sort((a, b) => Math.round(a.y / 60) - Math.round(b.y / 60) || a.x - b.x).slice(0, 40)
+      }, LOOK)
+      .catch(() => [])
+    if (!spots.length) {
+      await p.waitForTimeout(Math.min(1200, end - Date.now()))
+      continue
+    }
+    const at = spots[(hop * 3 + Math.floor(rand(0, 2))) % spots.length]
+    hop++
+    await glide(p, at.x + rand(-6, 6), at.y + rand(-3, 3))
+    await p.waitForTimeout(rand(650, 1150))
+    // Now and then, scroll the list the cursor is over (never a map: the wheel would zoom it)
+    if (hop % 4 === 0) {
+      const overMap = await p.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.leaflet-container'), at).catch(() => true)
+      if (!overMap) {
+        await p.mouse.wheel(0, rand(160, 280))
+        await p.waitForTimeout(500)
+      }
+    }
+  }
+}
+// The cursor's curved, easing move (as point() does on the laptop), for either window
+const pos = new Map()
+async function glide(p, x, y) {
+  const from = p === page ? mouse : pos.get(p) || { x: 195, y: 420 }
+  const dist = Math.hypot(x - from.x, y - from.y)
+  const steps = Math.max(8, Math.min(40, Math.round(dist / 18)))
+  const bow = rand(-0.15, 0.15) * dist
+  const mid = { x: (from.x + x) / 2 - ((y - from.y) / (dist || 1)) * bow, y: (from.y + y) / 2 + ((x - from.x) / (dist || 1)) * bow }
+  for (let i = 1; i <= steps; i++) {
+    const t = 1 - (1 - i / steps) ** 3
+    await p.mouse.move((1 - t) ** 2 * from.x + 2 * (1 - t) * t * mid.x + t ** 2 * x, (1 - t) ** 2 * from.y + 2 * (1 - t) * t * mid.y + t ** 2 * y)
+    await p.waitForTimeout(8)
+  }
+  if (p === page) mouse = { x, y }
+  else pos.set(p, { x, y })
+}
 async function confirmIfAsked(p = page) {
   const ok = p.getByTestId('confirm-ok')
   // Some confirms open after a server call (the broadcast counts its recipients first), so wait for one
@@ -423,10 +480,17 @@ const SEGMENTS = [
       for (let i = 0; i < 30 && !(await ready()); i++) await page.waitForTimeout(1000)
     }
     await press(start)
+    // The published NE4 plan, chosen by its value (plan:<id>) and checked, so the run never starts as tracking only
     const engine = byId('start-engine')
-    const opts = await engine.locator('option').allTextContents()
-    const label = opts.find((o) => o.includes('NE4'))
-    if (label) await engine.selectOption({ label }, { timeout: 5000 }).catch(() => {})
+    await engine.waitFor({ state: 'visible', timeout: 15_000 })
+    const planRow = (await rootSb.from('plans').select('id').eq('event_id', EV).not('published_at', 'is', null).limit(1)).data?.[0]
+    if (!planRow) throw new Error('no published plan to start the event with')
+    await point(engine)
+    for (let i = 0; i < 3 && (await engine.inputValue().catch(() => '')) !== 'plan:' + planRow.id; i++) {
+      await engine.selectOption({ value: 'plan:' + planRow.id }).catch(() => {})
+      await page.waitForTimeout(600)
+    }
+    if ((await engine.inputValue().catch(() => '')) !== 'plan:' + planRow.id) throw new Error('the NE4 plan could not be chosen on the Start panel')
     await wait(800)
     await press(byId('start-confirm-btn'))
     await confirmIfAsked()
@@ -485,10 +549,12 @@ const SEGMENTS = [
   [12, 'Messages and SOS', 45, async () => {
     await page.goto(`/events/${EV}/live`)
     await wait(2000)
-    const tab = byId('live-tab-message').or(page.getByRole('tab', { name: /Message/ }))
-    if (await tab.first().isVisible().catch(() => false)) await press(tab.first())
-    await write(byId('broadcast-body-input'), 'Red Lions running 1 min late. Hold salute positions.')
-    await press(byId('broadcast-send'))
+    // Each layout has its own copy of these controls: only the one on screen counts
+    const shown = (id) => byId(id).filter({ visible: true })
+    const tab = shown('live-tab-message')
+    if (await tab.first().waitFor({ state: 'visible', timeout: 10_000 }).then(() => true, () => false)) await press(tab, 1200)
+    await write(shown('broadcast-body-input'), 'Red Lions running 1 min late. Hold salute positions.')
+    await press(shown('broadcast-send'))
     await confirmIfAsked()
     await wait(2500)
     // The cadet's "Got it"
@@ -595,6 +661,9 @@ try {
     console.log(cues.at(-1))
     try {
       await run()
+      // Lines still being said: the hand goes on through the screen (segment 10's is the IC's phone window)
+      const talkLeft = (TALK[n] || 0) * 1000 + 1500 - (Date.now() - start)
+      if (talkLeft > 1500) await browse(n === 10 ? ic : page, talkLeft)
       if (SHOTS) await page.screenshot({ path: path.join(OUT, `seg-${String(n).padStart(2, '0')}.png`) }).catch(() => {})
     } catch (e) {
       const shot = path.join(OUT, `fail-${n}.png`)
