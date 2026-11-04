@@ -128,7 +128,38 @@ export function stopsOf(rows) {
     }
     stop.rows.push(row)
   }
-  return stops
+  return keepRealStops(stops)
+}
+
+/**
+ * A walk traced frame by frame puts a new point every few metres, and each one would be a numbered stop: a list and a
+ * map full of corners. A point is a stop only when the planner named it or the group stays there (a later moment of the
+ * stop keeps it on that point); the first and last points, and a point next to an off-site stretch, always are. Any other
+ * point is one the group walks through: its rows join the stop it is walking on from (as `via`), and the numbers close up.
+ */
+function keepRealStops(stops) {
+  const places = stops.filter((s) => s.kind === 'place')
+  const first = places[0]
+  const last = places[places.length - 1]
+  const held = (s) => s.rows.some((r) => r !== s.point && (r.lat == null || (r.lat === s.point.lat && r.lng === s.point.lng)))
+  const out = []
+  stops.forEach((stop, index) => {
+    stop.via = []
+    const prev = out[out.length - 1]
+    const after = stops[index + 1]
+    const passing = stop.kind === 'place' && stop !== first && stop !== last && !stop.name && !held(stop) &&
+      prev && prev.kind === 'place' && after && after.kind === 'place'
+    if (!passing) {
+      out.push(stop)
+      return
+    }
+    prev.rows.push(...stop.rows)
+    prev.via.push(...stop.rows)
+    prev.endsAt = stop.endsAt
+  })
+  let number = 0
+  for (const stop of out) if (stop.kind === 'place') stop.number = number += 1
+  return out
 }
 
 /**

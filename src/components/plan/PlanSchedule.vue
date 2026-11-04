@@ -466,8 +466,10 @@ const placeOfRow = computed(() => {
     for (const stop of stopsOf(walk.rows)) {
       for (const row of stop.rows) {
         let text = stopText(stop)
-        if (stop.kind === 'place' && !stop.name && row !== stop.point) text = 'Still at ' + text
-        out.set(row, { point: stop.point, text })
+        const walking = stop.via && stop.via.includes(row)
+        if (walking) text = 'On the way from ' + text
+        else if (stop.kind === 'place' && !stop.name && row !== stop.point) text = 'Still at ' + text
+        out.set(row, { point: walking && row.lat != null ? row : stop.point, text })
       }
     }
   }

@@ -72,6 +72,7 @@ const props = defineProps({
 
 const TICK_MS = 1000
 const SHOW_ZOOM = 18 // close enough to tell one point from the next
+const FOCUSED_ON_TOP = 1000000 // above every numbered pin (each takes 100 per number)
 
 const walk = usePlanWalk({ session: () => props.session, enabled: () => !props.embedded })
 const { loaded, errorMsg, readAt } = walk
@@ -263,6 +264,17 @@ function draw() {
   routeLayer.clearLayers()
   dotLayer.clearLayers()
 
+  // One group's map, before the show has ended, is about what comes next: see drawAhead
+  if (!props.whole && phase.value !== 'ended') {
+    const track = [...tracks.value.values()][0]
+    if (track && track.stops.some((s) => s.kind === 'place')) {
+      drawAhead(track)
+      fit()
+      applyFocus()
+      return
+    }
+  }
+
   // Every dot carries its time and place beside it, until there are so many that the labels would bury the map: then
   // the labels go and one hover box (below) says the same thing. Never both.
   let pins = 0
@@ -310,7 +322,8 @@ function draw() {
       })
       // Later stops stand on top of earlier ones, as they would in the plan
       const order = (props.pinNumbers && props.pinNumbers.get(track.id + '|' + row.frame_id)) || stop.number || 0
-      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: order * 100 })
+      // The stop somebody asked to see stands on top of any pin it overlaps
+      const marker = L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: order * 100 + (focused ? FOCUSED_ON_TOP : 0) })
       if (crowded.value) marker.bindTooltip(dotText(track, stop), { direction: 'top', offset: [0, -12] })
       marker.addTo(dotLayer)
     }
@@ -318,6 +331,72 @@ function draw() {
 
   fit()
   applyFocus()
+}
+
+/** One stop's pin, as the full map draws it. */
+function stopPin(track, stop, classes) {
+  const row = stop.point
+  const number = (props.pinNumbers && props.pinNumbers.get(track.id + '|' + row.frame_id)) || stop.number
+  const icon = L.divIcon({
+    className: 'pv-route-pin',
+    html:
+      `<span class="${['pv-route-dot', ...classes].join(' ')}" style="--pv-dot:${track.colour};--pv-dot-ink:${textOn(track.colour)}"` +
+      ` data-testid="route-dot" data-group="${track.id}" data-t="${row.t_s}">` +
+      `<span class="pv-route-dot-mark">${number}</span>` +
+      `<span class="pv-route-dot-label" data-testid="route-dot-label">${escapeHtml(dotText(track, stop))}</span>` +
+      `</span>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  })
+  const top = classes.includes('is-focused') ? FOCUSED_ON_TOP : 0
+  return L.marker([row.lat, row.lng], { icon, keyboard: false, autoPan: true, zIndexOffset: (number || 0) * 100 + top }).addTo(dotLayer)
+}
+
+/**
+ * One group's map: pins only where the group is now, the next stop, and a stop somebody picked from the list. The rest
+ * of the walk is a line: the leg to the next stop drawn strong, each leg after it fainter the further ahead it is, and
+ * the legs already walked barely there.
+ */
+function drawAhead(track) {
+  crowded.value = false
+  const stops = track.stops
+  const here = isLive.value ? whereAt(track.rows, clockAt.value.getTime()) : null
+  const hereIndex = here ? stops.findIndex((s) => s.rows.includes(here)) : -1
+  const next = nextStop.value
+  let nextIndex = next ? stops.indexOf(next) : -1
+  // After the last stop's time there is no next: the last stop is where the walk ends
+  const last = stops.map((s) => s.kind).lastIndexOf('place')
+  if (nextIndex < 0 && hereIndex < 0) nextIndex = last
+  const from = hereIndex >= 0 ? hereIndex : nextIndex - 1 // the leg being walked leaves this stop
+
+  // Each leg: the points of one stop's rows, then the next stop's first point. An off-site stop is a gap.
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i]
+    const b = stops[i + 1]
+    if (a.kind !== 'place' || b.kind !== 'place') continue
+    const path = []
+    for (const r of a.rows) if (r.lat != null) path.push([r.lat, r.lng])
+    path.push([b.point.lat, b.point.lng])
+    let style
+    if (i < from) style = { opacity: 0.2, weight: 2.5, dashArray: '4 6' }
+    else if (i === from) style = { opacity: 1, weight: 5 }
+    else style = { opacity: Math.max(0.16, 0.85 * Math.pow(0.88, i - from - 1)), weight: 4 }
+    const line = L.polyline(path, { color: track.colour, lineCap: 'round', lineJoin: 'round', interactive: false, ...style }).addTo(routeLayer)
+    const element = line.getElement()
+    if (element) element.setAttribute('data-route', track.id)
+  }
+
+  const shown = new Set()
+  const pin = (index, classes) => {
+    if (index < 0 || shown.has(index) || !stops[index] || stops[index].kind !== 'place') return
+    shown.add(index)
+    stopPin(track, stops[index], classes)
+  }
+  stops.forEach((stop, index) => {
+    if (stop.rows.some((r) => shownT === r.t_s || (props.focusT != null && String(props.focusT) === String(r.t_s)))) pin(index, ['is-focused'])
+  })
+  pin(nextIndex, ['is-next'])
+  pin(hereIndex, ['is-current'])
 }
 
 /** Frame the venues and the walk once; after that the view is the follower's, not every poll's. */
@@ -359,12 +438,10 @@ function showMoment(t_s, groupId) {
 
 watch(() => props.pinNumbers, () => draw())
 
-/** Undo showMoment: no moment picked, and the map back on the whole route. */
+/** Undo showMoment: no moment picked. The camera stays where it is; the person moves it if they want. */
 function clearMoment() {
   shownT = null
   draw()
-  fittedWithPoints = false
-  fit()
 }
 
 defineExpose({ showMoment, clearMoment, zones })
