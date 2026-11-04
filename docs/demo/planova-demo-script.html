@@ -98,7 +98,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     <p class="lede">The team's narrated walkthrough, fitted to the 12-minute limit and run on the real NDP 2025 NE4 data. It covers every feature in the app as of 4 Nov, after the last UI update: the event wizard, the venue map, the timeline with its Problems panel, groups, rehearsals, attendance, the live run, the phone app, messages and SOS, playback and testing. Six speakers share it, each voicing the parts closest to what they built.</p>
     <div class="facts">
       <span class="fact">Limit <b>12:00</b></span>
-      <span class="fact">Planned <b>11:25</b></span>
+      <span class="fact">Planned <b>11:35</b></span>
       <span class="fact">16 segments</span>
       <span class="fact">6 speakers</span>
       <span class="fact">Export <b>1080p</b>, YouTube unlisted</span>
@@ -109,31 +109,31 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     <h2 id="h-strip">The twelve minutes, to scale</h2>
     <div class="strip" role="list">
       <a role="listitem" href="#s1" style="flex:50;background:var(--s1)" title="0:00 Intro, roles and how it works (Komin)">Intro</a>
-      <a role="listitem" href="#s2" style="flex:40;background:var(--s6)" title="0:50 Create an event (Kenneth)">Create</a>
+      <a role="listitem" href="#s2" style="flex:40;background:var(--s2)" title="0:50 Create an event (rui)">Create</a>
       <a role="listitem" href="#s3" style="flex:40;background:var(--s3)" title="1:30 Draw the venue (Hazel)">Map</a>
       <a role="listitem" href="#s4" style="flex:70;background:var(--s5)" title="2:10 Build the timeline (Linus)">Timeline</a>
       <a role="listitem" href="#s5" style="flex:45;background:var(--s5)" title="3:20 Problems, and two planners at once (Linus)">Problems</a>
-      <a role="listitem" href="#s6" style="flex:30;background:var(--s2)" title="4:05 Groups and people (rui)">Groups</a>
+      <a role="listitem" href="#s6" style="flex:30;background:var(--s6)" title="4:05 Groups and people (Kenneth)">Groups</a>
       <a role="listitem" href="#s7" style="flex:30;background:var(--s4)" title="4:35 Rehearsals (Ern)">Reh</a>
       <a role="listitem" href="#s8" style="flex:35;background:var(--s4)" title="5:05 Taking attendance (Ern)">Roll call</a>
       <a role="listitem" href="#s9" style="flex:55;background:var(--s1)" title="5:40 Run it live (Komin)">Live</a>
       <a role="listitem" href="#s10" style="flex:70;background:var(--s3)" title="6:35 What members and ICs see (Hazel)">ICs</a>
-      <a role="listitem" href="#s11" style="flex:35;background:var(--s6)" title="7:45 Live location (Kenneth)">Tracking</a>
+      <a role="listitem" href="#s11" style="flex:35;background:var(--s2)" title="7:45 Live location (rui)">Tracking</a>
       <a role="listitem" href="#s12" style="flex:45;background:var(--s4)" title="8:20 Messages and SOS (Ern)">SOS</a>
-      <a role="listitem" href="#s13" style="flex:55;background:var(--s6)" title="9:05 End and playback (Kenneth)">Playback</a>
-      <a role="listitem" href="#s14" style="flex:20;background:var(--s2)" title="10:00 The planner's phone (rui)">Phone</a>
-      <a role="listitem" href="#s15" style="flex:45;background:var(--s2)" title="10:20 How we tested it (rui)">Tests</a>
-      <a role="listitem" href="#s16" style="flex:20;background:var(--s1)" title="11:05 Close (Komin)">End</a>
-      <span class="strip buf" style="flex:35" title="Spare 35 s"></span>
+      <a role="listitem" href="#s13" style="flex:55;background:var(--s2)" title="9:05 End and playback (rui)">Playback</a>
+      <a role="listitem" href="#s14" style="flex:20;background:var(--s6)" title="10:00 The planner's phone (Kenneth)">Phone</a>
+      <a role="listitem" href="#s15" style="flex:55;background:var(--s6)" title="10:20 How we tested it (Kenneth)">Tests</a>
+      <a role="listitem" href="#s16" style="flex:20;background:var(--s1)" title="11:15 Close (Komin)">End</a>
+      <span class="strip buf" style="flex:25" title="Spare 25 s"></span>
     </div>
     <div class="ticks"><span>0:00</span><span>3:00</span><span>6:00</span><span>9:00</span><span>12:00</span></div>
     <div class="legend">
       <span><i class="dot" style="background:var(--s1)"></i>Komin · 01, 09, 16 · 125 s</span>
-      <span><i class="dot" style="background:var(--s2)"></i>rui · 06, 14, 15 · 95 s</span>
+      <span><i class="dot" style="background:var(--s2)"></i>rui · 02, 11, 13 · 130 s</span>
       <span><i class="dot" style="background:var(--s3)"></i>Hazel · 03, 10 · 110 s</span>
       <span><i class="dot" style="background:var(--s4)"></i>Ern · 07, 08, 12 · 110 s</span>
       <span><i class="dot" style="background:var(--s5)"></i>Linus · 04, 05 · 115 s</span>
-      <span><i class="dot" style="background:var(--s6)"></i>Kenneth · 02, 11, 13 · 130 s</span>
+      <span><i class="dot" style="background:var(--s6)"></i>Kenneth · 06, 14, 15 · 105 s</span>
     </div>
   </section>
 
@@ -167,14 +167,14 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Home: the live event card, then Ongoing, Upcoming and Archive</li><li>One slide, "Under the hood": website and phone app → Supabase database → OneMap</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Hi, we're Group 11, and this is Planova. Think of an NDP rehearsal: dozens of contingents, one venue, and everyone has to be in the right place at the right moment. Planova lets you plan where every group goes, and on the day, see where they actually are. What you see depends on your role. The root sets up the event, planners build the plan, and everyone else is in a group, led by a Group Admin and an IC whose phone shares its location. It all runs on a Supabase database that also enforces those roles, with maps from OneMap. Kenneth?</p></div>
+            <p>Hi, we're Group 11, and this is Planova. Think of an NDP rehearsal: dozens of contingents, one venue, and everyone has to be in the right place at the right moment. Planova lets you plan where every group goes, and on the day, see where they actually are. What you see depends on your role. The root sets up the event, planners build the plan, and everyone else is in a group, led by a Group Admin and an IC whose phone shares its location. It all runs on a Supabase database that also enforces those roles, with maps from OneMap. rui?</p></div>
         </div>
         <div class="shows"><span class="tag">Problem</span><span class="tag">Roles</span><span class="tag">Data store</span><span class="tag">External API</span></div>
       </div>
     </article>
 
     <article class="seg" id="s2">
-      <div class="clock"><span class="t">0:50</span><span class="d">40 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
+      <div class="clock"><span class="t">0:50</span><span class="d">40 s</span><span class="who" style="background:var(--s2)">rui</span></div>
       <div class="body">
         <h3>Create an event</h3>
         <div class="cols">
@@ -226,7 +226,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s6">
-      <div class="clock"><span class="t">4:05</span><span class="d">30 s</span><span class="who" style="background:var(--s2)">rui</span></div>
+      <div class="clock"><span class="t">4:05</span><span class="d">30 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
       <div class="body">
         <h3>Groups and people</h3>
         <div class="cols">
@@ -291,7 +291,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s11">
-      <div class="clock"><span class="t">7:45</span><span class="d">35 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
+      <div class="clock"><span class="t">7:45</span><span class="d">35 s</span><span class="who" style="background:var(--s2)">rui</span></div>
       <div class="body">
         <h3>Live location</h3>
         <div class="cols">
@@ -317,7 +317,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s13">
-      <div class="clock"><span class="t">9:05</span><span class="d">55 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
+      <div class="clock"><span class="t">9:05</span><span class="d">55 s</span><span class="who" style="background:var(--s2)">rui</span></div>
       <div class="body">
         <h3>End and playback</h3>
         <div class="cols">
@@ -330,7 +330,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s14">
-      <div class="clock"><span class="t">10:00</span><span class="d">20 s</span><span class="who" style="background:var(--s2)">rui</span></div>
+      <div class="clock"><span class="t">10:00</span><span class="d">20 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
       <div class="body">
         <h3>The planner's phone</h3>
         <div class="cols">
@@ -343,20 +343,20 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </article>
 
     <article class="seg" id="s15">
-      <div class="clock"><span class="t">10:20</span><span class="d">45 s</span><span class="who" style="background:var(--s2)">rui</span></div>
+      <div class="clock"><span class="t">10:20</span><span class="d">55 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
       <div class="body">
         <h3>How we tested it</h3>
         <div class="cols">
-          <div><div class="label">On screen</div><ul class="do"><li>Slide: 114 unit tests, 71 end-to-end tests, 954 database checks</li><li>Terminal clip of the end-to-end run going green, sped up 4×</li></ul></div>
+          <div><div class="label">On screen</div><ul class="do"><li>Slide: 114 unit tests, 71 end-to-end tests, 954 database checks, every page at 320 px, the 1,000-phone run</li><li>Terminal clip of the end-to-end run going green, sped up 4×</li></ul></div>
           <div class="say"><div class="label">Say</div>
-            <p>Everything you've seen is tested automatically. Seventy-one end-to-end tests play every role in its own browser, from building the plan to the replay, and check the database, not just the screen. On top of that, there are a hundred and fourteen unit tests and over nine hundred and fifty database checks, and every page is checked on a small phone screen. We also ran a whole NE4 night with a thousand virtual phones. That found one slow query, which we fixed.</p></div>
+            <p>Everything you've seen is tested automatically, and on the real NE4 data. Seventy-one end-to-end tests sign in as every role, each in its own browser, and go from building the plan to the replay. They check the database, not just the screen, so a member really can't see another group. Under those sit a hundred and fourteen unit tests and over nine hundred and fifty database checks, which run every rule and permission against a real copy of our schema. Every page is also checked on a 320-pixel phone, and we ran a whole NE4 night with a thousand virtual phones. That found one slow query, which we fixed before the rehearsal.</p></div>
         </div>
         <div class="shows"><span class="tag">Testing</span></div>
       </div>
     </article>
 
     <article class="seg" id="s16">
-      <div class="clock"><span class="t">11:05</span><span class="d">20 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
+      <div class="clock"><span class="t">11:15</span><span class="d">20 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>Close</h3>
         <div class="cols">
@@ -370,7 +370,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
 
   <section aria-labelledby="h-fit">
     <h2 id="h-fit">Will it fit in 12 minutes?</h2>
-    <p class="lede">Yes, with 0:35 to spare. The narration is 1,256 words, about 8:40 at a relaxed 145 words a minute. The rest of each slot is for clicks, so the clicking happens while you talk. Every segment's lines fit inside its slot.</p>
+    <p class="lede">Yes, with 0:25 to spare. The narration is 1,287 words, about 8:53 at a relaxed 145 words a minute. The rest of each slot is for clicks, so the clicking happens while you talk. Every segment's lines fit inside its slot.</p>
     <div class="grid2">
       <div class="card">
         <h3>Keep it inside the slot</h3>
@@ -444,20 +444,20 @@ td.t { font-family: var(--mono); white-space: nowrap; }
         <thead><tr><th>Video clip</th><th>Speaker</th><th>Name your audio</th><th>Slot</th><th>Words</th></tr></thead>
         <tbody>
           <tr><td>01 Komin - Intro, roles and how it works</td><td>Komin</td><td><code>01 Komin.m4a</code></td><td class="t">50 s</td><td class="t">102</td></tr>
-          <tr><td>02 Kenneth - Create an event</td><td>Kenneth</td><td><code>02 Kenneth.m4a</code></td><td class="t">40 s</td><td class="t">76</td></tr>
+          <tr><td>02 rui - Create an event</td><td>rui</td><td><code>02 rui.m4a</code></td><td class="t">40 s</td><td class="t">76</td></tr>
           <tr><td>03 Hazel - Draw the venue</td><td>Hazel</td><td><code>03 Hazel.m4a</code></td><td class="t">40 s</td><td class="t">89</td></tr>
           <tr><td>04 Linus - Build the timeline</td><td>Linus</td><td><code>04 Linus.m4a</code></td><td class="t">70 s</td><td class="t">145</td></tr>
           <tr><td>05 Linus - Problems, and two planners at once</td><td>Linus</td><td><code>05 Linus.m4a</code></td><td class="t">45 s</td><td class="t">86</td></tr>
-          <tr><td>06 rui - Groups and people</td><td>rui</td><td><code>06 rui.m4a</code></td><td class="t">30 s</td><td class="t">56</td></tr>
+          <tr><td>06 Kenneth - Groups and people</td><td>Kenneth</td><td><code>06 Kenneth.m4a</code></td><td class="t">30 s</td><td class="t">56</td></tr>
           <tr><td>07 Ern - Rehearsals</td><td>Ern</td><td><code>07 Ern.m4a</code></td><td class="t">30 s</td><td class="t">61</td></tr>
           <tr><td>08 Ern - Taking attendance</td><td>Ern</td><td><code>08 Ern.m4a</code></td><td class="t">35 s</td><td class="t">63</td></tr>
           <tr><td>09 Komin - Run it live</td><td>Komin</td><td><code>09 Komin.m4a</code></td><td class="t">55 s</td><td class="t">99</td></tr>
           <tr><td>10 Hazel - What members and ICs see</td><td>Hazel</td><td><code>10 Hazel.m4a</code></td><td class="t">70 s</td><td class="t">117</td></tr>
-          <tr><td>11 Kenneth - Live location</td><td>Kenneth</td><td><code>11 Kenneth.m4a</code></td><td class="t">35 s</td><td class="t">73</td></tr>
+          <tr><td>11 rui - Live location</td><td>rui</td><td><code>11 rui.m4a</code></td><td class="t">35 s</td><td class="t">73</td></tr>
           <tr><td>12 Ern - Messages and SOS</td><td>Ern</td><td><code>12 Ern.m4a</code></td><td class="t">45 s</td><td class="t">76</td></tr>
-          <tr><td>13 Kenneth - End and playback</td><td>Kenneth</td><td><code>13 Kenneth.m4a</code></td><td class="t">55 s</td><td class="t">84</td></tr>
-          <tr><td>14 rui - The planner's phone</td><td>rui</td><td><code>14 rui.m4a</code></td><td class="t">20 s</td><td class="t">24</td></tr>
-          <tr><td>15 rui - How we tested it</td><td>rui</td><td><code>15 rui.m4a</code></td><td class="t">45 s</td><td class="t">81</td></tr>
+          <tr><td>13 rui - End and playback</td><td>rui</td><td><code>13 rui.m4a</code></td><td class="t">55 s</td><td class="t">84</td></tr>
+          <tr><td>14 Kenneth - The planner's phone</td><td>Kenneth</td><td><code>14 Kenneth.m4a</code></td><td class="t">20 s</td><td class="t">24</td></tr>
+          <tr><td>15 Kenneth - How we tested it</td><td>Kenneth</td><td><code>15 Kenneth.m4a</code></td><td class="t">55 s</td><td class="t">112</td></tr>
           <tr><td>16 Komin - Close</td><td>Komin</td><td><code>16 Komin.m4a</code></td><td class="t">20 s</td><td class="t">24</td></tr>
         </tbody>
       </table>
@@ -470,11 +470,11 @@ td.t { font-family: var(--mono); white-space: nowrap; }
           <li>Play your clip and talk over it with your lines from the run sheet. A phone voice memo is fine; record somewhere quiet.</li>
           <li>One audio file per segment, named as in the table: the two-digit segment number, a space, then your name, such as <code>07 Ern.m4a</code>. MP3, M4A and WAV all work; only the extension changes.</li>
           <li>Komin: 01, 09, 16 (125 s).</li>
-          <li>rui: 06, 14, 15 (95 s).</li>
+          <li>rui: 02, 11, 13 (130 s).</li>
           <li>Hazel: 03, 10 (110 s).</li>
           <li>Ern: 07, 08, 12 (110 s).</li>
           <li>Linus: 04, 05 (115 s).</li>
-          <li>Kenneth: 02, 11, 13 (130 s).</li>
+          <li>Kenneth: 06, 14, 15 (105 s).</li>
           <li>Start talking within a second of pressing record; the start of your file lines up with the start of the clip.</li>
         </ul>
       </div>
@@ -502,7 +502,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
           <tr><td>Type of data store</td><td class="t">0:00</td><td>Supabase database, which also enforces the roles</td></tr>
           <tr><td>External API and how it's integrated</td><td class="t">0:00 · 1:30</td><td>OneMap maps and addresses</td></tr>
           <tr><td>How the features are tested</td><td class="t">10:20</td><td>71 end-to-end tests by role, 114 unit tests, 954 database checks, the 1,000-phone run</td></tr>
-          <tr><td>720p minimum, 12 minutes maximum</td><td class="t">—</td><td>1080p export; planned 11:25</td></tr>
+          <tr><td>720p minimum, 12 minutes maximum</td><td class="t">—</td><td>1080p export; planned 11:35</td></tr>
         </tbody>
       </table>
     </div>

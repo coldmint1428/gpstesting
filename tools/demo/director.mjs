@@ -570,7 +570,7 @@ const SEGMENTS = [
       await page.waitForTimeout(3500)
     }
   }],
-  [15, 'How we tested it', 45, async () => {
+  [15, 'How we tested it', 55, async () => {
     await page.goto(`/events/${EV}/overview`)
     await wait(3000)
   }],
