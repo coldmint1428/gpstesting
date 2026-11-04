@@ -134,7 +134,12 @@ test('a visitor: home, sign in, create an account, and an invite link that asks 
 test('the root: every page of a live event, on a laptop', async ({ browser }) => {
   const page = await pageAs(browser, 'root')
   const e = `/events/${ev.eventId}`
-  await visit(page, '/events', { heading: /^Good (morning|afternoon|evening)/, shows: [/QA-Tour/], name: 'root-events' })
+  await visit(page, '/events', { heading: /^Good (morning|afternoon|evening)/, name: 'root-events' })
+  // The list opens on Upcoming when there is any (the live one is the big card, and other runs' can be ahead of this
+  // one there): a live event is on the Ongoing tab, found the way a person would
+  await page.getByTestId('events-tab-ongoing').click()
+  await page.getByLabel('Search events').fill('QA-Tour')
+  await expect(page.getByText(/QA-Tour/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 })
   await visit(page, `${e}/overview`, { shows: [/QA-Tour/, 'Live'], name: 'root-overview' })
   await visit(page, `${e}/timeline`, { heading: 'Timeline', shows: ['Tour walk'], name: 'root-timeline' })
   await expect(page.locator('.pv-frame')).toHaveCount(20)
@@ -160,7 +165,10 @@ test('the planner: the plan and the ops board', async ({ browser }) => {
 
 test('the IC on a phone: Now, sharing and the set-up check', async ({ browser }) => {
   const page = await pageAs(browser, 'ic1', PHONE)
-  await visit(page, '/events', { name: 'ic-events', shows: [/QA-Tour/] })
+  await visit(page, '/events', { name: 'ic-events' })
+  await page.getByTestId('events-tab-ongoing').click() // a live event is on Ongoing (the list opens on Upcoming)
+  await page.getByLabel('Search events').fill('QA-Tour')
+  await expect(page.getByText(/QA-Tour/).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 })
   await visit(page, `/events/${ev.eventId}/live`, { name: 'ic-live', shows: [/Alpha/] })
   await visit(page, `/events/${ev.eventId}/share`, { name: 'ic-share', shows: [/shar/i] })
   await visit(page, '/check-phone', { name: 'ic-check-phone', shows: [/phone|location/i] })
