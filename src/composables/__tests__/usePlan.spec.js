@@ -114,7 +114,6 @@ describe('usePlan: the structural doors (083)', () => {
     const cases = [
       ['deleteFrame', () => api.deleteFrame('f1', 3), 'frame_delete', { p_id: 'f1', p_rev: 3 }],
       ['shiftFrom', () => api.shiftFrom(60, 120, 180), 'frame_shift', { p_from_s: 60, p_delta_s: 120, p_to_s: 180 }],
-      ['fillGap', () => api.fillGap('f1', 'f2', ['g1']), 'frames_fill', { p_from: 'f1', p_to: 'f2' }],
       ['holdFrame', () => api.holdFrame('f1', 60, ['g1']), 'frame_hold', { p_frame: 'f1', p_seconds: 60 }],
       ['setVerify', () => api.setVerify(['f1'], ['g1'], 'manual'), 'frame_set_verify', { p_verify: 'manual' }],
       ['importFrames', () => api.importFrames('p1', [{ t_s: 60 }]), 'plan_import', { p_plan: 'p1' }],

@@ -37,14 +37,14 @@
  * WHAT THE READER REFUSES, AND WHY. Everything it can see without the map: no t_s column, a time that is not a time,
  * two rows that place one group at one moment, two rows that give one moment two different notes, a group this event
  * does not have, coordinates that are missing or not coordinates, a state or a verify word that is not one of the
- * two. Each is reported with the file's own row number, so the person can find it in Excel. The 25 m rule is the
- * board's to refuse (it needs `findGaps` and the board's sentence — see `sheetGaps`), and the locked polygons and
- * pace are `plan_check`'s, which the board shows as warnings like any other plan.
+ * two. Each is reported with the file's own row number, so the person can find it in Excel. There is no distance or
+ * speed limit to refuse (091); walks through the locked polygons are `plan_check`'s, which the board shows as errors
+ * like any other plan.
  *
  * This module is pure: no Vue, no network, no DOM. The board reads and writes files through it; the tests call it
  * directly.
  */
-import { MAX_FRAME_GAP_M, findGaps, formatOffset, parseOffset } from './planFrames.js'
+import { formatOffset, parseOffset } from './planFrames.js'
 
 /** The columns, in the order the writer puts them. `t_s` is the only one a file must have. */
 export const SHEET_COLUMNS = ['t_s', 'note', 'group', 'lat', 'lng', 'state', 'verify']
@@ -325,21 +325,4 @@ export function readSheet(text, groups = []) {
 
   const frames = [...byTime.values()].sort((a, b) => a.t_s - b.t_s)
   return { frames, errors }
-}
-
-/**
- * Every walk in a read sheet that breaks the 25 m rule, in the same shape the board's own warnings use.
- *
- * The sheet's frames have no ids (they are not saved yet), so each gets one for the duration of the check: the
- * ordinals matter, because the budget is 25 m per frame step and the steps are counted by position in the strip.
- *
- * @param {Array<{t_s:number, positions:Object}>} frames  the `frames` of readSheet()
- */
-export function sheetGaps(frames, maxM = MAX_FRAME_GAP_M) {
-  const shaped = (frames || []).map((frame, index) => ({
-    id: `sheet-${index + 1}`,
-    t_s: frame.t_s,
-    positions: frame.positions || {},
-  }))
-  return findGaps(shaped, maxM)
 }

@@ -509,30 +509,6 @@ export function usePlan(eventId) {
   }
 
   /**
-   * Space one impossible stretch out: the frames that split the distance between `fromId` and `toId` into legal
-   * steps, for the named groups, are worked out and written by the database in one call (042). Doing this from
-   * here would be one save per generated frame, each on a rev the one before it had bumped, and the seconds have
-   * to be merged across groups -- which the database does for the groups it was given.
-   */
-  async function fillGap(fromId, toId, groupIds) {
-    busy.value = true
-    try {
-      const rows = await call('frames_fill', {
-        p_plan: plan.value.id,
-        p_from: fromId,
-        p_to: toId,
-        p_groups: groupIds && groupIds.length ? groupIds : null,
-        p_session: locks.session(),
-      })
-      await loadFrames()
-      await loadPlans()
-      return Array.isArray(rows) ? rows[0] : rows
-    } finally {
-      busy.value = false
-    }
-  }
-
-  /**
    * Hold the named groups where they already stand, and say so again `seconds` later: the strip's "hold one group"
    * (045). One call for the whole set, and a partial write -- only those groups gain a row at the later moment, so a
    * frame that already states somebody else keeps them. No group list means everybody standing at this frame.
@@ -899,7 +875,6 @@ export function usePlan(eventId) {
     moveFrame,
     deleteFrame,
     shiftFrom,
-    fillGap,
     holdFrame,
     setVerify,
     importFrames,

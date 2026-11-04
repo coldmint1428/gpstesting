@@ -281,14 +281,12 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
         // (undo = put that frame's own map back). Both directions use the frame the hold named.
         if (back) return command.added ? removeFrame(command.frame.id) : writePositions(command.frameId, command.before)
         return command.added ? restoreFrames([command.frame]) : writePositions(command.frameId, command.after)
-      case 'fill':
-        return back ? removeFrames(command.added) : restoreFrames(command.added)
       case 'deleteMany':
         return back ? restoreFrames(command.frames) : removeFrames(command.frames)
       case 'planName':
         return renamePlan(back ? command.before : command.after)
       case 'batch': {
-        // Several edits made as one (Fix all timing, Fix this walk): undone last first, so each finds the plan as it left it
+        // Several edits made as one: undone last first, so each finds the plan as it left it
         const list = back ? [...command.commands].reverse() : command.commands
         for (const one of list) await apply(one, direction)
         return undefined
@@ -398,10 +396,6 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
     record({ kind: 'hold', frameId, added, before, after, frame, label })
   }
 
-  function filled(added, label) {
-    record({ kind: 'fill', added, label })
-  }
-
   function planName(before, after, label) {
     record({ kind: 'planName', before, after, label })
   }
@@ -423,7 +417,6 @@ export function usePlanUndo({ plan, frames, api, onRefused = null }) {
     deleted,
     deletedMany,
     held,
-    filled,
     planName,
   }
 }

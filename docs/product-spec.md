@@ -53,8 +53,9 @@ where the bottlenecks are, whether physical or time-based.
   the front end.
 - Snapshots are discrete and can sit at any point in time. Playback runs at any interval of
   choice.
-- Movement between positions is a straight line, capped at roughly 25m per segment. Longer moves
-  require new snapshots. Any segment that cuts through a polygon is rejected. Reason is, this is
+- Movement between positions is a straight line. There is no cap on how far or how fast a group
+  moves between snapshots (091: groups may walk, ride a bus, take a boat or follow a float, so
+  that is the planner's call). Any segment that cuts through a no-go area or obstacle is rejected. Reason is, this is
   the most straightforward way to plan routing without too much code or edge cases.
 
 ## Authoring
@@ -65,7 +66,7 @@ where the bottlenecks are, whether physical or time-based.
 - Nodes can be multi-selected and dragged together.
 - Adjusting a node flags the affected segments both before and after, especially where rules are
   broken.
-- Dragging a node re-validates the path into and out of it against the 25m cap and the polygons.
+- Dragging a node re-validates the path into and out of it against the polygons.
 - No auto-routing or automated placement (it might mess up).
 - CSV export, and CSV import is acceptable for bulk schedule.
 - Filtering exists for visibility. Groups have names and colours, and hovering a node shows its
