@@ -1211,3 +1211,17 @@ html body .k2-backlink .ki{width:18px;height:18px;fill:none;stroke:currentColor;
 @container (max-width: 290px){
   .k2-pp .k2-rad .k2-rad-lab{display:none}
 }
+
+/* ===== Map page: the map is as tall as the Timeline's, and the zones panel is exactly as tall as the map (it scrolls inside) ===== */
+.k2-mapp{--map-h:clamp(560px,calc(100vh - 200px),980px)}
+html:not(.native-app) body .ev .k2-mapp .bench-map{height:var(--map-h);min-height:0}
+html:not(.native-app) body .ev .k2-mapp .k2-benchside{height:var(--map-h);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.k2-mapp .k2-benchside > .k2-tabs{position:sticky;top:-6px;z-index:3;background:#fff}
+.k2-mapp .k2-benchside::-webkit-scrollbar{width:8px}
+.k2-mapp .k2-benchside::-webkit-scrollbar-track{background:rgba(10,31,23,.05);border-radius:999px}
+.k2-mapp .k2-benchside::-webkit-scrollbar-thumb{background:rgba(10,31,23,.28);border-radius:999px}
+@media (max-width: 1100px){
+  .k2-mapp{--map-h:clamp(440px,68vh,720px)}
+  /* stacked: the zones list follows the map at its natural length */
+  html:not(.native-app) body .ev .k2-mapp .k2-benchside{height:auto;overflow:visible}
+}

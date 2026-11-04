@@ -93,6 +93,8 @@ const props = defineProps({
   // and no Start editing to press, and who may change a particular SHAPE is settled one object at a
   // time by `locks` below (see 016_object_locks.sql). Looking and working are the same state.
   canEdit: { type: Boolean, default: true },
+  // The event is live: only the sentence in the side panel changes (canEdit is already false)
+  locked: { type: Boolean, default: false },
   // The per-object locks (composables/useBenchLocks.js). Handed in like the history and the
   // clipboard, because it is the page's session. Read here for two things: the sentence in the
   // strip, and refusing a press on a shape somebody else is holding before it moves at all.
@@ -2934,7 +2936,7 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
       </div>
 
       <!-- Looking, not editing: the map moves, nothing else does. -->
-      <p v-if="!canEdit" class="k2-hint" style="margin-top: 8px">Only this event's root and planners can change its zones.</p>
+      <p v-if="!canEdit" class="k2-hint" style="margin-top: 8px" data-testid="zones-locked">{{ locked ? 'Zones are locked while the event is live. They can be edited again once it ends.' : "Only this event's root and planners can change its zones." }}</p>
 
       <!-- ===== Areas: drawing them is what the bench is for, and the list is what the planner keeps coming back to ===== -->
       <div v-show="sideTab === 'areas' || !canEdit" role="tabpanel">

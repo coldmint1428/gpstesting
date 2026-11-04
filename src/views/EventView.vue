@@ -1238,7 +1238,7 @@ async function removeEvent() {
         <!-- Map: root / planners edit the zones (v-if: the bench holds locks and a presence row only while it is open) -->
         <template v-if="canManage && tab === 'map'">
           <div class="ev-surface">
-            <PolygonTestView :event-id="id" embedded />
+            <PolygonTestView :event-id="id" embedded :locked="isLive" />
           </div>
         </template>
 
