@@ -186,7 +186,11 @@ check('S5 a name stated later names the whole stop', lateName.length === 1 && la
 check('S6 no rows, no stops', stopsOf([]).length === 0)
 
 const noMerge = await mutant('a repeat of a point is a new stop', 'if (!same) open(', 'if (true) open(')
-check('M6 the mutant splits a repeated point, so S1 is red', brief(noMerge.stopsOf(OUTING)) !== brief(outing), brief(noMerge.stopsOf(OUTING)))
+// Since the schedule folds walk-through points into the stop before them (keepRealStops), a split repeat can come back as
+// the same stops; it shows instead as rows of the stop marked 'via', which a stop the group stays at never has.
+const viaRows = (stops) => stops.reduce((n, stop) => n + (stop.via || []).length, 0)
+const split = noMerge.stopsOf(OUTING)
+check('M6 the mutant splits a repeated point, so S1 is red', brief(split) !== brief(outing) || viaRows(split) !== viaRows(outing), brief(split) + ' via ' + viaRows(split))
 
 // ---------- 6. one stop per clock minute ----------
 const SAME_MINUTE = stopsOf([
