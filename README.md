@@ -430,6 +430,11 @@ itself has a test with no browser in it: `npm run test:sheet` (58 assertions —
 semicolon-separated file from a comma-decimal Excel, "Off-Site" read as off_site, the times a planner types, the
 refusals with their row numbers, and the 25 m sentence).
 
+> **Since 091 there is no 25 m rule and no speed rule.** `plan_check` reports only walks across a no-go area or
+> obstacle; the board has no "jumps too far" / "moves too fast" rows, no Fill / Fill all / Add time / Fix all timing,
+> no red bands on the strip, and a sheet with a long step imports. `frames_fill` is dropped. The 25 m passages above
+> (the bench's 200 m jump, "Sheet gap", `step23-csv.mjs`'s refusal) describe the rule as it was.
+
 Retiring the last callers has a check with no fixture at all, because what it proves is the **catalogue**.
 `dev/checks/step24-retire.sql` builds a simulation event, five virtual groups (one per behaviour), a plan with four
 moments and a running simulation inside one transaction, and rolls the lot back — then asks the catalogue what is

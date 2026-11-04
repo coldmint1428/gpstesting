@@ -13,19 +13,14 @@
  * A position also carries two flags (046): `state` is `on_site` or `off_site`, and
  * `verify` is `auto` or `manual`. An off-site statement still exists -- it is how the
  * plan says "this group is not on the map at this moment" -- but it is not a place
- * anybody walked to, so no rule that measures a walk uses it. Both flags are carried
+ * anybody walked to. Both flags are carried
  * forward with the coordinates: a group that went off site stays off site until a
  * frame says otherwise, exactly as it stays where it was.
  *
  * This module is pure: no Vue, no network, no DOM. Everything the board needs to
- * decide "is this allowed" and "where is everyone at time T" lives here.
+ * decide "where is everyone at time T" lives here. There is no distance or speed limit
+ * between frames (091): how far and how fast a group moves is the planner's call.
  */
-
-/**
- * How far one group may walk in one frame step, in metres. The budget for a walk is this times the number of frame
- * steps it spans, which is the cumulative rule (step 12): 3 frames allow 75 m, ten allow 250 m.
- */
-export const MAX_FRAME_GAP_M = 25
 
 /** Metres per degree of latitude. Same constant the rest of the app uses. */
 const M_PER_DEG = 111320
@@ -58,10 +53,7 @@ export function kmh(metres, seconds) {
  * The two flags (046) travel with the coordinates: a group that went off site stays off site until a frame says
  * otherwise, and a position that carries no flags -- an old row, or the preview's fake api -- is on site and trusted.
  *
- * Every point also carries `index`: the ordinal of its frame in the whole plan (step 12). The 25 m rule is a budget
- * per *frame step*, so the number of frames between two statements is the thing that has to be counted -- and the
- * track itself cannot tell you, because the frames a group was carried through have the same position and may be
- * minutes apart. Seconds cannot stand in for it either: two frames can be one step and an hour apart.
+ * Every point also carries `index`: the ordinal of its frame in the whole plan.
  *
  * @param {Array<{id:string, t_s:number, positions:Object<string,{lat:number,lng:number,state?:string,verify?:string}>}>} frames
  * @returns {Map<string, Array<{index:number, t_s:number, frameId:string, lat:number, lng:number, state:string, verify:string, defined:boolean}>>}
@@ -102,146 +94,6 @@ export function resolveTracks(frames) {
     }
   }
   return tracks
-}
-
-/**
- * Find every impossible walk: two statements of where a group is, too far apart for the frames between them.
- *
- * **The rule is cumulative**, which is the decision this whole stage is built on: a group may cover 25 m per frame
- * step, so a walk that spans three frames may be 75 m and one that spans ten may be 250 m. The budget therefore
- * comes from the *frame count* between the two statements — `index` from resolveTracks — not from a flat 25 m and
- * not from the seconds between them. A frame is a slot in the strip; ten slots are ten chances to walk.
- *
- * **Only statements count.** A position carried forward from an earlier frame is not a statement of its own, so
- * the pair reported is always (the frame that last said where they were) -> (the frame that says where they are
- * now). Measuring from the carried frame instead is what made a group stated at +0:00 and +10:00 read as breaking
- * at +9:00: a pair nobody can fix, because nothing at +9:00 said anything. It also made the board and the database
- * name different pairs for the same walk (finding 24), which step 12 ends by having both sides follow the same
- * pair. Off-site statements are skipped (046), so an excursion is still invisible and a return is measured from
- * where the group was last on site.
- *
- * @returns {Array<{groupId:string, from:object, to:object, metres:number, seconds:number, kmh:number,
- *   steps:number, budget:number}>} `steps` is how many frame steps the walk had, `budget` what they allow.
- */
-export function findGaps(frames, maxM = MAX_FRAME_GAP_M) {
-  const gaps = []
-  for (const [groupId, points] of resolveTracks(frames)) {
-    const stated = points.filter((p) => p.state !== 'off_site' && p.defined)
-    for (let i = 1; i < stated.length; i++) {
-      const from = stated[i - 1]
-      const to = stated[i]
-      const steps = Math.max(1, to.index - from.index)
-      const budget = maxM * steps
-      const metres = metresBetween(from, to)
-      if (metres > budget) {
-        gaps.push({
-          groupId,
-          from,
-          to,
-          metres,
-          seconds: to.t_s - from.t_s,
-          kmh: kmh(metres, to.t_s - from.t_s),
-          steps,
-          budget,
-        })
-      }
-    }
-  }
-  return gaps
-}
-
-/**
- * How many frames a stretch's marks reach in from each end. A plan can hold hundreds of frames, and one broken group
- * spanning all of them must not paint every dot on the strip on every pointer move — the mark is there to show how
- * far the stretch reaches, not to count it. The band on the strip is drawn full width whatever this says, so the
- * whole stretch is always visible even when its middle dots are not individually red.
- */
-export const MAX_STRETCH_RINGS = 24
-
-/**
- * Everything the board needs to paint warnings, derived once per edit.
- *
- * Three things make this more than a list of gaps (step 12). The marks **cover the stretch**, not just the pair:
- * expansion runs by rings in from both ends of each gap, so the frames a walk had between its two statements are
- * marked too — those are the frames that have to be re-spaced or filled, and they are what "the whole impossible
- * stretch" means. The rings stop at MAX_STRETCH_RINGS for the reason recorded there. And gaps that touch are
- * **merged per group** into one stretch, so a frame dragged 200 m away reads as one stretch through the frames
- * around it rather than as two unrelated breaks that happen to share a frame.
- *
- * @returns {{
- *   gaps: Array<object>,
- *   frameIds: Set<string>,      // frames to mark on the timeline: every frame in every stretch, ring-capped
- *   cells: Set<string>,         // `${groupId}|${frameId}` to mark on the map / lane: the statements at each end
- *   bands: Array<{groupId:string, from_t_s:number, to_t_s:number}>,
- *   stretches: Array<{groupId:string, fromIndex:number, toIndex:number, from_t_s:number, to_t_s:number,
- *     fromFrameId:string, toFrameId:string, steps:number, gaps:Array<object>}>
- * }}
- */
-export function annotate(frames, maxM = MAX_FRAME_GAP_M) {
-  const gaps = findGaps(frames, maxM)
-  const ordered = [...frames].sort((a, b) => a.t_s - b.t_s)
-  const frameIds = new Set()
-  const cells = new Set()
-  const stretches = []
-
-  for (const gap of gaps) {
-    cells.add(`${gap.groupId}|${gap.from.frameId}`)
-    cells.add(`${gap.groupId}|${gap.to.frameId}`)
-
-    // Mark the stretch by walking in from both ends, one ring at a time, and stop when the rings meet.
-    for (let ring = 0; ring <= MAX_STRETCH_RINGS; ring += 1) {
-      const left = gap.from.index + ring
-      const right = gap.to.index - ring
-      if (left > gap.to.index || right < gap.from.index) break
-      frameIds.add(ordered[left].id)
-      frameIds.add(ordered[right].id)
-      if (left >= right) break
-    }
-
-    // One stretch per run of touching gaps: a group broken at +1:00→+1:15 and +1:15→+1:30 is one stretch of three
-    // frames, and the sentence about it should say so once.
-    const last = stretches[stretches.length - 1]
-    if (last && last.groupId === gap.groupId && gap.from.index <= last.toIndex) {
-      last.toIndex = gap.to.index
-      last.to_t_s = gap.to.t_s
-      last.toFrameId = gap.to.frameId
-      last.steps = last.toIndex - last.fromIndex
-      last.gaps.push(gap)
-    } else {
-      stretches.push({
-        groupId: gap.groupId,
-        fromIndex: gap.from.index,
-        toIndex: gap.to.index,
-        from_t_s: gap.from.t_s,
-        to_t_s: gap.to.t_s,
-        fromFrameId: gap.from.frameId,
-        toFrameId: gap.to.frameId,
-        steps: gap.steps,
-        gaps: [gap],
-      })
-    }
-  }
-
-  // Bands are drawn from the merged stretches, so a stretch broken at two neighbouring hops is one band, not two
-  // overlapping ones. Still one band per group: two groups walking the same impossible stretch are two lanes.
-  const bands = stretches.map((s) => ({ groupId: s.groupId, from_t_s: s.from_t_s, to_t_s: s.to_t_s }))
-  return { gaps, frameIds, cells, bands, stretches }
-}
-
-/**
- * The words for one impossible walk, without the group's name: "198 m between +1:00 and +1:15 (limit 25 m)".
- *
- * One sentence, one place. The board's warning row and the refusal in front of an import both read from here, because
- * the step's own proof is that they are the *same* sentence: a sheet refused for a 100 m step has to say what the
- * strip already says about that step, not a second wording of it that can drift.
- *
- * @param {object} gap  one element of findGaps()/annotate().gaps
- */
-export function gapDetail(gap) {
-  const steps = gap.steps > 1 ? `, ${gap.steps} steps` : ''
-  const metres = Math.round(gap.metres)
-  const budget = Math.round(gap.budget)
-  return `${metres} m between ${formatOffset(gap.from.t_s)} and ${formatOffset(gap.to.t_s)} (limit ${budget} m${steps})`
 }
 
 /**

@@ -121,6 +121,13 @@ html.native-app .kin {
   inset: 0;
   z-index: 1040;
   background: rgba(10, 31, 23, 0.6);
+  touch-action: none;
+}
+/* BottomSheet.vue sets this while a sheet is open, so the page behind it does not scroll */
+html.pv-scroll-locked,
+html.pv-scroll-locked body {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 .pv-sheet {
   position: fixed;
@@ -133,6 +140,7 @@ html.native-app .kin {
   padding: 10px 20px calc(24px + var(--pv-safe-bottom));
   max-height: 88vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   box-shadow: 0 -8px 24px rgba(10, 31, 23, 0.18);
   /* Opens and closes with BottomSheet.vue's transition (motion.css, "sheet" and "backdrop") */
 }

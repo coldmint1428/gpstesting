@@ -298,7 +298,7 @@ function clearDraft(m) {
               <span class="av" :style="{ backgroundColor: groupColour(r.m.groupId), color: textOn(groupColour(r.m.groupId)) }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
               <div style="min-width: 0">
                 <b class="d-block text-truncate" style="font-size: 14px">{{ r.m.display_name }}<span v-if="r.isMe" class="mut" style="font-weight: 500"> (you)</span></b>
-                <span class="mut d-block text-truncate" style="font-size: 12px">{{ groupName(r.m.groupId) }}<template v-if="r.m.isAdmin && r.role !== 'admin'"> · Group Admin</template></span>
+                <span class="mut d-block text-truncate" style="font-size: 12px"><RouterLink v-if="r.m.groupId || r.role !== 'planner'" class="k2-grouplink" :to="{ name: 'event', params: { id: eventId, page: 'groups' }, query: { group: r.m.groupId || 'none' } }" :title="'Open ' + groupName(r.m.groupId)" :data-testid="'person-group-' + r.m.username">{{ groupName(r.m.groupId) }}</RouterLink><template v-else>{{ groupName(r.m.groupId) }}</template><template v-if="r.m.isAdmin && r.role !== 'admin'"> · Group Admin</template></span>
               </div>
               <!-- A phone: the person's tags together at the right of their name (wider screens give them columns) -->
               <span v-if="r.m.isIC || !r.actions.role" class="k2-pp-tags" aria-hidden="true">

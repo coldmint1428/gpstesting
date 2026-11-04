@@ -16,6 +16,7 @@ import { ROLE_LABEL, topRole, canSetIC } from '../utils/permissions'
 import { setGroupIC } from '../services/memberService'
 import BenchAlert from './BenchAlert.vue'
 import EmptyState from './EmptyState.vue'
+import ExpandTransition from './ExpandTransition.vue'
 import { askConfirm, toast } from '../composables/useNotify'
 import { nextGroupColour, textOn, NO_GROUP_COLOUR } from '../utils/groupColours'
 
@@ -35,14 +36,15 @@ const shownGroups = computed(() => (props.onlyGroupId ? props.groups.filter((g) 
 const emit = defineEmits(['changed'])
 
 // The group open in full (?group=), or null for the list of cards. Only groups this page lists can open;
-// 'none' (people without a group) is for the root and planners. ICs and members always have their own group open.
+// 'none' (people without a group) is for the root, planners and group admins (who may take them into their own
+// group). ICs and members always have their own group open.
 const route = useRoute()
 const router = useRouter()
 const openGroup = computed(() => {
   if (props.onlyGroupId) return shownGroups.value[0] || null
   const id = route.query.group
   if (!id) return null
-  if (id === 'none') return props.canManage ? { id: 'none', name: 'No group', colour: NO_GROUP_COLOUR } : null
+  if (id === 'none') return seesUnassigned.value ? { id: 'none', name: 'No group', colour: NO_GROUP_COLOUR } : null
   return shownGroups.value.find((g) => g.id === id) || null
 })
 // Planners run the whole event and are never in a group (036), so they are not "without a group" either
@@ -50,6 +52,8 @@ const isPlanner = (m) => topRole(m) === 'planner'
 const membersOf = (groupId) =>
   props.members.filter((m) => (groupId === 'none' ? !m.groupId && !isPlanner(m) : m.groupId === groupId))
 const unassigned = computed(() => membersOf('none'))
+// Who sees the people without a group: whoever may put them into a group
+const seesUnassigned = computed(() => props.canManage || !!(props.me && props.me.isAdmin && props.me.groupId))
 const openMembers = computed(() => (openGroup.value ? membersOf(openGroup.value.id) : []))
 
 // A group's details, each named, so "A" and "B" are never a guess at which is the code and which the category
@@ -100,10 +104,19 @@ const SIZE_BANDS = [
   { key: 'medium', label: 'Medium (6-15)', test: (n) => n >= 6 && n <= 15 },
   { key: 'large', label: 'Large (16+)', test: (n) => n >= 16 },
   { key: 'empty', label: 'Empty', test: (n) => n === 0 },
+  { key: 'none', label: 'No group', test: () => false }, // the people without a group, and no group cards
 ]
+const sizeBands = computed(() => SIZE_BANDS.filter((b) => b.key !== 'none' || seesUnassigned.value))
 const sizeFilter = ref('all')
 const groupSort = ref('az') // az | za | big | small
-const sizeCounts = computed(() => Object.fromEntries(SIZE_BANDS.map((b) => [b.key, cards.value.filter((c) => b.test(c.size)).length])))
+const sizeCounts = computed(() => ({
+  ...Object.fromEntries(SIZE_BANDS.map((b) => [b.key, cards.value.filter((c) => b.test(c.size)).length])),
+  none: unassigned.value.length,
+}))
+// The "No group" card: under All, or on its own under No group; never inside a size
+const showUnassignedCard = computed(
+  () => seesUnassigned.value && unassigned.value.length > 0 && (sizeFilter.value === 'all' || sizeFilter.value === 'none'),
+)
 const visibleCards = computed(() => {
   const band = SIZE_BANDS.find((b) => b.key === sizeFilter.value) || SIZE_BANDS[0]
   const byName = (a, b) => a.g.name.localeCompare(b.g.name, undefined, { numeric: true, sensitivity: 'base' })
@@ -351,10 +364,11 @@ async function changeGroup(m, select) {
   }
   if (!(await assignGroup(m, to))) select.value = m.groupId || ''
 }
-async function removeFromMyGroup(m) {
+// Remove: a group admin from their own group, root / planners from any group (assign_group, 002)
+async function takeOutOfGroup(m) {
   const ok = await askConfirm({
     title: 'Take ' + m.display_name + ' out of ' + groupNameOf(m.groupId) + '?',
-    message: 'They stay in the event with no group.' + (m.isIC ? ' They are no longer an IC.' : ''),
+    message: 'They stay in the event with no group.' + (m.isIC || m.isAdmin ? ' They are no longer its IC or admin.' : ''),
     confirmText: 'Take out',
     danger: true,
   })
@@ -394,7 +408,8 @@ const managesGroupOf = (m) => m.groupId && (props.canManage || m.groupId === myA
 // The root, planners and the group's admin may stop an IC's sharing (not yourself: use your own Stop button)
 const canStopSharing = (m) => m.isIC && managesGroupOf(m) && (!props.me || m.id !== props.me.id)
 const adminCanAdd = (m) => !props.canManage && myAdminGroupId.value && !m.groupId
-const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.groupId === myAdminGroupId.value
+const canTakeOut = (m) =>
+  !!m.groupId && (!props.me || m.id !== props.me.id) && (props.canManage || m.groupId === myAdminGroupId.value)
 </script>
 
 <template>
@@ -499,9 +514,9 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
                 <option value="">No group</option>
                 <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
               </select>
-              <!-- Group admin: add to / remove from own group -->
-              <button type="button" v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="assignGroup(m, myAdminGroupId)">Add</button>
-              <button type="button" v-if="adminCanRemove(m) && m.id !== me.id" class="btn btn-sm btn-ghost" :disabled="busy" @click="removeFromMyGroup(m)">Remove</button>
+              <!-- Group admin: add to own group. Remove: root / planners from any group, a group admin from their own -->
+              <button type="button" v-if="adminCanAdd(m)" class="btn btn-sm btn-outline-secondary" :disabled="busy" :data-testid="'group-add-' + m.username" @click="assignGroup(m, myAdminGroupId)">Add</button>
+              <button type="button" v-if="canTakeOut(m)" class="btn btn-sm btn-ghost" :disabled="busy" :data-testid="'group-remove-' + m.username" @click="takeOutOfGroup(m)">Remove</button>
 
               <button type="button" v-if="canStopSharing(m)" class="btn btn-sm btn-ghost-danger" :disabled="busy" :data-testid="'stop-sharing-' + m.username" @click="stopSharing(m)">Stop sharing</button>
             </div>
@@ -528,7 +543,11 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
       <EmptyState v-else-if="!shownGroups.length" compact icon="people" title="No groups yet" />
 
       <!-- Group details (root / planner): category, code, sector, headcount -->
-      <div v-if="canManage && showDetails && groups.length" class="kp-card" data-testid="group-details">
+      <!-- Slides open and closed like every other fold. The wrapper takes back the stack's gap while it is folded, so
+           nothing jumps when it appears or goes (k2-gapfold) -->
+      <ExpandTransition>
+      <div v-if="canManage && showDetails && groups.length" class="k2-gapfold">
+      <div class="kp-card" data-testid="group-details">
         <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0 k2-stacktable">
@@ -565,6 +584,8 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           </table>
         </div>
       </div>
+      </div>
+      </ExpandTransition>
 
       <!-- Size buttons and sort (only when there is more than one group to choose between) -->
       <div v-if="!onlyGroupId && shownGroups.length > 1" class="k2-filterrow k" data-testid="group-controls">
@@ -572,12 +593,12 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         <div class="ksel k2-segsel">
           <label for="group-size-sel" class="visually-hidden">Filter by group size</label>
           <select id="group-size-sel" v-model="sizeFilter" data-testid="group-size-select">
-            <option v-for="b in SIZE_BANDS" :key="b.key" :value="b.key" :disabled="b.key !== 'all' && !sizeCounts[b.key]">{{ b.label }} ({{ sizeCounts[b.key] }})</option>
+            <option v-for="b in sizeBands" :key="b.key" :value="b.key" :disabled="b.key !== 'all' && !sizeCounts[b.key]">{{ b.label }} · {{ sizeCounts[b.key] }}</option>
           </select>
         </div>
         <div class="seg k2-wrapseg k2-segbtns" role="group" aria-label="Filter by group size">
           <button
-            v-for="b in SIZE_BANDS"
+            v-for="b in sizeBands"
             :key="b.key"
             type="button"
             :aria-pressed="sizeFilter === b.key ? 'true' : 'false'"
@@ -597,7 +618,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           </select>
         </div>
       </div>
-      <p v-if="shownGroups.length && !visibleCards.length" class="mut" data-testid="group-none-match">No groups match this size.</p>
+      <p v-if="shownGroups.length && !visibleCards.length && sizeFilter !== 'none'" class="mut" data-testid="group-none-match">No groups match this size.</p>
 
       <div class="k k2-grouplist" data-testid="group-list">
       <template v-for="section in cardSections" :key="section.label">
@@ -624,8 +645,8 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
         </RouterLink>
       </div>
       </template>
-      <div v-if="canManage && unassigned.length" class="kp-groups" style="margin-top: 16px">
-        <!-- People without a group (root / planners) -->
+      <div v-if="showUnassignedCard" class="kp-groups" :style="{ marginTop: visibleCards.length ? '16px' : '0' }">
+        <!-- People without a group (root / planners, and group admins, who may take them into their group) -->
         <RouterLink :to="{ query: { group: 'none' } }" class="kp-group kp-group-empty" data-testid="group-card-none">
           <div class="kp-inline">
             <h3 class="kp-group-name me-auto">No group</h3>

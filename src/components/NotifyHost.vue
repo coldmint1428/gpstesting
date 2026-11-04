@@ -3,6 +3,7 @@
 // Bootstrap modal + toast styles, opened by Vue (no Bootstrap JavaScript needed).
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { confirmState, answerConfirm, toasts, closeToast } from '../composables/useNotify'
+import ExpandTransition from './ExpandTransition.vue'
 
 const confirmButton = ref(null)
 const typeInput = ref(null)
@@ -25,6 +26,18 @@ watch(confirmState, async (state) => {
   }
 })
 
+// A long list (a plan's 26 warnings) folds away under one button and scrolls inside the dialog when opened, so the
+// question and its buttons stay on screen. A few lines are short enough to show as they are.
+const FOLD_AFTER = 3
+const linesOpen = ref(false)
+const lineCount = computed(() => (confirmState.value && confirmState.value.lines ? confirmState.value.lines.length : 0))
+const folds = computed(() => lineCount.value > FOLD_AFTER)
+const foldLabel = computed(() => {
+  const what = (confirmState.value && confirmState.value.linesLabel) || ''
+  return (linesOpen.value ? 'Hide ' : 'Show ') + (what ? lineCount.value + ' ' + what : 'all ' + lineCount.value)
+})
+watch(confirmState, () => (linesOpen.value = false))
+
 function onKey(event) {
   if (event.key === 'Escape' && confirmState.value) answerConfirm(false)
 }
@@ -45,7 +58,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       data-testid="confirm-dialog"
       @click.self="answerConfirm(false)"
     >
-      <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content shadow">
           <div class="modal-header border-0 pb-0">
             <h2 id="confirm-title" class="modal-title h5">{{ confirmState.title }}</h2>
@@ -53,9 +66,29 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           </div>
           <div v-if="confirmState.message || (confirmState.lines && confirmState.lines.length)" class="modal-body pt-2">
             <p v-if="confirmState.message" class="mb-2">{{ confirmState.message }}</p>
-            <ul v-if="confirmState.lines && confirmState.lines.length" class="mb-0 ps-3" data-testid="confirm-lines">
+            <button
+              v-if="folds"
+              type="button"
+              class="k2-foldbtn"
+              :aria-expanded="linesOpen ? 'true' : 'false'"
+              aria-controls="confirm-lines"
+              data-testid="confirm-lines-toggle"
+              @click="linesOpen = !linesOpen"
+            >
+              {{ foldLabel }}<svg viewBox="0 0 24 24" aria-hidden="true" :class="{ 'is-open': linesOpen }"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+            <ul v-if="lineCount && !folds" id="confirm-lines" class="mb-0 ps-3" data-testid="confirm-lines">
               <li v-for="(line, i) in confirmState.lines" :key="i">{{ line }}</li>
             </ul>
+            <ExpandTransition>
+              <div v-if="folds && linesOpen">
+                <div class="k2-foldpad">
+                  <ul id="confirm-lines" class="mb-0 k2-foldlist" data-testid="confirm-lines">
+                    <li v-for="(line, i) in confirmState.lines" :key="i">{{ line }}</li>
+                  </ul>
+                </div>
+              </div>
+            </ExpandTransition>
           </div>
           <div v-if="confirmState.requireText" class="modal-body pt-0">
             <label for="confirm-type" class="form-label small">Type <strong>{{ confirmState.requireText }}</strong> to confirm</label>

@@ -3,7 +3,7 @@
 //     node tools/plan_sheet_test.mjs        (also: npm run test:sheet)
 //
 // No database and no browser: this is the file side only, the part a spreadsheet can get wrong. The product side —
-// export, wipe, import, and a sheet refused with the board's own sentence — is dev/checks/step23-csv.mjs.
+// export, wipe, import — is dev/checks/step23-csv.mjs.
 //
 // Every case is a file somebody could really produce: a plan exported and read back, a sheet saved by Excel with
 // semicolons or without a BOM, notes with commas, quotes and newlines, a moment repeated down the sheet because a
@@ -13,10 +13,8 @@ import {
   SHEET_COLUMNS,
   readSheet,
   sheetFileName,
-  sheetGaps,
   sheetText,
 } from '../src/utils/planSheet.js'
-import { gapDetail } from '../src/utils/planFrames.js'
 
 let passed = 0
 const failures = []
@@ -194,38 +192,12 @@ check('R5 a header with no rows is not an error, just nothing to import', header
 const empty = readSheet('', GROUPS)
 check('R5 an empty file says it has no rows', empty.errors.length === 1 && /no rows/.test(empty.errors[0].message), show(empty.errors))
 
-// ---------- 6. the 25 m rule, in the board's words ----------
-const gapSheet = readSheet(
-  't_s,note,group,lat,lng\n0,,Sound,1.296600,103.773100\n60,,Sound,1.296600,103.774000\n',
+// ---------- 6. no distance rule (091) ----------
+const longSheet = readSheet(
+  't_s,note,group,lat,lng\n0,,Sound,1.296600,103.773100\n60,,Sound,1.296600,103.783100\n',
   GROUPS,
 )
-const gaps = sheetGaps(gapSheet.frames)
-check('G6 a 100 m step in a sheet is found', gaps.length === 1 && Math.round(gaps[0].metres) === 100, show(gaps.map((g) => g.metres)))
-check('G6 it is Sound, the group in the file', gaps[0] && gaps[0].groupId === 'g2', show(gaps[0] && gaps[0].groupId))
-check(
-  'G6 and it says what the board says: group name plus gapDetail',
-  gaps.length === 1 && `Sound: ${gapDetail(gaps[0])}` === 'Sound: 100 m between +0:00 and +1:00 (limit 25 m)',
-  gaps.length === 1 ? `Sound: ${gapDetail(gaps[0])}` : 'no gap',
-)
-
-const carried = readSheet(
-  't_s,note,group,lat,lng\n0,,Sound,1.296600,103.773100\n30,,,,,\n60,,,,,\n90,,Sound,1.296600,103.773729\n',
-  GROUPS,
-)
-check('G6 70 m over three frames is legal, because three frames allow 75 m', sheetGaps(carried.frames).length === 0, show(sheetGaps(carried.frames)))
-
-const tooFar = readSheet(
-  't_s,note,group,lat,lng\n0,,Sound,1.296600,103.773100\n30,,,,,\n60,,,,,\n90,,Sound,1.296600,103.7739985\n',
-  GROUPS,
-)
-const far = sheetGaps(tooFar.frames)
-check('G6 100 m over the same three frames breaks', far.length === 1 && Math.round(far[0].metres) === 100, show(far.map((g) => g.metres)))
-check('G6 and the budget is the frame steps it had (3 x 25 m)', far.length === 1 && far[0].steps === 3 && Math.round(far[0].budget) === 75, show(far))
-check(
-  'G6 the sentence says the budget and the steps, as the strip does',
-  far.length === 1 && gapDetail(far[0]) === '100 m between +0:00 and +1:30 (limit 75 m, 3 steps)',
-  far.length === 1 ? gapDetail(far[0]) : 'no gap',
-)
+check('G6 a 1.1 km step in a sheet reads cleanly: how far a group goes is the planner\'s call', longSheet.errors.length === 0 && longSheet.frames.length === 2, show(longSheet.errors))
 
 // ---------- 7. the name of the file ----------
 check('F7 a file name a phone accepts', sheetFileName({ name: 'Rehearsal, day 2 / v3' }) === 'Rehearsal, day 2 - v3.csv', sheetFileName({ name: 'Rehearsal, day 2 / v3' }))

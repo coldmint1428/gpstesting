@@ -538,6 +538,11 @@ html body .toast {
   font-weight: 700;
   box-shadow: var(--offset-lime);
 }
+/* One edge per toast: the older theme's coloured left border (planova-theme.css) sat under the offset shadow as a
+   second, redder layer */
+html body .toast[class*="text-bg-"] {
+  border-left: 0 !important;
+}
 html body .toast.text-bg-danger {
   background: var(--danger-strong) !important;
 }

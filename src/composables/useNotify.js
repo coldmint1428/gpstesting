@@ -13,16 +13,17 @@ export const toasts = ref([]) // [{ id, text, type }]
 //   lines       sentences under the message, drawn as a list: refusals name several things at once (step 23)
 //   cancelText  null for a dialog with one button -- something to read, nothing to decide
 //   requireText a word the person must type before the main button works (ending a live event: a slip-proof step)
-export function askConfirm({ title, message = '', lines = [], confirmText = 'OK', cancelText = 'Cancel', danger = false, requireText = '' }) {
+//   linesLabel  what the lines are ('warnings'): more than a few are folded under "Show 26 warnings" (NotifyHost)
+export function askConfirm({ title, message = '', lines = [], linesLabel = '', confirmText = 'OK', cancelText = 'Cancel', danger = false, requireText = '' }) {
   if (confirmState.value) confirmState.value.resolve(false) // only one dialog at a time
   return new Promise((resolve) => {
-    confirmState.value = { title, message, lines, confirmText, cancelText, danger, requireText, resolve }
+    confirmState.value = { title, message, lines, linesLabel, confirmText, cancelText, danger, requireText, resolve }
   })
 }
 
 /** A dialog with one button: a refusal or a report, in the same frame as the questions. Resolves true when closed. */
-export function askNotice({ title, message = '', lines = [], confirmText = 'OK' }) {
-  return askConfirm({ title, message, lines, confirmText, cancelText: null })
+export function askNotice({ title, message = '', lines = [], linesLabel = '', confirmText = 'OK' }) {
+  return askConfirm({ title, message, lines, linesLabel, confirmText, cancelText: null })
 }
 
 export function answerConfirm(yes) {

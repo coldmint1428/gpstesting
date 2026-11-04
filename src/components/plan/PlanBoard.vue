@@ -2,8 +2,8 @@
 // PlanBoard — the planning stage, as an animation timeline over a locked map.
 //
 // The mental model, in one line: a plan is a strip of frames; at each frame you say where every group is;
-// a straight line joins neighbouring frames, and no two neighbouring positions for one group may be more
-// than 25 m apart. Nothing here draws a route, and nothing here edits a polygon.
+// a straight line joins neighbouring frames. There is no limit on how far or how fast a group moves between
+// two frames (091). Nothing here draws a route, and nothing here edits a polygon.
 //
 // The map and the bar are two views of the same selection. Selecting a frame on the bar decides which moment
 // the map is showing; dragging a marker on the map writes that moment's position for that group -- and for every
@@ -44,26 +44,23 @@ import { isLockRefusal, planErrorMessage, usePlan } from '../../composables/useP
 import { usePlanUndo } from '../../composables/usePlanUndo'
 import PlanLive from './PlanLive.vue'
 import PlanProblems from './PlanProblems.vue'
-import { calmCase, editAllowed, extraSeconds, problemWords, problemsOf, suggestedSpot, walkFixPlan, walkFixWords } from '../../utils/planProblems'
+import { calmCase, editAllowed, problemWords, problemsOf, suggestedSpot } from '../../utils/planProblems'
 import { placeName } from '../../composables/useReverseGeocode'
 import EmptyState from '../EmptyState.vue'
 import { askConfirm, askNotice, toast } from '../../composables/useNotify'
 import { saveFile } from '../../lib/saveFile'
 import { escapeHtml } from '../../utils/people'
-import { formatDuration } from '../../utils/time'
 import {
   SNAP_S,
-  annotate,
   formatOffset,
   formatOffsetShort,
-  gapDetail,
   parseOffset,
   resolveTracks,
   restatedPositions,
   snap,
   snapshotAt,
 } from '../../utils/planFrames'
-import { readSheet, sheetFileName, sheetGaps, sheetText } from '../../utils/planSheet'
+import { readSheet, sheetFileName, sheetText } from '../../utils/planSheet'
 import '../../assets/planova.css'
 import { GROUP_PALETTE, textOn } from '../../utils/groupColours'
 import { useLoadGate } from '../../composables/usePageReady'
@@ -145,6 +142,25 @@ function readLock() {
     return false
   }
 }
+// A reminder for planners: groups may walk, ride a bus, take a boat or follow a float, so the plan has no distance or speed rule
+// and the timing is theirs to set. Closed once, it stays closed on this device.
+const TRANSPORT_KEY = 'planova.transportTipClosed'
+const transportTip = ref(readTransportTip())
+function readTransportTip() {
+  try {
+    return localStorage.getItem(TRANSPORT_KEY) !== '1'
+  } catch {
+    return true
+  }
+}
+function closeTransportTip() {
+  transportTip.value = false
+  try {
+    localStorage.setItem(TRANSPORT_KEY, '1')
+  } catch {
+    /* private mode: closed until the page closes */
+  }
+}
 function toggleLock() {
   moveLock.value = !moveLock.value
   try {
@@ -158,7 +174,6 @@ const canMove = computed(() => props.canEdit && !moveLock.value)
 
 const selected = computed(() => frames.value.find((f) => f.id === selectedId.value) || null)
 const tracks = computed(() => resolveTracks(frames.value))
-const analysis = computed(() => annotate(frames.value))
 
 /**
  * The offset a copy was taken at (053), or null for a plan that was drawn rather than copied from a running one.
@@ -171,40 +186,23 @@ function isCutFrame(frame) {
 }
 
 /**
- * What the database will refuse the plan for that the board's own walk does not already say. `annotate` is the 25 m
- * rule, derived here so a drag goes red before anything is written; plan_check is the second opinion, and the only
- * one that looks at the locked polygons and at pace. Its rows are fetched after every frame read -- a write is
- * followed by a read -- so a walk that clips a no-go, or a hop that asks for a speed nobody can run, is marked on the
- * board instead of waiting for Publish to refuse it. A row naming the same pair as a local gap is that same problem
- * said twice, so it is left to the gap row, which already carries the Fill button that fixes it.
+ * What the database refuses the plan for: a walk across a no-go area or obstacle (plan_check). There is no distance or
+ * speed rule (091), so nothing is worked out on the board itself. The rows are fetched after every frame read -- a
+ * write is followed by a read -- so a walk that clips a no-go is marked on the board instead of waiting for Publish to
+ * refuse it. Rows from an older plan_check that still reports the 25 m or speed rules are ignored (planProblems).
  */
 const serverProblems = ref([])
-const blocking = computed(() => {
-  // The pair is the pair on both sides now (step 12): the board reports a walk from the frame that last said where a
-  // group was, and so does plan_check. A row naming a pair the walk already reports is that same problem said twice,
-  // so it is left to the gap row, which carries the Fill button that fixes it. (Before step 12 the board reported
-  // from a carried frame and the database from the stated one -- finding 24 -- so this matched on the end alone.)
-  const told = new Set(analysis.value.gaps.map((g) => `${g.groupId}|${g.from.frameId}|${g.to.frameId}`))
-  return (serverProblems.value || []).filter(
-    (row) =>
-      row.severity === 'error' &&
-      !String(row.message || '').includes('faster than running') &&
-      !told.has(`${row.group_id}|${row.from_frame}|${row.to_frame}`),
-  )
-})
+const blocking = computed(() => problemsOf(serverProblems.value || []).map((p) => ({ group_id: p.groupId, from_frame: p.fromFrame, to_frame: p.toFrame })))
 
 // ---------- the Problems panel, and the lock it explains ----------
 // Errors lock the plan: only the frames and groups they name can change, until they are fixed. Warnings do not; they
 // can be dismissed, on this browser, and come back if the walk changes (planProblems).
-const problems = computed(() => problemsOf(analysis.value.gaps, serverProblems.value || []))
+const problems = computed(() => problemsOf(serverProblems.value || []))
 const errors = computed(() => problems.value.filter((p) => p.level === 'error'))
 const dismissedIds = ref(new Set())
 const shownProblemId = ref('')
 const problemsPanel = ref(null)
 const placeNames = ref({}) // "lat,lng" -> a place's name, as OneMap answers it
-const walkFix = ref(null) // the fix on show, worked out and not yet written
-const walkFixResult = ref(null) // what the last fix really did
-let applyingFix = false
 
 const dismissKey = () => 'planova.dismissed.' + (plan.value ? plan.value.id : '')
 function readDismissed() {
@@ -256,9 +254,7 @@ watch(problems, (list) => {
 
 function problemActions(problem) {
   const seconds = problem.toS - problem.fromS
-  // Two rules, two fixes: frames for the 25 m limit, time for speed (planProblems)
-  if (problem.kind === 'far') return [{ key: 'walk', label: 'Fill', testid: 'gap-fill' }]
-  if (problem.kind === 'pace') return [{ key: 'walk', label: 'Add time', testid: 'problem-time' }]
+  // How far and how fast a group moves is the planner's call (091): the only fixes are for a walk across a no-go area.
   if (problem.kind === 'zone' && seconds >= 2) return [{ key: 'between', label: 'Add frame between', testid: 'problem-between' }]
   if (problem.kind === 'zone') return [{ key: 'time', seconds: 10, label: 'Add 10 s', testid: 'problem-time' }]
   return []
@@ -399,177 +395,23 @@ function addTimeTo(problem, seconds) {
   return shiftStretch(problem.toS, seconds, last)
 }
 
-/**
- * Fill or Add time, step one: work out what it would do, say so, and draw it. Nothing is written until Apply.
- */
-function startWalkFix(problem) {
-  if (problem.level === 'warning' && blockedByErrors()) return
-  const open = problems.value.filter((p) => !dismissedIds.value.has(p.id) || p.id === problem.id)
-  const fix = walkFixPlan(problem, open, tracks.value.get(problem.groupId) || [], zones.value)
-  walkFixResult.value = null
-  walkFix.value = {
-    ...fix,
-    words: fix.blocked ? null : walkFixWords(fix, groupName(problem.groupId), frameNumber),
-  }
-  openProblem(problem)
-  drawLines()
-  if (map && fix.route.length > 1) map.fitBounds(L.latLngBounds(fix.route.map((p) => [p.lat, p.lng])).pad(0.4), { maxZoom: 19 })
-}
-
-function cancelWalkFix() {
-  walkFix.value = null
-  drawLines()
-}
-
-/**
- * Step two: write it, as one edit. Any time first, latest first, so a walk's times still mean what they said when its
- * turn comes, and so each fill has the seconds it needs. Afterwards the plan is read again, and the result says what is really
- * fixed and what is not, rather than what was meant.
- */
-async function applyWalkFix() {
-  const fix = walkFix.value
-  if (!fix || fix.blocked) return
-  const name = groupName(fix.groupId)
-  const commands = []
-  const span = new Set(fix.frameIds)
-  let added = 0
-  let timeAdded = 0
-  let failure = ''
-  applyingFix = true
-  try {
-    for (const time of [...fix.times].sort((a, b) => b.from_s - a.from_s)) {
-      const to_s = Math.max(...frames.value.map((f) => f.t_s))
-      const at = frames.value.filter((f) => f.t_s >= time.from_s).map((f) => ({ id: f.id, t_s: f.t_s }))
-      await api.shiftFrom(time.from_s, time.seconds, to_s)
-      commands.push({ kind: 'shift', from_s: time.from_s, to_s, delta: time.seconds, frames: at })
-      timeAdded += time.seconds
-    }
-    for (const fill of fix.fills) {
-      const from = frames.value.find((f) => f.id === fill.fromFrame)
-      const to = frames.value.find((f) => f.id === fill.toFrame)
-      // A frame already standing at a wanted time is reused, and gains a position: undo has to take that off it too
-      const inside = frames.value.filter((f) => f.t_s > from.t_s && f.t_s < to.t_s)
-      const known = new Set(frames.value.map((f) => f.id))
-      const before = new Map(inside.map((f) => [f.id, restatedPositions(f)]))
-      const result = await api.fillGap(fill.fromFrame, fill.toFrame, [fix.groupId])
-      added += result?.frames_added ?? 0
-      const written = frames.value.filter((f) => !known.has(f.id))
-      for (const frame of written) span.add(frame.id)
-      if (written.length) commands.push({ kind: 'fill', added: written.map(frameCopy) })
-      for (const frame of inside) {
-        const now = frames.value.find((f) => f.id === frame.id)
-        if (!now) continue
-        const after = restatedPositions(now)
-        if (JSON.stringify(after) !== JSON.stringify(before.get(frame.id))) {
-          span.add(frame.id)
-          commands.push({ kind: 'positions', frameId: frame.id, before: before.get(frame.id), after })
-        }
-      }
-    }
-  } catch (error) {
-    failure = planErrorMessage(error)
-  }
-  if (commands.length) edits.batch(commands, fix.kind === 'far' ? `filled ${name}'s walk` : `added time to ${name}'s walk`)
-  walkFix.value = null
-  await refreshProblems()
-  applyingFix = false
-
-  // Only what this fix was for counts against it: a filled walk that is still fast is the other fix's problem
-  const here = problemCards.value.filter((p) => p.groupId === fix.groupId && span.has(p.fromFrame) && span.has(p.toFrame))
-  const left = here.filter((p) => p.kind === fix.kind)
-  const others = here.filter((p) => p.kind !== fix.kind)
-  const lines = []
-  if (added) lines.push(`Added ${added === 1 ? '1 new frame' : added + ' new frames'} for ${name}. Later frames are renumbered.`)
-  if (timeAdded) lines.push(`Added ${formatDuration(timeAdded * 1000)}${fix.kind === 'far' ? ' to make room for them' : ''}. The plan runs that much longer.`)
-  if (failure) lines.push(failure, commands.length ? 'The changes above are still in place.' : 'Nothing was changed.')
-  for (const p of left) lines.push(`Still open: ${p.title}. ${p.detail}`.trim())
-  const fast = others.filter((p) => p.kind === 'pace').length
-  if (fast) lines.push(`${fast === 1 ? '1 too-fast warning' : fast + ' too-fast warnings'} on this walk ${fast === 1 ? 'is' : 'are'} separate: use Add time or Fix all timing.`)
-  for (const p of others.filter((o) => o.kind !== 'pace')) lines.push(`Now showing: ${p.title}.`)
-  walkFixResult.value = {
-    title: failure ? 'The fix stopped partway' : left.length ? 'Partly fixed' : fix.kind === 'far' ? 'Filled: this walk is inside the 25 m limit' : 'Time added: this walk can be walked',
-    tone: failure || left.length ? 'warn' : 'ok',
-    lines,
-    canUndo: commands.length > 0,
-    frames: frames.value,
-  }
-  shownProblemId.value = ''
-  drawLines()
-  revealProblems()
-}
-
-async function undoWalkFix() {
-  walkFixResult.value = null
-  await runUndo()
-}
-
-/**
- * Fix all timing: give every open too-fast walk the time it needs, as one edit. Later walks go first, so a walk's times
- * still mean what they said when its turn comes: pushing an end only moves what comes after it.
- */
-async function fixAllTiming() {
-  if (blockedByErrors()) return
-  const list = openWarnings.value.filter((p) => p.kind === 'pace').sort((a, b) => b.toS - a.toS)
-  if (!list.length) return
-  const needs = list.map((problem) => ({ problem, seconds: extraSeconds(problem.metres, problem.toS - problem.fromS) }))
-  const total = needs.reduce((sum, row) => sum + row.seconds, 0)
-  const ok = await askConfirm({
-    title: `Add ${formatDuration(total * 1000)} to this plan?`,
-    message: `${list.length === 1 ? 'This walk gets' : list.length + ' walks get'} enough time to be walked, and everything after each one moves later. The plan runs ${formatDuration(total * 1000)} longer. Undo puts it all back.`,
-    confirmText: 'Add time',
-  })
-  if (!ok) return
-  const done = []
-  try {
-    for (const { problem, seconds } of needs) {
-      const to_s = Math.max(...frames.value.map((f) => f.t_s))
-      const at = frames.value.filter((f) => f.t_s >= problem.toS).map((f) => ({ id: f.id, t_s: f.t_s }))
-      await api.shiftFrom(problem.toS, seconds, to_s)
-      done.push({ from_s: problem.toS, to_s, delta: seconds, frames: at })
-    }
-    toast(`Added ${formatDuration(total * 1000)}.`, 'success', 3000)
-  } catch (error) {
-    // A walk somebody is retiming refuses its push. The ones already moved stay, and Undo still reaches them.
-    if (!refusedBecauseHeld(error)) toast(planErrorMessage(error), 'danger', 5000)
-  }
-  if (done.length) edits.batch(done.map((one) => ({ kind: 'shift', ...one })), `added ${formatDuration(total * 1000)} to ${list.length === 1 ? 'a walk' : list.length + ' walks'}`)
-}
-
 function dismissAllWarnings() {
   for (const problem of openWarnings.value) setDismissed(problem, true)
 }
 
 function actOnProblem(problem, key) {
-  if (key === 'walk') return startWalkFix(problem)
   if (key === 'between') return addFrameBetween(problem)
   const action = problem.actions.find((a) => a.key === key)
   return addTimeTo(problem, action.seconds)
 }
 
-/** The group-frames the database names, merged into the lanes' and the map's red. The strip is left to the 25 m
- *  rule: a frame dot means "this moment is broken for somebody's walk", and a crossing is already named by the row,
- *  the badge and the segment -- marking two more dots would count a rule the strip does not measure. */
+/** The group-frames the database names (a walk across a no-go area or obstacle), in the lanes' and the map's red. */
 const flaggedCells = computed(
-  () =>
-    new Set([
-      ...analysis.value.cells,
-      ...blocking.value.flatMap((row) => [`${row.group_id}|${row.from_frame}`, `${row.group_id}|${row.to_frame}`]),
-    ]),
+  () => new Set(blocking.value.flatMap((row) => [`${row.group_id}|${row.from_frame}`, `${row.group_id}|${row.to_frame}`])),
 )
 
-/**
- * Where the open frame sits in the strip, and the stretches it is inside. A dot marked red on the bar says "this
- * moment is part of an impossible walk"; this says which walk, and over what span -- the answer to "why is that dot
- * red?" without hunting through the warning rows for a sentence that happens to mention this time.
- */
+/** The frames in strip order, for "Frame 12" in the Problems panel. */
 const frameOrder = computed(() => [...frames.value].sort((a, b) => a.t_s - b.t_s))
-const stretchAtSelected = computed(() => {
-  const frame = selected.value
-  if (!frame) return []
-  const index = frameOrder.value.findIndex((f) => f.id === frame.id)
-  if (index < 0) return []
-  return analysis.value.stretches.filter((s) => s.fromIndex <= index && index <= s.toIndex)
-})
 
 /**
  * Ask what the database makes of the plan, then repaint. The answer is deliberately not an error path: a failed
@@ -945,7 +787,7 @@ function drawLines() {
     if (!points.length) continue
     // An off-site statement is not a place on the map, so the track stops there and starts again at the next on-site
     // frame: the line is drawn as the runs between on-site statements (046, step 10). Joining through an off-site
-    // point would draw a walk to a place nobody is, which is the picture the 25 m rule already refuses to measure.
+    // point would draw a walk to a place nobody is.
     const line = (run) => {
       if (run.length < 2) return
       L.polyline(run, {
@@ -968,19 +810,8 @@ function drawLines() {
     }
     line(run)
   }
-  // Every break in the chain, drawn in the same red the bar uses.
-  for (const gap of analysis.value.gaps) {
-    L.polyline(
-      [
-        [gap.from.lat, gap.from.lng],
-        [gap.to.lat, gap.to.lng],
-      ],
-      { color: '#c2410c', weight: 3, opacity: 0.9, interactive: false },
-    ).addTo(lineLayer)
-  }
-  // The stretches the database refuses that the walk above does not report: a line through a zone, or a hop too
-  // quick to be a walk. Drawn on top of the track, so the segment the sentence names is the segment on screen. A
-  // shorter dash tells it apart from a break: the people are there, the ground is not allowed.
+  // The stretches the database refuses: a line through a no-go area or obstacle. Drawn on top of the track, so the
+  // segment the sentence names is the segment on screen.
   for (const row of blocking.value) {
     const track = tracks.value.get(row.group_id)
     const from = track && track.find((p) => p.frameId === row.from_frame)
@@ -994,13 +825,6 @@ function drawLines() {
       { color: '#c2410c', weight: 3, opacity: 0.9, dashArray: '2 4', interactive: false },
     ).addTo(lineLayer)
   }
-  // A fix on show: the walk it covers, and the new frames it would add along it.
-  if (walkFix.value && walkFix.value.route.length > 1) {
-    L.polyline(walkFix.value.route.map((p) => [p.lat, p.lng]), { color: '#16a34a', weight: 4, opacity: 0.9, interactive: false }).addTo(lineLayer)
-    for (const spot of walkFix.value.fills.flatMap((fill) => fill.spots)) {
-      L.circleMarker([spot.lat, spot.lng], { radius: 6, color: '#16a34a', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(lineLayer)
-    }
-  }
   // Warnings the planner has not dismissed, amber where an error is red; and the walk "Show on map" asked for, wide.
   for (const problem of problems.value) {
     const shown = problem.id === shownProblemId.value
@@ -1011,7 +835,7 @@ function drawLines() {
     const line = [[from.lat, from.lng], [to.lat, to.lng]]
     if (shown) L.polyline(line, { color: problem.level === 'error' ? '#c2410c' : '#d97706', weight: 9, opacity: 0.35, interactive: false }).addTo(lineLayer)
     if (problem.level === 'warning') L.polyline(line, { color: '#d97706', weight: 3, opacity: 0.95, dashArray: '2 4', interactive: false }).addTo(lineLayer)
-    const spot = shown && !walkFix.value ? spotOf(problem) : null
+    const spot = shown ? spotOf(problem) : null
     if (spot) {
       L.polyline([[from.lat, from.lng], [spot.lat, spot.lng]], { color: '#16a34a', weight: 3, dashArray: '6 6', interactive: false }).addTo(lineLayer)
       L.marker([spot.lat, spot.lng], {
@@ -2333,72 +2157,6 @@ async function saveFrameCopy(from, word) {
 }
 
 /**
- * Every gap that runs between the same two frames. A broken stretch is usually broken for more than one group --
- * they walk together -- and filling it for all of them at once is one call and one reload instead of one each.
- */
-function gapGroups(gap) {
-  const ids = analysis.value.gaps
-    .filter((g) => g.from.frameId === gap.from.frameId && g.to.frameId === gap.to.frameId)
-    .map((g) => g.groupId)
-  return [...new Set(ids)]
-}
-
-/**
- * "Fill them all": every stretch that is too far apart, for every group in it, in one go. The stretches are the distinct
- * pairs of neighbouring frames in the plan's gaps; each is filled by the same call as one Fill button (042), one after
- * the other, and the frames they add are one undo step, so a single Undo takes the lot back.
- */
-const gapSpans = computed(() => {
-  const seen = new Set()
-  const spans = []
-  for (const gap of analysis.value.gaps) {
-    const key = gap.from.frameId + '>' + gap.to.frameId
-    if (seen.has(key)) continue
-    seen.add(key)
-    spans.push({ gap, groupIds: gapGroups(gap) })
-  }
-  return spans
-})
-const gapGroupTotal = computed(() => new Set(analysis.value.gaps.map((g) => g.groupId)).size)
-
-async function fillAllGaps() {
-  if (!plan.value || !gapSpans.value.length) return
-  const spans = gapSpans.value
-  const ok = await askConfirm({
-    title: `Fill ${spans.length} ${spans.length === 1 ? 'stretch' : 'stretches'}?`,
-    message: `Adds the frames it takes between every pair of moments that are too far apart, for the ${gapGroupTotal.value} ${gapGroupTotal.value === 1 ? 'group' : 'groups'} involved. One Undo takes them all back.`,
-    confirmText: 'Fill all',
-  })
-  if (!ok) return
-  const known = new Set(frames.value.map((f) => f.id))
-  let added = 0
-  let longest = 0
-  let held = 0
-  let failed = null
-  for (const { gap, groupIds } of spans) {
-    try {
-      const result = await api.fillGap(gap.from.frameId, gap.to.frameId, groupIds)
-      added += result?.frames_added ?? 0
-      longest = Math.max(longest, result?.max_step_m ?? 0)
-    } catch (error) {
-      // A stretch somebody is retiming (083) is skipped; the rest still fill
-      if (refusedBecauseHeld(error)) held++
-      else failed = failed || error
-    }
-  }
-  const written = frames.value.filter((f) => !known.has(f.id)).map(frameCopy)
-  if (written.length) edits.filled(written, `added ${countLabel(written.length)} across ${spans.length} ${spans.length === 1 ? 'stretch' : 'stretches'}`)
-  if (failed) toast(planErrorMessage(failed), 'danger', 7000)
-  else
-    toast(
-      (added ? `Added ${added} frame${added === 1 ? '' : 's'}${longest ? ` — the longest step is now ${longest} m` : ''}.` : 'Those stretches were already spaced out.') +
-        (held ? ` ${held} ${held === 1 ? 'stretch was' : 'stretches were'} skipped: someone is retiming ${held === 1 ? 'it' : 'them'}.` : ''),
-      'success',
-      5000,
-    )
-}
-
-/**
  * "Hold one group": state the target groups again, where they already stand, at a later moment — one call (045), and
  * nothing else on that later frame changes, so a frame that already says somebody else keeps saying them. That is
  * the spec's "hold one group; rewrite that group's future spans so its next move happens later", in the only
@@ -2973,6 +2731,7 @@ async function publish() {
         : 'This becomes the timetable everyone follows. Any other live plan stops.') +
       (warned.length ? ` This plan has ${warned.length === 1 ? 'a warning' : warned.length + ' warnings'}:` : ''),
     lines: warned.map((p) => `${p.when}: ${p.title}. ${p.detail}`),
+    linesLabel: warned.length === 1 ? 'warning' : 'warnings',
     confirmText: again ? 'Publish again' : 'Publish',
   })
   if (!ok) return
@@ -3118,7 +2877,7 @@ function pickSheet() {
  * Read the chosen sheet, refuse it if it is not a plan, and import it if the planner says yes.
  *
  * THE ORDER IS THE POINT. A file is checked completely before anything is written: the reader's row-numbered
- * mistakes, then the 25 m rule in the board's own sentence, then a confirmation that names both counts and says the
+ * mistakes, then a confirmation that names both counts and says the
  * plan's moments are replaced. Only then is the one call made -- and a refusal from the database (a plan whose actuals
  * have been marked, which the client cannot see) is shown in the same frame rather than as a toast that could be
  * missed. Nothing here touches a frame on the way to a refusal.
@@ -3155,20 +2914,6 @@ async function onSheetPicked(event) {
     await askNotice({
       title: 'This sheet was not imported',
       message: `"${file.name}" has no moments in it. Nothing was changed.`,
-    })
-    return
-  }
-
-  // The 25 m rule, in the same words the strip uses for the same pair of frames: a sheet whose walk cannot be walked
-  // is refused before it is written, and the planner can see in the spreadsheet exactly which row to space out.
-  const gaps = sheetGaps(read.frames)
-  if (gaps.length) {
-    await askNotice({
-      title: 'This sheet was not imported',
-      message:
-        (gaps.length === 1 ? 'One walk in' : `${gaps.length} walks in`) +
-        ` "${file.name}" ${gaps.length === 1 ? 'is' : 'are'} longer than the plan allows. Nothing was changed.`,
-      lines: gaps.slice(0, 6).map((gap) => `${groupName(gap.groupId)}: ${gapDetail(gap)}`),
     })
     return
   }
@@ -3362,10 +3107,6 @@ watch(
 // Every frame read is followed by the database's verdict on the whole plan, so an edit can never leave the board
 // saying less than the gate would. `immediate` covers the preview harness, which starts with frames in hand.
 watch(frames, refreshProblems, { immediate: true })
-// A fix on show was worked out from the plan as it stood: if the plan moves under it, it is out of date
-watch(frames, () => {
-  if (walkFix.value && !applyingFix) cancelWalkFix()
-})
 watch(() => (plan.value ? plan.value.id : null), () => {
   shownProblemId.value = ''
   readDismissed()
@@ -3660,9 +3401,6 @@ watch(
               </div>
             </div>
 
-            <div class="pv-band" v-for="(warn, i) in analysis.bands" :key="'b' + i"
-                 :style="{ left: xOf(warn.from_t_s) + 'px', width: Math.max(widthOf(warn.to_t_s - warn.from_t_s), 4) + 'px' }"></div>
-
             <!-- The stretch that is selected: a band along the strip, so "what will move" is visible before a drag. -->
             <div v-if="selectionSpan" class="pv-selection" data-testid="selection-band"
                  :style="{ left: xOf(selectionSpan.from_s) + 'px', width: Math.max(widthOf(selectionSpan.to_s - selectionSpan.from_s), 4) + 'px' }"></div>
@@ -3690,7 +3428,6 @@ watch(
                 :data-cut="isCutFrame(frame) ? 'true' : null"
                 :class="{
                   'is-selected': isFrameSelected(frame.id),
-                  'is-bad': analysis.frameIds.has(frame.id),
                   'is-cut': isCutFrame(frame),
                   'is-behind': playhead != null && frame.t_s <= playhead,
                   'is-problem-node': !!problemNodeTag(frame),
@@ -3722,15 +3459,6 @@ watch(
         @show="showProblemOnMap"
         @timeline="showProblemOnTimeline"
         @act="actOnProblem"
-        @fix-all="fixAllTiming"
-        @fill-all="fillAllGaps"
-        :preview="walkFix"
-        :result="walkFixResult"
-        :result-can-undo="!!walkFixResult && walkFixResult.canUndo && walkFixResult.frames === frames"
-        @apply-fix="applyWalkFix"
-        @cancel-fix="cancelWalkFix"
-        @undo-fix="undoWalkFix"
-        @clear-result="walkFixResult = null"
         @dismiss-all="dismissAllWarnings"
         @dismiss="(p) => setDismissed(p, true)"
         @restore="(p) => setDismissed(p, false)"
@@ -3748,12 +3476,6 @@ watch(
           <div class="k2-insp-body">
           <!-- ===== Frame ===== -->
           <section v-show="inspectorTab === 'frame'" role="tabpanel">
-            <!-- Why the open dot is red: the walk it belongs to, and the span that walk covers. -->
-            <p v-if="stretchAtSelected.length" class="k2-hint" style="margin-top: 0; margin-bottom: 10px" data-testid="frame-stretch">
-              This moment is in a stretch that can't be walked in time:
-              <template v-for="(s, i) in stretchAtSelected" :key="s.groupId + i"><strong>{{ groupName(s.groupId) }}</strong>, {{ formatOffset(s.from_t_s) }} → {{ formatOffset(s.to_t_s) }}<template v-if="i < stretchAtSelected.length - 1">; </template></template>.
-            </p>
-
             <!-- One frame: its time and its note. Several: the span they cover, and nothing to type into. -->
             <p v-if="selectionSpan.count > 1" class="k2-hint" style="margin-top: 0; margin-bottom: 10px" data-testid="selection-span">
               {{ countLabel(selectionSpan.count) }}, {{ formatOffset(selectionSpan.from_s) }} → {{ formatOffset(selectionSpan.to_s) }}.
@@ -3812,6 +3534,16 @@ watch(
               </p>
               <p v-if="moveLock" class="k2-hint" data-testid="lock-hint">Locked: frames and groups can't be dragged. Press the lock to change that.</p>
             </template>
+            <div v-if="props.canEdit && transportTip" class="k2-transport" role="note" data-testid="transport-tip">
+              <p>
+                <strong>Plan for how each group travels.</strong> Some groups walk, others may ride a bus, a boat or a float.
+                Give each group a route and timing that suits it: the plan does not check distance or speed. For a ride off
+                the route, mark the group <em>Off site</em> for that stretch.
+              </p>
+              <button type="button" class="k2-transport-x" aria-label="Close this reminder" title="Close" data-testid="transport-tip-close" @click="closeTransportTip">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              </button>
+            </div>
             <p class="k2-hint">{{ formatOffset(0) }} is the start of the run.</p>
           </section>
 

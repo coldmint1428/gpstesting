@@ -57,7 +57,7 @@ test.afterAll(async () => {
   for (const c of Object.values(contexts)) await c.close()
 })
 
-test('the planner makes a plan, and a sheet that breaks the 25 m rule is refused with the row', async ({ browser }) => {
+test('the planner makes a plan, and a sheet with a long jump is not refused: there is no distance rule', async ({ browser }) => {
   const page = await as(browser, 'root')
   await page.goto(`/events/${ev.eventId}/timeline`)
   await page.getByPlaceholder('Name the first plan').fill('NDP walk-through')
@@ -67,12 +67,14 @@ test('the planner makes a plan, and a sheet that breaks the 25 m rule is refused
   await expect(page.getByTestId('sheet-import')).toBeEnabled()
   await page.keyboard.press('Escape')
 
-  const bad = planSheet({ jump: true })
-  await page.getByTestId('sheet-file').setInputFiles({ name: 'bad.csv', mimeType: 'text/csv', buffer: Buffer.from(bad.csv) })
+  // A jump far over the old 25 m step reaches the "replace every moment?" question instead of a refusal (091)
+  const long = planSheet({ jump: true })
+  await page.getByTestId('sheet-file').setInputFiles({ name: 'long.csv', mimeType: 'text/csv', buffer: Buffer.from(long.csv) })
   const dialog = page.getByTestId('confirm-dialog')
   await expect(dialog).toBeVisible()
-  await expect(dialog).toContainText(/25 ?m/)
-  await shot(page, 'flow-01-sheet-refused')
+  await expect(dialog).not.toContainText('was not imported')
+  await expect(dialog).not.toContainText(/25 ?m/)
+  await shot(page, 'flow-01-sheet-long-jump')
   await page.getByTestId('confirm-cancel').or(page.getByTestId('confirm-ok')).first().click()
   await expect(dialog).toBeHidden()
 })
