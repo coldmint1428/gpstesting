@@ -92,15 +92,6 @@ async function logout() {
       <RouterLink class="ks-brand" to="/" aria-label="Planova home"><KLogo /><span>planova</span></RouterLink>
       <div id="k-nav-context" class="k-nav-context"></div>
       <span class="sp"></span>
-      <!-- Visible on every page while sharing, so users always know -->
-      <RouterLink
-        v-if="tracker.isTracking.value && tracker.sharingEventId.value"
-        :to="{ name: 'share', params: { id: tracker.sharingEventId.value } }"
-        class="chip chip-ink k-sharing"
-        data-testid="nav-sharing"
-      >
-        <i class="dot pulse" style="background: var(--lime)"></i>Sharing location
-      </RouterLink>
       <div id="k-nav-actions" class="k-nav-actions"></div>
       <div v-if="auth.isLoggedIn" ref="meWrap" class="wrapm">
         <button type="button" class="ks-av" aria-label="Account" :aria-expanded="meOpen ? 'true' : 'false'" data-testid="nav-account" @click="meOpen = !meOpen">{{ initials }}</button>
