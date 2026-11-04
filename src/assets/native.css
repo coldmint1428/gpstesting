@@ -564,28 +564,28 @@ html.native-app .next-move .btn-outline-success {
    A table squeezed into ~380 px either cuts off its last column or needs a sideways swipe nobody finds. On the phone
    each table row becomes a small stacked block instead: no sideways scrolling, nothing hidden. Cells that need a name
    say it through data-label. */
-html.native-app .pv-stack thead {
+html.native-app .k2-stacktable thead {
   display: none;
 }
-html.native-app .pv-stack,
-html.native-app .pv-stack tbody,
-html.native-app .pv-stack tr,
-html.native-app .pv-stack td,
-html.native-app .pv-stack th {
+html.native-app .k2-stacktable,
+html.native-app .k2-stacktable tbody,
+html.native-app .k2-stacktable tr,
+html.native-app .k2-stacktable td,
+html.native-app .k2-stacktable th {
   display: block;
   width: auto;
   max-width: none !important;
 }
-html.native-app .pv-stack tr {
+html.native-app .k2-stacktable tr {
   padding: 10px 14px;
   border-bottom: 1px solid var(--bs-border-color);
 }
-html.native-app .pv-stack td,
-html.native-app .pv-stack th {
+html.native-app .k2-stacktable td,
+html.native-app .k2-stacktable th {
   border: 0;
   padding: 2px 0;
 }
-html.native-app .pv-stack td[data-label]::before {
+html.native-app .k2-stacktable td[data-label]::before {
   content: attr(data-label);
   display: block;
   font-size: 12px;
@@ -593,7 +593,7 @@ html.native-app .pv-stack td[data-label]::before {
   color: var(--bs-secondary-color);
   margin-top: 6px;
 }
-html.native-app .pv-stack .d-none {
+html.native-app .k2-stacktable .d-none {
   display: none !important;
 }
 /* lists whose rows have text + a button: the text wraps instead of pushing the button off screen */

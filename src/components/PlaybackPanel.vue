@@ -87,6 +87,11 @@ function itemTitle(kind, startsAt, endedAt) {
   return kind === 'day' ? range + ' (before Start/End)' : range
 }
 
+/** "Tue, 3 Nov, 9:45 am – 2:02 pm" -> "3 Nov, 9:45 am – 2:02 pm" */
+function withoutWeekday(text) {
+  return text.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s+/g, '')
+}
+
 // "available until" is midnight starting the 8th day; show it as 11:59 pm the day before
 function untilText(item) {
   return formatDay(item.availableUntil.getTime() - 60000) + ', 11:59 pm'
@@ -310,7 +315,8 @@ onUnmounted(() => clearInterval(liveTimer))
                   <button type="submit" class="kb kb-ink kb-sm" data-testid="rename-recording-save">Save</button>
                   <button type="button" class="kb kb-line kb-sm" @click="renamingKey = null">Cancel</button>
                 </form>
-                <b v-else>{{ item.title }}</b>
+                <!-- The narrowest phones get the default name without its weekday, so it still fits on one line -->
+                <b v-else :class="{ 'has-short': !item.name }" :title="item.title"><span class="k2-rec-full">{{ item.title }}</span><span v-if="!item.name" class="k2-rec-short" aria-hidden="true">{{ withoutWeekday(item.title) }}</span></b>
                 <span v-if="renamingKey !== item.key && item.name" class="mut" style="font-size: 12px">{{ item.timesTitle }}</span>
                 <span v-if="!item.expired && item.expiresSoon" class="chip chip-warn" style="height: 22px">Download to keep</span>
               </div>
@@ -320,6 +326,8 @@ onUnmounted(() => clearInterval(liveTimer))
                   {{ item.people }} {{ item.people === 1 ? 'person' : 'people' }} · {{ item.readings.toLocaleString() }} {{ item.readings === 1 ? 'reading' : 'readings' }}
                   <template v-if="item.endReason === 'auto'"> · ended automatically</template>
                   <template v-if="busyKey === item.key"> · {{ progress }}</template>
+                  <!-- A phone has no column for "Until": it goes on this line -->
+                  <span v-if="item.availableUntil" class="k2-rec-until">Until {{ untilText(item) }}</span>
                 </template>
               </div>
             </div>

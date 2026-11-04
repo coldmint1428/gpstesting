@@ -10,6 +10,7 @@ import PhoneTabBar from './components/PhoneTabBar.vue'
 import { isNativeApp } from './lib/platform'
 import { pendingNavigation } from './router' // QA-09: the bar while a page change waits on the server
 import KLogo from './components/kinetic/KLogo.vue'
+import { usePlacedPopup } from './composables/useOpenMenu'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -72,6 +73,8 @@ function closeMe(event) {
   if (meOpen.value && meWrap.value && !meWrap.value.contains(event.target)) meOpen.value = false
 }
 onMounted(() => document.addEventListener('pointerdown', closeMe))
+// Placed like every other menu, so none of it is cut off (useOpenMenu)
+usePlacedPopup(meOpen)
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeMe))
 
 async function logout() {

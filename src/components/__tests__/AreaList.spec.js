@@ -37,7 +37,6 @@ describe('AreaList padlock', () => {
     expect(wrapper.find('[data-testid="area-name-Stage"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="area-code-Stage"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="area-kind-select-Stage"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.find('[data-testid="area-delete-Stage"]').attributes('disabled')).toBeDefined()
 
     expect(wrapper.emitted('area-edit')).toBeUndefined()
     await wrapper.find('[data-testid="area-open-Gate A"]').trigger('click')

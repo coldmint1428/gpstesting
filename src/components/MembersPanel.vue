@@ -52,8 +52,16 @@ const membersOf = (groupId) =>
 const unassigned = computed(() => membersOf('none'))
 const openMembers = computed(() => (openGroup.value ? membersOf(openGroup.value.id) : []))
 
-// One line of a group's details: "Contingent · C01 · Sector B · Ch 3"
-const detailLine = (g) => [g.category, g.code, g.sector && 'Sector ' + g.sector, g.radio].filter(Boolean).join(' · ')
+// A group's details, each named, so "A" and "B" are never a guess at which is the code and which the category
+const detailChips = (g) =>
+  [
+    ['Category', g.category],
+    ['Code', g.code],
+    ['Sector', g.sector],
+    ['Radio', g.radio],
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => ({ label, value }))
 const names = (list) => list.map((m) => m.display_name).join(', ')
 const peopleText = (n) => n + (n === 1 ? ' person' : ' people')
 
@@ -68,7 +76,7 @@ const cards = computed(() =>
       g,
       size: people.length,
       countText: peopleText(people.length),
-      line: detailLine(g),
+      chips: detailChips(g),
       icNames: ics.length ? names(ics) : 'None yet',
       adminNames: admins.length ? names(admins) : 'None yet',
       preview: people.slice(0, 6), // initials shown on the card
@@ -115,7 +123,7 @@ const cardSections = computed(() => {
 })
 const unassignedText = computed(() => peopleText(unassigned.value.length))
 const openCountText = computed(() => peopleText(openMembers.value.length))
-const openLine = computed(() => (openGroup.value && openGroup.value.id !== 'none' ? detailLine(openGroup.value) : ''))
+const openChips = computed(() => (openGroup.value && openGroup.value.id !== 'none' ? detailChips(openGroup.value) : []))
 
 // Root / planners, or this group's admin, may put people into it: root / planners anyone not in it (moving them from
 // another group), the group's admin only people without a group (assign_group, 002)
@@ -222,6 +230,7 @@ async function run(fnName, params) {
 // A message can go to a whole category ("every Contingent group") or sector (032), so groups need one.
 // Headcount is not typed in: the database keeps it at the number of people in the group (070).
 const showDetails = ref(false)
+const detailOpen = ref({}) // groupId -> unfolded (phone)
 const details = ref({}) // groupId -> { code, category, sector, radio }
 const detailSaved = ref('') // groupId just saved
 const justSaved = new Set() // rows to refresh from the next reload
@@ -417,7 +426,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
           <button v-if="canManage && openGroup.id !== 'none'" type="button" class="btn btn-sm btn-outline-secondary" data-testid="group-edit-btn" @click="startEditGroup">Edit</button>
           <button v-if="canManage && openGroup.id !== 'none'" type="button" class="btn btn-sm btn-ghost-danger" :disabled="busy" data-testid="group-delete-btn" @click="deleteOpenGroup">Delete</button>
         </div>
-        <p v-if="!editingGroup && openLine && !(canManage && details[openGroup.id])" class="kp-sub">{{ openLine }}</p>
+        <div v-if="!editingGroup && openChips.length && !(canManage && details[openGroup.id])" class="k2-factchips" data-testid="group-facts"><span v-for="f in openChips" :key="f.label" class="kp-chip k2-factchip"><i>{{ f.label }}</i><span class="v">{{ f.value }}</span></span></div>
       </div>
 
       <!-- Details (root / planner): code, category, sector, radio -->
@@ -468,7 +477,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
               <strong>{{ m.display_name }}<span v-if="me && m.id === me.id" class="text-muted fw-normal"> (you)</span></strong>
               <div class="kp-chips mt-1">
                 <span class="kp-chip" :data-testid="'role-badge-' + m.username">{{ ROLE_LABEL[topRole(m)] }}</span>
-                <span v-if="m.isAdmin && topRole(m) !== 'admin'" class="kp-chip">Group admin</span>
+                <span v-if="m.isAdmin && topRole(m) !== 'admin'" class="kp-chip">Group Admin</span>
                 <span v-if="m.isIC" class="kp-chip kp-chip-peach">IC</span>
                 <span v-if="sharingStatus[m.id] === true" class="kp-chip kp-chip-mint" data-testid="badge-sharing">Sharing</span>
                 <span v-else-if="sharingStatus[m.id] === false" class="kp-chip kp-chip-warn" :data-testid="'badge-not-sharing-' + m.username">Not sharing</span>
@@ -522,25 +531,30 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
       <div v-if="canManage && showDetails && groups.length" class="kp-card" data-testid="group-details">
         <datalist id="group-categories"><option v-for="c in groupCategories" :key="c" :value="c" /></datalist>
         <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0 pv-stack">
+          <table class="table table-sm align-middle mb-0 k2-stacktable">
             <thead>
               <tr>
                 <th scope="col">Group</th>
                 <th scope="col">Category</th>
                 <th scope="col">Code</th>
                 <th scope="col">Sector</th>
-                <th scope="col">People</th>
                 <th scope="col">Radio</th>
                 <th scope="col"><span class="visually-hidden">Save</span></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="g in groups.filter((x) => details[x.id])" :key="g.id" :data-testid="'group-details-' + g.name">
-                <td class="text-nowrap"><span class="kp-dot me-2" :style="{ backgroundColor: g.colour }"></span>{{ g.name }}</td>
+              <tr v-for="g in groups.filter((x) => details[x.id])" :key="g.id" :class="{ 'is-open': detailOpen[g.id] }" :data-testid="'group-details-' + g.name">
+                <td class="text-nowrap">
+                  <!-- On a phone each group folds to this one line; on a wider screen the row is already one line -->
+                  <button type="button" class="k2-gdtoggle" :aria-expanded="detailOpen[g.id] ? 'true' : 'false'" :data-testid="'gd-toggle-' + g.name" @click="detailOpen[g.id] = !detailOpen[g.id]">
+                    <span class="kp-dot me-2" :style="{ backgroundColor: g.colour }"></span><span class="k2-gdname">{{ g.name }}</span>
+                    <span v-if="detailsChanged(g)" class="k2-gdunsaved" title="Not saved yet">Not saved</span>
+                    <svg class="ki k2-gdchev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                  </button>
+                </td>
                 <td data-label="Category"><input v-model="details[g.id].category" class="form-control form-control-sm" list="group-categories" maxlength="50" :aria-label="'Category of ' + g.name" data-testid="gd-category" /></td>
                 <td data-label="Code"><input v-model="details[g.id].code" class="form-control form-control-sm" maxlength="40" :aria-label="'Code of ' + g.name" data-testid="gd-code" /></td>
                 <td data-label="Sector"><input v-model="details[g.id].sector" class="form-control form-control-sm" maxlength="50" :aria-label="'Sector of ' + g.name" /></td>
-                <td data-label="People" data-testid="gd-headcount">{{ membersOf(g.id).length }}</td>
                 <td data-label="Radio"><input v-model="details[g.id].radio" class="form-control form-control-sm" maxlength="40" placeholder="Ch 3 · BRAVO" :aria-label="'Radio channel or call sign of ' + g.name" data-testid="gd-radio" /></td>
                 <td class="text-nowrap">
                   <span v-if="detailSaved === g.id" class="small text-success">Saved ✓</span>
@@ -554,7 +568,14 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
 
       <!-- Size buttons and sort (only when there is more than one group to choose between) -->
       <div v-if="!onlyGroupId && shownGroups.length > 1" class="k2-filterrow k" data-testid="group-controls">
-        <div class="seg k2-wrapseg" role="group" aria-label="Filter by group size">
+        <!-- A phone: one dropdown, since five buttons do not fit on a line -->
+        <div class="ksel k2-segsel">
+          <label for="group-size-sel" class="visually-hidden">Filter by group size</label>
+          <select id="group-size-sel" v-model="sizeFilter" data-testid="group-size-select">
+            <option v-for="b in SIZE_BANDS" :key="b.key" :value="b.key" :disabled="b.key !== 'all' && !sizeCounts[b.key]">{{ b.label }} ({{ sizeCounts[b.key] }})</option>
+          </select>
+        </div>
+        <div class="seg k2-wrapseg k2-segbtns" role="group" aria-label="Filter by group size">
           <button
             v-for="b in SIZE_BANDS"
             :key="b.key"
@@ -588,7 +609,7 @@ const adminCanRemove = (m) => !props.canManage && myAdminGroupId.value && m.grou
             <h3 class="kp-group-name me-auto">{{ c.g.name }}</h3>
             <span class="kp-chip">{{ c.countText }}</span>
           </div>
-          <div v-if="c.line" class="small text-muted text-truncate">{{ c.line }}</div>
+          <div v-if="c.chips.length" class="k2-factchips" data-testid="group-card-facts"><span v-for="f in c.chips" :key="f.label" class="kp-chip k2-factchip"><i>{{ f.label }}</i><span class="v">{{ f.value }}</span></span></div>
           <dl class="kp-group-facts">
             <dt>IC</dt>
             <dd>{{ c.icNames }}</dd>

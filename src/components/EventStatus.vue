@@ -366,9 +366,11 @@ function remind() {
       </div>
       <!-- While live: the design has no room for these in the bar, so they share one menu (none of them may go) -->
       <div v-else-if="canManage" class="wrapm" data-menu :aria-busy="busy ? 'true' : null" data-testid="event-status">
-        <button type="button" class="kb kb-line kb-sm" :aria-expanded="openMenu === 'live' ? 'true' : 'false'" data-testid="event-menu-btn" @click="toggleMenu('live')">
-          <span class="k2-hm">Manage event</span><span class="k2-sm" aria-hidden="true">Event</span>
-          <svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        <button type="button" class="kb kb-line kb-sm k2-evmenu" aria-label="Manage event" title="Manage event" :aria-expanded="openMenu === 'live' ? 'true' : 'false'" data-testid="event-menu-btn" @click="toggleMenu('live')">
+          <span class="k2-hm">Manage event</span>
+          <!-- On a phone the bar has room for an icon only: a wrench, for the event's controls -->
+          <svg class="ki k2-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg class="ki k2-hm" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
         </button>
         <div v-if="openMenu === 'live'" class="menu r k2-livemenu" role="menu">
           <div class="k2-livemenu-text" data-testid="status-text">

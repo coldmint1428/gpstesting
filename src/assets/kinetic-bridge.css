@@ -579,6 +579,12 @@ html body .dropdown-item:hover {
 .k .row:not([class*='g-']):not(:has(> [class*='col'])) > :not(.kb, .ib, .chip, .kin) {
   padding: 0;
 }
+/* Bootstrap also gives a .row's children flex-shrink: 0, so a long title in one of these rows could not shrink or wrap
+   and ran over the buttons beside it. Text and boxes shrink again; the fixed-size controls keep their size. */
+.k .row:not([class*='g-']):not(:has(> [class*='col'])) > :not(.kb, .ib, .chip, .kin, .tog, .av, .k2-chk, .k2-lock, .k2-sw, .k2-pillbtn, .k2-mini, .pv-marker, button, svg, img, input, select) {
+  flex-shrink: 1;
+  min-width: 0;
+}
 .k .row:not([class*='g-']):not(:has(> [class*='col'])) > .kin {
   flex: 1;
   min-width: 0;

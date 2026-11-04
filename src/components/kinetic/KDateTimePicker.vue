@@ -11,6 +11,7 @@ const props = defineProps({
   id: { type: String, default: null },
   label: { type: String, required: true },
   min: { type: String, default: '' }, // 'YYYY-MM-DDTHH:mm': days before it are disabled
+  before: { type: String, default: '' }, // 'YYYY-MM-DD': it and the days after it are disabled
   invalid: { type: Boolean, default: false },
   clearable: { type: Boolean, default: false },
   testid: { type: String, default: null },
@@ -49,7 +50,7 @@ function setTime(value) {
       @input="emit('update:modelValue', $event.target.value)"
     />
     <div class="k2-dt">
-      <KDatePicker :model-value="date" :label="label + ': date'" :min="(min || '').slice(0, 10)" @update:model-value="setDate" />
+      <KDatePicker :model-value="date" :label="label + ': date'" :min="(min || '').slice(0, 10)" :before="before" @update:model-value="setDate" />
       <KTimePicker :model-value="time" :label="label + ': time'" @update:model-value="setTime" />
     </div>
     <button v-if="clearable && modelValue" type="button" class="k2-link" style="margin-top: 6px" @click="emit('update:modelValue', '')">Clear</button>

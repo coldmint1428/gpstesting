@@ -5,7 +5,7 @@
 // IC is a duty on top of that, not a rank: an IC (group flag) shares GPS. "View role" 'ic' is a member with that duty.
 
 export const ROLE_RANK = { root: 4, planner: 3, admin: 2, member: 1 }
-export const ROLE_LABEL = { root: 'Root', planner: 'Planner', admin: 'Group admin', member: 'Member', ic: 'IC' }
+export const ROLE_LABEL = { root: 'Root', planner: 'Planner', admin: 'Group Admin', member: 'Member', ic: 'IC' }
 
 // A member of useEventData ({ roles: ['planner', ...], isAdmin, isIC }) -> 'root' | 'planner' | 'admin' | 'member'
 export function topRole(member) {

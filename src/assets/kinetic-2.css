@@ -106,7 +106,7 @@
 /* Playback */
 .k2-rec{display:grid;grid-template-columns:48px minmax(0,1fr) auto 40px 40px;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--k-line)}
 .k2-rec:first-child{border-top:0}
-.k2-rec b{font:700 15px Manrope}
+.k2-rec b{font:700 14px/1.3 Manrope;overflow-wrap:anywhere}
 .k2-player{margin-top:12px;background:#fff;border-radius:22px;padding:16px 18px}
 .k2-clock{font:700 28px Unbounded;letter-spacing:-.05em}
 .k2-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
@@ -122,7 +122,9 @@
   .k2-loc .dot{position:absolute;top:1px;right:1px;width:11px;height:11px;border-radius:50%;box-shadow:0 0 0 2px #fff}
   /* The location menu hangs from a button in the middle of the bar, so anchored to it the menu ran off the left edge.
      On a phone it sits under the top bar instead, 12px in from both sides. */
-  html body .k .menu.k2-locmenu{position:fixed;top:68px;left:12px;right:12px;width:auto!important}
+  /* Every menu from the top bar's buttons (location, Manage event, Start, account) opens as a sheet under the bar: a
+     menu hung from a button near the right edge would run off the left of a phone */
+  html body .k .menu.k2-locmenu,html body .k-topbar .k-nav-actions .menu,html body .k-topbar .ke2-nav > .wrapm > .menu{position:fixed;top:66px;left:12px;right:12px;width:auto!important;max-width:none;max-height:calc(100dvh - 90px);overflow-y:auto}
   .k2-side{display:none}
   .k2-h h1{font-size:26px}
   .k2-live,.k2-mapp {grid-template-columns:minmax(0,1fr)}
@@ -140,7 +142,19 @@
   html body .k2-wrapseg::-webkit-scrollbar{display:none}
   html body .k2-wrapseg > button{flex:none;padding:0 12px}
   .k2-pp.hd{display:none}
-  .k2-rec{grid-template-columns:44px minmax(0,1fr) 40px}
+  .k2-rec{grid-template-columns:44px minmax(0,1fr) 40px 40px;gap:10px}
+  /* A recording's default name ("Tue, 3 Nov, 9:45 am – 2:02 pm") on one line: a little more room (smaller play and
+     icon buttons, tighter card) and a size that follows the screen; an unusually long custom name ends in "…" */
+  .k2-card:has(> .k2-longlist > .k2-rec){padding-left:14px;padding-right:10px}
+  .k2-rec{grid-template-columns:38px minmax(0,1fr) 34px 34px;gap:8px}
+  .k2-rec .rp-play{width:38px;height:38px}
+  .k2-rec .ib{width:34px;height:34px}
+  .k2-rec b{display:block;font-size:clamp(11px,3.2vw,13px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+}
+@media (max-width: 379.98px){
+  .k2-rec b.has-short .k2-rec-full{display:none}
+  .k2-rec b.has-short .k2-rec-short{display:inline}
+  .k2-rec .mut{font-size:12px!important}
   .k2-rec .k2-hm{display:none}
   .k2-dt{grid-template-columns:1fr 110px}
   .k2-field{grid-template-columns:96px 1fr}
@@ -215,6 +229,7 @@
 
 /* ===== The app's shell around the design's parts ===== */
 html body .k-topbar .ke2-nav.k2-eventbar{height:68px;padding:0 20px;gap:10px}
+html body .k-topbar .ks-ev .k-ev-name{font-size:clamp(15px,1.5vw,18px)}
 .k-nav-actions .kb,.k-nav-actions .k2-loc{flex:none}
 .k2-bartext{font-size:13px;font-weight:700;white-space:nowrap}
 .k .k2-sm{display:none}
@@ -260,7 +275,21 @@ html body .ev:not(.ev-native) .k2-pagehead h2{font:800 36px/1 Unbounded;letter-s
   .k-topbar .k2-hm{display:none}
   .k-topbar .k2-sm{display:inline}
   .k-topbar .k2-eventbar .ks-brand span{display:none}
-  .k-topbar .ks-ev .k-ev-name{font-size:14px;max-width:110px}
+  /* The event's name takes every pixel the buttons leave, at a size that follows the screen, for every role */
+  .k-topbar .k2-eventbar .k-nav-context{flex:1 1 0;min-width:0}
+.k-topbar .k2-eventbar > .sp{display:none}
+/* useFitText (EventView) sets the name's size inline; on a phone a long name may wrap onto a second line */
+html body .k-topbar .ks-ev .k-ev-name.is-2l{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;line-height:1.12;overflow-wrap:anywhere;text-overflow:clip}
+  .k-topbar .k2-eventbar > .sp{display:none}
+  .k-topbar .k2-eventbar .ks-ev{min-width:0;gap:6px}
+  html body .k-topbar .ks-ev .k-ev-name{flex:0 1 auto;min-width:2.5em;max-width:none;font-family:Manrope,system-ui,sans-serif;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+  /* Live: a lime dot on the logo's corner, so the name keeps the space a chip would take */
+  .k-topbar .ke2-nav.k2-eventbar{position:relative}
+  .k-topbar .k2-eventbar .k2-livechip{position:absolute;left:30px;top:13px;width:14px;height:14px;min-width:0;padding:0;border-radius:50%;justify-content:center;box-shadow:0 0 0 2px var(--canvas,#eef1ea);z-index:1}
+  .k-topbar .k2-eventbar .k2-livechip .dot{width:6px;height:6px;margin:0}
+  .k-topbar .k2-evmenu{width:40px;height:40px;padding:0;justify-content:center;border-radius:999px}
+  html body .k-topbar .k2-eventbar .k2-sos{min-width:0;height:40px;padding:0 11px;font-size:12px;box-shadow:2px 3px 0 var(--k-ink)}
+  .k-topbar .k2-eventbar .k-nav-actions{gap:6px}
   html body .ev:not(.ev-native) .ev-body{grid-template-columns:minmax(0,1fr)}
   html body .ev:not(.ev-native) .ev-main{padding:14px 12px 110px}
   html body .ev:not(.ev-native) .k2-pagehead h2{font-size:26px}
@@ -302,7 +331,7 @@ html body .leaflet-tooltip.k2-ztip::before{display:none}
 .k2-qt button[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--ink)}
 @media (max-width: 767.98px){
   .kp-live.k2-live{grid-template-columns:minmax(0,1fr)}
-  .k2-maplegend{position:static;max-width:none;margin-top:8px;background:transparent;padding:0}
+  .k2-maplegend{position:static;max-width:none;margin-top:10px;background:transparent;padding:0;justify-content:center;text-align:center}
 }
 
 /* Timeline (the website; the phone app keeps its own arrangement of these parts) */
@@ -312,6 +341,17 @@ html:not(.native-app) body .ev .pv-board.is-empty{background:#fff;border-radius:
 html:not(.native-app) body .ev .pv-board-head{display:block;background:transparent;padding:0;border:0;margin:0}
 .k2-planbar{margin-bottom:14px}
 .k2-planbtn{max-width:min(420px,100%)}
+/* Phones: the picker takes the row with its chips and menu beside it, Publish gets a row of its own, and the run line
+   under it has room to breathe */
+@media (max-width: 575.98px){
+  .k2-planbar{gap:10px 8px;margin-bottom:12px}
+  .k2-planbar > .wrapm:first-child{flex:1 1 0;min-width:0}
+  .k2-planbar .k2-planbtn{width:100%;max-width:none}
+  .k2-planbar > .sp{display:none}
+  .k2-planbar [data-testid="plan-publish"]{flex:1 1 100%;height:44px;justify-content:center}
+  html body .ev .pv-board .pv-run{padding:10px 12px;border-radius:14px;border:1px solid var(--pv-line);margin-bottom:12px}
+  .pv-run-line{row-gap:4px}
+}
 .k2-createplan{margin-bottom:14px;gap:8px;flex-wrap:wrap}
 html:not(.native-app) body .ev .pv-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto 1fr;gap:12px 16px;align-items:start;height:auto;min-height:0;overflow:visible}
 html:not(.native-app) body .ev .pv-stage{grid-column:1;grid-row:1;position:relative;border-radius:24px;overflow:hidden;height:auto;min-height:0}
@@ -390,7 +430,7 @@ html:not(.native-app) body .ev .bench-map{height:min(66vh,620px);border-radius:2
 /* Overview, Rehearsals */
 .ov2-qr img{display:block;border-radius:12px;background:#fff;padding:6px}
 .k2-rehearsal{width:100%;grid-template-columns:64px minmax(0,1fr) auto;border-left:0;border-right:0;border-bottom:0;background:none;text-align:left;color:var(--ink)}
-.k2-rehearsal:hover{background:var(--canvas)}
+button.k2-rehearsal:hover{background:var(--canvas)}
 .ov2-inv .link{color:#fff}
 
 /* The bridge's reset for a .row's children (width:auto, padding:0) must not reach the design's fixed-size parts */
@@ -424,6 +464,14 @@ html:not(.native-app) body .ev .pv-route.is-crowded .pv-route-dot-label{display:
 html:not(.native-app) body .ev .pv-route.is-crowded .pv-route-dot.is-focused .pv-route-dot-label{display:block}
 .k2-maplegend{bottom:28px}
 @media (max-width: 767.98px){.k-topbar .k2-sos{font-size:12px}}
+/* The narrowest phones: every round button in the event bar steps down to 36px so the name keeps a few words */
+@media (max-width: 379.98px){
+  html body .k-topbar .ke2-nav.k2-eventbar{padding:0 8px;gap:5px}
+  .k-topbar .k2-eventbar .k-nav-actions{gap:5px}
+  .k-topbar .k2-eventbar .k2-evmenu,.k-topbar .k2-eventbar .k2-loc,.k-topbar .k2-eventbar .ks-av{width:36px;height:36px}
+  html body .k-topbar .k2-eventbar .k2-sos{height:36px;padding:0 9px}
+  .k-topbar .k2-livechip{width:22px;height:22px}
+}
 
 html:not(.native-app) body .ev .pv-hint{bottom:auto;height:auto}
 .k2-planbtn{color:var(--ink)}
@@ -495,6 +543,11 @@ html body .k .ksel:after{display:none}
 
 /* Map: Done ends the job, at the row's far end */
 .k2-benchside .k2-done{margin-left:auto}
+/* An area's Delete sits beside its Done, so nothing hangs under the area's fields */
+.k2-benchside .k2-areaend{display:flex;gap:6px;align-items:center;margin-left:auto;flex:none}
+.k2-benchside .k2-areaend > .k2-areadel{flex:none;width:36px;height:36px;padding:0;justify-content:center;color:var(--k-red,#c2410c);box-shadow:inset 0 0 0 1.5px var(--k-red,#c2410c)}
+.k2-benchside .k2-areadel:disabled{opacity:.45}
+.k2-benchside .k2-areaend > .k2-done{margin-left:0}
 .k .row > .kb.kb-sm{padding:0 14px!important}
 /* Timeline: the marker in each Groups row, the one on the map */
 .k2-rowmarker{flex:none;width:26px!important;height:26px;font:700 10px Manrope}
@@ -642,6 +695,12 @@ html:not(.native-app) body .ev .k2-live .kp-live-map .position-relative.mb-3{mar
 .k2-liveside > .k2-tabs{flex:none;gap:0;margin:0 10px 0 -6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 .k2-liveside > .k2-tabs::-webkit-scrollbar{display:none}
 .k2-liveside > .k2-tabs button{flex:none;padding:0 10px;white-space:nowrap}
+/* Phones: the four tabs share the width instead of running off the edge (a half-shown tab gave no hint it scrolled) */
+@media (max-width: 575.98px){
+  .k2-liveside > .k2-tabs{margin:0 0 0 -2px}
+  .k2-liveside > .k2-tabs button{flex:1 1 auto;min-width:0;padding:0 4px;font-size:clamp(11.5px,3.4vw,13.5px)}
+  .k2-liveside > .k2-tabs .n{margin-left:3px}
+}
 .k2-liveside-body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 10px 18px 0}
 .k2-liveside-body::-webkit-scrollbar{width:8px}
 .k2-liveside-body::-webkit-scrollbar-track{background:rgba(10,31,23,.05);border-radius:999px}
@@ -809,7 +868,11 @@ html body .k2-sel .k2-sel-btns button:disabled{opacity:.4;cursor:default}
 .kp-card form > .kp-actions:not(:first-child),.kp-card > .kp-actions:not(:first-child){margin-top:16px}
 .k2-arealist{gap:8px;margin-top:16px;margin-bottom:4px}
 .k2-arealist button.is-locked{background:var(--k-bg2,#f3f4ee)}
-.plan-row.is-locked{padding:8px 12px;border-radius:14px}
+/* Floor plan rows: every row has the same inset and rounding, so a locked row's shading and the hover's shading
+   sit on the same picture, name box and switch positions as a plain row */
+.plan-row{padding:0 10px;border-radius:14px}
+.plan-row + .plan-row{margin-top:6px}
+.plan-row > .k2-fp{border-top:0;padding:8px 0}
 .plan-scroll{display:flex;flex-direction:column;gap:8px;padding-right:6px}
 
 /* A pale group colour (yellow, sky) still reads on the map: a thin ink ring beside the white one */
@@ -1003,3 +1066,148 @@ html body :is(.pv-ops-error-x,.pv-strip-close):hover{background:rgba(10,31,23,.1
 .k2-tabs[data-slide] > button[aria-selected="true"]{border-bottom-color:transparent}
 @media (prefers-reduced-motion: reduce){:is(.k2-mini,.k2-opsfilter,.k2-tabs)[data-slide="on"]::before{transition:none}}
 .k2-mini button .ki{width:14px;height:14px;vertical-align:middle}
+
+/* ===== The event's top bar between phone and wide desktop (768-1199px): the desktop buttons left the name 0px wide.
+   The name takes what the buttons leave at every width, and up to 1200px the buttons are the phone's round icons. ===== */
+.k-topbar .k2-eventbar .k-nav-context{flex:1 1 0;min-width:0}
+.k-topbar .k2-eventbar > .sp{display:none}
+/* useFitText (EventView) sets the name's size inline; on a phone a long name may wrap onto a second line */
+html body .k-topbar .ks-ev .k-ev-name.is-2l{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;line-height:1.12;overflow-wrap:anywhere;text-overflow:clip}
+.k-topbar .k2-eventbar .ks-ev{min-width:0}
+html body .k-topbar .k2-eventbar .ks-ev .k-ev-name{flex:0 1 auto;min-width:2.5em}
+.k-topbar .k2-livechip{flex:none}
+@media (min-width: 768px) and (max-width: 1199.98px){
+  .k-topbar .k2-eventbar > .sp{display:none}
+  .k-topbar .k2-eventbar .k2-hm{display:none}
+  .k-topbar .k2-eventbar .k2-sm{display:inline}
+  .k-topbar .k2-livechip{width:26px;height:26px;padding:0;justify-content:center}
+  .k-topbar .k2-evmenu{width:40px;height:40px;padding:0;justify-content:center;border-radius:999px}
+  .k-topbar .k2-eventbar .k2-loc{position:relative;width:40px;height:40px;padding:0;justify-content:center}
+  .k-topbar .k2-eventbar .k2-loc span{display:none}
+  .k-topbar .k2-eventbar .k2-loc .dot{position:absolute;top:1px;right:1px;width:11px;height:11px;border-radius:50%;box-shadow:0 0 0 2px #fff}
+}
+/* The invite card: the code and the QR side by side only when both fit; the code's size follows the card */
+.ov2-code{font-size:clamp(30px,3.4vw,46px);overflow-wrap:anywhere}
+@media (max-width: 1279.98px){
+  .ov2-inv{grid-template-columns:minmax(0,1fr)}
+  .ov2-qr{flex-direction:row;justify-content:flex-start}
+}
+
+/* A menu with no room under its button opens above it (useOpenMenu's placeMenu adds the class) */
+html body .k .menu.is-up,html body .k2-cal.is-up{top:auto!important;bottom:calc(100% + 8px)}
+
+/* A table that becomes one block per row on a phone (the group details). Its own class: .pv-stack is the plan board's
+   row of buttons, a flex box, and a table given it fell apart on the desktop. On the phone each field's name sits
+   right above its own box, two to a line, instead of a header row that cannot line up with them. */
+@media (max-width:767px){
+  html:not(.native-app) .k2-stacktable thead{display:none}
+  html:not(.native-app) .k2-stacktable,html:not(.native-app) .k2-stacktable tbody{display:block;width:100%}
+  html:not(.native-app) .k2-stacktable tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 10px;padding:12px 0;border-bottom:1px solid var(--k-line)}
+  html:not(.native-app) .k2-stacktable tr:last-child{border-bottom:0}
+  html:not(.native-app) .k2-stacktable td{display:block;border:0;padding:0;min-width:0}
+  html:not(.native-app) .k2-stacktable td:first-child{grid-column:1/-1;font-weight:700}
+  /* Folded: only the group's line shows; tapping it opens its fields */
+  html:not(.native-app) .k2-stacktable tr:not(.is-open) > td:not(:first-child){display:none}
+  html:not(.native-app) .k2-stacktable tr{padding:4px 0}
+  html:not(.native-app) .k2-stacktable tr.is-open{padding-bottom:12px}
+  .k2-gdtoggle{pointer-events:auto!important;cursor:pointer!important;min-height:44px}
+  .k2-gdchev{display:block!important}
+  tr.is-open .k2-gdchev{transform:rotate(180deg)}
+  html:not(.native-app) .k2-stacktable td:last-child{grid-column:1/-1;display:flex;justify-content:flex-end;margin-top:8px}
+  html:not(.native-app) .k2-stacktable td[data-label]::before{content:attr(data-label);display:block;font:600 12px Manrope;color:var(--k-mut,#6b7280);margin:6px 0 3px}
+}
+
+/* A group's details as named chips: "Code A", "Category B" */
+.k2-factchips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
+.k2-factchip{gap:5px;max-width:100%;min-width:0}
+.k2-factchip i{font-style:normal;font-weight:600;opacity:.6}
+.k2-factchip .v{min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* A narrow phone: the area's four buttons still fit on one line */
+@media (max-width:400px){
+  .k2-benchside .row > .k2-pillbtn:not(.k2-areadel){padding:0 9px!important}
+  .k2-benchside .k2-areaend > .kb.kb-sm.k2-done{padding:0 11px!important}
+}
+
+/* The group details' name cell. Wide: plain text (the row is already one line). Phone: the fold's button. */
+.k2-gdtoggle{display:flex;align-items:center;gap:6px;width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;pointer-events:none;cursor:default}
+.k2-gdname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.k2-gdunsaved{flex:none;font:700 11px Manrope;color:var(--k-red,#c2410c)}
+.k2-gdchev{display:none;width:18px;height:18px;margin-left:auto;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.k2-gdname{flex:0 1 auto}
+/* Wide: many groups scroll inside the card, under a header that stays put */
+@media (min-width:768px){
+  [data-testid="group-details"] .table-responsive{max-height:min(60vh,560px);overflow-y:auto}
+  [data-testid="group-details"] .k2-stacktable thead th{position:sticky;top:0;z-index:1;background:var(--k-bg2,#f3f4ee)}
+}
+
+/* Phone More sheet: the event's state and who you are in it (the desktop's top bar and "You" card) */
+.k2-more-you{display:flex;flex-direction:column;gap:10px;padding:12px 14px;margin-bottom:12px;border-radius:16px;background:var(--k-bg)}
+.k2-more-state{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
+.k2-more-you .k-you-pills{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.k2-more-you .k-you-pills{margin-left:0;flex:none}
+
+/* The short default name is for the narrowest phones only (see max-width 379.98px) */
+.k2-rec-short{display:none}
+/* A recording's "until" date: its own column when there is room, the detail line on a phone */
+.k2-rec-until{display:none}
+@media (max-width: 767.98px){.k2-rec-until{display:block}}
+.k2-rad-lab{display:none;font-size:12px;font-weight:700}
+@media (max-width: 767.98px){.k2-rad-lab{display:inline}}
+/* People on a phone: a name and its group line wrap rather than end in "…" (there is no hover to read the rest) */
+@media (max-width: 767.98px){.k2-pp .text-truncate{white-space:normal!important;overflow-wrap:anywhere}}
+/* A page's own Back link (Profile): shown at every width, unlike the top bar's crumb */
+html body .ks-crumb.k2-backlink{display:inline-flex;margin-bottom:12px;min-height:36px;color:var(--k-ink)}
+html body .k2-backlink .ki{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* Filters: buttons when there is room, one dropdown on a phone */
+.k2-segsel{display:none}
+@media (max-width: 767.98px){
+  .k2-filterrow .k2-segbtns{display:none!important}
+  .k2-filterrow .k2-segsel{display:block;flex:1 1 0;min-width:0}
+  .k2-filterrow .k2-segsel select{width:100%}
+}
+/* The IC radius: a small dropdown */
+
+/* The IC radius: − 30 m +, all one height, no box of its own */
+.k2-rad{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0;background:none;box-shadow:none!important}
+.k2-radbtn{flex:none;width:26px;height:26px;border:0;border-radius:999px;background:var(--k-bg);color:var(--k-ink);font:800 15px/1 Manrope;display:grid;place-items:center;padding:0}
+.k2-radbtn:disabled{opacity:.35}
+.k2-radval{min-width:38px;text-align:center;font:700 13px Manrope;color:var(--k-ink);white-space:nowrap}
+.k2-pp{grid-template-columns:minmax(0,1.5fr) 150px 190px 44px}
+/* A person on a phone. Line 1: name, then the IC and role tags together at the right. Line 2: the radius under the
+   name, the role dropdown and ⋯ at the right. */
+.k2-pp-tags{display:none}
+@media (max-width: 767.98px){
+  .k2-pp{grid-template-columns:40px minmax(0,1fr) auto 32px;column-gap:10px;row-gap:6px}
+  .k2-pp > .row{grid-column:1/-1;grid-row:1}
+  .k2-pp-tags{display:flex;flex:none!important;gap:6px;margin-left:auto;align-items:center}
+  .k2-pp-tags .chip{height:24px}
+  .k2-pp .k2-pp-icchip,.k2-pp .k2-pp-rolechip{display:none}
+  .k2-pp .k2-ic{grid-column:2;grid-row:2;padding-left:0;justify-self:start}
+  .k2-pp > div:nth-child(2){grid-column:3;grid-row:2;justify-self:end}
+  .k2-pp > div:nth-child(2):not(:has(select)){display:none}
+  .k2-pp > .wrapm{grid-column:4;grid-row:2}
+  .k2-pp .k2-ic:not(:has(.k2-rad, .k2-rad-lab)){display:none}
+  .k2-pp .k2-sel-sm{width:auto!important;white-space:nowrap}
+  .k2-pp .ksel{width:auto!important}
+}
+.k2-radbtn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+/* People on a phone, line 2: every role dropdown one width ("Group Admin" is the longest, at 12px), and a radius
+   control small enough to sit beside it with its − and + both in reach */
+@media (max-width: 767.98px){
+  .k2-pp{grid-template-columns:40px minmax(0,1fr) 116px 28px;column-gap:8px}
+  html body .k2-pp select.k2-sel-sm:not([multiple]):not([size]){width:116px!important;font-size:12px;padding:0 24px 0 10px;background-position:right 8px center}
+  .k2-pp .ksel{width:116px!important}
+  .k2-pp .k2-rad{gap:3px}
+  .k2-pp .k2-rad-lab{font-size:11px}
+  .k2-pp .k2-radbtn{width:24px;height:24px}
+  .k2-pp .k2-radval{min-width:32px;font-size:12px}
+}
+/* The narrowest phones: the radius starts under the picture, so it still clears the dropdown */
+.k2-pplist{container-type:inline-size}
+@container (max-width: 330px){
+  .k2-pp .k2-ic{grid-column:1/3!important}
+}
+@container (max-width: 290px){
+  .k2-pp .k2-rad .k2-rad-lab{display:none}
+}

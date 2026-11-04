@@ -191,17 +191,31 @@ async function remove(m) {
 
 // How close this IC's phone must be to a moment's point for the tick to close it (063). A planner sets it here; the IC
 // sets their own on their "My GPS details" page, and the database refuses anybody outside those three doors.
-async function changeTolerance(m, input) {
-  const metres = Math.round(Number(input.value))
-  if (!Number.isFinite(metres)) {
-    input.value = m.toleranceM // not a number: put the stored one back
-    return
-  }
-  const ok = await run(
-    () => setArrivalTolerance(props.eventId, m.id, metres),
-    m.display_name + ' now counts as arrived within ' + metres + ' m.',
-  )
-  if (!ok) input.value = m.toleranceM // refused: the list did not change, so put the field back by hand
+// The IC radius: − and + in steps of 5 m (the database allows 5 to 100). Presses add up on screen and are saved once,
+// a moment after the last one, so tapping + three times is one save of +15 m.
+const RADIUS_MIN = 5
+const RADIUS_MAX = 100
+const radiusDraft = ref({}) // person id -> metres shown while a save waits
+const radiusTimers = {}
+const radiusOf = (m) => (radiusDraft.value[m.id] != null ? radiusDraft.value[m.id] : m.toleranceM)
+function stepRadius(m, by) {
+  const now = Number(radiusOf(m)) || 30
+  const next = Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, Math.round((now + by) / 5) * 5))
+  if (next === now) return
+  radiusDraft.value = { ...radiusDraft.value, [m.id]: next }
+  clearTimeout(radiusTimers[m.id])
+  radiusTimers[m.id] = setTimeout(() => saveRadius(m), 700)
+}
+async function saveRadius(m) {
+  const metres = radiusDraft.value[m.id]
+  if (metres == null || metres === m.toleranceM) return clearDraft(m)
+  await run(() => setArrivalTolerance(props.eventId, m.id, metres), m.display_name + ' now counts as arrived within ' + metres + ' m.')
+  clearDraft(m)
+}
+function clearDraft(m) {
+  const rest = { ...radiusDraft.value }
+  delete rest[m.id]
+  radiusDraft.value = rest
 }
 </script>
 
@@ -260,7 +274,14 @@ async function changeTolerance(m, input) {
     </div>
 
     <div class="k2-filterrow k" data-testid="people-role-filter">
-      <div class="seg k2-wrapseg" role="group" aria-label="Filter by role">
+      <!-- A phone: one dropdown, since the role buttons do not fit on a line -->
+      <div class="ksel k2-segsel">
+        <label for="people-role-sel" class="visually-hidden">Filter by role</label>
+        <select id="people-role-sel" v-model="roleFilter" data-testid="people-role-select">
+          <option v-for="b in roleButtons" :key="b.key" :value="b.key">{{ b.label }} ({{ b.n }})</option>
+        </select>
+      </div>
+      <div class="seg k2-wrapseg k2-segbtns" role="group" aria-label="Filter by role">
         <button v-for="b in roleButtons" :key="b.key" type="button" :aria-pressed="roleFilter === b.key ? 'true' : 'false'" :data-testid="'people-role-' + b.key" @click="roleFilter = b.key">
           {{ b.label }} <span style="opacity: 0.6">{{ b.n }}</span>
         </button>
@@ -271,14 +292,19 @@ async function changeTolerance(m, input) {
       <EmptyState v-if="!rows.length" compact icon="search" title="No one matches" text="Try another name or filter." data-testid="people-empty" />
       <template v-else>
         <div class="k2-pp hd" aria-hidden="true"><span>Person</span><span>Role</span><span>IC radius</span><span></span></div>
-        <div data-testid="people-list">
+        <div class="k2-pplist" data-testid="people-list">
           <div v-for="r in rows" :key="r.m.id" class="k2-pp" :data-testid="'person-' + r.m.username">
             <div class="row" style="gap: 10px; min-width: 0">
               <span class="av" :style="{ backgroundColor: groupColour(r.m.groupId), color: textOn(groupColour(r.m.groupId)) }" aria-hidden="true">{{ initials(r.m.display_name) }}</span>
               <div style="min-width: 0">
                 <b class="d-block text-truncate" style="font-size: 14px">{{ r.m.display_name }}<span v-if="r.isMe" class="mut" style="font-weight: 500"> (you)</span></b>
-                <span class="mut d-block text-truncate" style="font-size: 12px">{{ groupName(r.m.groupId) }}<template v-if="r.m.isAdmin && r.role !== 'admin'"> · Group admin</template></span>
+                <span class="mut d-block text-truncate" style="font-size: 12px">{{ groupName(r.m.groupId) }}<template v-if="r.m.isAdmin && r.role !== 'admin'"> · Group Admin</template></span>
               </div>
+              <!-- A phone: the person's tags together at the right of their name (wider screens give them columns) -->
+              <span v-if="r.m.isIC || !r.actions.role" class="k2-pp-tags" aria-hidden="true">
+                <span v-if="r.m.isIC" class="chip chip-soft">IC</span>
+                <span v-if="!r.actions.role" class="chip" :class="r.role === 'root' ? 'chip-ink' : r.role === 'planner' ? 'chip-mint' : 'chip-soft'">{{ ROLE_LABEL[r.role] }}</span>
+              </span>
             </div>
             <div>
               <template v-if="r.actions.role">
@@ -291,17 +317,19 @@ async function changeTolerance(m, input) {
                   </select>
                 </div>
               </template>
-              <span v-else class="chip" :class="r.role === 'root' ? 'chip-ink' : r.role === 'planner' ? 'chip-mint' : 'chip-soft'" :data-testid="'person-role-' + r.m.username">{{ ROLE_LABEL[r.role] }}</span>
+              <span v-else class="chip k2-pp-rolechip" :class="r.role === 'root' ? 'chip-ink' : r.role === 'planner' ? 'chip-mint' : 'chip-soft'" :data-testid="'person-role-' + r.m.username">{{ ROLE_LABEL[r.role] }}</span>
             </div>
             <div class="k2-ic">
               <template v-if="r.m.isIC">
-                <span class="chip chip-soft" style="height: 24px" :data-testid="'person-ic-' + r.m.username">IC</span>
+                <span class="chip chip-soft k2-pp-icchip" style="height: 24px" :data-testid="'person-ic-' + r.m.username">IC</span>
                 <!-- An IC's arrival radius: how close their phone must be for a moment to close itself (063). -->
-                <span v-if="r.actions.radius" class="k2-rad">
-                  <label :for="'tol-' + r.m.id" class="visually-hidden">IC radius of {{ r.m.display_name }}</label>
-                  <input :id="'tol-' + r.m.id" type="number" min="5" max="100" step="5" :value="r.m.toleranceM" :disabled="busy" :data-testid="'person-tolerance-' + r.m.username" @change="changeTolerance(r.m, $event.target)" />m
+                <span v-if="r.actions.radius" class="k2-rad" role="group" :aria-label="'Arrival radius of ' + r.m.display_name" title="How close this IC's phone must be to a stop for it to count as arrived">
+                  <span class="k2-rad-lab mut" aria-hidden="true">Radius</span>
+                  <button type="button" class="k2-radbtn" :disabled="busy || radiusOf(r.m) <= RADIUS_MIN" :aria-label="'Smaller radius for ' + r.m.display_name" :data-testid="'person-tolerance-down-' + r.m.username" @click="stepRadius(r.m, -5)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"></path></svg></button>
+                  <b class="k2-radval" aria-live="polite" :data-testid="'person-tolerance-' + r.m.username">{{ radiusOf(r.m) }} m</b>
+                  <button type="button" class="k2-radbtn" :disabled="busy || radiusOf(r.m) >= RADIUS_MAX" :aria-label="'Larger radius for ' + r.m.display_name" :data-testid="'person-tolerance-up-' + r.m.username" @click="stepRadius(r.m, 5)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"></path></svg></button>
                 </span>
-                <span v-else-if="r.m.toleranceM != null" class="mut" style="font-size: 13px; font-weight: 700">{{ r.m.toleranceM }} m</span>
+                <span v-else-if="r.m.toleranceM != null" class="mut" style="font-size: 13px; font-weight: 700"><span class="k2-rad-lab">Radius </span>{{ r.m.toleranceM }} m</span>
               </template>
               <span v-else class="mut k2-ic-none">—</span>
             </div>

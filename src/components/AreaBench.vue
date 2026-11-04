@@ -2950,12 +2950,13 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
                 type="button"
                 class="k2-pillbtn"
                 :disabled="editingArea.points.length >= AREA_MAX_POINTS"
-                :title="editingArea.points.length >= AREA_MAX_POINTS ? 'An area can have at most ' + AREA_MAX_POINTS + ' points' : ''"
+                :title="editingArea.points.length >= AREA_MAX_POINTS ? 'An area can have at most ' + AREA_MAX_POINTS + ' points' : 'Add a dot to the outline, then drag it to reshape the area'"
                 data-testid="area-add-point"
                 @click="addAreaPoint"
               >Add point</button>
               <button type="button" class="k2-pillbtn" title="Make a copy of this area" data-testid="area-duplicate" @click="emit('area-duplicated', editingArea)">Duplicate</button>
-              <button type="button" class="kb kb-lime kb-sm k2-done" title="Finish editing this area" data-testid="area-shape-done" @click="mode = null"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Done</button>
+              <span class="k2-areaend"><button type="button" class="k2-pillbtn k2-areadel" :disabled="Boolean(editingArea.locked)" :title="'Delete ' + editingArea.name" :aria-label="'Delete ' + editingArea.name" data-testid="area-shape-delete" @click="deleteAreaAsk(editingArea)"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg></button>
+              <button type="button" class="kb kb-lime kb-sm k2-done" title="Finish editing this area" data-testid="area-shape-done" @click="mode = null"><svg class="ki" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>Done</button></span>
             </div>
           </template>
 
