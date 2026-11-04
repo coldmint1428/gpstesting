@@ -229,11 +229,22 @@ const SEGMENTS = [
     wizardEvent = page.url().match(/events\/([0-9a-f-]{36})/)[1]
     await wait(3000)
   }],
-  [3, 'Draw the venue', 35, async () => {
+  [3, 'Draw the venue', 40, async () => {
     await page.goto(`/events/${EV}/map`)
     const draw = page.getByRole('button', { name: 'Draw area' })
     await draw.waitFor({ timeout: 30_000 })
-    await wait(1500)
+    // The map flies from its first view to the event's areas: corners placed mid-flight land in the wrong place, so
+    // wait until the areas are drawn and the map has stopped moving
+    await page.locator('.bench-map path.leaflet-interactive').first().waitFor({ timeout: 30_000 }).catch(() => {})
+    let last = null
+    for (let i = 0; i < 20; i++) {
+      const b = await page.locator('.bench-map path.leaflet-interactive').first().boundingBox().catch(() => null)
+      const key = b && [b.x, b.y, b.width].map(Math.round).join(',')
+      if (key && key === last) break
+      last = key
+      await page.waitForTimeout(400)
+    }
+    await wait(800)
     await press(draw)
     const map = page.locator('.bench-map')
     const box = await map.boundingBox()
@@ -244,6 +255,13 @@ const SEGMENTS = [
       await wait(350)
     }
     await write(page.getByPlaceholder('e.g. Trees'), 'Esplanade Park')
+    // Its type is picked while drawing: No-Go, so anyone walking in lights up on the live map
+    const draftKind = byId('area-kind')
+    if (await draftKind.isVisible().catch(() => false)) {
+      await point(draftKind)
+      await draftKind.selectOption('no_go').catch(() => {})
+      await wait(800)
+    }
     await press(page.getByRole('button', { name: 'Save area' }), 1200)
     const kind = byId('area-kind-select-Esplanade Park')
     if (await kind.count()) await kind.selectOption('no_go').catch(() => {})
@@ -254,7 +272,7 @@ const SEGMENTS = [
     await page.goto(`/events/${EV}/timeline`)
     await byId('plan-picker').waitFor({ timeout: 30_000 })
     await wait(2000)
-    for (const file of ['ndp-ne4-demo-broken.csv', 'ndp-ne4-demo.csv']) {
+    for (const file of ['ndp-ne4-demo.csv']) { // no distance rule since 091: a long jump is not refused, so no broken copy
       await press(byId('plan-more'))
       await point(byId('sheet-import'))
       await wait(400)
@@ -262,7 +280,7 @@ const SEGMENTS = [
       await byId('sheet-file').setInputFiles(path.join('docs', 'demo', file))
       await wait(1500)
       await confirmIfAsked()
-      await wait(file.includes('broken') ? 5000 : 8000)
+      await wait(8000)
       const dismiss = byId('plan-refusal-dismiss')
       if (await dismiss.isVisible().catch(() => false)) await press(dismiss)
     }
@@ -312,44 +330,26 @@ const SEGMENTS = [
     }
     await wait(3000)
     await planner.close()
-    // Then a badge dragged a few hundred metres in one frame: more than 25 m, and the Problems panel says so
+    // Then a badge walked straight through the No-Go area drawn in segment 3 (red, dashed): the Problems panel says so,
+    // and Publish is locked until it's fixed. One Undo puts the badge back.
+    const nogo = page.locator('.pv-map path[stroke="#DC2626"]').first()
+    const z = (await nogo.count()) ? await nogo.boundingBox().catch(() => null) : null
     const m = await page.locator('.pv-map .pv-marker').nth(2).boundingBox()
-    if (m) {
-      await page.mouse.move(m.x + m.width / 2, m.y + m.height / 2, { steps: 8 })
+    if (z && m) {
+      await page.mouse.move(m.x + m.width / 2, m.y + m.height / 2, { steps: 10 })
       await page.mouse.down()
-      for (let i = 1; i <= 20; i++) await page.mouse.move(m.x + m.width / 2 + 15 * i, m.y + m.height / 2 + 8 * i)
+      const to = { x: z.x + z.width / 2, y: z.y + z.height / 2 }
+      for (let i = 1; i <= 24; i++) await page.mouse.move(m.x + m.width / 2 + ((to.x - m.x - m.width / 2) * i) / 24, m.y + m.height / 2 + ((to.y - m.y - m.height / 2) * i) / 24)
       await page.mouse.up()
-    }
-    await wait(4000)
-    // The Problems panel: Fill all (or the one Fill) adds the frames in between
-    const panel = byId('plan-problems')
-    if (await panel.isVisible().catch(() => false)) await point(panel)
-    await wait(1500)
-    const fillAll = byId('gap-fill-all')
-    const fill = byId('gap-fill')
-    if (await fillAll.isVisible().catch(() => false)) await press(fillAll)
-    else if (await fill.first().isVisible().catch(() => false)) await press(fill.first())
-    await confirmIfAsked()
-    // A fix shows what it will change first (the green line and new frames on the map), then Apply writes it
-    const apply = byId('walk-fix-apply')
-    if (await apply.isVisible({ timeout: 4000 }).catch(() => false) || (await apply.waitFor({ timeout: 4000 }).then(() => true, () => false))) {
+      mouse = to
+      await wait(3500)
+      const panel = byId('plan-problems')
+      if (await panel.isVisible().catch(() => false)) await point(panel)
       await wait(2000)
-      await press(apply, 2500)
-    }
-    await wait(1500)
-    // The frames it added walk faster than running: warnings. Fix all timing says how much time it would add (shown,
-    // then left: moving every walk later takes the board a while), and the warnings are dismissed instead.
-    const fixAll = byId('problems-fix-all')
-    if (await fixAll.isVisible().catch(() => false)) {
-      await press(fixAll)
-      const cancel = byId('confirm-cancel')
-      if (await cancel.waitFor({ state: 'visible', timeout: 4000 }).then(() => true, () => false)) {
-        await wait(2500)
-        await press(cancel, 800)
-      }
-    }
-    const dismissAll = byId('problems-dismiss-all')
-    if (await dismissAll.isVisible().catch(() => false)) await press(dismissAll, 1500)
+      await point(byId('plan-publish')) // locked while there is an error
+      await wait(1500)
+      await press(byId('undo'), 2500)
+    } else console.log('   (no No-Go area or badge on the timeline map to walk through)')
     await press(byId('plan-publish'), 1500)
     await confirmIfAsked()
     await wait(2500)
@@ -414,7 +414,15 @@ const SEGMENTS = [
   [9, 'Run it live', 55, async () => {
     await page.goto(`/events/${EV}/live`)
     await wait(2000)
-    await press(byId('start-event-btn'))
+    // Start waits for the plan list; on a slow load, reload once, as a person would
+    const start = byId('start-event-btn')
+    const ready = () => start.first().isEnabled({ timeout: 1000 }).catch(() => false)
+    for (let i = 0; i < 30 && !(await ready()); i++) await page.waitForTimeout(1000)
+    if (!(await ready())) {
+      await page.reload()
+      for (let i = 0; i < 30 && !(await ready()); i++) await page.waitForTimeout(1000)
+    }
+    await press(start)
     const engine = byId('start-engine')
     const opts = await engine.locator('option').allTextContents()
     const label = opts.find((o) => o.includes('NE4'))
@@ -502,9 +510,15 @@ const SEGMENTS = [
     clearInterval(walking)
     await page.goto(`/events/${EV}/live`)
     await wait(2000)
-    const menu = page.getByRole('button', { name: /Manage event/ })
-    if (await menu.isVisible().catch(() => false)) await press(menu)
-    await press(byId('end-event-btn'))
+    // Manage event → End event (the page has an End button per layout; only the shown one counts)
+    const menu = byId('event-menu-btn')
+    const end = page.getByTestId('end-event-btn').filter({ visible: true })
+    for (let i = 0; i < 2; i++) {
+      if (await end.first().isVisible().catch(() => false)) break
+      if (await menu.isVisible().catch(() => false)) await press(menu, 800)
+      await end.first().waitFor({ state: 'visible', timeout: 5000 }).catch(() => {})
+    }
+    await press(end)
     await write(byId('confirm-type'), 'END')
     await press(byId('confirm-ok'), 3000)
     await page.goto(`/events/${EV}/playback`)

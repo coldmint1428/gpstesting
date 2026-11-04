@@ -57,9 +57,40 @@ const event = must(await root.from('events').select('id, join_code').eq('id', ev
 // ---------- the venue: the Padang field and the contingents' casing location on Raffles Avenue ----------
 // Corners checked against OneMap's own map: the Padang between St Andrew's Road and Connaught Drive, from the
 // Recreation Club to the Cricket Club; the casing location where the NDP 25 map's casing routes start.
+// A piece of the Padang, by how far across it is: a from the St Andrew's Road side (0) to Connaught Drive (1), b from
+// the Victoria Concert Hall end (0) to the Recreation Club end (1). Its corners are the Padang's own, below.
+const PADANG = { west: [1.28977, 103.85213], north: [1.29192, 103.85301], east: [1.29116, 103.85381], south: [1.28947, 103.85324] }
+function padangAt(a, b) {
+  const { west: D, north: A, east: B, south: C } = PADANG
+  const mix = (i) => (1 - a) * (1 - b) * D[i] + (1 - a) * b * A[i] + a * b * B[i] + a * (1 - b) * C[i]
+  return [Math.round(mix(0) * 1e6) / 1e6, Math.round(mix(1) * 1e6) / 1e6]
+}
+function padangPart(a0, a1, b0, b1) {
+  return [padangAt(a0, b1), padangAt(a1, b1), padangAt(a1, b0), padangAt(a0, b0)]
+}
 const AREAS = [
   { name: 'Padang', kind: 'zone', code: 'PADANG', points: [[1.29192, 103.85301], [1.29116, 103.85381], [1.28947, 103.85324], [1.28977, 103.85213]] },
   { name: 'Casing Location', kind: 'zone', code: 'CASING', points: [[1.29135, 103.8557], [1.29135, 103.85615], [1.2909, 103.85615], [1.2909, 103.8557]] },
+  // The show's own layout on the field, as the Padang is built for an NDP: the performance floor in the middle, the big
+  // stand along Connaught Drive, a stand at each end, and the St Andrew's Road side left open (padangPart below)
+  { name: 'Performance Floor', kind: 'stage', code: 'FLOOR', points: padangPart(0.12, 0.7, 0.18, 0.8) },
+  { name: 'East Stand', kind: 'zone', code: 'EAST_STAND', points: padangPart(0.76, 0.97, 0.06, 0.94) },
+  { name: 'South Stand', kind: 'zone', code: 'SOUTH_STAND', points: padangPart(0.1, 0.7, 0.03, 0.14) },
+  { name: 'North Stand', kind: 'zone', code: 'NORTH_STAND', points: padangPart(0.1, 0.7, 0.86, 0.97) },
+  // The parade's formation on the floor, as NDP lays it out, rows from the St Andrew's Road side towards the big screen
+  // and the centre stage: the State Colours, the Guard of Honour, the Regimental Colours Party, the uniformed
+  // contingents, the Youth Uniform Groups, the Social and Economic Groups, then the Combined Band
+  { name: 'State Colours', kind: 'zone', code: 'STATE_COLOURS', points: padangPart(0.13, 0.17, 0.44, 0.56) },
+  { name: 'Guard of Honour', kind: 'zone', code: 'GUARD_OF_HONOUR', points: padangPart(0.19, 0.27, 0.22, 0.78) },
+  { name: 'Regimental Colours Party', kind: 'zone', code: 'COLOURS_PARTY', points: padangPart(0.29, 0.33, 0.26, 0.74) },
+  { name: 'Contingents', kind: 'zone', code: 'CONTINGENTS', points: padangPart(0.35, 0.44, 0.22, 0.78) },
+  { name: 'Youth Uniform Groups', kind: 'zone', code: 'YOUTH_UNIFORM_GROUPS', points: padangPart(0.46, 0.52, 0.3, 0.7) },
+  { name: 'Social and Economic Groups', kind: 'zone', code: 'SOCIAL_ECONOMIC_GROUPS', points: padangPart(0.54, 0.6, 0.24, 0.76) },
+  { name: 'Combined Band', kind: 'zone', code: 'COMBINED_BAND', points: padangPart(0.61, 0.67, 0.4, 0.6) },
+  { name: 'Centre Stage', kind: 'stage', code: 'CENTRE_STAGE', points: padangPart(0.67, 0.73, 0.43, 0.57) },
+  // The NDP 25 Main map's own posts and outlines (tools/demo/ndp-kml-areas.mjs): stations, access control points,
+  // medical posts and the contingents' holding area, each on its real coordinates
+  ...JSON.parse(fs.readFileSync('docs/demo/ndp25-areas.json', 'utf8')).areas.map(({ name, kind, code, points }) => ({ name, kind, code, points })),
 ]
 const bench = must(await root.rpc('open_bench', { p_event: eventId }), 'open bench')
 const layout = (Array.isArray(bench) ? bench[0] : bench).id
