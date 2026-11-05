@@ -55,8 +55,11 @@ test('a plan with no frames says to add the first one', async () => {
 
 test('a finger a little off a frame dot still opens that frame', async () => {
   const { sb } = await clientFor('root')
+  // runs alone too (-g): the first frame (t_s 0, what frame-add-first makes) comes from the test before, if it ran
+  const { data: frames } = await sb.rpc('plan_frames_list', { p_plan: planId })
+  if (!(frames || []).some((f) => f.t_s === 0)) await sb.rpc('frame_save', { p_plan: planId, p_frame: { t_s: 0 } })
   for (const t_s of [60, 120]) await sb.rpc('frame_save', { p_plan: planId, p_frame: { t_s } })
-  await page.reload()
+  await page.goto(`/events/${ev.eventId}/timeline`)
   await expect(page.locator('.pv-frame')).toHaveCount(3)
   const dot = page.locator('.pv-frame').nth(2)
   // Once the board under the strip is in (the page is too short to scroll before), then mid-screen, as a thumb would

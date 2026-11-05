@@ -61,6 +61,7 @@ test('the plan picker names the frame count, not a copy number', async () => {
 })
 
 test('a group with no position is placed with "Place on map" and one tap', async () => {
+  if (!page.url().includes('/timeline')) await page.goto(`/events/${ev.eventId}/timeline`) // runs alone too (-g)
   await page.getByTestId('insp-tab-groups').click() // the inspector's Groups tab (3 Nov redesign)
   const place = page.getByTestId('place-group')
   await expect(place).toHaveCount(2) // Alpha and Bravo: nobody is on the map yet

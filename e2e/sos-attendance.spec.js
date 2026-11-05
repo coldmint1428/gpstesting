@@ -132,8 +132,8 @@ test('the database refuses the people who may not end an SOS, and outsiders see 
 // ---------- Attendance ----------
 
 test('the IC takes a roll call by hand; the member sees they are marked present', async ({ browser }) => {
-  const ic = pages.ic1
-  const member = pages.member
+  const ic = await as(browser, 'ic1', PHONE)
+  const member = await as(browser, 'member', PHONE)
   await ic.goto(`/events/${ev.eventId}/attendance`)
   await expect(ic.getByTestId('attendance-run')).toBeVisible({ timeout: 20_000 })
   await ic.getByTestId('attendance-title').fill('Morning muster')
@@ -154,20 +154,20 @@ test('the IC takes a roll call by hand; the member sees they are marked present'
 })
 
 test('in QR mode the member checks in with the code on the IC\'s screen, and an old code is refused', async ({ browser }) => {
-  const root = pages.root
+  const root = await as(browser, 'root')
   await root.goto(`/events/${ev.eventId}/attendance`)
   // A segmented control since the 2 Nov redesign: the radio itself is hidden, its label is what is pressed
   await root.locator('label[for="att-mode-qr"]').click()
   await expect.poll(async () => (await (await clientFor('root')).sb.from('events').select('attendance_mode').eq('id', ev.eventId).single()).data.attendance_mode, { timeout: 15_000 }).toBe('qr')
 
-  const ic = pages.ic1
+  const ic = await as(browser, 'ic1', PHONE)
   await ic.goto(`/events/${ev.eventId}/attendance`)
   await ic.getByTestId('attendance-title').fill('Gate check')
   await ic.getByTestId('attendance-start').click()
   await expect(ic.getByTestId('attendance-qr')).toBeVisible({ timeout: 20_000 })
   await shot(ic, 'att-04-ic-qr', { fullPage: true })
 
-  const member = pages.member
+  const member = await as(browser, 'member', PHONE)
   await member.goto(`/events/${ev.eventId}/attendance`)
   await expect(member.getByTestId('attendance-scan')).toBeVisible({ timeout: 20_000 })
   await shot(member, 'att-05-member-scan')
