@@ -1,7 +1,7 @@
 // Each segment's cues: [action in the take's log, word in the narration that names it], in the order they happen.
 // Shared by the teleprompter (prompter.mjs) and the voice alignment (voiceover.mjs).
 export const CUES = {
-  1: [[/^open \/events$/, /^(think|planova|planover)$/], [/^segment actions done$/, /^(role|roles)$/]],
+  1: [[/^press NDP 2025/, /^lets$/], [/^press (tab-people|People)/, /^role$/], [/press people-role-root/, /^(root|route)$/], [/press people-role-planner/, /^planners?$/], [/press people-role-admin/, /^admin$/], [/press people-role-ic/, /^ic$/], [/press people-role-all/, /^(supabase|superbase|database)$/]],
   2: [[/type NDP Rehearsal 4/, /^details$/], [/press wiz-next/, /^(email|people)$/], [/type Navy/, /^(groups?|navy)$/], [/press wiz-confirm/, /^create$/]],
   3: [[/press Draw area/, /^(tap|corners?)$/], [/type Esplanade Park/, /^(name|esplanade)$/], [/press Save area/, /^(no-go|nogo|wanders?)$/], [/press area-lock-Padang/, /^(locked|lock)$/]],
   4: [[/sheet-import|plan-more/, /^(csv|run|sheets?)$/], [/press play$/, /^play$/], [/press zoom-in/, /^zoom$/], [/press frame-delete/, /^delete$/], [/press undo/, /^undo$/]],

@@ -32,6 +32,13 @@ if (cmd === 'add-phone') {
     const { error } = await sb.from('profiles').update({ display_name: on ? realName : qaName }).eq('id', user.id)
     console.log(`${who}: ${error ? 'error: ' + error.message : on ? realName : qaName}`)
   }
+} else if (cmd === 'role') {
+  // Segment 01 shows a Group Admin: the phone's account is one for that take (member again for the rest)
+  const [, ev, user, role] = process.argv.slice(2)
+  if (!ev || !user || !role) throw new Error('usage: role <event id> <user id> <member|admin|planner>')
+  const { sb } = await clientFor('root')
+  const { error } = await sb.rpc('set_member_role', { p_event_id: ev, p_user_id: user, p_new_role: role })
+  console.log(error ? 'error: ' + error.message : `${user} is now ${role}`)
 } else {
-  throw new Error('commands: add-phone <event id> <username> | names on | names off')
+  throw new Error('commands: add-phone <event id> <username> | names on | names off | role <event id> <user id> <role>')
 }

@@ -342,8 +342,23 @@ async function goLive() {
 const SEGMENTS = [
   [1, 'Intro, roles and how it works', 50, async () => {
     // Home is already open and drawn (loaded before the first segment): no second load on camera
-    await wait(3000)
-    await point(page.getByText('NDP 2025 NE4 Rehearsal').first())
+    await wait(2500)
+    const card = page.getByText('NDP 2025 NE4 Rehearsal').first()
+    await point(card)
+    await wait(3500)
+    // Into the event ("Planova lets you plan…"), moving inside the app so the page never reloads
+    await press(card, 1200)
+    if (!(await page.waitForURL(/\/events\/[0-9a-f-]{36}/, { timeout: 5000 }).then(() => true, () => false))) await page.goto(`/events/${EV}/overview`)
+    // "What you see depends on your role": People, then each role as it is named
+    const people = page.getByRole('link', { name: /^People\b/ }).filter({ visible: true }).first()
+    await people.waitFor({ state: 'visible', timeout: 20_000 })
+    await wait(1500)
+    await press(people, 800)
+    await pressWhenReady('people-role-root', 2800) // "The root sets up the event"
+    await pressWhenReady('people-role-planner', 2800) // "planners build the plan"
+    await pressWhenReady('people-role-admin', 2800) // "led by a Group Admin"
+    await pressWhenReady('people-role-ic', 3000) // "and an IC whose phone shares its location"
+    await pressWhenReady('people-role-all', 1500) // "a database that also enforces those roles"
   }],
   [2, 'Create an event', 40, async () => {
     await page.goto('/events/new')

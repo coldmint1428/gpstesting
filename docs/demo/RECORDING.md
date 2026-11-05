@@ -101,6 +101,16 @@ If a segment is wrong, fix the script and re-record. To try just a few segments,
 
 ### Retaking a few segments on the same event
 
+Segment 01 filters People by Root, Planner, Group Admin and IC, so it needs a Group Admin. The phone's account is one
+for that take only (it must be in P&C Contingent 3 first; `add-phone` puts it back if a planner role took it out):
+
+```bash
+node tools/demo/take-setup.mjs add-phone <event id> <phone user id>
+node tools/demo/take-setup.mjs role <event id> <phone user id> admin
+node tools/demo/director.mjs --event <event id> --shots --only 1
+node tools/demo/take-setup.mjs role <event id> <phone user id> member
+```
+
 A retake goes into its own run folder. Cut it like a full take (step 5), then copy its clips over the same-numbered ones.
 
 - Segments 10–13 need the event live. If it has already been ended, add `--go-live`: it starts the event on the
