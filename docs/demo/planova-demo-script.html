@@ -436,6 +436,48 @@ td.t { font-family: var(--mono); white-space: nowrap; }
     </div>
   </section>
 
+  <section aria-labelledby="h-make">
+    <h2 id="h-make">Recording and compiling</h2>
+    <p class="lede">The whole video is made by scripts in this repo, so any Claude Code session (or a person) can redo it. The full steps are in <code>docs/demo/RECORDING.md</code>; tell Claude: <i>"follow docs/demo/RECORDING.md and record the demo"</i>.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>1 · Set up</h3>
+        <ol>
+          <li><code>npm install</code>, then <code>cd tools/demo/video &amp;&amp; npm install</code>. The QA sign-ins in <code>.tmp/qa-accounts.json</code> must be on the laptop.</li>
+          <li>The phone: USB debugging on, the latest APK, Do Not Disturb on with Planova allowed.</li>
+          <li>Delete the old demo events (after a look at the list).</li>
+          <li><code>node tools/demo/seed-ndp-demo.mjs</code> makes the event: the real NDP 25 venue, 13 contingents.</li>
+          <li><code>node tools/demo/take-setup.mjs add-phone &lt;event&gt; &lt;username&gt;</code>, then open the event on the phone.</li>
+          <li><code>node tools/demo/take-setup.mjs names on</code> for realistic names on screen.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>2 · Record</h3>
+        <ol>
+          <li><code>node tools/demo/director.mjs --event &lt;event&gt; --phone --phone-user &lt;id&gt; --shots</code>: about 10 minutes. Don't touch the phone or the two Chrome windows.</li>
+          <li><code>node tools/demo/take-setup.mjs names off</code>, always; the tests need the QA names.</li>
+          <li>Check: no segment "stopped early", every end-of-segment screenshot matches its "On screen" above.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>3 · Cut and hand out</h3>
+        <ol>
+          <li>From <code>tools/demo/video</code>: <code>merge.mjs</code>, <code>split.mjs</code>, <code>prompter.mjs</code>.</li>
+          <li>Share <code>segments-prompter/</code>: each clip has a teleprompter, and each word lights up as it should be said, on the moment its action happens.</li>
+          <li>Each speaker records one file per segment, <code>NN Name.m4a</code>, into one folder.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>4 · Compile</h3>
+        <ol>
+          <li><code>transcribe.py</code> (faster-whisper, local): a time for every spoken word.</li>
+          <li><code>voiceover.mjs</code>: cleans each voice and lines the clip up word by word, so every action lands on its word.</li>
+          <li><code>compile.mjs</code>: a title card, the speaker's name and topic in the lower third, an animated testing slide, an end card and crossfades, giving <b>Planova - IS216 G11.mp4</b>. No teleprompter text.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
   <section aria-labelledby="h-vo">
     <h2 id="h-vo">Voice-over</h2>
     <p class="lede">The screens are recorded for you. Each speaker gets their segments as video clips, named with their name, and records their lines over them. The clips are then joined into one video.</p>
