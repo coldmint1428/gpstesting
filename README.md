@@ -623,7 +623,7 @@ Editor, in one transaction that rolls back.
 
 | Email | Password | Username | Role in "Test Event" |
 |---|---|---|---|
-| testuser1@gmail.com | 123456 | testuser1 | Root + planner (planning bench) |
+| testuser@gmail.com | testuser123 | testuser | Root + planner (planning bench) |
 | claude.playback.test@example.com | Pb-Test-48217q! | claude_test | Root of "Playback test (Claude)" - throwaway account used to test Start/End + playback |
 
 ## Testing with several users
