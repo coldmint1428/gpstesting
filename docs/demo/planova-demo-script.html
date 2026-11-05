@@ -89,6 +89,13 @@ td.t { font-family: var(--mono); white-space: nowrap; }
   .strip a { font-size: 0; }
 }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+.st { display: inline-flex; align-items: center; gap: 6px; font: 600 12px var(--body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--muted); color: var(--muted); margin: 2px 0 10px; }
+.st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st-done { background: var(--forest); border-color: var(--forest); color: var(--on-forest); }
+.st-voiced, .st-refine { border-color: var(--s5); color: var(--s5); }
+.progress { display: grid; gap: 8px; margin-top: 12px; }
+.progress .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.progress .row a { font: 600 13px var(--mono); color: inherit; }
 </style>
 
 <main>
@@ -104,6 +111,16 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <span class="fact">Export <b>1080p</b>, YouTube unlisted</span>
     </div>
   </header>
+
+  <section aria-labelledby="h-progress">
+    <h2 id="h-progress">Progress</h2>
+    <div class="progress">
+      <div class="row"><span class="st st-done">Done · 2</span><a href="#s1">01 Komin</a> <a href="#s16">16 Komin</a></div>
+      <div class="row"><span class="st st-voiced">Voiced, to refine · 1</span><a href="#s9">09 Komin</a></div>
+      <div class="row"><span class="st st-refine">To refine · 1</span><a href="#s4">04 Linus</a></div>
+      <div class="row"><span class="st st-recorded">Waiting for voice-over · 12</span><a href="#s2">02 rui</a> <a href="#s3">03 Hazel</a> <a href="#s5">05 Linus</a> <a href="#s6">06 Kenneth</a> <a href="#s7">07 Ern</a> <a href="#s8">08 Ern</a> <a href="#s10">10 Hazel</a> <a href="#s11">11 rui</a> <a href="#s12">12 Ern</a> <a href="#s13">13 rui</a> <a href="#s14">14 Kenneth</a> <a href="#s15">15 Kenneth</a></div>
+    </div>
+  </section>
 
   <section aria-labelledby="h-strip">
     <h2 id="h-strip">The twelve minutes, to scale</h2>
@@ -164,6 +181,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">0:00</span><span class="d">50 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>Intro, roles and how it works</h3>
+        <div class="st st-done" data-status="done">Done: recorded, roles shown as they are named, voiced (5 Nov)</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Home: the live event card, then Ongoing, Upcoming and Archive</li><li>One slide, "Under the hood": website and phone app → Supabase database → OneMap</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -177,6 +195,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">0:50</span><span class="d">40 s</span><span class="who" style="background:var(--s2)">rui</span></div>
       <div class="body">
         <h3>Create an event</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · waiting for rui's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Create event. Type as you talk: NDP Rehearsal 4, the Padang, Saturday 6 pm</li><li>People: type an email, Add</li><li>Groups: Navy and Air Force; tick an IC and a Group Admin</li><li>Review → Create event → Overview: code, QR, invite link</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -190,6 +209,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">1:30</span><span class="d">40 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
       <div class="body">
         <h3>Draw the venue</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · waiting for Hazel's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Cut to the NE4 event, Map page: the Padang as built for the parade (the floor, the three stands, the formation rows), and around it the posts from the NDP 25 Main map (KML): control stations, ACPs, medical posts, QRTs, the holding area and casing pens</li><li>Draw area: tap the corners of Esplanade Park, name it, type No-Go, Save</li><li>Padlock the Padang</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -203,6 +223,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">2:10</span><span class="d">70 s</span><span class="who" style="background:var(--s5)">Linus</span></div>
       <div class="body">
         <h3>Build the timeline</h3>
+        <div class="st st-refine" data-status="refine">Recorded · to refine: show frames being added, not an empty map · waiting for Linus's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Timeline: a new plan; Place on map for two groups</li><li>Add a frame at +5:00 and drag the badges</li><li>Import the NE4 show matrix CSV: 13 groups, 418 moments</li><li>Play at 60×, then 120×; Ctrl + wheel to zoom</li><li>Shift-click a stretch of frames, Delete, then Undo</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -216,6 +237,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">3:20</span><span class="d">45 s</span><span class="who" style="background:var(--s5)">Linus</span></div>
       <div class="body">
         <h3>Problems, and two planners at once</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · waiting for Linus's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>A second planner nudges a badge: it moves here too, held for them while they drag</li><li>A badge walked straight through the No-Go area from segment 3: the Problems panel shows the error</li><li>Publish is locked while there is an error; Undo puts the badge back, and the error clears</li><li>Publish</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -229,6 +251,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">4:05</span><span class="d">30 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
       <div class="body">
         <h3>Groups and people</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · waiting for Kenneth's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Groups: add one with its colour, sector and radio channel; tick its IC; delete a group</li><li>People: search, filter by group, change a role, set an IC's arrival radius</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -242,6 +265,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">4:35</span><span class="d">30 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
         <h3>Rehearsals</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · waiting for Ern's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Rehearsals: add one before the event day, with a note; then change its time</li><li>As a member: Not available, with a reason</li><li>As a planner: approve or turn down</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -255,6 +279,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">5:05</span><span class="d">35 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
         <h3>Taking attendance</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · waiting for Ern's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Attendance: New roll call → By hand; mark present or excused; Close → who's absent</li><li>QR roll call: the code on the IC's phone changes every 5 s; a member scans it</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -268,6 +293,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">5:40</span><span class="d">55 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>Run it live</h3>
+        <div class="st st-voiced" data-status="voiced">Recorded and voiced · to refine: slow down the move to the plan running 6 minutes late</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Start now → the NE4 plan → T+0: Now → Start event</li><li>Remind ICs</li><li>Live page, Operations: the clock; under way, due soon, no signal</li><li>Move the salute a minute later, Publish again; the IC's phone: "Your times changed"</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -281,6 +307,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">6:35</span><span class="d">70 s</span><span class="who" style="background:var(--s3)">Hazel</span></div>
       <div class="body">
         <h3>What members and ICs see</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · waiting for Hazel's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>The phone app as the Contingent 3 IC: Now, Map, Group, Info, More</li><li>Now: the route on a map, the stops, a countdown, LATE; tap We're here</li><li>Share my location → the set-up screens; lock the phone; the notification with Stop</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -294,6 +321,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">7:45</span><span class="d">35 s</span><span class="who" style="background:var(--s2)">rui</span></div>
       <div class="body">
         <h3>Live location</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded (retaken 5 Nov) · waiting for rui's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Live page, On the map: the IC's badge moving from the casing location to the Padang</li><li>Click the badge; the dashed plan line</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -307,6 +335,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">8:20</span><span class="d">45 s</span><span class="who" style="background:var(--s4)">Ern</span></div>
       <div class="body">
         <h3>Messages and SOS</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded (retaken 5 Nov) · waiting for Ern's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Live page → Message everyone: Running late, To: Everyone, Send</li><li>The phone's banner, Got it; who has read it</li><li>A member presses SOS: the red banner with who and where; I'm on my way; Mark handled</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -320,6 +349,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">9:05</span><span class="d">55 s</span><span class="who" style="background:var(--s2)">rui</span></div>
       <div class="body">
         <h3>End and playback</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded (retaken 5 Nov) · waiting for rui's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>End event → type END; the phones stop sharing; a minute later the live map clears</li><li>Playback: open the run, drag to any moment, play faster, trails, follow one IC</li><li>Rename the recording; Download CSV</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -333,6 +363,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">10:00</span><span class="d">20 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
       <div class="body">
         <h3>The planner's phone</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded (retaken 5 Nov) · waiting for Kenneth's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>The real phone, now a planner's: Ops, Map, Timeline (undo and redo by the zoom), People, More, tapped through over USB</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -346,6 +377,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">10:20</span><span class="d">55 s</span><span class="who" style="background:var(--s6)">Kenneth</span></div>
       <div class="body">
         <h3>How we tested it</h3>
+        <div class="st st-recorded" data-status="recorded">Recorded · the test slide is added at compile · waiting for Kenneth's voice-over</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Slide: 114 unit tests, 71 end-to-end tests, 954 database checks, every page at 320 px, the 1,000-phone run</li><li>Terminal clip of the end-to-end run going green, sped up 4×</li></ul></div>
           <div class="say"><div class="label">Say</div>
@@ -359,6 +391,7 @@ td.t { font-family: var(--mono); white-space: nowrap; }
       <div class="clock"><span class="t">11:15</span><span class="d">20 s</span><span class="who" style="background:var(--s1)">Komin</span></div>
       <div class="body">
         <h3>Close</h3>
+        <div class="st st-done" data-status="done">Done: recorded and voiced (5 Nov)</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do"><li>Back to the Overview; end slide with the site, the repo and the six names</li></ul></div>
           <div class="say"><div class="label">Say</div>

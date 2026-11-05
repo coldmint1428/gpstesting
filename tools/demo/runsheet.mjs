@@ -8,8 +8,37 @@ head = head
   .replace('--s5: #8a5a2b;\n', '--s5: #8a5a2b; --s6: #6b3fa0;\n')
   .replaceAll('--s5: #e0a872; color-scheme: dark', '--s5: #e0a872; --s6: #c3a6f0; color-scheme: dark')
 if (!head.includes('--s6')) throw new Error('speaker colours not found')
+if (!head.includes('.st {')) head = head.replace('</style>', `.st { display: inline-flex; align-items: center; gap: 6px; font: 600 12px var(--body); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--muted); color: var(--muted); margin: 2px 0 10px; }
+.st::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st-done { background: var(--forest); border-color: var(--forest); color: var(--on-forest); }
+.st-voiced, .st-refine { border-color: var(--s5); color: var(--s5); }
+.progress { display: grid; gap: 8px; margin-top: 12px; }
+.progress .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.progress .row a { font: 600 13px var(--mono); color: inherit; }
+</style>`)
 
 const WHO = { Komin: 's1', rui: 's2', Hazel: 's3', Ern: 's4', Linus: 's5', Kenneth: 's6' }
+// Where each segment stands (update as the work moves): done = recorded, refined and voiced;
+// voiced = voice matched, still to refine; refine = recorded, still to refine; recorded = waiting for the voice-over
+const STATUS = {
+  1: ['done', "Done: recorded, roles shown as they are named, voiced (5 Nov)"],
+  2: ['recorded', "Recorded · waiting for rui's voice-over"],
+  3: ['recorded', "Recorded · waiting for Hazel's voice-over"],
+  4: ['refine', "Recorded · to refine: show frames being added, not an empty map · waiting for Linus's voice-over"],
+  5: ['recorded', "Recorded · waiting for Linus's voice-over"],
+  6: ['recorded', "Recorded · waiting for Kenneth's voice-over"],
+  7: ['recorded', "Recorded · waiting for Ern's voice-over"],
+  8: ['recorded', "Recorded · waiting for Ern's voice-over"],
+  9: ['voiced', "Recorded and voiced · to refine: slow down the move to the plan running 6 minutes late"],
+  10: ['recorded', "Recorded · waiting for Hazel's voice-over"],
+  11: ['recorded', "Recorded (retaken 5 Nov) · waiting for rui's voice-over"],
+  12: ['recorded', "Recorded (retaken 5 Nov) · waiting for Ern's voice-over"],
+  13: ['recorded', "Recorded (retaken 5 Nov) · waiting for rui's voice-over"],
+  14: ['recorded', "Recorded (retaken 5 Nov) · waiting for Kenneth's voice-over"],
+  15: ['recorded', "Recorded · the test slide is added at compile · waiting for Kenneth's voice-over"],
+  16: ['done', "Done: recorded and voiced (5 Nov)"],
+}
+const STATE = { done: 'Done', voiced: 'Voiced, to refine', refine: 'To refine', recorded: 'Waiting for voice-over' }
 const esc = (s) => s.replace(/&(?!amp;|lt;|gt;)/g, '&amp;')
 
 // [title, short label, seconds, speaker, on screen[], say, tags[]]
@@ -98,6 +127,7 @@ const seg = (r) => `
       <div class="clock"><span class="t">${clock(r.at)}</span><span class="d">${r.secs} s</span><span class="who" style="background:var(--${WHO[r.who]})">${r.who}</span></div>
       <div class="body">
         <h3>${esc(r.title)}</h3>
+        <div class="st st-${STATUS[r.n][0]}" data-status="${STATUS[r.n][0]}">${esc(STATUS[r.n][1])}</div>
         <div class="cols">
           <div><div class="label">On screen</div><ul class="do">${r.screen.map((s) => `<li>${esc(s)}</li>`).join('')}</ul></div>
           <div class="say"><div class="label">Say</div>
@@ -121,6 +151,13 @@ const body = `<main>
       <span class="fact">Export <b>1080p</b>, YouTube unlisted</span>
     </div>
   </header>
+
+  <section aria-labelledby="h-progress">
+    <h2 id="h-progress">Progress</h2>
+    <div class="progress">
+${Object.entries(STATE).map(([k, label]) => { const list = rows.filter((r) => STATUS[r.n][0] === k); return list.length ? `      <div class="row"><span class="st st-${k}">${label} · ${list.length}</span>${list.map((r) => `<a href="#s${r.n}">${two(r.n)} ${r.who}</a>`).join(' ')}</div>` : '' }).filter(Boolean).join('\n')}
+    </div>
+  </section>
 
   <section aria-labelledby="h-strip">
     <h2 id="h-strip">The twelve minutes, to scale</h2>
