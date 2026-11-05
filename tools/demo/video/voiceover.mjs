@@ -60,7 +60,7 @@ for (const clip of clips) {
   const said = (words[nn]?.words || []).map((w) => ({ w: norm(w.w), s: w.s - cutLead }))
 
   // Anchors: (time in the clip, time in the voice), in order, from 0 to the ends
-  const clipStart = n === 1 ? 0 : starts[n]
+  const clipStart = starts[n] ?? 0
   const segActions = actions.filter((x) => x.seg === n).map((x) => ({ ...x, c: x.t - clipStart })).filter((x) => x.c > 0.2 && x.c < v - 0.2)
   const anchors = [{ c: 0, a: 0, why: 'start' }]
   let ai = 0

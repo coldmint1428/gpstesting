@@ -47,7 +47,7 @@ for (const clip of fs.readdirSync(path.join(take, 'segments')).filter((f) => /^\
   const words = say.text.split(' ')
 
   // Anchors: a word index and the moment (in the clip) its action happens
-  const clipStart = n === 1 ? 0 : starts[n]
+  const clipStart = starts[n] ?? 0
   const acts = actions.filter((x) => x.seg === n).map((x) => ({ ...x, c: x.t - clipStart })).filter((x) => x.c > 0.3 && x.c < v)
   const anchors = []
   let ai = 0

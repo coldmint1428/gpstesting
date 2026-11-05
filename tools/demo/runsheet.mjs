@@ -16,7 +16,7 @@ const esc = (s) => s.replace(/&(?!amp;|lt;|gt;)/g, '&amp;')
 const SEGMENTS = [
   ['Intro, roles and how it works', 'Intro', 50, 'Komin',
     ['Home: the live event card, then Ongoing, Upcoming and Archive', 'One slide, "Under the hood": website and phone app → Supabase database → OneMap'],
-    "Hi, we're Group 11, and this is Planova. Think of an NDP rehearsal: dozens of contingents, one venue, and everyone has to be in the right place at the right moment. Planova lets you plan where every group goes, and on the day, see where they actually are. What you see depends on your role. The root sets up the event, planners build the plan, and everyone else is in a group, led by a Group Admin and an IC whose phone shares its location. It all runs on a Supabase database that also enforces those roles, with maps from OneMap. rui?",
+    "Hi, we're Group 5, and this is Planova. Think of an NDP rehearsal: dozens of contingents, one venue, and everyone has to be in the right place at the right moment. Planova lets you plan where every group goes, and on the day, see where they actually are. What you see depends on your role. The root sets up the event, planners build the plan, and everyone else is in a group, led by a Group Admin and an IC whose phone shares its location. It all runs on a Supabase database that also enforces those roles, with maps from OneMap. rui?",
     ['Problem', 'Roles', 'Data store', 'External API']],
   ['Create an event', 'Create', 40, 'rui',
     ['Create event. Type as you talk: NDP Rehearsal 4, the Padang, Saturday 6 pm', 'People: type an email, Add', 'Groups: Navy and Air Force; tick an IC and a Group Admin', 'Review → Create event → Overview: code, QR, invite link'],

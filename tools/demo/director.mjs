@@ -341,9 +341,7 @@ async function goLive() {
 
 const SEGMENTS = [
   [1, 'Intro, roles and how it works', 50, async () => {
-    await page.goto('/')
-    await wait(3000)
-    await page.goto('/events')
+    // Home is already open and drawn (loaded before the first segment): no second load on camera
     await wait(3000)
     await point(page.getByText('NDP 2025 NE4 Rehearsal').first())
   }],
@@ -759,6 +757,8 @@ const clock = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000
 if (PHONE) recordPhone()
 try {
   await page.goto('/events')
+  // Segment 1 opens on Home: wait until its event card has drawn, so the clip never starts on a loading screen
+  await page.getByText('NDP 2025 NE4 Rehearsal').first().waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {})
   await page.waitForTimeout(2000)
   // A retake of a live segment on an event that has been ended: start it again off camera, then wait on the Live
   // page until it has fully drawn, so the retake's first frame is already the working page

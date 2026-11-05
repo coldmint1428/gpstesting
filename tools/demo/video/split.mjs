@@ -23,7 +23,7 @@ const out = path.join(dir, 'segments')
 fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out)
 marks.forEach((m, i) => {
-  const from = m.n === 1 ? 0 : m.t // segment 1 also takes the opening seconds before it; a retake starts on its own segment
+  const from = m.t // every clip, segment 1 included, starts at its own segment (the page is drawn by then)
   const to = marks[i + 1] ? marks[i + 1].t - 0.1 : end + 2
   const name = `${String(m.n).padStart(2, '0')} ${WHO[m.n - 1]} - ${m.title}`.replace(/[<>:"/\\|?*]/g, '') + '.mp4'
   execFileSync(FF, ['-y', '-v', 'error', '-ss', from.toFixed(2), '-i', video, '-t', (to - from).toFixed(2),

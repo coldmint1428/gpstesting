@@ -31,7 +31,7 @@ const title = 'title.mp4'
 run(['-f', 'lavfi', '-i', `color=c=${INK}:s=1920x1080:d=4.5:r=30`, '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '4.5', '-vf', [
   `drawtext=${BOLD}:${text('planova')}:fontsize=170:fontcolor=${LIME}:x=(w-tw)/2:y=(h-th)/2-80:${fade(0.3, 1.0, 3.9, 4.4)}`,
   `drawtext=${FONT}:${text('Plan every group. Run it live. See it all again.')}:fontsize=46:fontcolor=white:x=(w-tw)/2:y=(h)/2+70:${fade(0.9, 1.6, 3.9, 4.4)}`,
-  `drawtext=${FONT}:${text('IS216 Web Application Development II  ·  Group 11')}:fontsize=28:fontcolor=0xb9cfc4:x=(w-tw)/2:y=h-120:${fade(1.3, 2.0, 3.9, 4.4)}`,
+  `drawtext=${FONT}:${text('IS216 Web Application Development II  ·  G11  ·  Group 5')}:fontsize=28:fontcolor=0xb9cfc4:x=(w-tw)/2:y=h-120:${fade(1.3, 2.0, 3.9, 4.4)}`,
 ].join(','), ...ENC, title])
 
 // ---------- each segment, with its speaker and topic in the lower third ----------
