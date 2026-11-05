@@ -29,7 +29,7 @@ const STATUS = {
   6: ['recorded', "Recorded · waiting for Kenneth's voice-over"],
   7: ['recorded', "Recorded · waiting for Ern's voice-over"],
   8: ['recorded', "Recorded · waiting for Ern's voice-over"],
-  9: ['voiced', "Recorded and voiced · to refine: slow down the move to the plan running 6 minutes late"],
+  9: ['done', "Done: re-recorded with a slower, clearer slip (Operations, then the Timeline, the salute and the rest of the show moved a minute, Publish again), voiced (5 Nov)"],
   10: ['recorded', "Recorded · waiting for Hazel's voice-over"],
   11: ['recorded', "Recorded (retaken 5 Nov) · waiting for rui's voice-over"],
   12: ['recorded', "Recorded (retaken 5 Nov) · waiting for Ern's voice-over"],

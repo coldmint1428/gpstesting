@@ -9,7 +9,7 @@ export const CUES = {
   6: [[/press create-group-btn/, /^add$/], [/press gd-radio/, /^radio$/], [/press group-delete-btn/, /^delete$/], [/open \/events\/EV\/people/, /^lists$/], [/press person-tolerance-up/, /^close$/]],
   7: [[/press rehearsal-edit/, /^(move|moved)$/], [/press rehearsal-tab-requests/, /^(request|requests)$/], [/press request-approve/, /^(approves?|approve)$/]],
   8: [[/QR code/, /^qr$/]],
-  9: [[/press start-event-btn|Start now/, /^start$/], [/press start-confirm-btn/, /^(it's|its)$/], [/press remind-ics-btn/, /^remind$/], [/press live-tab-ops/, /^operations$/], [/press push-60/, /^salute$/], [/press plan-publish/, /^publish$/]],
+  9: [[/press start-event-btn|Start now/, /^start$/], [/press start-confirm-btn/, /^(it's|its)$/], [/remind-ics-btn/, /^remind$/], [/press live-tab-ops/, /^operations$/], [/press (tab-timeline|Timeline)/, /^(slip|sleep|shows)$/], [/press salute-frame/, /^(six|6|minutes)$/], [/press push-60/, /^salute$/], [/press plan-publish/, /^publish$/]],
   10: [],
   11: [[/press live-tab-people/, /^(badge|moves)$/], [/leaflet|^press ([A-Z]{2})?$/, /^click$/]],
   12: [[/press live-tab-message/, /^messages?$/], [/press broadcast-send/, /^(sector|choose)$/], [/press sos-show/, /^sos$/], [/press sos-help/, /^(way|responders)$/]],

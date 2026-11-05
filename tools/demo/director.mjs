@@ -305,9 +305,8 @@ async function rehearsalBefore() {
 }
 // Start the event on the published plan, then the IC shares on their phone and walks (segment 9, or off camera
 // before a retake of a later segment with --go-live)
-async function goLive() {
-  await page.goto(`/events/${EV}/live`)
-  await wait(2000)
+async function goLive(share = true) {
+  if (!/\/live$/.test(new URL(page.url()).pathname)) { await page.goto(`/events/${EV}/live`); await wait(2000) }
   // Start waits for the plan list; on a slow load, reload once, as a person would
   const start = byId('start-event-btn')
   const ready = () => start.first().isEnabled({ timeout: 1000 }).catch(() => false)
@@ -332,7 +331,10 @@ async function goLive() {
   await press(byId('start-confirm-btn'))
   await confirmIfAsked()
   await wait(3000)
-  // The IC starts sharing on their phone, and walks
+  if (share) await icShares()
+}
+// The IC starts sharing on their phone, and walks
+async function icShares() {
   await ic.goto(`/events/${EV}/live`)
   await byId('share-btn', ic).click({ timeout: 30_000 })
   await confirmIfAsked(ic)
@@ -623,28 +625,57 @@ const SEGMENTS = [
     await confirmIfAsked(ic)
   }],
   [9, 'Run it live', 55, async () => {
-    await goLive()
-    const remind = byId('remind-ics-btn')
-    if (await remind.isVisible().catch(() => false)) await press(remind, 1500)
-    // The Live page opens on Operations: every group against the plan
-    const ops = byId('live-tab-ops')
-    if (await ops.isVisible().catch(() => false)) await press(ops, 3000)
-    // The show slips: the salute moves a minute, and the plan is published again
-    await page.goto(`/events/${EV}/timeline`)
-    await wait(3000)
-    const salute = page.locator('.pv-frame[title*="Combined Salute"]').first()
-    if (await salute.count()) {
-      await salute.scrollIntoViewIfNeeded()
-      await point(salute)
-      await salute.click({ force: true, timeout: 5000 }) // the dots around T+3m overlap
-      await wait(800)
-      await press(byId('push-60'))
-      await confirmIfAsked()
+    await goLive(false)
+    // "Any IC who isn't sharing gets a reminder, and Remind ICs nudges them again": the IC isn't sharing yet
+    // (on a laptop it sits in the Manage event menu)
+    const remind = page.getByTestId('remind-ics-btn').filter({ visible: true }).first()
+    await wait(1500)
+    if (!(await remind.isVisible().catch(() => false))) await pressWhenReady('event-menu-btn', 1000).catch(() => {})
+    // Shown, not pressed: the start has just sent the automatic reminder, so a second one within the minute only
+    // says "No one to remind", which is not what the narration describes
+    if (await remind.waitFor({ state: 'visible', timeout: 6000 }).then(() => true, () => false)) {
+      await point(remind)
+      logAction('point remind-ics-btn', mouse)
       await wait(2500)
-      await press(byId('plan-publish'))
-      await confirmIfAsked()
     }
+    await page.keyboard.press('Escape')
+    await wait(600)
+    await icShares()
+    // "The Live page opens on Operations": the clock, then each group against the plan, one by one
+    const ops = byId('live-tab-ops').filter({ visible: true }).first()
+    if (await ops.isVisible().catch(() => false)) await press(ops, 1500)
+    const clockEl = byId('ops-clock').filter({ visible: true }).first()
+    if (await clockEl.isVisible().catch(() => false)) { await point(clockEl); await wait(2000) }
+    const opsRows = byId('ops-row').filter({ visible: true })
+    for (let i = 0; i < Math.min(4, await opsRows.count()); i++) { await point(opsRows.nth(i)); await wait(1600) }
+    // "…and shows slip": to the Timeline inside the app (no reload), and the plan drawn before anything is touched
+    const tl = page.getByTestId('tab-timeline').filter({ visible: true }).first()
+    if (await tl.isVisible().catch(() => false)) await press(tl, 500)
+    else await page.goto(`/events/${EV}/timeline`)
+    const salute = page.locator('.pv-frame[title*="Combined Salute"]').first()
+    await salute.waitFor({ state: 'attached', timeout: 20_000 })
     await wait(2500)
+    // "up to six minutes": the salute picked out, its time held on screen
+    await salute.scrollIntoViewIfNeeded()
+    await point(salute)
+    logAction('press salute-frame', mouse)
+    await salute.click({ force: true, timeout: 5000 }) // the dots around T+3m overlap
+    await wait(3500)
+    // "So we move the salute": the salute and everything after it (Shift+click the last frame), a minute later. One
+    // frame alone cannot move: the plan has a frame every 5 s, so it would land on one that stays put
+    const last = page.locator('.pv-frame').last()
+    await last.scrollIntoViewIfNeeded().catch(() => {})
+    await point(last)
+    logAction('press stretch-to-end', mouse)
+    await last.click({ force: true, modifiers: ['Shift'], timeout: 5000 })
+    await wait(1500)
+    await press(byId('push-60'), 1000)
+    await confirmIfAsked()
+    await wait(3500)
+    // "publish again, and every phone affected is told": Publish again, then the phone's notice
+    await press(byId('plan-publish'), 800)
+    await confirmIfAsked()
+    await wait(5000)
   }],
   [10, 'What members and ICs see', 70, async () => {
     // The IC's phone window: the Schedule (route, stops, countdown), We're here, My group (this window has its own video)
