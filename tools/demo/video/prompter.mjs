@@ -1,9 +1,11 @@
 // node prompter.mjs <take folder> <run sheet .html>  -> <take>/segments-prompter/NN Name - Title.mp4
 // A teleprompter on each speaker's clip, like a newsreader's: the segment's lines across the bottom, each word filling
 // with colour as it should be said, and the next line waiting beneath. The timing comes from the take's action log:
-// the word that names an action (cues.mjs) lights up the moment that action happens on screen; the words between
-// run at a speaking pace of 145 a minute, pausing before a cued word if the screen is not there yet. Where the lines
-// need longer than the clip, its last frame holds. These clips are for recording; the final video uses the clean ones.
+// the word that names an action (cues.mjs) lights up the moment that action happens on screen. The words always run at
+// an even speaking pace (PACE): when the screen gets to an action before the words do, the picture pauses just before
+// that action until the reader catches up; when the screen is slower, the reader waits before the cued word. Where the
+// lines need longer than the clip, its last frame holds. These clips are for recording; the final video uses the clean
+// ones, retimed to each recorded voice (voiceover.mjs).
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -15,8 +17,8 @@ const FF = require('ffmpeg-static')
 const FP = require('ffprobe-static').path
 
 const [take, sheet] = process.argv.slice(2).map((p) => path.resolve(p))
-const PACE = 60 / 145 // seconds a word
-const MIN = 0.22 // never faster than this a word
+const PACE = 60 / 130 // seconds a word: an unhurried 130 words a minute, never faster
+const MIN = 0.3 // and a short word after a long one never flashes by quicker than this
 const LINE = 8 // words on a line
 const dur = (f) => Number(execFileSync(FP, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f], { encoding: 'utf8' }))
 const html = fs.readFileSync(sheet, 'utf8').replace(/\r\n/g, '\n')
@@ -58,34 +60,31 @@ for (const clip of fs.readdirSync(path.join(take, 'segments')).filter((f) => /^\
     ai += ax + 1
     wi += wx + 1
   }
-  // Each word's start: speaking pace between anchors, a pause before a cued word if the screen is not there yet,
-  // and faster (down to MIN a word) where the screen gets there first
+  // Each word's start, at an even pace from the previous cued word. A cued word waits for its action; if the action
+  // would come first, the picture holds just before it (holds: [moment in the clip, seconds]) until the words get there
   const at = new Array(words.length)
+  const holds = []
+  let shift = 0 // seconds of hold so far: a moment t of the clip plays at t + shift
   let t = 0.6
   let from = 0
-  for (const a of [...anchors, { i: words.length, t: null }]) {
-    const count = a.i - from
-    if (a.t == null) {
-      for (let k = 0; k < count; k++) at[from + k] = t + k * PACE
-    } else {
-      const natural = count * PACE
-      const room = a.t - t
-      if (room >= natural) {
-        for (let k = 0; k < count; k++) at[from + k] = a.t - (count - k) * PACE // read, then wait for the screen
-      } else {
-        const step = Math.max(MIN, room / Math.max(count, 1))
-        for (let k = 0; k < count; k++) at[from + k] = t + k * step
-      }
-      if (a.i < words.length) at[a.i] = Math.max(a.t, (at[a.i - 1] ?? 0) + MIN)
-      from = a.i
-      t = at[a.i]
-      continue
+  for (const a of anchors) {
+    for (let k = 0; k < a.i - from; k++) at[from + k] = t + k * PACE
+    const ready = t + (a.i - from) * PACE
+    const lands = a.t + shift
+    if (ready > lands) {
+      const hold = ready - lands
+      const atClip = Math.max(holds.length ? holds[holds.length - 1][0] : 0, a.t - 0.15)
+      holds.push([atClip, hold])
+      shift += hold
     }
+    at[a.i] = a.t + shift
     from = a.i
+    t = at[a.i]
   }
+  for (let k = 0; k < words.length - from; k++) at[from + k] = t + k * PACE
   for (let k = 1; k < words.length; k++) if (at[k] < at[k - 1] + MIN) at[k] = at[k - 1] + MIN
   const endAt = at[words.length - 1] + PACE + 0.8
-  const total = Math.max(v, endAt)
+  const total = Math.max(v + shift, endAt)
 
   // Lines of LINE words (a sentence ends a line early); the line being read, and the next one dimmed beneath
   const rows = []
@@ -123,10 +122,18 @@ Style: Who,Segoe UI,30,&H00172A0A,&H00172A0A,&H006BF3C6,&H006BF3C6,1,0,0,0,100,1
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 ${ev.join('\n')}
 `)
-  const hold = Math.max(0, total - v)
-  execFileSync(FF, ['-y', '-v', 'error', '-i', src, '-vf', `tpad=stop_mode=clone:stop_duration=${hold.toFixed(2)},ass=${file}`,
+  const hold = Math.max(0, total - v - shift)
+  const cuts = [...holds, [v, hold]]
+  let graph = ''
+  let prev = 0
+  cuts.forEach(([c, h], j) => {
+    graph += `[0:v]trim=start=${prev.toFixed(3)}:end=${Math.max(prev + 0.04, c).toFixed(3)},setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=${h.toFixed(3)}[p${j}];`
+    prev = Math.max(prev + 0.04, c)
+  })
+  graph += cuts.map((_, j) => `[p${j}]`).join('') + `concat=n=${cuts.length}:v=1:a=0,fps=30,ass=${file}[v]`
+  execFileSync(FF, ['-y', '-v', 'error', '-i', src, '-filter_complex', graph, '-map', '[v]',
     '-t', total.toFixed(2), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p', '-an', path.join(clip)], { cwd: out })
   fs.rmSync(path.join(out, file))
-  report.push(`${clip}: ${words.length} words, ${anchors.length} on their action${hold > 0.5 ? `, last frame held ${hold.toFixed(1)} s` : ''} (${total.toFixed(0)} s)`)
+  report.push(`${clip}: ${words.length} words at ${Math.round(60 / PACE)} a minute, ${anchors.length} on their action${shift > 0.3 ? `, paused ${shift.toFixed(1)} s for the reader` : ''}${hold > 0.5 ? `, last frame held ${hold.toFixed(1)} s` : ''} (${total.toFixed(0)} s)`)
 }
 console.log(report.join('\n'))
