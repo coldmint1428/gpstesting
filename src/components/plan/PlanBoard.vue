@@ -3225,7 +3225,7 @@ watch(
         </template>
       </div>
 
-      <form v-if="creating" class="k row k2-createplan" @submit.prevent="confirmCreate">
+      <form v-if="creating" class="k k2-createplan" @submit.prevent="confirmCreate">
         <input v-model="newPlanName" class="kin" style="height: 40px; flex: 1; min-width: min(160px, 100%)" data-testid="plan-create-name" placeholder="Plan name" aria-label="Plan name" />
         <button type="submit" class="kb kb-lime kb-sm" :disabled="busy || !newPlanName.trim()">Create</button>
         <button type="button" class="kb kb-ghost kb-sm" @click="creating = false">Cancel</button>

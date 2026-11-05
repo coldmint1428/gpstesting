@@ -352,7 +352,10 @@ html:not(.native-app) body .ev .pv-board-head{display:block;background:transpare
   html body .ev .pv-board .pv-run{padding:10px 12px;border-radius:14px;border:1px solid var(--pv-line);margin-bottom:12px}
   .pv-run-line{row-gap:4px}
 }
-.k2-createplan{margin-bottom:14px;gap:8px;flex-wrap:wrap}
+/* Naming a new plan: one row under the plan bar, the name filling the width and Create/Cancel at its end. The form is
+   its own .k, so it cannot also be a .row: Bootstrap's .row would make every field full width on its own line and pull
+   the form 12 px past the header on both sides. */
+.k2-createplan{display:flex;align-items:center;margin-bottom:14px;gap:8px;flex-wrap:wrap}
 html:not(.native-app) body .ev .pv-body{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto auto 1fr;gap:12px 16px;align-items:start;height:auto;min-height:0;overflow:visible}
 html:not(.native-app) body .ev .pv-stage{grid-column:1;grid-row:1;position:relative;border-radius:24px;overflow:hidden;height:auto;min-height:0}
 html:not(.native-app) body .ev .pv-map{height:min(56vh,560px);min-height:320px;width:100%}
