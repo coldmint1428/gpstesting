@@ -247,7 +247,6 @@ function pick(row) {
   max-height: 20rem;
   overflow-y: auto;
   padding-right: 0.25rem;
-  overscroll-behavior: contain;
 }
 
 /* One heading per type. It sticks to the top of the scrolling card while its own rows go past,

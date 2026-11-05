@@ -3088,8 +3088,8 @@ const { openMenu, toggleMenu, closeMenu } = useOpenMenu()
   overflow-y: auto;
   /* Room for the scrollbar, so it does not sit on top of the cards' borders. */
   padding-right: 0.25rem;
-  /* Scrolling to the end of the list must not carry on into the page behind it. */
-  overscroll-behavior: contain;
+  /* No overscroll-behavior: contain here -- once the list is at its end (or has nothing to
+     scroll) the wheel carries on to the page, so the cursor resting on the list never traps it. */
 }
 
 /* While an area is being drawn the pointer becomes a crosshair -- the same signal every
